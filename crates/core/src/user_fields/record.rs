@@ -144,7 +144,7 @@ impl UserConfig {
     }
 
     /// Project a raw adapter record without retaining unmapped storage field names.
-    pub fn project_record(
+    pub async fn project_record(
         &self,
         storage: &Map<String, Value>,
         supports_native_json: bool,
@@ -156,12 +156,13 @@ impl UserConfig {
                 std::slice::from_ref(storage),
                 supports_native_json,
                 supports_native_dates,
-            )?
+            )
+            .await?
             .remove(0))
     }
 
     /// Project raw adapter records together without retaining unmapped storage field names.
-    pub fn project_records(
+    pub async fn project_records(
         &self,
         storage: &[Map<String, Value>],
         supports_native_json: bool,
@@ -184,11 +185,12 @@ impl UserConfig {
             })
             .collect::<AuthResult<Vec<_>>>()?;
         self.project_adapter_records(records, supports_native_json, supports_native_dates)
+            .await
     }
 
     /// Apply adapter input policies once to a complete logical record or update patch.
     /// Native adapter writes do not run HTTP input validation or remove `input: false` fields.
-    pub fn record_storage_fields_for_adapter(
+    pub async fn record_storage_fields_for_adapter(
         &self,
         input: Map<String, Value>,
         create: bool,
@@ -198,10 +200,11 @@ impl UserConfig {
         self.record_storage_fields_with_binding(input, create, |name, field, value| {
             Ok(field.adapter_input(value, supports_native_json, native_json_field(name)))
         })
+        .await
     }
 
     /// Bind a complete record after its storage policies, while retaining force-allowed IDs.
-    pub fn record_storage_fields_with_binding(
+    pub async fn record_storage_fields_with_binding(
         &self,
         input: Map<String, Value>,
         create: bool,
@@ -211,7 +214,7 @@ impl UserConfig {
         if let Some(id) = input.get("id") {
             let _ = output.insert("id".into(), id.clone());
         }
-        let transformed = self.storage_fields_inner(input, create, true)?;
+        let transformed = self.storage_fields_async(input, create, true).await?;
         for (name, field) in &self.additional_fields {
             if name == "id" {
                 continue;
@@ -226,7 +229,7 @@ impl UserConfig {
 
     /// Project stored values without applying endpoint visibility or decoding replacement types.
     /// The caller must invoke this after the write and before cache writes or database after hooks.
-    pub fn record_output_fields(
+    pub async fn record_output_fields(
         &self,
         core: Map<String, Value>,
         storage: &Map<String, Value>,
@@ -239,12 +242,13 @@ impl UserConfig {
                 vec![AdapterRecord::new(core, storage.clone())],
                 supports_native_json,
                 supports_native_dates,
-            )?
+            )
+            .await?
             .remove(0))
     }
 
     /// Project extracted records in row order, interleaving synchronous callbacks by field.
-    pub fn project_adapter_records(
+    pub async fn project_adapter_records(
         &self,
         mut records: Vec<AdapterRecord>,
         supports_native_json: bool,
@@ -254,40 +258,43 @@ impl UserConfig {
             &mut records,
             &self.additional_fields,
             |record, name, field| {
-                if name == "id" {
-                    return Ok(());
-                }
-                let value = record
-                    .storage
-                    .get(field.field_name.as_deref().unwrap_or(name))
-                    .cloned();
-                let value = field.adapter_output(value, supports_native_json)?;
-                let value = if !supports_native_dates
-                    && !field.references_id()
-                    && matches!(field.field_type, UserFieldType::Date)
-                {
-                    match value {
-                        Some(Value::String(text)) => {
-                            match crate::utils::date::parse_adapter_date(&text) {
-                                Some(date) => SchemaValue::Typed(Value::String(
-                                    date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                                )),
-                                None => SchemaValue::InvalidDate,
-                            }
-                        }
-                        value => SchemaValue::from_json(value),
+                Box::pin(async move {
+                    if name == "id" {
+                        return Ok(());
                     }
-                } else {
-                    SchemaValue::from_json(value)
-                };
-                if value.is_undefined() {
-                    let _ = record.output.shift_remove(name);
-                } else {
-                    let _ = record.output.insert(name.to_owned(), value);
-                }
-                Ok(())
+                    let value = record
+                        .storage
+                        .get(field.field_name.as_deref().unwrap_or(name))
+                        .cloned();
+                    let value = field.adapter_output(value, supports_native_json).await?;
+                    let value = if !supports_native_dates
+                        && !field.references_id()
+                        && matches!(field.field_type, UserFieldType::Date)
+                    {
+                        match value {
+                            Some(Value::String(text)) => {
+                                match crate::utils::date::parse_adapter_date(&text) {
+                                    Some(date) => SchemaValue::Typed(Value::String(
+                                        date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                                    )),
+                                    None => SchemaValue::InvalidDate,
+                                }
+                            }
+                            value => SchemaValue::from_json(value),
+                        }
+                    } else {
+                        SchemaValue::from_json(value)
+                    };
+                    if value.is_undefined() {
+                        let _ = record.output.shift_remove(name);
+                    } else {
+                        let _ = record.output.insert(name.to_owned(), value);
+                    }
+                    Ok(())
+                })
             },
-        )?;
+        )
+        .await?;
         Ok(records.into_iter().map(|record| record.output).collect())
     }
 }

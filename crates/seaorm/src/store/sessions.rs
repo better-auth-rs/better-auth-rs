@@ -20,7 +20,7 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
-    pub(super) fn output_sessions(
+    pub(super) async fn output_sessions(
         &self,
         rows: &[S::Session],
         db: &impl ConnectionTrait,
@@ -30,9 +30,10 @@ where
             &self.config().session,
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
         )
+        .await
     }
 
-    pub(super) fn output_session(
+    pub(super) async fn output_session(
         &self,
         row: &S::Session,
         db: &impl ConnectionTrait,
@@ -42,6 +43,7 @@ where
             &self.config().session,
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
         )
+        .await
     }
 
     fn normalize_session_client_field(value: Option<String>) -> Option<String> {
@@ -51,15 +53,13 @@ where
         }
     }
 
-    pub(crate) fn apply_session_field_updates(
+    pub(crate) async fn apply_session_field_updates(
         &self,
         active: &mut <S::Session as SeaOrmSessionModel>::ActiveModel,
     ) -> AuthResult<()> {
         let schema = self.config().session.field_schema();
-        let fields = schema.storage_fields_with_binding(
-            Default::default(),
-            false,
-            |name, field, value| {
+        let fields = schema
+            .storage_fields_with_binding(Default::default(), false, |name, field, value| {
                 crate::reference_id::input_binding(
                     name,
                     field,
@@ -69,8 +69,8 @@ where
                     S::Session::native_json_field,
                     self.connection().get_database_backend(),
                 )
-            },
-        )?;
+            })
+            .await?;
         S::Session::apply_fields(active, fields)?;
         crate::reference_id::apply_bindings(
             active,
@@ -184,17 +184,19 @@ where
             active.not_set(S::Session::id_column());
         }
         let schema = self.config().session.field_schema();
-        let fields = schema.storage_fields_with_binding(fields, true, |name, field, value| {
-            crate::reference_id::input_binding(
-                name,
-                field,
-                value,
-                self.config().advanced.database.generate_id(),
-                S::Session::field_column,
-                S::Session::native_json_field,
-                db.get_database_backend(),
-            )
-        })?;
+        let fields = schema
+            .storage_fields_with_binding(fields, true, |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    self.config().advanced.database.generate_id(),
+                    S::Session::field_column,
+                    S::Session::native_json_field,
+                    db.get_database_backend(),
+                )
+            })
+            .await?;
         S::Session::apply_fields(&mut active, fields)?;
         S::Session::apply_fields(&mut active, plugin_fields)?;
         crate::reference_id::apply_bindings(
@@ -209,7 +211,7 @@ where
             async { active.insert(db).await.map_err(map_db_err) },
         )
         .await?;
-        let session = self.output_session(&session, db)?;
+        let session = self.output_session(&session, db).await?;
         if tx.is_none() {
             self.after_runtime_session(&session, crate::hooks::current_request_hook_context())
                 .await?;
@@ -327,7 +329,8 @@ where
                         db.get_database_backend(),
                     )
                 },
-            )?;
+            )
+            .await?;
         let _ = update.updated_at.get_or_insert_with(Utc::now);
         S::Session::apply_update(&mut active, update)?;
         S::Session::apply_fields(&mut active, fields)?;
@@ -348,10 +351,10 @@ where
             ),
         )
         .await?;
-        session
-            .as_ref()
-            .map(|row| self.output_session(row, db))
-            .transpose()
+        match session.as_ref() {
+            Some(row) => self.output_session(row, db).await.map(Some),
+            None => Ok(None),
+        }
     }
 }
 
@@ -424,7 +427,7 @@ where
         &self,
         token: &str,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
-        database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+        match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -438,8 +441,10 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_session(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self.output_session(row, self.connection()).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_session_snapshots(
@@ -458,7 +463,7 @@ where
         if only_active {
             condition = condition.add(S::Session::expires_at_column().gt(Utc::now()));
         }
-        database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+        match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
@@ -474,7 +479,10 @@ where
             },
         )
         .await
-        .and_then(|rows| self.output_sessions(&rows, self.connection()))
+        {
+            Ok(rows) => self.output_sessions(&rows, self.connection()).await,
+            Err(error) => Err(error),
+        }
         .map(|sessions| {
             sessions
                 .into_iter()
@@ -488,7 +496,7 @@ where
         user_id: &str,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
         let user_id = self.parse_id(user_id, <S::Session as SeaOrmSessionModel>::parse_user_id)?;
-        database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+        match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
@@ -505,7 +513,10 @@ where
             },
         )
         .await
-        .and_then(|rows| self.output_sessions(&rows, self.connection()))
+        {
+            Ok(rows) => self.output_sessions(&rows, self.connection()).await,
+            Err(error) => Err(error),
+        }
     }
 
     async fn update_session_fields(
@@ -558,10 +569,10 @@ where
         )
         .await;
         // Upstream deleteWithHooks treats only snapshot-read errors as a missing record.
-        let session = snapshot
-            .ok()
-            .flatten()
-            .and_then(|session| self.session_delete_snapshot(session).ok());
+        let session = match snapshot.ok().flatten() {
+            Some(session) => self.session_delete_snapshot(session).await.ok(),
+            None => None,
+        };
         let Some(session) = session else {
             return Ok(());
         };

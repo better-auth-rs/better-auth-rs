@@ -1,7 +1,7 @@
 use better_auth_core::config::{CookieCacheStrategy, SameSite};
 use better_auth_core::middleware::{RateLimitConfig, RateLimitStorageKind};
 use better_auth_core::observability::database::{DatabaseHook, DatabaseHookMetadata};
-use better_auth_core::observability::telemetry::PluginTelemetry;
+use better_auth_core::observability::telemetry::{PluginTelemetry, Telemetry};
 use better_auth_core::{AuthConfig, AuthPlugin, AuthResult, AuthSchema};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -269,6 +269,16 @@ pub(super) fn init_payload<S: AuthSchema>(
         "updateUserInfoOnLink",
         linking.update_user_info_on_link,
     )?;
+    option(
+        &mut account_linking,
+        "trustedProviders",
+        config
+            .account
+            .account_linking
+            .trusted_providers
+            .as_ref()
+            .and_then(better_auth_core::TrustedValues::as_static),
+    )?;
     let mut account = Map::from_iter([("accountLinking".into(), json!(account_linking))]);
     option(
         &mut account,
@@ -287,36 +297,54 @@ pub(super) fn init_payload<S: AuthSchema>(
         config.verification.disable_cleanup,
     )?;
 
-    let environment = if std::env::var("NODE_ENV").is_ok_and(|value| value == "production") {
-        "production"
-    } else if std::env::var("CI").is_ok_and(|value| !value.is_empty() && value != "false") {
-        "ci"
-    } else if std::env::var("NODE_ENV").is_ok_and(|value| value == "test") {
-        "test"
-    } else {
-        "development"
-    };
-    Ok(json!({
-        "config": {
-            "emailVerification": plugin_options.email_verification,
-            "emailAndPassword": plugin_options.email_and_password,
-            "user": {"changeEmail":change_email},
-            "plugins":plugins.iter().map(|plugin| plugin.name()).collect::<Vec<_>>(),
-            "hooks":{"before":options.before,"after":options.after},
-            "secondaryStorage": options.secondary,
-            "logger": logger,
-            "trustedOrigins": config.trusted_origins.as_static().map(<[String]>::len),
-            "session": session,
-            "account": account,
-            "verification": verification,
-            "advanced": advanced_options,
-            "rateLimit": rate_limit,
-            "onAPIError": api_error,
-            "databaseHooks": database_hooks(&options.database_hooks),
-        },
-        "runtime":{"name":"rust","version":Value::Null},
-        "environment":environment,
-    }))
+    let mut config_options = Map::from_iter([
+        (
+            "emailVerification".into(),
+            json!(plugin_options.email_verification),
+        ),
+        (
+            "emailAndPassword".into(),
+            json!(plugin_options.email_and_password),
+        ),
+        ("user".into(), json!({"changeEmail":change_email})),
+        (
+            "plugins".into(),
+            json!(
+                plugins
+                    .iter()
+                    .filter_map(|plugin| plugin.telemetry_plugin_id())
+                    .collect::<Vec<_>>()
+            ),
+        ),
+        (
+            "hooks".into(),
+            json!({"before":options.before,"after":options.after}),
+        ),
+        ("secondaryStorage".into(), json!(options.secondary)),
+        ("logger".into(), json!(logger)),
+        ("session".into(), json!(session)),
+        ("account".into(), json!(account)),
+        ("verification".into(), json!(verification)),
+        ("advanced".into(), json!(advanced_options)),
+        ("rateLimit".into(), json!(rate_limit)),
+        ("onAPIError".into(), json!(api_error)),
+        (
+            "databaseHooks".into(),
+            json!(database_hooks(&options.database_hooks)),
+        ),
+    ]);
+    option(
+        &mut config_options,
+        "trustedOrigins",
+        config.trusted_origins.as_ref().map(|values| match values {
+            better_auth_core::TrustedValues::Static(values) => values.len(),
+            better_auth_core::TrustedValues::Dynamic(_)
+            | better_auth_core::TrustedValues::Merged(_) => 1,
+        }),
+    )?;
+    let mut payload = Telemetry::initialization_metadata();
+    let _ = payload.insert("config".into(), Value::Object(config_options));
+    Ok(Value::Object(payload))
 }
 
 fn database_hooks(hooks: &[DatabaseHookMetadata]) -> Map<String, Value> {

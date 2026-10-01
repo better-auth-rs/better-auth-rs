@@ -3,6 +3,7 @@
     clippy::panic_in_result_fn,
     reason = "tracing callbacks cannot return capture failures; Result tests propagate setup errors and assert observable contracts"
 )]
+use better_auth::config::UserFieldTransform;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -1121,7 +1122,7 @@ mod sqlite {
             "note".into(),
             better_auth_core::user_fields::UserFieldConfig {
                 required: Some(false),
-                input_transform: Some(Arc::new(|value| {
+                input_transform: Some(UserFieldTransform::new(|value| {
                     if value.as_ref() == Some(&json!("reject")) {
                         Err(AuthError::internal("rejected transform"))
                     } else {

@@ -1,6 +1,5 @@
 use super::{AuthConfig, CookieCacheRefresh, CookieCacheStrategy, OAuthStateStrategy};
 use crate::store::StoreCapabilities;
-use chrono::Duration;
 
 impl AuthConfig {
     /// Resolve omitted storage-dependent settings before plugin initialization.
@@ -29,9 +28,6 @@ impl AuthConfig {
             let _ = cache.refresh.get_or_insert(CookieCacheRefresh::Enabled);
         }
         if let Some(cache) = &mut self.session.cookie_cache {
-            let _ = cache.enabled.get_or_insert(false);
-            let _ = cache.max_age.get_or_insert(Duration::minutes(5));
-            let _ = cache.strategy.get_or_insert(CookieCacheStrategy::Compact);
             if capabilities.server_sessions() {
                 if matches!(
                     cache.refresh,
@@ -51,6 +47,7 @@ impl AuthConfig {
 mod tests {
     use super::*;
     use crate::config::CookieCacheConfig;
+    use chrono::Duration;
 
     #[test]
     fn stateless_defaults_respect_each_explicit_override() {

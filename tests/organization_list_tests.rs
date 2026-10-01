@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -32,7 +33,7 @@ fn field(events: &Events, kind: &'static str, required: bool) -> UserFieldConfig
     let events = events.clone();
     UserFieldConfig {
         required: Some(required),
-        output_transform: Some(Arc::new(move |value| {
+        output_transform: Some(UserFieldTransform::new(move |value| {
             let label = value
                 .as_ref()
                 .and_then(Value::as_str)

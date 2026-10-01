@@ -14,7 +14,7 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `app_name` | `String` | `"Better Auth"` | App name used by emails and cookie-related metadata |
 | `base_url` | `BaseUrl` | `Auto` | Explicit URL, dynamic host policy, or environment/request resolution |
 | `base_path` | `String` | `"/api/auth"` | Auth route mount prefix |
-| `trusted_origins` | `TrustedValues` | `Static(vec![])` | Static origins or an asynchronous Request resolver |
+| `trusted_origins` | `Option<TrustedValues>` | `None` | Static origins or an asynchronous Request resolver |
 | `disabled_paths` | `Vec<String>` | `[]` | Routes that should behave as disabled |
 | `api_error` | `ApiErrorConfig` | see below | HTTP error policy and error-page appearance |
 | `session` | `SessionConfig` | see below | Session token and cookie behavior |
@@ -51,7 +51,7 @@ The error page reads the original Request URL. A native call must supply `Endpoi
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `expires_in` | `Option<chrono::Duration>` | `None` (seven days) | Session lifetime |
+| `expires_in` | `Option<chrono::Duration>` | `None` (seven days) | Session lifetime; explicit zero also resolves to seven days |
 | `store_session_in_database` | `Option<bool>` | `None` (false) | Retain database sessions when secondary storage is installed |
 | `preserve_session_in_database` | `Option<bool>` | `None` (false) | Expire revoked database rows and disable cache-miss database fallback |
 | `update_age` | `Option<chrono::Duration>` | `None` (one day) | Age threshold before refreshing a session |
@@ -62,7 +62,7 @@ The error page reads the original Request URL. A native call must supply `Endpoi
 | `bearer` | `Option<BearerConfig>` | `None` | Enable Bearer authentication; `require_signature` rejects unsigned tokens |
 | `additional_fields` | `IndexMap<String, SessionFieldConfig>` | Empty | Session field defaults, validators, transforms, update generators, mappings, and visibility |
 
-These optional inputs preserve omitted values for telemetry. Read effective values through the matching methods, such as `config.session.expires_in()` and `config.account.encrypt_oauth_tokens()`.
+These optional inputs preserve configured values for telemetry. A zero session lifetime remains explicit in telemetry and resolves to seven days at runtime. Stateless initialization fills omitted cookie-cache settings before telemetry; database and secondary storage preserve cache input omission. Read effective values through the matching methods, such as `config.session.expires_in()` and `config.account.encrypt_oauth_tokens()`.
 
 Refresh semantics:
 
@@ -153,7 +153,7 @@ Ordinary sign-in preserves stored scopes. With `update_account_on_sign_in: Some(
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `Option<bool>` | `None` (true) | Enable account linking |
-| `trusted_providers` | `TrustedValues` | `Static(vec![])` | Static providers or an asynchronous Request resolver |
+| `trusted_providers` | `Option<TrustedValues>` | `None` | Static providers or an asynchronous Request resolver |
 | `allow_different_emails` | `bool` | `false` | Allow linking accounts with different emails |
 | `allow_unlinking_all` | `Option<bool>` | `None` (false) | Allow unlinking the last linked account |
 | `disable_implicit_linking` | `bool` | `false` | Only allow explicit linking via `link-social` |
@@ -274,3 +274,5 @@ Disabling tracking omits session and CAPTCHA addresses and disables IP rate limi
 ## Plugin-Specific Config
 
 Plugin configs such as `EmailPasswordConfig`, `SessionManagementConfig`, `OrganizationConfig`, `PasskeyConfig`, and `TwoFactorConfig` are documented in their plugin guides, because their behavior is best understood next to the routes they affect.
+
+`trusted_origins` and account-linking `trusted_providers` preserve omission with `Option<TrustedValues>`. Runtime omission resolves to an empty collection. Direct assignments use `Some(TrustedValues::Static(values))` or `Some(TrustedValues::Dynamic(resolver))`; the existing `trusted_origin(...)` and `trusted_origins(...)` builders retain their signatures. An explicit empty collection remains distinct from omission in telemetry.

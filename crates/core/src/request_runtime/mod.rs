@@ -99,7 +99,7 @@ impl RequestRuntime {
         let trusted_providers = config
             .account
             .account_linking
-            .trusted_providers
+            .trusted_provider_values()
             .resolve(None)
             .await?;
         Ok(RuntimeValues {
@@ -150,7 +150,12 @@ impl<S: AuthSchema> AuthContext<S> {
 
     pub fn trusted_origins(&self) -> &[String] {
         self.request_runtime.values.as_ref().map_or_else(
-            || self.config.trusted_origins.as_static().unwrap_or(&[]),
+            || {
+                self.config
+                    .trusted_origin_values()
+                    .as_static()
+                    .unwrap_or(&[])
+            },
             |values| values.trusted_origins.as_slice(),
         )
     }
@@ -165,7 +170,7 @@ impl<S: AuthSchema> AuthContext<S> {
                 self.config
                     .account
                     .account_linking
-                    .trusted_providers
+                    .trusted_provider_values()
                     .as_static()
                     .unwrap_or(&[])
             },
@@ -286,7 +291,7 @@ impl<S: AuthSchema> AuthContext<S> {
                 .config
                 .account
                 .account_linking
-                .trusted_providers
+                .trusted_provider_values()
                 .resolve(Some(request))
                 .await?;
             Arc::new(resolved)
@@ -315,8 +320,13 @@ impl<S: AuthSchema> AuthContext<S> {
     /// The origin middleware calls functional origins again after HTTP resolution.
     pub async fn csrf_trusted_origins(&self, request: &AuthRequest) -> AuthResult<Vec<String>> {
         let mut values = self.trusted_origins().to_vec();
-        if self.config.trusted_origins.is_dynamic() {
-            values.extend(self.config.trusted_origins.resolve(Some(request)).await?);
+        if self.config.trusted_origin_values().is_dynamic() {
+            values.extend(
+                self.config
+                    .trusted_origin_values()
+                    .resolve(Some(request))
+                    .await?,
+            );
         }
         Ok(values)
     }
@@ -371,7 +381,7 @@ impl<S: AuthSchema> AuthContext<S> {
             .config
             .account
             .account_linking
-            .trusted_providers
+            .trusted_provider_values()
             .resolve(request)
             .await?;
         if self
@@ -395,7 +405,7 @@ async fn origins(
     request: Option<&AuthRequest>,
 ) -> AuthResult<Vec<String>> {
     let mut values = url::base_origins(base_url);
-    values.extend(config.trusted_origins.resolve(request).await?);
+    values.extend(config.trusted_origin_values().resolve(request).await?);
     if let Some(environment) = url::environment("BETTER_AUTH_TRUSTED_ORIGINS")? {
         values.extend(environment.split(',').map(str::to_owned));
     }

@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, store::EphemeralStore,
     types::ListUsersParams, user_fields::UserFieldConfig,
@@ -67,7 +68,7 @@ async fn ordinary_output_transform_matches_upstream() -> AuthResult<()> {
             let _ = config.user.additional_fields.insert(
                 name.into(),
                 UserFieldConfig {
-                    output_transform: Some(Arc::new(move |value| {
+                    output_transform: Some(UserFieldTransform::new(move |value| {
                         let raw = value
                             .as_ref()
                             .and_then(Value::as_str)

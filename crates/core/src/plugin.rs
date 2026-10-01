@@ -49,6 +49,11 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     /// Plugin name - should be unique
     fn name(&self) -> &'static str;
 
+    /// Return the upstream plugin ID; core option wrappers have no plugin ID.
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        Some(self.name())
+    }
+
     /// Routes that this plugin handles
     fn routes(&self) -> Vec<AuthRoute>;
 
@@ -553,7 +558,7 @@ impl<S: AuthSchema> AuthContext<S> {
     }
 
     /// Project a user through the active user schema before returning public data.
-    pub fn user_view(
+    pub async fn user_view(
         &self,
         user: &impl crate::entity::AuthUser,
     ) -> AuthResult<crate::wire::UserView> {
@@ -564,10 +569,11 @@ impl<S: AuthSchema> AuthContext<S> {
             &self.metadata,
             self.database.supports_native_json(),
         )
+        .await
     }
 
     /// Keep hidden user fields available to trusted callbacks.
-    pub fn internal_user_view(
+    pub async fn internal_user_view(
         &self,
         user: &impl crate::entity::AuthUser,
     ) -> AuthResult<crate::wire::UserView> {
@@ -577,6 +583,7 @@ impl<S: AuthSchema> AuthContext<S> {
             &self.metadata,
             self.database.supports_native_json(),
         )
+        .await
     }
 
     /// Preserve cached session fields without repeating database output transforms.

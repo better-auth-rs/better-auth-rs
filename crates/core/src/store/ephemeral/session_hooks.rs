@@ -101,7 +101,8 @@ impl EphemeralStore {
         update.additional_fields = self
             .session_config
             .field_schema()
-            .storage_fields(update.additional_fields, false)?;
+            .storage_fields(update.additional_fields, false)
+            .await?;
         let session = self
             .raw("session", "update", |state| {
                 let Some(mut session) = state.sessions.find_mut(|row| row.token == token)? else {
@@ -111,7 +112,10 @@ impl EphemeralStore {
                 Ok(Some(session.clone()))
             })
             .await?;
-        let session = session.map(|row| self.output_session(row)).transpose()?;
+        let session =
+            futures_util::future::OptionFuture::from(session.map(|row| self.output_session(row)))
+                .await
+                .transpose()?;
         Ok(session)
     }
 
@@ -138,7 +142,7 @@ impl EphemeralStore {
             })
             .await?;
         // Upstream deleteManyWithHooks catches snapshot projection failures, then runs the write.
-        let sessions = self.output_sessions(sessions).unwrap_or_default();
+        let sessions = self.output_sessions(sessions).await.unwrap_or_default();
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
@@ -163,7 +167,8 @@ impl EphemeralStore {
             let fields = self
                 .session_config
                 .field_schema()
-                .storage_fields(Default::default(), false)?;
+                .storage_fields(Default::default(), false)
+                .await?;
             self.raw("session", "updateMany", |state| {
                 let mut count = 0;
                 state.sessions.update_each(|session| {

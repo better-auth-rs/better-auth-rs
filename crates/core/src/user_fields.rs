@@ -11,10 +11,9 @@ pub use record::AdapterRecord;
 mod organization;
 mod output;
 mod record;
+mod transform;
 mod user_record;
-
-/// Synchronous field transform. `None` represents undefined; `Some(Value::Null)` represents null.
-pub type UserFieldTransform = Arc<dyn Fn(Option<Value>) -> AuthResult<Option<Value>> + Send + Sync>;
+pub use transform::UserFieldTransform;
 
 /// Synchronous public input validator. Return the validated value or a public validation message.
 pub type UserFieldValidator = Arc<dyn Fn(Value) -> AuthResult<Value> + Send + Sync>;
@@ -73,9 +72,11 @@ pub struct UserFieldConfig {
     pub on_update: Option<Arc<dyn Fn() -> Value + Send + Sync>>,
     /// Validate public input before persistence; takes precedence over the route input transform.
     pub validator: Option<UserFieldValidator>,
-    /// Transform input at the route and storage boundaries, matching the upstream adapter.
+    /// Transform input at public parsing and storage boundaries.
+    /// Public parsing requires a synchronous callback; core adapters can await async callbacks.
     pub input_transform: Option<UserFieldTransform>,
-    /// Transform a stored value when constructing a user view.
+    /// Transform a stored value when constructing a view.
+    /// Core adapters await async callbacks; Organization policies require synchronous callbacks.
     pub output_transform: Option<UserFieldTransform>,
 }
 
@@ -177,7 +178,7 @@ impl UserConfig {
                         })?,
                     )
                 } else if let Some(transform) = &field.input_transform {
-                    transform(Some(value.clone()))?
+                    transform.call_sync(Some(value.clone()))?
                 } else {
                     Some(value.clone())
                 }
@@ -220,13 +221,37 @@ impl UserConfig {
         self.parse_input(&allowed, create)
     }
 
-    /// Map configured fields to application storage columns and apply adapter transforms.
-    pub fn storage_fields(
+    /// Map configured fields to application storage columns and await adapter transforms.
+    pub async fn storage_fields(
         &self,
         input: Map<String, Value>,
         create: bool,
     ) -> AuthResult<Map<String, Value>> {
-        self.storage_fields_inner(input, create, false)
+        self.storage_fields_async(input, create, false).await
+    }
+
+    async fn storage_fields_async(
+        &self,
+        input: Map<String, Value>,
+        create: bool,
+        preserve_id: bool,
+    ) -> AuthResult<Map<String, Value>> {
+        let mut output = Map::new();
+        for (name, field) in &self.additional_fields {
+            if preserve_id && name == "id" {
+                continue;
+            }
+            let Some(mut value) = field.storage_value(input.get(name), create)? else {
+                continue;
+            };
+            if let Some(transform) = &field.input_transform {
+                value = transform.call(value).await?;
+            }
+            if let Some(value) = value {
+                let _ = output.insert(field.field_name.as_ref().unwrap_or(name).clone(), value);
+            }
+        }
+        Ok(output)
     }
 
     fn storage_fields_inner(
@@ -240,33 +265,47 @@ impl UserConfig {
             if preserve_id && name == "id" {
                 continue;
             }
-            let mut value = input.get(name).cloned().or_else(|| {
-                if create {
-                    field.default_value()
-                } else {
-                    field.on_update.as_ref().map(|update| update())
-                }
-            });
-            if value.is_none() && (!create || field.input_transform.is_none()) {
+            let Some(mut value) = field.storage_value(input.get(name), create)? else {
                 continue;
-            }
-            if create
-                && field.required == Some(true)
-                && value == Some(Value::Null)
-                && let Some(default) = field.default_value()
-            {
-                value = Some(default);
-            }
-            if let Some(value) = value.as_mut() {
-                field.normalize_date(value)?;
-            }
+            };
             if let Some(transform) = &field.input_transform {
-                value = transform(value)?;
+                value = transform.call_sync(value)?;
             }
             if let Some(value) = value {
                 let _ = output.insert(field.field_name.as_ref().unwrap_or(name).clone(), value);
             }
         }
         Ok(output)
+    }
+}
+
+impl UserFieldConfig {
+    // The outer option omits a field. The inner option passes undefined to its callback.
+    fn storage_value(
+        &self,
+        input: Option<&Value>,
+        create: bool,
+    ) -> AuthResult<Option<Option<Value>>> {
+        let mut value = input.cloned().or_else(|| {
+            if create {
+                self.default_value()
+            } else {
+                self.on_update.as_ref().map(|update| update())
+            }
+        });
+        if value.is_none() && (!create || self.input_transform.is_none()) {
+            return Ok(None);
+        }
+        if create
+            && self.required == Some(true)
+            && value == Some(Value::Null)
+            && let Some(default) = self.default_value()
+        {
+            value = Some(default);
+        }
+        if let Some(value) = value.as_mut() {
+            self.normalize_date(value)?;
+        }
+        Ok(Some(value))
     }
 }

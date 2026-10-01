@@ -35,7 +35,8 @@ impl<S: AuthSchema> SecondaryStore<S> {
             &self.config.user,
             &self.metadata,
             self.inner.supports_native_json(),
-        )?;
+        )
+        .await?;
         for reference in self.references(&user.id.display_string()?).await? {
             if reference.expires_at <= chrono::Utc::now().timestamp_millis() {
                 continue;

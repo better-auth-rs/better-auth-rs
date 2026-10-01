@@ -1,4 +1,5 @@
 use super::{Capture, config};
+use better_auth::config::UserFieldTransform;
 use better_auth::{AuthError, AuthResult};
 use better_auth_core::{
     AuthConfig, AuthSchema, CreateUser, ListUsersParams,
@@ -28,7 +29,7 @@ impl Projection {
             "note".into(),
             UserFieldConfig {
                 required: Some(false),
-                output_transform: Some(Arc::new(move |value| {
+                output_transform: Some(UserFieldTransform::new(move |value| {
                     let _ = counter.fetch_add(1, Ordering::SeqCst);
                     if should_fail.load(Ordering::SeqCst) {
                         return Err(AuthError::internal("list projection failed"));

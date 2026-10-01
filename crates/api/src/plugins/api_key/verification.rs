@@ -508,7 +508,7 @@ impl ApiKeyPlugin {
                     active: true,
                     additional_fields: Default::default(),
                 };
-                Ok(Some((session, ctx.user_view(&user)?)))
+                Ok(Some((session, ctx.user_view(&user).await?)))
             },
         )
         .await

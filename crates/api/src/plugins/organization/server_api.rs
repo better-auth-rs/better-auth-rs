@@ -158,7 +158,7 @@ impl OrganizationPlugin {
         let org_id = organization.id.typed()?.as_str();
         let organization_view =
             crate::plugins::organization::fields::organization(&organization, ctx);
-        let user_view = ctx.internal_user_view(&user)?;
+        let user_view = ctx.internal_user_view(&user).await?;
         let event = OrganizationUser {
             user: &user_view,
             organization: &organization_view,
@@ -189,7 +189,7 @@ impl OrganizationPlugin {
             let team_id = team.id.typed()?.clone();
             let result = async {
                 let maximum = if let Some((actor, session)) = &session {
-                    let user_view = ctx.user_view(actor)?;
+                    let user_view = ctx.user_view(actor).await?;
                     let session_view = ctx.session_view(session).await?;
                     self.config
                         .team_member_limit(OrganizationTeamMemberLimit {

@@ -190,26 +190,26 @@ impl SessionView {
     }
 
     /// Apply configured field visibility to a serialized application session model.
-    pub fn with_fields<T: AuthSession>(
+    pub async fn with_fields<T: AuthSession>(
         session: &T,
         config: &crate::config::SessionConfig,
     ) -> crate::AuthResult<Self> {
-        Self::with_fields_for_adapter(session, config, true)
+        Self::with_fields_for_adapter(session, config, true).await
     }
 
-    pub fn with_fields_for_adapter<T: AuthSession>(
+    pub async fn with_fields_for_adapter<T: AuthSession>(
         session: &T,
         config: &crate::config::SessionConfig,
         supports_native_json: bool,
     ) -> crate::AuthResult<Self> {
         let mut view =
-            Self::with_internal_fields_for_adapter(session, config, supports_native_json)?;
+            Self::with_internal_fields_for_adapter(session, config, supports_native_json).await?;
         view.filter_returned_fields(config);
         Ok(view)
     }
 
     /// Include hidden application fields for trusted callbacks, never for public responses.
-    pub fn with_internal_fields_for_adapter<T: AuthSession>(
+    pub async fn with_internal_fields_for_adapter<T: AuthSession>(
         session: &T,
         config: &crate::config::SessionConfig,
         supports_native_json: bool,
@@ -219,12 +219,13 @@ impl SessionView {
             std::slice::from_ref(session),
             config,
             supports_native_json,
-        )?
+        )
+        .await?
         .remove(0))
     }
 
     /// Project a database result in row order, interleaving synchronous callbacks by field.
-    pub fn with_internal_fields_many_for_adapter<T: AuthSession>(
+    pub async fn with_internal_fields_many_for_adapter<T: AuthSession>(
         sessions: &[T],
         config: &crate::config::SessionConfig,
         supports_native_json: bool,
@@ -251,27 +252,30 @@ impl SessionView {
             &mut rows,
             &config.additional_fields,
             |(session, view, core, model), name, field| {
-                let value = if let Some(fields) = session.projected_fields() {
-                    fields.get(name).cloned()
-                } else {
-                    let value = model
-                        .get(T::serialized_field_name(
-                            field.field_name.as_deref().unwrap_or(name),
-                        ))
-                        .or_else(|| model.get(name))
-                        .or_else(|| core.get(name))
-                        .cloned();
-                    field.adapter_output(value, supports_native_json)?
-                };
-                if let Some(mut value) = value {
-                    if !field.references_id() {
-                        field.normalize_date(&mut value)?;
+                Box::pin(async move {
+                    let value = if let Some(fields) = session.projected_fields() {
+                        fields.get(name).cloned()
+                    } else {
+                        let value = model
+                            .get(T::serialized_field_name(
+                                field.field_name.as_deref().unwrap_or(name),
+                            ))
+                            .or_else(|| model.get(name))
+                            .or_else(|| core.get(name))
+                            .cloned();
+                        field.adapter_output(value, supports_native_json).await?
+                    };
+                    if let Some(mut value) = value {
+                        if !field.references_id() {
+                            field.normalize_date(&mut value)?;
+                        }
+                        let _ = view.additional_fields.insert(name.to_owned(), value);
                     }
-                    let _ = view.additional_fields.insert(name.to_owned(), value);
-                }
-                Ok(())
+                    Ok(())
+                })
             },
-        )?;
+        )
+        .await?;
         Ok(rows.into_iter().map(|(_, view, _, _)| view).collect())
     }
 }

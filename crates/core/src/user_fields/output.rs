@@ -95,66 +95,66 @@ impl UserView {
 
     /// Construct the public user shape from the active application and plugin schemas.
     /// Application model serialization is inspected only at this user boundary.
-    pub fn with_fields<T: AuthUser>(
+    pub async fn with_fields<T: AuthUser>(
         user: &T,
         config: &super::UserConfig,
         metadata: &MetadataMap,
     ) -> AuthResult<Self> {
-        Self::project(user, config, metadata, true, true)
+        Self::project(user, config, metadata, true, true).await
     }
 
-    pub fn with_fields_for_adapter<T: AuthUser>(
+    pub async fn with_fields_for_adapter<T: AuthUser>(
         user: &T,
         config: &super::UserConfig,
         metadata: &MetadataMap,
         supports_native_json: bool,
     ) -> AuthResult<Self> {
-        Self::project(user, config, metadata, true, supports_native_json)
+        Self::project(user, config, metadata, true, supports_native_json).await
     }
 
     /// Apply adapter transforms once, then use the endpoint's field visibility.
-    pub fn with_field_policies<T: AuthUser>(
+    pub async fn with_field_policies<T: AuthUser>(
         user: &T,
         adapter: &super::UserConfig,
         endpoint: &super::UserConfig,
         metadata: &MetadataMap,
         supports_native_json: bool,
     ) -> AuthResult<Self> {
-        let mut view = Self::project(user, adapter, metadata, false, supports_native_json)?;
+        let mut view = Self::project(user, adapter, metadata, false, supports_native_json).await?;
         view.filter_cached_fields(endpoint);
         Ok(view)
     }
 
     /// Apply adapter transforms and active schemas without removing application-only fields.
     /// Use this view only for trusted callbacks, never for public responses.
-    pub fn with_internal_fields<T: AuthUser>(
+    pub async fn with_internal_fields<T: AuthUser>(
         user: &T,
         config: &super::UserConfig,
         metadata: &MetadataMap,
     ) -> AuthResult<Self> {
-        Self::project(user, config, metadata, false, true)
+        Self::project(user, config, metadata, false, true).await
     }
 
-    pub fn with_internal_fields_for_adapter<T: AuthUser>(
+    pub async fn with_internal_fields_for_adapter<T: AuthUser>(
         user: &T,
         config: &super::UserConfig,
         metadata: &MetadataMap,
         supports_native_json: bool,
     ) -> AuthResult<Self> {
-        Self::project(user, config, metadata, false, supports_native_json)
+        Self::project(user, config, metadata, false, supports_native_json).await
     }
 
     /// Project a database result in row order, interleaving synchronous callbacks by field.
-    pub fn with_internal_fields_many_for_adapter<T: AuthUser>(
+    pub async fn with_internal_fields_many_for_adapter<T: AuthUser>(
         users: &[T],
         config: &super::UserConfig,
         metadata: &MetadataMap,
         supports_native_json: bool,
     ) -> AuthResult<Vec<Self>> {
-        Self::project_many(users, config, metadata, false, supports_native_json)
+        Self::project_many(users, config, metadata, false, supports_native_json).await
     }
 
-    fn project<T: AuthUser>(
+    async fn project<T: AuthUser>(
         user: &T,
         config: &super::UserConfig,
         metadata: &MetadataMap,
@@ -168,11 +168,12 @@ impl UserView {
             metadata,
             public,
             supports_native_json,
-        )?
+        )
+        .await?
         .remove(0))
     }
 
-    fn project_many<T: AuthUser>(
+    async fn project_many<T: AuthUser>(
         users: &[T],
         config: &super::UserConfig,
         metadata: &MetadataMap,
@@ -219,73 +220,78 @@ impl UserView {
             &mut rows,
             &config.additional_fields,
             |(user, view, model), name, field| {
-                let value = if let Some(projected) = user.projected_fields() {
-                    match name {
-                        "name" => view.name.json()?,
-                        "image" => view.image.json()?,
-                        _ => projected.get(name).cloned(),
-                    }
-                } else {
-                    let value = model
-                        .as_ref()
-                        .and_then(|model| model.get(field.field_name.as_deref().unwrap_or(name)))
-                        .cloned()
-                        .or_else(|| match (name, &field.field_name) {
-                            ("username", None) => Some(json!(user.username())),
-                            ("displayUsername", None) => Some(json!(user.display_username())),
-                            _ => None,
-                        });
-                    field.adapter_output(value, supports_native_json)?
-                };
-                if name == "username" || name == "displayUsername" {
-                    if let Some(fields) = &mut view.visible_fields {
-                        if value.is_some() && (!public || field.returned) {
-                            let _ = fields.insert(name.to_owned());
+                Box::pin(async move {
+                    let value = if let Some(projected) = user.projected_fields() {
+                        match name {
+                            "name" => view.name.json()?,
+                            "image" => view.image.json()?,
+                            _ => projected.get(name).cloned(),
+                        }
+                    } else {
+                        let value = model
+                            .as_ref()
+                            .and_then(|model| {
+                                model.get(field.field_name.as_deref().unwrap_or(name))
+                            })
+                            .cloned()
+                            .or_else(|| match (name, &field.field_name) {
+                                ("username", None) => Some(json!(user.username())),
+                                ("displayUsername", None) => Some(json!(user.display_username())),
+                                _ => None,
+                            });
+                        field.adapter_output(value, supports_native_json).await?
+                    };
+                    if name == "username" || name == "displayUsername" {
+                        if let Some(fields) = &mut view.visible_fields {
+                            if value.is_some() && (!public || field.returned) {
+                                let _ = fields.insert(name.to_owned());
+                            } else {
+                                let _ = fields.remove(name);
+                            }
+                        }
+                        let typed = if !public || field.returned {
+                            value
+                                .as_ref()
+                                .map(|value| serde_json::from_value(value.clone()))
+                                .transpose()?
+                                .flatten()
                         } else {
-                            let _ = fields.remove(name);
+                            None
+                        };
+                        if name == "username" {
+                            view.username = typed;
+                        } else {
+                            view.display_username = typed;
                         }
                     }
-                    let typed = if !public || field.returned {
-                        value
-                            .as_ref()
-                            .map(|value| serde_json::from_value(value.clone()))
-                            .transpose()?
-                            .flatten()
-                    } else {
-                        None
-                    };
-                    if name == "username" {
-                        view.username = typed;
-                    } else {
-                        view.display_username = typed;
+                    if name == "name" || name == "image" {
+                        let target = if name == "name" {
+                            &mut view.name
+                        } else {
+                            &mut view.image
+                        };
+                        *target = crate::SchemaValue::from_json(value);
+                        if public
+                            && !field.returned
+                            && let Some(fields) = &mut view.visible_fields
+                        {
+                            let _ = fields.remove(name);
+                        }
+                        return Ok(());
                     }
-                }
-                if name == "name" || name == "image" {
-                    let target = if name == "name" {
-                        &mut view.name
-                    } else {
-                        &mut view.image
-                    };
-                    *target = crate::SchemaValue::from_json(value);
-                    if public
-                        && !field.returned
-                        && let Some(fields) = &mut view.visible_fields
-                    {
-                        let _ = fields.remove(name);
+                    if let Some(mut value) = value {
+                        if !field.references_id() {
+                            field.normalize_date(&mut value)?;
+                        }
+                        if !public || field.returned {
+                            let _ = view.additional_fields.insert(name.to_owned(), value);
+                        }
                     }
-                    return Ok(());
-                }
-                if let Some(mut value) = value {
-                    if !field.references_id() {
-                        field.normalize_date(&mut value)?;
-                    }
-                    if !public || field.returned {
-                        let _ = view.additional_fields.insert(name.to_owned(), value);
-                    }
-                }
-                Ok(())
+                    Ok(())
+                })
             },
-        )?;
+        )
+        .await?;
         Ok(rows.into_iter().map(|(_, view, _)| view).collect())
     }
 }

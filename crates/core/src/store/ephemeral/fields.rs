@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::user_fields::UserFieldTransform;
 use better_auth_schema_registry::{EntityRole, core_fields};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
@@ -75,7 +77,9 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
     let _ = fields.team.additional_fields.insert(
         "createdAt".into(),
         UserFieldConfig {
-            input_transform: Some(Arc::new(|_| Ok(Some(json!("2000-01-02T03:04:05+02:00"))))),
+            input_transform: Some(UserFieldTransform::new(|_| {
+                Ok(Some(json!("2000-01-02T03:04:05+02:00")))
+            })),
             ..Default::default()
         },
     );
@@ -84,7 +88,7 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
         UserFieldConfig {
             field_type: UserFieldType::Number,
             default_value: Some(json!(17)),
-            input_transform: Some(Arc::new(|value| {
+            input_transform: Some(UserFieldTransform::new(|value| {
                 assert_eq!(value, Some(json!(0)));
                 Ok(Some(json!(2)))
             })),
@@ -260,10 +264,10 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     use serde_json::json;
 
     let policy = UserFieldConfig {
-        input_transform: Some(Arc::new(|value| {
+        input_transform: Some(UserFieldTransform::new(|value| {
             Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
         })),
-        output_transform: Some(Arc::new(|value| {
+        output_transform: Some(UserFieldTransform::new(|value| {
             Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
         })),
         ..Default::default()
@@ -284,10 +288,10 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             required: Some(false),
             field_name: Some("ignored_id".into()),
             default_value: Some(json!("ignored")),
-            input_transform: Some(Arc::new(|_| {
+            input_transform: Some(UserFieldTransform::new(|_| {
                 Err(AuthError::bad_request("id input must not run"))
             })),
-            output_transform: Some(Arc::new(|_| {
+            output_transform: Some(UserFieldTransform::new(|_| {
                 Err(AuthError::bad_request("id output must not run"))
             })),
             ..Default::default()
@@ -305,7 +309,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         "teamId".into(),
         UserFieldConfig {
             required: Some(false),
-            output_transform: Some(Arc::new(|value| {
+            output_transform: Some(UserFieldTransform::new(|value| {
                 assert_eq!(value, Some(Value::Null));
                 Ok(value)
             })),
@@ -466,7 +470,7 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
                 additional_fields: [(
                     "name".into(),
                     UserFieldConfig {
-                        input_transform: Some(Arc::new(|_| {
+                        input_transform: Some(UserFieldTransform::new(|_| {
                             Err(AuthError::bad_request("transform failed"))
                         })),
                         ..Default::default()
@@ -522,7 +526,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
     fields.organization.additional_fields.insert(
         "name".into(),
         UserFieldConfig {
-            input_transform: Some(Arc::new(|_| Ok(Some(json!(12))))),
+            input_transform: Some(UserFieldTransform::new(|_| Ok(Some(json!(12))))),
             ..Default::default()
         },
     );
@@ -552,7 +556,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
         .additional_fields
         .get_mut("name")
         .unwrap()
-        .output_transform = Some(Arc::new(|_| Ok(None)));
+        .output_transform = Some(UserFieldTransform::new(|_| Ok(None)));
     store.configure_organization_fields(fields).unwrap();
     let omitted = store
         .get_organization_by_id(organization.id.typed().unwrap())

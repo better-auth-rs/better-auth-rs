@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -80,7 +81,7 @@ async fn duplicate_identities_are_rejected_after_two_projections_independently_o
             let _ = config.account.additional_fields.insert(
                 "accessToken".into(),
                 UserFieldConfig {
-                    output_transform: Some(Arc::new(move |value| {
+                    output_transform: Some(UserFieldTransform::new(move |value| {
                         let _ = calls.fetch_add(1, Ordering::SeqCst);
                         let mode = should_fail.load(Ordering::SeqCst);
                         let token = value.as_ref().and_then(serde_json::Value::as_str);

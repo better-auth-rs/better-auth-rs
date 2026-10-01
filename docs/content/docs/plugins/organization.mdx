@@ -70,6 +70,8 @@ Organization body schemas run after endpoint before hooks and before authenticat
 
 Trusted native calls to `/organization/create` can omit both headers and a Request and supply `userId`. The plugin loads that user and applies organization limits, while bypassing a false `allow_user_to_create_organization` result for this server action. Explicit empty headers or a supplied Request still require an authenticated session. Native `/organization/check-slug` also permits omitted headers and Request. These rules do not grant an HTTP caller permission to act as another user.
 
+Trusted native `/organization/create-team` and `/organization/remove-team` calls can supply `organizationId` without headers or a Request. Their lifecycle hooks receive `user: None`, and the team-limit policy receives `session: None`. Calls with a session retain membership and permission checks and can use the active organization. HTTP calls, explicit empty headers, and supplied Requests require authentication. Other team routes retain their required-headers and session rules. Team capacity checks use accurate database counts, independent of the default list limit.
+
 ## Additional fields
 
 Set `OrganizationConfig::schema` to an `OrganizationFields` value. The `organization`, `member`, `invitation`, `team`, and `organization_role` members each use `UserConfig::additional_fields`. Define the corresponding typed SeaORM columns and select the application's organization models as described in the [database guide](/docs/concepts/database). The plugin configures the store during initialization.

@@ -17,6 +17,7 @@ use better_auth::__private_core::{
         CreateUser, UpdateOrganization, UpdateOrganizationRole, UpdateTeam,
     },
 };
+use better_auth::config::UserFieldTransform;
 use better_auth::seaorm::{Database, SeaOrmStore, sea_orm::EntityTrait};
 use better_auth::{
     AuthConfig,
@@ -34,10 +35,10 @@ type Store = SeaOrmStore<BundledSchema, fixture::models::Models>;
 fn text_policy() -> UserFieldConfig {
     UserFieldConfig {
         required: Some(true),
-        input_transform: Some(Arc::new(|value| {
+        input_transform: Some(UserFieldTransform::new(|value| {
             Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
         })),
-        output_transform: Some(Arc::new(|value| {
+        output_transform: Some(UserFieldTransform::new(|value| {
             Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
         })),
         ..Default::default()
@@ -129,12 +130,12 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         UserFieldConfig {
             field_name: Some("ignored_id_mapping".into()),
             default_value: Some(json!("ignored-id-default")),
-            input_transform: Some(Arc::new(|_| {
+            input_transform: Some(UserFieldTransform::new(|_| {
                 Err(better_auth::AuthError::config(
                     "id input policy must not run",
                 ))
             })),
-            output_transform: Some(Arc::new(|_| {
+            output_transform: Some(UserFieldTransform::new(|_| {
                 Err(better_auth::AuthError::config(
                     "id output policy must not run",
                 ))
@@ -311,7 +312,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         "name".into(),
         UserFieldConfig {
             required: Some(true),
-            output_transform: Some(Arc::new(|_| Ok(Some(json!(12))))),
+            output_transform: Some(UserFieldTransform::new(|_| Ok(Some(json!(12))))),
             ..Default::default()
         },
     );
@@ -342,7 +343,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         "logo".into(),
         UserFieldConfig {
             required: Some(false),
-            output_transform: Some(Arc::new(|_| Ok(None))),
+            output_transform: Some(UserFieldTransform::new(|_| Ok(None))),
             ..Default::default()
         },
     );
@@ -370,7 +371,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         "status".into(),
         UserFieldConfig {
             required: Some(true),
-            output_transform: Some(Arc::new(|_| Ok(Some(json!("unrecognized"))))),
+            output_transform: Some(UserFieldTransform::new(|_| Ok(Some(json!("unrecognized"))))),
             ..Default::default()
         },
     );
@@ -414,12 +415,12 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
             field_type: UserFieldType::Number,
             required: Some(false),
             default_value: Some(json!(17)),
-            input_transform: Some(Arc::new(move |value| {
+            input_transform: Some(UserFieldTransform::new(move |value| {
                 let _ = observed.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(value, Some(json!(0)));
                 Ok(Some(json!(2)))
             })),
-            output_transform: Some(Arc::new(|value| {
+            output_transform: Some(UserFieldTransform::new(|value| {
                 Ok(value.map(|value| json!(value.as_i64().unwrap() + 10)))
             })),
             ..Default::default()

@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use async_trait::async_trait;
 use axum::{Json, Router, routing::post};
 use better_auth::plugins::{
@@ -54,7 +55,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                 returned: name != "scope" || input.operation != "list-accounts",
                 on_update: (name == "scope")
                     .then(|| Arc::new(|| json!("after")) as Arc<dyn Fn() -> Value + Send + Sync>),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(value.map(|value| {
                         if value.is_null() {
                             value

@@ -445,21 +445,23 @@ where
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         let id = self.store.parse_id(id, S::User::parse_id)?;
-        <S::User as SeaOrmUserModel>::Entity::find()
+        match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
             .one(&self.tx)
             .await
             .map_err(map_db_err)?
             .as_ref()
-            .map(|row| self.store.output_user(row, &self.tx))
-            .transpose()
+        {
+            Some(row) => self.store.output_user(row, &self.tx).await.map(Some),
+            None => Ok(None),
+        }
     }
     async fn get_user_by_email(
         &self,
         email: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-        <S::User as SeaOrmUserModel>::Entity::find()
+        match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(
                 <S::User as SeaOrmUserModel>::email_column()
                     .eq(crate::utils::email::normalize_user_email(email)),
@@ -468,8 +470,10 @@ where
             .await
             .map_err(map_db_err)?
             .as_ref()
-            .map(|row| self.store.output_user(row, &self.tx))
-            .transpose()
+        {
+            Some(row) => self.store.output_user(row, &self.tx).await.map(Some),
+            None => Ok(None),
+        }
     }
     async fn get_user_by_username(
         &self,

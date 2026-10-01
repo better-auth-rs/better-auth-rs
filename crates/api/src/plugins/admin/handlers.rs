@@ -147,7 +147,7 @@ pub(crate) async fn set_role_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: ctx.user_view(&updated_user)?,
+        user: ctx.user_view(&updated_user).await?,
     })
 }
 
@@ -160,7 +160,7 @@ pub(crate) async fn get_user_core(
         .get_user_by_id(&query.id)
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-    ctx.user_view(&user)
+    ctx.user_view(&user).await
 }
 
 pub(crate) async fn create_user_core(
@@ -276,7 +276,7 @@ pub(crate) async fn create_user_core(
     }
 
     Ok(UserResponse {
-        user: ctx.user_view(&user)?,
+        user: ctx.user_view(&user).await?,
     })
 }
 
@@ -417,7 +417,7 @@ pub(crate) async fn update_user_core(
     if body.data.get("banned") == Some(&serde_json::Value::Bool(true)) {
         ctx.database.delete_user_sessions(&body.user_id).await?;
     }
-    ctx.user_view(&updated_user)
+    ctx.user_view(&updated_user).await
 }
 
 pub(crate) async fn list_users_core(
@@ -438,11 +438,12 @@ pub(crate) async fn list_users_core(
     };
 
     let (users, total) = ctx.database.list_users(params).await?;
+    let mut projected = Vec::with_capacity(users.len());
+    for user in &users {
+        projected.push(ctx.user_view(user).await?);
+    }
     Ok(ListUsersResponse {
-        users: users
-            .iter()
-            .map(|user| ctx.user_view(user))
-            .collect::<AuthResult<_>>()?,
+        users: projected,
         total,
         limit: query.limit,
         offset: query.offset,
@@ -519,7 +520,7 @@ pub(crate) async fn ban_user_core(
         .await?;
 
     Ok(UserResponse {
-        user: ctx.user_view(&updated_user)?,
+        user: ctx.user_view(&updated_user).await?,
     })
 }
 
@@ -542,7 +543,7 @@ pub(crate) async fn unban_user_core(
 
     let updated_user = ctx.database.update_user(&body.user_id, update).await?;
     Ok(UserResponse {
-        user: ctx.user_view(&updated_user)?,
+        user: ctx.user_view(&updated_user).await?,
     })
 }
 
@@ -599,7 +600,7 @@ pub(crate) async fn impersonate_user_core(
             return Err(AuthError::banned_user(
                 config
                     .banned_user_message
-                    .resolve(&ctx.internal_user_view(&target)?)
+                    .resolve(&ctx.internal_user_view(&target).await?)
                     .await?,
             ));
         }
@@ -625,7 +626,7 @@ pub(crate) async fn impersonate_user_core(
         .await?;
     let response = SessionUserResponse {
         session: ctx.session_view(&session).await?,
-        user: ctx.user_view(&target)?,
+        user: ctx.user_view(&target).await?,
     };
 
     Ok((response, data))
@@ -673,7 +674,7 @@ pub(crate) async fn stop_impersonating_core(
     };
     let response = SessionUserResponse {
         session: ctx.session_view(&data.session).await?,
-        user: ctx.user_view(&data.user)?,
+        user: ctx.user_view(&data.user).await?,
     };
 
     Ok((response, data))

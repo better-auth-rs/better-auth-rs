@@ -148,6 +148,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin
         "password-management"
     }
 
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        None
+    }
+
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::post("/request-password-reset", "requestPasswordReset")

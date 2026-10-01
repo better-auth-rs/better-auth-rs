@@ -6,7 +6,7 @@ use crate::store::{
 };
 
 impl EphemeralStore {
-    pub(super) fn output_verifications(
+    pub(super) async fn output_verifications(
         &self,
         records: &[Map<String, Value>],
     ) -> AuthResult<Vec<VerificationView>> {
@@ -14,13 +14,14 @@ impl EphemeralStore {
             .config
             .verification
             .field_schema()
-            .project_records(records, true, true)?
+            .project_records(records, true, true)
+            .await?
             .into_iter()
             .map(VerificationView::from_adapter_fields)
             .collect())
     }
 
-    pub(super) fn output_verification(
+    pub(super) async fn output_verification(
         &self,
         record: &Map<String, Value>,
     ) -> AuthResult<VerificationView> {
@@ -28,7 +29,8 @@ impl EphemeralStore {
             self.config
                 .verification
                 .field_schema()
-                .project_record(record, true, true)?,
+                .project_record(record, true, true)
+                .await?,
         ))
     }
     pub(super) fn verification_field<'a>(
@@ -91,7 +93,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                 true,
                 true,
                 |_| true,
-            )?;
+            )
+            .await?;
         let _ = record.insert("id".into(), Value::String(id.to_owned()));
         let inserted = self
             .raw("verification", "create", |state| {
@@ -111,8 +114,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             return Ok(false);
         }
         // Reservation catches create errors and then reads the existing row through the adapter again.
-        if self.output_verification(&record).is_err() {
-            let _ = self.output_verification(&record)?;
+        if self.output_verification(&record).await.is_err() {
+            let _ = self.output_verification(&record).await?;
             return Ok(false);
         }
         Ok(true)
@@ -132,7 +135,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .config
             .verification
             .field_schema()
-            .record_storage_fields_for_adapter(input.fields()?, true, true, |_| true)?;
+            .record_storage_fields_for_adapter(input.fields()?, true, true, |_| true)
+            .await?;
         let supplied = record
             .remove("id")
             .and_then(|id| id.as_str().map(str::to_owned));
@@ -145,7 +149,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             Ok(())
         })
         .await?;
-        let projected = self.output_verification(&record)?;
+        let projected = self.output_verification(&record).await?;
         if let Some(writer) = writer {
             writer(projected.clone()).await?;
         }
@@ -181,7 +185,9 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .and_then(Value::as_str),
             )
         });
-        latest.map(|row| self.output_verification(row)).transpose()
+        futures_util::future::OptionFuture::from(latest.map(|row| self.output_verification(row)))
+            .await
+            .transpose()
     }
     async fn get_verification(
         &self,
@@ -203,10 +209,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .cloned())
             })
             .await?;
-        record
-            .as_ref()
-            .map(|record| self.output_verification(record))
-            .transpose()
+        futures_util::future::OptionFuture::from(
+            record
+                .as_ref()
+                .map(|record| self.output_verification(record)),
+        )
+        .await
+        .transpose()
     }
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
         let record = self
@@ -222,10 +231,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .cloned())
             })
             .await?;
-        record
-            .as_ref()
-            .map(|record| self.output_verification(record))
-            .transpose()
+        futures_util::future::OptionFuture::from(
+            record
+                .as_ref()
+                .map(|record| self.output_verification(record)),
+        )
+        .await
+        .transpose()
     }
     async fn get_verification_by_identifier(
         &self,
@@ -244,10 +256,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .cloned())
             })
             .await?;
-        record
-            .as_ref()
-            .map(|record| self.output_verification(record))
-            .transpose()
+        futures_util::future::OptionFuture::from(
+            record
+                .as_ref()
+                .map(|record| self.output_verification(record)),
+        )
+        .await
+        .transpose()
     }
 
     async fn update_verification(

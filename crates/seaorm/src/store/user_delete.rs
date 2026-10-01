@@ -23,7 +23,7 @@ where
         let user_id = self.parse_id(user_id, S::Account::parse_user_id)?;
         let condition = S::Account::user_id_column().eq(user_id);
         let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
-            database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
                 "findMany",
                 async {
@@ -39,7 +39,10 @@ where
                 },
             )
             .await
-            .and_then(|rows| self.output_accounts(&rows, db))
+            {
+                Ok(rows) => self.output_accounts(&rows, db).await,
+                Err(error) => Err(error),
+            }
         }
         .await;
         // Match the upstream snapshot-only catch; hook and write errors still propagate.
@@ -121,12 +124,12 @@ where
                     .map_err(map_db_err)
             },
         )
-        .await
-        .and_then(|row| {
-            row.as_ref()
-                .map(|row| self.output_user(row, db))
-                .transpose()
-        });
+        .await;
+        let snapshot = match snapshot {
+            Ok(Some(row)) => self.output_user(&row, db).await.map(Some),
+            Ok(None) => Ok(None),
+            Err(error) => Err(error),
+        };
         // deleteWithHooks returns null after a missing or unreadable snapshot.
         let user = match snapshot {
             Ok(Some(user)) => user,

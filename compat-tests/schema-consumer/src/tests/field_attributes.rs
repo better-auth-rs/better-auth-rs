@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::{
     AuthConfig, BetterAuth,
     config::{UserFieldConfig, UserFieldReference, UserFieldType},
@@ -261,7 +262,7 @@ fn runtime_fields(output_calls: Arc<AtomicUsize>) -> OrganizationConfig {
             };
             if name == "transformedOwner" {
                 let calls = output_calls.clone();
-                field.output_transform = Some(Arc::new(move |value| {
+                field.output_transform = Some(UserFieldTransform::new(move |value| {
                     calls.fetch_add(1, Ordering::SeqCst);
                     assert_eq!(value, Some(json!("12.5")));
                     Ok(Some(json!({"original":value})))

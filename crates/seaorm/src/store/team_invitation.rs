@@ -208,11 +208,11 @@ where
                 let mut active = session.into_active_model();
                 let cookie_session = if let [team_id] = team_ids.as_slice() {
                     S::Session::set_active_team_id(&mut active, Some((*team_id).to_owned()));
-                    self.apply_session_field_updates(&mut active)?;
+                    self.apply_session_field_updates(&mut active).await?;
                     S::Session::set_updated_at(&mut active, Utc::now());
                     let updated = active.update(&tx).await.map_err(map_db_err)?;
                     active = updated.clone().into_active_model();
-                    Some(self.output_session(&updated, &tx)?)
+                    Some(self.output_session(&updated, &tx).await?)
                 } else {
                     None
                 };
@@ -220,7 +220,7 @@ where
                     &mut active,
                     Some(invitation.organization_id.typed()?.clone()),
                 );
-                self.apply_session_field_updates(&mut active)?;
+                self.apply_session_field_updates(&mut active).await?;
                 S::Session::set_updated_at(&mut active, Utc::now());
                 let _ = active.update(&tx).await.map_err(map_db_err)?;
                 Ok((member, cookie_session))

@@ -19,11 +19,11 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
-    pub(super) fn session_delete_snapshot(
+    pub(super) async fn session_delete_snapshot(
         &self,
         session: S::Session,
     ) -> AuthResult<better_auth_core::wire::SessionView> {
-        self.output_session(&session, self.connection())
+        self.output_session(&session, self.connection()).await
     }
 
     pub(super) async fn delete_sessions_with_connection(
@@ -54,9 +54,11 @@ where
         )
         .await;
         // Upstream deleteManyWithHooks ignores snapshot failures only. The batch write still runs.
-        let sessions = snapshot
-            .and_then(|sessions| self.output_sessions(&sessions, db))
-            .unwrap_or_default();
+        let sessions = match snapshot {
+            Ok(sessions) => self.output_sessions(&sessions, db).await,
+            Err(error) => Err(error),
+        }
+        .unwrap_or_default();
         let context = self.hook_context(transaction);
         for session in &sessions {
             for hook in self.hooks() {
@@ -85,7 +87,7 @@ where
                     ..Default::default()
                 },
             )?;
-            self.apply_session_field_updates(&mut active)?;
+            self.apply_session_field_updates(&mut active).await?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "updateMany",

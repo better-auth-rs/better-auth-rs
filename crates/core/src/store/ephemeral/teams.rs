@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::user_fields::UserFieldTransform;
 use crate::{
     CreateOrganizationRole, CreateTeam, OrganizationRole, Team, TeamMember, UpdateOrganizationRole,
     UpdateTeam,
@@ -695,7 +697,7 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
         }));
-        marker.output_transform = Some(Arc::new(|value| {
+        marker.output_transform = Some(UserFieldTransform::new(|value| {
             if value == Some(json!("read-fail")) || value == Some(json!("updated-2")) {
                 Err(AuthError::bad_request("invitation output failed"))
             } else {

@@ -25,7 +25,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(session)
     }
 
-    pub(super) fn session_fields(
+    pub(super) async fn session_fields(
         &self,
         session: &crate::wire::SessionView,
     ) -> AuthResult<Map<String, Value>> {
@@ -40,7 +40,8 @@ impl<S: AuthSchema> SecondaryStore<S> {
             session,
             &config,
             !self.database_sessions() || self.inner.supports_native_json(),
-        )?;
+        )
+        .await?;
         view.visible_fields = Some(
             [
                 ("admin.enabled", "impersonatedBy"),
@@ -169,17 +170,20 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let user = match transaction {
             Some(transaction) => transaction.get_user_by_id_field(&session.user_id).await?,
             None => self.inner.get_user_by_id_field(&session.user_id).await?,
-        }
-        .map(|user| {
-            UserView::with_internal_fields_for_adapter(
-                &user,
-                &self.config.user,
-                &self.metadata,
-                self.inner.supports_native_json(),
-            )
-        })
-        .transpose()?;
-        let value = json!({ "session": self.session_fields(session)?, "user": user });
+        };
+        let user = match user {
+            Some(user) => Some(
+                UserView::with_internal_fields_for_adapter(
+                    &user,
+                    &self.config.user,
+                    &self.metadata,
+                    self.inner.supports_native_json(),
+                )
+                .await?,
+            ),
+            None => None,
+        };
+        let value = json!({ "session": self.session_fields(session).await?, "user": user });
         self.secondary()?
             .set(
                 session.token(),

@@ -12,6 +12,7 @@ use better_auth::__private_core::{
     store::{InvitationStore, MemberStore, OrganizationStore, SessionStore, TeamStore, UserStore},
     types::{CreateInvitation, CreateOrganization, CreateSession, CreateTeam, CreateUser},
 };
+use better_auth::config::UserFieldTransform;
 use better_auth::seaorm::{Database, SeaOrmStore};
 use better_auth::{AuthConfig, AuthError, plugins::organization::OrganizationConfig};
 use better_auth_seaorm::store::__private_test_support::{
@@ -153,7 +154,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
                 .additional_fields
                 .get_mut("label")
                 .unwrap()
-                .output_transform = Some(Arc::new(|_| {
+                .output_transform = Some(UserFieldTransform::new(|_| {
                 Err(AuthError::bad_request("member output failed"))
             }));
         }
@@ -239,7 +240,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
             ))
         }));
         if claim_output_failure {
-            marker.output_transform = Some(Arc::new(|value| {
+            marker.output_transform = Some(UserFieldTransform::new(|value| {
                 if value == Some(json!("updated-1")) {
                     Err(AuthError::bad_request("claim output failed"))
                 } else {
@@ -247,7 +248,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
                 }
             }));
         } else {
-            marker.input_transform = Some(Arc::new(|value| {
+            marker.input_transform = Some(UserFieldTransform::new(|value| {
                 if value == Some(json!("updated-2")) {
                     Err(AuthError::bad_request("compensation failed"))
                 } else {
@@ -361,7 +362,7 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
         }));
-        marker.output_transform = Some(Arc::new(|value| {
+        marker.output_transform = Some(UserFieldTransform::new(|value| {
             if value == Some(json!("read-fail")) || value == Some(json!("updated-2")) {
                 Err(AuthError::bad_request("invitation output failed"))
             } else {

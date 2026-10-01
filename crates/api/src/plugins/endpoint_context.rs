@@ -139,6 +139,9 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     fn name(&self) -> &'static str {
         self.plugin.name()
     }
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        self.plugin.telemetry_plugin_id()
+    }
     fn routes(&self) -> Vec<AuthRoute> {
         self.plugin.routes()
     }

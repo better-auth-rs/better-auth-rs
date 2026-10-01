@@ -311,7 +311,7 @@ impl MagicLinkPlugin {
         let response = if req.query_string("callbackURL")?.is_none_or(str::is_empty) {
             AuthResponse::json(
                 200,
-                &serde_json::json!({ "token": issued.session.token(), "session": ctx.session_view(&issued.session).await?, "user": ctx.user_view(&issued.user)? }),
+                &serde_json::json!({ "token": issued.session.token(), "session": ctx.session_view(&issued.session).await?, "user": ctx.user_view(&issued.user).await? }),
             )?
         } else {
             redirect(if is_new_user {

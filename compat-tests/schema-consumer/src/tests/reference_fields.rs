@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::{
     AuthConfig, AuthSchema, BetterAuth,
     config::{UserFieldConfig, UserFieldReference, UserFieldType},
@@ -92,7 +93,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
             field: "id".into(),
         }),
         default_value: Some(json!(1)),
-        output_transform: Some(Arc::new(move |value| {
+        output_transform: Some(UserFieldTransform::new(move |value| {
             count.fetch_add(1, Ordering::SeqCst);
             assert!(value.as_ref().unwrap().is_string());
             Ok(value)
@@ -191,9 +192,12 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
     assert_eq!(calls.load(Ordering::SeqCst), 4);
     let user_view =
         UserView::with_fields_for_adapter(&updated_user, &config.user, &Default::default(), false)
+            .await
             .unwrap();
     let session_view =
-        SessionView::with_fields_for_adapter(&updated_session, &config.session, false).unwrap();
+        SessionView::with_fields_for_adapter(&updated_session, &config.session, false)
+            .await
+            .unwrap();
     assert_eq!(serde_json::to_value(user_view).unwrap()["owner"], "1.0e+20");
     assert_eq!(
         serde_json::to_value(session_view).unwrap()["owner"],

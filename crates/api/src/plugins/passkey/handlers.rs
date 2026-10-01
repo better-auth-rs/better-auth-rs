@@ -415,7 +415,7 @@ pub(super) async fn verify_authentication_core(
     Ok(PasskeyHandlerOutcome::Success((
         serde_json::to_value(SessionResponse {
             session: ctx.session_view(&session).await?,
-            user: ctx.user_view(&user)?,
+            user: ctx.user_view(&user).await?,
         })?,
         ctx.session_manager().internal_data(&user, &session).await?,
     )))

@@ -44,7 +44,7 @@ pub(crate) async fn get_active_member_core(
 
     Ok(MemberResponse::from_member_and_user(
         &member,
-        &ctx.internal_user_view(user)?,
+        &ctx.internal_user_view(user).await?,
     ))
 }
 
@@ -235,7 +235,7 @@ pub(crate) async fn remove_member_core(
         .get_user_by_id(target_member.user_id.typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_view = ctx.internal_user_view(&target_user)?;
+    let user_view = ctx.internal_user_view(&target_user).await?;
     let event = OrganizationMemberEvent {
         member: &target_member,
         user: &user_view,
@@ -391,7 +391,7 @@ pub(crate) async fn update_member_role_core(
         .get_user_by_id(target_member.user_id.typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_view = ctx.internal_user_view(&target_user)?;
+    let user_view = ctx.internal_user_view(&target_user).await?;
     let event = OrganizationMemberEvent {
         member: &target_member,
         user: &user_view,

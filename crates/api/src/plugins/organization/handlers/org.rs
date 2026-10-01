@@ -269,7 +269,7 @@ pub(crate) async fn update_organization_core(
         ..Default::default()
     };
 
-    let user_view = ctx.user_view(user)?;
+    let user_view = ctx.user_view(user).await?;
     let actor = OrganizationActor {
         member: &member,
         user: &user_view,
@@ -346,7 +346,7 @@ pub(crate) async fn delete_organization_core(
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
 
-    let user_view = ctx.user_view(user)?;
+    let user_view = ctx.user_view(user).await?;
     let event = OrganizationUser {
         organization: &organization_view,
         user: &user_view,
@@ -590,7 +590,8 @@ pub(crate) async fn leave_organization_core(
         }
     }
 
-    let response = MemberResponse::from_member_and_user(&member, &ctx.internal_user_view(user)?);
+    let response =
+        MemberResponse::from_member_and_user(&member, &ctx.internal_user_view(user).await?);
     ctx.database.delete_member(member.id().typed()?).await?;
 
     if session.active_organization_id() == Some(&body.organization_id) {
@@ -633,7 +634,7 @@ pub async fn handle_create_organization(
             401,
             &serde_json::Value::Null,
         )?))?;
-        ctx.internal_user_view(&user)?
+        ctx.internal_user_view(&user).await?
     };
     let (response, default_team_id) =
         create_organization_core(&body, &user, session.is_none(), config, ctx, Some(req)).await?;

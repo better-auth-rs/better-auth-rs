@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn suffix(suffix: &'static str) -> UserFieldTransform {
-    Arc::new(move |value| {
+    UserFieldTransform::new(move |value| {
         Ok(value.map(|value| {
             if value.is_null() {
                 value
@@ -56,7 +56,7 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
             UserFieldConfig {
                 field_type: UserFieldType::Json,
                 default_value: Some(json!({ "stage": "created" })),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     let Some(value) = value else {
                         return Ok(None);
                     };

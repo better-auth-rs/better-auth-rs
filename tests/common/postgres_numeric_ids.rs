@@ -1,5 +1,6 @@
 use super::*;
 use better_auth::config::IdGeneration;
+use better_auth::config::UserFieldTransform;
 use better_auth_core::CreateAccount;
 use better_auth_core::UpdateAccount;
 use better_auth_core::store::{AuthTransaction, transaction};
@@ -281,7 +282,7 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
                 model: "user".into(),
                 field: "id".into(),
             }),
-            input_transform: Some(Arc::new(move |value| {
+            input_transform: Some(UserFieldTransform::new(move |value| {
                 observed
                     .lock()
                     .expect("reference observations")

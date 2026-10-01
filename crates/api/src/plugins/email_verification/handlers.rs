@@ -54,7 +54,7 @@ pub(super) async fn send_verification_email_core(
                 None,
             )?;
             let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
-            let user = ctx.user_view(user)?;
+            let user = ctx.user_view(user).await?;
             if let Some(task) = super::delivery::delivery(
                 Some(config),
                 super::VerificationEmail { user, url, token },
@@ -88,7 +88,7 @@ pub(super) async fn send_verification_email_core(
                 None,
             )?;
             let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
-            let user = ctx.user_view(&user)?;
+            let user = ctx.user_view(&user).await?;
             if let Some(task) = super::delivery::delivery(
                 Some(config),
                 super::VerificationEmail { user, url, token },
@@ -127,7 +127,10 @@ where
 {
     let ctx = endpoint.auth;
     let current_session = if let Some((user, session)) = current_session {
-        Some((ctx.user_view(&user)?, ctx.session_view(&session).await?))
+        Some((
+            ctx.user_view(&user).await?,
+            ctx.session_view(&session).await?,
+        ))
     } else {
         None
     };
@@ -193,7 +196,7 @@ where
                 let url =
                     verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
                 if super::delivery::available(Some(config), ctx) {
-                    let mut updated_user = ctx.user_view(&user)?;
+                    let mut updated_user = ctx.user_view(&user).await?;
                     updated_user.email = Some(update_to.to_string());
                     let task = super::delivery::delivery(
                         Some(config),
@@ -234,7 +237,7 @@ where
                                 .map_err(SessionIssueError::into_auth_error)?
                                 .session;
                         (
-                            ctx.internal_user_view(&user)?,
+                            ctx.internal_user_view(&user).await?,
                             ctx.session_manager()
                                 .internal_session_view(&session)
                                 .await?,
@@ -255,7 +258,7 @@ where
                     .await?;
 
                 if let Some(ref hook) = config.after_email_verification {
-                    let hook_user = ctx.user_view(&updated_user)?;
+                    let hook_user = ctx.user_view(&updated_user).await?;
                     hook(&hook_user).await?;
                 }
                 session_user.email = Some(update_to.into());
@@ -275,7 +278,7 @@ where
                 return Ok(VerifyEmailResult::Json {
                     body: serde_json::json!({
                         "status": true,
-                        "user": ctx.user_view(&updated_user)?,
+                        "user": ctx.user_view(&updated_user).await?,
                     }),
                     session_data: Some(data),
                 });
@@ -289,7 +292,7 @@ where
                                 .await
                                 .map_err(SessionIssueError::into_auth_error)?;
                         (
-                            ctx.internal_user_view(&user)?,
+                            ctx.internal_user_view(&user).await?,
                             ctx.session_manager()
                                 .internal_session_view(&issued.session)
                                 .await?,
@@ -320,7 +323,7 @@ where
                     let task = super::delivery::delivery(
                         Some(config),
                         super::VerificationEmail {
-                            user: ctx.user_view(&updated_user)?,
+                            user: ctx.user_view(&updated_user).await?,
                             url,
                             token: new_token,
                         },
@@ -373,7 +376,7 @@ where
     }
 
     if let Some(ref hook) = config.before_email_verification {
-        let hook_user = ctx.user_view(&user)?;
+        let hook_user = ctx.user_view(&user).await?;
         hook(&hook_user).await?;
     }
 
@@ -389,7 +392,7 @@ where
         .await?;
 
     if let Some(ref hook) = config.after_email_verification {
-        let hook_user = ctx.user_view(&updated_user)?;
+        let hook_user = ctx.user_view(&updated_user).await?;
         hook(&hook_user).await?;
     }
 

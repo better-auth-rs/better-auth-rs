@@ -97,7 +97,7 @@ pub(crate) async fn request_password_reset_core(
     let task = super::callbacks::delivery(
         config,
         super::PasswordResetEmail {
-            user: ctx.internal_user_view(&user)?,
+            user: ctx.internal_user_view(&user).await?,
             url: reset_url,
             token: reset_token,
         },
@@ -182,7 +182,7 @@ pub(crate) async fn reset_password_core(
 
     if let Some(callback) = &ctx.password_policy.on_password_reset {
         callback(super::PasswordResetEvent {
-            user: ctx.internal_user_view(&user)?,
+            user: ctx.internal_user_view(&user).await?,
             request: Some(req.clone()),
         })
         .await?;
@@ -310,12 +310,13 @@ pub(crate) async fn change_password_core(
     let response = ChangePasswordResponse {
         token: new_token.as_ref().map(|data| data.session.token.clone()),
         user: ctx
-            .database
-            .get_user_by_id(user.id().typed()?)
-            .await?
-            .map(|user| ctx.user_view(&user))
-            .transpose()?
-            .ok_or(AuthError::UserNotFound)?,
+            .user_view(
+                &ctx.database
+                    .get_user_by_id(user.id().typed()?)
+                    .await?
+                    .ok_or(AuthError::UserNotFound)?,
+            )
+            .await?,
     };
 
     Ok((response, new_token))

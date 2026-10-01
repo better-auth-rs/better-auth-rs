@@ -85,7 +85,7 @@ pub struct AuthConfig {
     /// Supports glob patterns (e.g. `"https://*.example.com"`).
     /// These are shared across all middleware that needs origin validation
     /// (CSRF, CORS, etc.).
-    pub trusted_origins: TrustedValues,
+    pub trusted_origins: Option<TrustedValues>,
 
     /// Paths that should be disabled (skipped) by the router.
     ///
@@ -144,7 +144,7 @@ pub struct AccountLinkingConfig {
     /// Enable account linking. Omission uses true.
     pub enabled: Option<bool>,
     /// Trusted providers that can auto-link (default: empty = all trusted)
-    pub trusted_providers: TrustedValues,
+    pub trusted_providers: Option<TrustedValues>,
     /// Allow linking accounts with different emails (default: false) - SECURITY WARNING
     pub allow_different_emails: bool,
     /// Allow unlinking all accounts (default: false)
@@ -401,7 +401,7 @@ impl Default for AccountLinkingConfig {
     fn default() -> Self {
         Self {
             enabled: None,
-            trusted_providers: TrustedValues::default(),
+            trusted_providers: None,
             allow_different_emails: false,
             allow_unlinking_all: None,
             disable_implicit_linking: false,
@@ -567,7 +567,7 @@ impl Default for AuthConfig {
             app_name: "Better Auth".to_string(),
             base_url: BaseUrl::Auto,
             base_path: "/api/auth".to_string(),
-            trusted_origins: TrustedValues::default(),
+            trusted_origins: None,
             disabled_paths: Vec::new(),
             api_error: ApiErrorConfig::default(),
             session: SessionConfig::default(),
@@ -692,14 +692,18 @@ impl AuthConfig {
 
     /// Add a trusted origin. Supports glob patterns (e.g. `"https://*.example.com"`).
     pub fn trusted_origin(mut self, origin: impl Into<String>) -> Self {
-        self.trusted_origins =
-            TrustedValues::merge(vec![self.trusted_origins, vec![origin.into()].into()]);
+        self.trusted_origins = Some(TrustedValues::merge(
+            self.trusted_origins
+                .into_iter()
+                .chain([vec![origin.into()].into()])
+                .collect(),
+        ));
         self
     }
 
     /// Set all trusted origins at once.
     pub fn trusted_origins(mut self, origins: impl Into<TrustedValues>) -> Self {
-        self.trusted_origins = origins.into();
+        self.trusted_origins = Some(origins.into());
         self
     }
 
@@ -806,7 +810,7 @@ impl AuthConfig {
             return true;
         }
         // Check trusted_origins patterns
-        self.trusted_origins
+        self.trusted_origin_values()
             .as_static()
             .unwrap_or(&[])
             .iter()
@@ -952,7 +956,7 @@ mod tests {
         assert_eq!(cfg.app_name, "Better Auth");
         assert!(matches!(cfg.base_url, BaseUrl::Auto));
         assert_eq!(cfg.base_path, "/api/auth");
-        assert!(cfg.trusted_origins.as_static().unwrap().is_empty());
+        assert!(cfg.trusted_origins.is_none());
     }
 
     // ── Builder methods ─────────────────────────────────────────────────
@@ -1008,7 +1012,7 @@ mod tests {
         let cfg = AuthConfig::new("test-secret-min-32-chars-1234567")
             .trusted_origin("https://a.com")
             .trusted_origin("https://b.com");
-        assert_eq!(cfg.trusted_origins.as_static().unwrap().len(), 2);
+        assert_eq!(cfg.trusted_origin_values().as_static().unwrap().len(), 2);
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1018,7 +1022,7 @@ mod tests {
             .trusted_origin("https://old.com")
             .trusted_origins(vec!["https://new.com".to_string()]);
         assert_eq!(
-            cfg.trusted_origins.as_static().unwrap(),
+            cfg.trusted_origin_values().as_static().unwrap(),
             &["https://new.com"]
         );
     }

@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 mod account;
 mod verification;
 
@@ -279,7 +280,7 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
                     event(&updates, format!("{model}.onUpdate"), json!("<undefined>")).unwrap();
                     json!("updated")
                 })),
-                input_transform: Some(Arc::new(move |value| {
+                input_transform: Some(UserFieldTransform::new(move |value| {
                     event(
                         &input,
                         format!("{model}.input"),
@@ -294,7 +295,7 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
                             .unwrap_or_else(|| value.to_string())
                     ))))
                 })),
-                output_transform: Some(Arc::new(move |value| {
+                output_transform: Some(UserFieldTransform::new(move |value| {
                     event(
                         &output,
                         format!("{model}.output"),

@@ -177,7 +177,6 @@ impl<S: AuthSchema> AuthBuilder<S> {
             database: self.store.is_some(),
             secondary: self.secondary_storage.is_some(),
         };
-        let telemetry_config = self.config.clone();
         self.config.resolve_storage_defaults(capabilities);
         let config = Arc::new(self.config);
         let store = self
@@ -209,7 +208,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let telemetry = better_auth_api::observability::initialize_telemetry(&init_context.config);
         if telemetry.enabled() {
             let payload = super::telemetry::init_payload(
-                &telemetry_config,
+                &config,
                 &self.plugins,
                 super::telemetry::InitOptions {
                     before: self.hooks.before.is_some(),
@@ -828,7 +827,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             .set_session_cookie(
                 req,
                 better_auth_core::session::SessionData {
-                    user: context.internal_user_view(&user)?,
+                    user: context.internal_user_view(&user).await?,
                     session,
                 },
                 None,

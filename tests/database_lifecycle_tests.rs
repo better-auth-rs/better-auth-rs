@@ -4,6 +4,7 @@
     reason = "Regression fixtures stop on unexpected setup or assertion failures"
 )]
 
+use better_auth::config::UserFieldTransform;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -151,7 +152,7 @@ async fn sqlite_and_ephemeral_delete_hooks_receive_one_transformed_hidden_snapsh
                 returned: false,
                 field_name: Some("deviceLabel".into()),
                 default_value: Some(serde_json::json!("raw")),
-                output_transform: Some(Arc::new(move |value| {
+                output_transform: Some(UserFieldTransform::new(move |value| {
                     if rejected.load(Ordering::SeqCst) {
                         return Err(AuthError::internal("snapshot rejected"));
                     }
@@ -541,7 +542,7 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
         "marker".into(),
         UserFieldConfig {
             required: Some(false),
-            output_transform: Some(Arc::new(move |value| {
+            output_transform: Some(UserFieldTransform::new(move |value| {
                 if rejection.load(Ordering::SeqCst) {
                     return Err(AuthError::internal("snapshot rejected"));
                 }

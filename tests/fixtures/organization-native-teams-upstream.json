@@ -1,0 +1,394 @@
+[
+  {
+    "backend": "memory",
+    "mode": "trusted",
+    "created": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "stored": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "removed": {
+      "message": "Team removed successfully."
+    },
+    "remaining": [
+      "Existing"
+    ],
+    "invitationTeam": "existing",
+    "events": [
+      {
+        "phase": "before",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true,
+          "organizationId": "org"
+        }
+      },
+      {
+        "phase": "limit",
+        "organizationId": "org",
+        "user": null
+      },
+      {
+        "phase": "create-before",
+        "user": null,
+        "team": {
+          "name": "New",
+          "organizationId": "org",
+          "label": "sent"
+        }
+      },
+      {
+        "phase": "create-after",
+        "user": null,
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true,
+          "organizationId": "org"
+        }
+      },
+      {
+        "phase": "before",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created",
+          "organizationId": "org"
+        }
+      },
+      {
+        "phase": "delete-before",
+        "user": null,
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "delete-after",
+        "user": null,
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created",
+          "organizationId": "org"
+        }
+      }
+    ]
+  },
+  {
+    "backend": "memory",
+    "mode": "owner",
+    "created": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "stored": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "removed": {
+      "message": "Team removed successfully."
+    },
+    "remaining": [
+      "Existing"
+    ],
+    "invitationTeam": "existing",
+    "events": [
+      {
+        "phase": "before",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true
+        }
+      },
+      {
+        "phase": "limit",
+        "organizationId": "org",
+        "user": "owner"
+      },
+      {
+        "phase": "create-before",
+        "user": "owner",
+        "team": {
+          "name": "New",
+          "organizationId": "org",
+          "label": "sent"
+        }
+      },
+      {
+        "phase": "create-after",
+        "user": "owner",
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true
+        }
+      },
+      {
+        "phase": "before",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created"
+        }
+      },
+      {
+        "phase": "delete-before",
+        "user": "owner",
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "delete-after",
+        "user": "owner",
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created"
+        }
+      }
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "mode": "trusted",
+    "created": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "stored": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "removed": {
+      "message": "Team removed successfully."
+    },
+    "remaining": [
+      "Existing"
+    ],
+    "invitationTeam": "existing",
+    "events": [
+      {
+        "phase": "before",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true,
+          "organizationId": "org"
+        }
+      },
+      {
+        "phase": "limit",
+        "organizationId": "org",
+        "user": null
+      },
+      {
+        "phase": "create-before",
+        "user": null,
+        "team": {
+          "name": "New",
+          "organizationId": "org",
+          "label": "sent"
+        }
+      },
+      {
+        "phase": "create-after",
+        "user": null,
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true,
+          "organizationId": "org"
+        }
+      },
+      {
+        "phase": "before",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created",
+          "organizationId": "org"
+        }
+      },
+      {
+        "phase": "delete-before",
+        "user": null,
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "delete-after",
+        "user": null,
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created",
+          "organizationId": "org"
+        }
+      }
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "mode": "owner",
+    "created": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "stored": {
+      "name": "New:hook",
+      "organizationId": "org",
+      "label": "sent:hook:in:out"
+    },
+    "removed": {
+      "message": "Team removed successfully."
+    },
+    "remaining": [
+      "Existing"
+    ],
+    "invitationTeam": "existing",
+    "events": [
+      {
+        "phase": "before",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true
+        }
+      },
+      {
+        "phase": "limit",
+        "organizationId": "org",
+        "user": "owner"
+      },
+      {
+        "phase": "create-before",
+        "user": "owner",
+        "team": {
+          "name": "New",
+          "organizationId": "org",
+          "label": "sent"
+        }
+      },
+      {
+        "phase": "create-after",
+        "user": "owner",
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/create-team",
+        "body": {
+          "name": "New",
+          "label": "sent",
+          "ignored": true
+        }
+      },
+      {
+        "phase": "before",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created"
+        }
+      },
+      {
+        "phase": "delete-before",
+        "user": "owner",
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "delete-after",
+        "user": "owner",
+        "team": {
+          "name": "New:hook",
+          "organizationId": "org",
+          "label": "sent:hook:in:out"
+        }
+      },
+      {
+        "phase": "after",
+        "path": "/organization/remove-team",
+        "body": {
+          "teamId": "created"
+        }
+      }
+    ]
+  }
+]

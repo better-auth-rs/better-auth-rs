@@ -1,0 +1,16 @@
+{
+  "memory": {
+    "trace": ["name:A", "name:B", "image:B.png", "image:A.png"],
+    "values": [
+      {"name": "A:resolved", "image": "A.png:resolved"},
+      {"name": "B:resolved", "image": "B.png:resolved"}
+    ]
+  },
+  "sqlite": {
+    "trace": ["name:A", "name:B", "image:B.png", "image:A.png"],
+    "values": [
+      {"name": "A:resolved", "image": "A.png:resolved"},
+      {"name": "B:resolved", "image": "B.png:resolved"}
+    ]
+  }
+}

@@ -1,13 +1,15 @@
 use super::{
-    AccountConfig, AccountLinkingConfig, AdvancedDatabaseConfig, ApiErrorConfig,
-    CrossSubDomainConfig, IpAddressConfig, SessionConfig, VerificationConfig,
+    AccountConfig, AccountLinkingConfig, AdvancedDatabaseConfig, ApiErrorConfig, AuthConfig,
+    CrossSubDomainConfig, IpAddressConfig, SessionConfig, TrustedValues, VerificationConfig,
 };
 use chrono::Duration;
 
 impl SessionConfig {
-    /// Read the effective session lifetime. Omission uses seven days.
+    /// Read the effective session lifetime. Omission and zero use seven days.
     pub fn expires_in(&self) -> Duration {
-        self.expires_in.unwrap_or_else(|| Duration::days(7))
+        self.expires_in
+            .filter(|age| !age.is_zero())
+            .unwrap_or_else(|| Duration::days(7))
     }
 
     /// Read the effective refresh interval. Omission uses one day; zero refreshes on every read.
@@ -103,5 +105,23 @@ impl AdvancedDatabaseConfig {
         self.generate_id
             .as_ref()
             .unwrap_or(&crate::id::IdGeneration::Random)
+    }
+}
+
+static EMPTY_TRUSTED_VALUES: TrustedValues = TrustedValues::Static(Vec::new());
+
+impl AuthConfig {
+    pub(crate) fn trusted_origin_values(&self) -> &TrustedValues {
+        self.trusted_origins
+            .as_ref()
+            .unwrap_or(&EMPTY_TRUSTED_VALUES)
+    }
+}
+
+impl AccountLinkingConfig {
+    pub(crate) fn trusted_provider_values(&self) -> &TrustedValues {
+        self.trusted_providers
+            .as_ref()
+            .unwrap_or(&EMPTY_TRUSTED_VALUES)
     }
 }

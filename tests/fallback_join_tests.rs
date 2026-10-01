@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -38,7 +39,7 @@ fn config(limit: Option<f64>, events: &Events, reject_user: &Arc<AtomicBool>) ->
         let reject = reject_user.clone();
         let field = UserFieldConfig {
             required: Some(false),
-            output_transform: Some(Arc::new(move |value| {
+            output_transform: Some(UserFieldTransform::new(move |value| {
                 let value_text = value
                     .as_ref()
                     .and_then(Value::as_str)
@@ -250,7 +251,9 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
         "userAgent".into(),
         UserFieldConfig {
             field_name: Some("user_agent".into()),
-            output_transform: Some(Arc::new(|value| Ok(Some(json!({"observed":value}))))),
+            output_transform: Some(UserFieldTransform::new(|value| {
+                Ok(Some(json!({"observed":value})))
+            })),
             ..Default::default()
         },
     );
@@ -258,7 +261,7 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
         "label".into(),
         UserFieldConfig {
             field_name: Some("stored_label".into()),
-            output_transform: Some(Arc::new(|value| {
+            output_transform: Some(UserFieldTransform::new(|value| {
                 Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap_or_default()))))
             })),
             ..Default::default()
@@ -433,7 +436,7 @@ async fn oauth_owner_projection_failure_precedes_token_write() -> AuthResult<()>
                     .additional_fields
                     .get_mut("accessToken")
                     .ok_or_else(|| AuthError::internal("field missing"))?;
-                field.output_transform = Some(Arc::new(move |value| {
+                field.output_transform = Some(UserFieldTransform::new(move |value| {
                     captured_events
                         .lock()
                         .map_err(|error| AuthError::internal(error.to_string()))?

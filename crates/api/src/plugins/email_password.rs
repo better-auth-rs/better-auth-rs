@@ -344,7 +344,7 @@ async fn finalize_sign_in_with_user_core(
         redirect: callback_url.is_some_and(|url| !url.is_empty()),
         token: token.clone(),
         url: callback_url.map(str::to_owned),
-        user: ctx.user_view(&issued.user)?,
+        user: ctx.user_view(&issued.user).await?,
     };
     Ok(SignInCoreResult { response })
 }
@@ -533,6 +533,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
 
     fn name(&self) -> &'static str {
         "email-password"
+    }
+
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        None
     }
 
     fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {

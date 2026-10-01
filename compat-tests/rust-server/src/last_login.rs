@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -214,7 +215,7 @@ fn configure(profile: &str, base_url: &str) -> AuthConfig {
                 input: true,
                 returned: false,
                 field_name: Some("alias".into()),
-                input_transform: Some(Arc::new(|value| {
+                input_transform: Some(UserFieldTransform::new(|value| {
                     Ok(Some(json!(format!(
                         "{}:in",
                         value
@@ -222,7 +223,7 @@ fn configure(profile: &str, base_url: &str) -> AuthConfig {
                             .unwrap_or("undefined".into())
                     ))))
                 })),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(Some(json!(format!(
                         "{}:out",
                         value
@@ -336,19 +337,12 @@ async fn finish<S: AuthSchema>(
 }
 
 async fn snapshot<S: AuthSchema>(State(fixture): State<Fixture<S>>) -> Json<Value> {
-    let users = fixture
-        .auth
-        .store()
-        .list_users(Default::default())
-        .await
-        .unwrap()
-        .0
-        .into_iter()
-        .map(|user| {
-            let view = fixture.auth.context().internal_user_view(&user).unwrap();
-            json!({"email":user.email(),"method":view.additional_fields.get("lastLoginMethod")})
-        })
-        .collect::<Vec<_>>();
+    let rows = fixture.auth.store().list_users(Default::default()).await.unwrap().0;
+    let mut users = Vec::with_capacity(rows.len());
+    for user in rows {
+        let view = fixture.auth.context().internal_user_view(&user).await.unwrap();
+        users.push(json!({"email":user.email(),"method":view.additional_fields.get("lastLoginMethod")}));
+    }
     let events = fixture.events.0.lock().unwrap().events.clone();
     let cache = fixture
         .cache

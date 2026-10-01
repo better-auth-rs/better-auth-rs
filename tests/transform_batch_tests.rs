@@ -4,6 +4,7 @@
     reason = "SeaORM derives require public generated entity types"
 )]
 
+use better_auth::config::UserFieldTransform;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
     CreateUser, CreateVerification, SchemaValue, store::EphemeralStore, types::ListUsersParams,
@@ -83,7 +84,7 @@ fn original_name(id: &str, ids: &[String; 2]) -> AuthResult<&'static str> {
 fn field(name: &'static str, trace: &Arc<Mutex<Trace>>) -> UserFieldConfig {
     let trace = trace.clone();
     UserFieldConfig {
-        output_transform: Some(Arc::new(move |value| {
+        output_transform: Some(UserFieldTransform::new(move |value| {
             let mut trace = locked(&trace)?;
             if !trace.armed {
                 return Ok(value);
@@ -201,7 +202,8 @@ async fn check<S: AuthSchema>(
         .ok_or_else(|| AuthError::internal("Created fixture user is missing"))?;
     assert_eq!(events(trace)?, ["name:A", "image:A.png"]);
     let _ =
-        better_auth_core::UserView::with_fields(&user, &config(trace).user, &Default::default())?;
+        better_auth_core::UserView::with_fields(&user, &config(trace).user, &Default::default())
+            .await?;
     assert_eq!(events(trace)?, ["name:A", "image:A.png"]);
     for (failures, expected, message) in [
         (

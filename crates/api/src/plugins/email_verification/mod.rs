@@ -88,6 +88,10 @@ better_auth_core::impl_auth_plugin! {
         get "/verify-email" => handle_verify_email, "verifyEmail", query = crate::plugins::query_input::verify_email;
     }
     extra {
+        fn telemetry_plugin_id(&self) -> Option<&'static str> {
+            None
+        }
+
         fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
             let options = &mut options.email_verification;
             options.expires_in = self.config.verification_token_expiry.map(|age| age.num_seconds());
@@ -297,7 +301,7 @@ impl EmailVerificationPlugin {
             return Ok(());
         }
         let message = VerificationEmail {
-            user: ctx.internal_user_view(user)?,
+            user: ctx.internal_user_view(user).await?,
             url: verification_url,
             token: verification_token,
         };

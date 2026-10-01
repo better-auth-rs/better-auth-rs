@@ -1,16 +1,18 @@
 use super::hooks::CommittedWrite;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
+#[cfg(test)]
+use crate::user_fields::UserFieldTransform;
 use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 
 impl EphemeralStore {
-    pub(super) fn output_session(&self, session: SessionView) -> AuthResult<SessionView> {
+    pub(super) async fn output_session(&self, session: SessionView) -> AuthResult<SessionView> {
         // Projection preserves the one input row.
-        Ok(self.output_sessions(vec![session])?.remove(0))
+        Ok(self.output_sessions(vec![session]).await?.remove(0))
     }
 
-    pub(super) fn output_sessions(
+    pub(super) async fn output_sessions(
         &self,
         sessions: Vec<SessionView>,
     ) -> AuthResult<Vec<SessionView>> {
@@ -26,16 +28,19 @@ impl EphemeralStore {
             &mut rows,
             &self.session_config.additional_fields,
             |(session, storage), name, field| {
-                let value = storage
-                    .get(field.field_name.as_deref().unwrap_or(name))
-                    .or_else(|| storage.get(name))
-                    .cloned();
-                if let Some(value) = field.adapter_output(value, true)? {
-                    let _ = session.additional_fields.insert(name.to_owned(), value);
-                }
-                Ok(())
+                Box::pin(async move {
+                    let value = storage
+                        .get(field.field_name.as_deref().unwrap_or(name))
+                        .or_else(|| storage.get(name))
+                        .cloned();
+                    if let Some(value) = field.adapter_output(value, true).await? {
+                        let _ = session.additional_fields.insert(name.to_owned(), value);
+                    }
+                    Ok(())
+                })
             },
-        )?;
+        )
+        .await?;
         Ok(rows.into_iter().map(|(session, _)| session).collect())
     }
 }
@@ -348,6 +353,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 let _ = plugin_fields.insert(name.into(), value);
             }
         }
+        let id = self
+            .generated_id("session", None, self.lock()?.sessions.len())?
+            .map(crate::SchemaValue::Typed)
+            .unwrap_or_default();
         let mut session = SessionView {
             visible_fields: Some(
                 [
@@ -362,10 +371,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 .map(|(name, _)| name.to_owned())
                 .collect(),
             ),
-            id: self
-                .generated_id("session", None, self.lock()?.sessions.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id,
             expires_at: create_session.expires_at,
             token: token.clone(),
             created_at: now,
@@ -380,7 +386,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             additional_fields: self
                 .session_config
                 .field_schema()
-                .storage_fields(fields, true)?,
+                .storage_fields(fields, true)
+                .await?,
         };
         for (field, target) in [
             ("impersonatedBy", &mut session.impersonated_by),
@@ -399,18 +406,22 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             Ok(())
         })
         .await?;
-        let session = self.output_session(session)?;
+        let session = self.output_session(session).await?;
         self.after_create_runtime_session(&session, crate::hooks::current_request_hook_context())
             .await?;
         Ok(Some(session))
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
-        self.raw("session", "findOne", |state| {
-            state.sessions.find(|row| row.token == token)
-        })
-        .await?
-        .map(|session| self.output_session(session))
+        let session = self
+            .raw("session", "findOne", |state| {
+                state.sessions.find(|row| row.token == token)
+            })
+            .await?;
+        futures_util::future::OptionFuture::from(
+            session.map(|session| self.output_session(session)),
+        )
+        .await
         .transpose()
     }
 
@@ -438,7 +449,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             })
             .await?;
         Ok(self
-            .output_sessions(sessions)?
+            .output_sessions(sessions)
+            .await?
             .into_iter()
             .map(|session| (session, None))
             .collect())
@@ -475,7 +487,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        self.output_sessions(sessions)
+        self.output_sessions(sessions).await
     }
 
     async fn update_session_expiry(
@@ -501,7 +513,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             })
             .await?;
         // A failed single-row snapshot prevents deletion, unlike a failed batch snapshot.
-        let Some(session) = session.and_then(|row| self.output_session(row).ok()) else {
+        let Some(session) = (match session {
+            Some(row) => self.output_session(row).await.ok(),
+            None => None,
+        }) else {
             return Ok(());
         };
         let transaction = EphemeralTransaction {
@@ -614,13 +629,13 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         field_name: Some("stored_marker".into()),
         default_value: Some(json!("created")),
         on_update: Some(Arc::new(|| json!("updated"))),
-        input_transform: Some(Arc::new(move |value| {
+        input_transform: Some(UserFieldTransform::new(move |value| {
             if rejection.load(Ordering::SeqCst) && value == Some(json!("updated")) {
                 return Err(AuthError::bad_request("transform failed"));
             }
             Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
         })),
-        output_transform: Some(Arc::new(|value| {
+        output_transform: Some(UserFieldTransform::new(|value| {
             Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
         })),
         ..Default::default()

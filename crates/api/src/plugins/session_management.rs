@@ -61,6 +61,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
         "session-management"
     }
 
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        None
+    }
+
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::get("/get-session", "getSession")

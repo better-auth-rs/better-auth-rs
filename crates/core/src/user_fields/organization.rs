@@ -1,4 +1,6 @@
 use super::{UserConfig, UserFieldConfig, UserFieldType};
+#[cfg(test)]
+use crate::user_fields::UserFieldTransform;
 use crate::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
@@ -65,16 +67,45 @@ impl UserConfig {
     }
 
     /// Apply the adapter's field mapping and output transforms before route visibility filtering.
-    pub fn output_fields(&self, storage: &Map<String, Value>) -> AuthResult<Map<String, Value>> {
-        self.output_fields_inner(storage, false)
+    pub async fn output_fields(
+        &self,
+        storage: &Map<String, Value>,
+    ) -> AuthResult<Map<String, Value>> {
+        // Projection preserves the one input row.
+        Ok(self
+            .output_fields_many(std::slice::from_ref(storage))
+            .await?
+            .remove(0))
     }
 
     /// Project a database result while retaining row order and per-row field order.
-    pub fn output_fields_many(
+    pub async fn output_fields_many(
         &self,
         storage: &[Map<String, Value>],
     ) -> AuthResult<Vec<Map<String, Value>>> {
-        self.output_fields_batch(storage.iter(), false)
+        let mut rows: Vec<_> = storage
+            .iter()
+            .map(|storage| (storage, Map::new()))
+            .collect();
+        super::batch::project_fields(
+            &mut rows,
+            &self.additional_fields,
+            |(storage, output), name, field| {
+                Box::pin(async move {
+                    let value = storage
+                        .get(field.field_name.as_deref().unwrap_or(name))
+                        .cloned();
+                    assign_output(
+                        output,
+                        name,
+                        field,
+                        field.adapter_output(value, true).await?,
+                    )
+                })
+            },
+        )
+        .await?;
+        Ok(rows.into_iter().map(|(_, output)| output).collect())
     }
 
     fn output_fields_inner(
@@ -94,7 +125,7 @@ impl UserConfig {
         preserve_id: bool,
     ) -> AuthResult<Vec<Map<String, Value>>> {
         let mut rows: Vec<_> = storage.map(|storage| (storage, Map::new())).collect();
-        super::batch::project_fields(
+        super::batch::project_fields_sync(
             &mut rows,
             &self.additional_fields,
             |(storage, output), name, field| {
@@ -104,13 +135,7 @@ impl UserConfig {
                 let value = storage
                     .get(field.field_name.as_deref().unwrap_or(name))
                     .cloned();
-                if let Some(mut value) = field.adapter_output(value, true)? {
-                    if !field.references_id() {
-                        field.normalize_date(&mut value)?;
-                    }
-                    let _ = output.insert(name.to_owned(), value);
-                }
-                Ok(())
+                assign_output(output, name, field, field.adapter_output_sync(value, true)?)
             },
         )?;
         Ok(rows.into_iter().map(|(_, output)| output).collect())
@@ -221,8 +246,8 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
-    #[test]
-    fn organization_validation_keeps_route_and_adapter_policies_separate() {
+    #[tokio::test]
+    async fn organization_validation_keeps_route_and_adapter_policies_separate() {
         let schema = UserConfig {
             additional_fields: [
                 (
@@ -238,7 +263,7 @@ mod tests {
                         required: Some(false),
                         field_name: Some("stored_label".into()),
                         validator: Some(Arc::new(|_| Err(AuthError::bad_request("must not run")))),
-                        input_transform: Some(Arc::new(|value| {
+                        input_transform: Some(UserFieldTransform::new(|value| {
                             Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
                         })),
                         ..Default::default()
@@ -275,7 +300,7 @@ mod tests {
                 .unwrap()
                 .clone()
         );
-        let stored = schema.storage_fields(parsed, true).unwrap();
+        let stored = schema.storage_fields(parsed, true).await.unwrap();
         assert_eq!(
             stored,
             json!({"implicit":"supplied", "stored_label":"raw:in", "protected":"server"})
@@ -343,4 +368,19 @@ mod tests {
                 .contains("[body.data.tags.1] Invalid input: expected string, received number")
         );
     }
+}
+
+fn assign_output(
+    output: &mut Map<String, Value>,
+    name: &str,
+    field: &UserFieldConfig,
+    value: Option<Value>,
+) -> AuthResult<()> {
+    if let Some(mut value) = value {
+        if !field.references_id() {
+            field.normalize_date(&mut value)?;
+        }
+        let _ = output.insert(name.to_owned(), value);
+    }
+    Ok(())
 }

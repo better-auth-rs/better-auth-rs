@@ -1,0 +1,1181 @@
+{
+  "clearedKeys": [
+    "NODE_ENV",
+    "TEST",
+    "npm_config_user_agent",
+    "BETTER_AUTH_TELEMETRY",
+    "BETTER_AUTH_TELEMETRY_DEBUG",
+    "BETTER_AUTH_TELEMETRY_ENDPOINT",
+    "BUILD_ID",
+    "BUILD_NUMBER",
+    "CI",
+    "CI_APP_ID",
+    "CI_BUILD_ID",
+    "CI_BUILD_NUMBER",
+    "CI_NAME",
+    "CONTINUOUS_INTEGRATION",
+    "RUN_ID",
+    "CF_PAGES",
+    "CF_PAGES_URL",
+    "CF_ACCOUNT_ID",
+    "VERCEL",
+    "VERCEL_URL",
+    "VERCEL_ENV",
+    "NETLIFY",
+    "NETLIFY_URL",
+    "RENDER",
+    "RENDER_URL",
+    "RENDER_INTERNAL_HOSTNAME",
+    "RENDER_SERVICE_ID",
+    "AWS_LAMBDA_FUNCTION_NAME",
+    "AWS_EXECUTION_ENV",
+    "LAMBDA_TASK_ROOT",
+    "GOOGLE_CLOUD_FUNCTION_NAME",
+    "GOOGLE_CLOUD_PROJECT",
+    "GCP_PROJECT",
+    "K_SERVICE",
+    "AZURE_FUNCTION_NAME",
+    "FUNCTIONS_WORKER_RUNTIME",
+    "WEBSITE_INSTANCE_ID",
+    "WEBSITE_SITE_NAME",
+    "DENO_DEPLOYMENT_ID",
+    "DENO_REGION",
+    "FLY_APP_NAME",
+    "FLY_REGION",
+    "FLY_ALLOC_ID",
+    "RAILWAY_STATIC_URL",
+    "RAILWAY_ENVIRONMENT_NAME",
+    "DYNO",
+    "HEROKU_APP_NAME",
+    "DO_DEPLOYMENT_ID",
+    "DO_APP_NAME",
+    "DIGITALOCEAN",
+    "KOYEB",
+    "KOYEB_DEPLOYMENT_ID",
+    "KOYEB_APP_NAME"
+  ],
+  "cases": {
+    "omitted": {
+      "env": {},
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "development": {
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "staging": {
+      "env": {
+        "NODE_ENV": "staging"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "production": {
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "metadata": {
+        "environment": "production",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciFalseOverridesMarkers": {
+      "env": {
+        "CI": "false",
+        "BUILD_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciCapitalFalse": {
+      "env": {
+        "CI": "False"
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "productionOverCiAndTest": {
+      "env": {
+        "NODE_ENV": "production",
+        "CI": "",
+        "TEST": "1"
+      },
+      "metadata": {
+        "environment": "production",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 0
+    },
+    "nodeTest": {
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "metadata": {
+        "environment": "test",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 0
+    },
+    "emptyTest": {
+      "env": {
+        "TEST": ""
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "falseTest": {
+      "env": {
+        "TEST": "false"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "zeroTest": {
+      "env": {
+        "TEST": "0"
+      },
+      "metadata": {
+        "environment": "test",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 0
+    },
+    "capitalFalseTest": {
+      "env": {
+        "TEST": "FALSE"
+      },
+      "metadata": {
+        "environment": "test",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 0
+    },
+    "ciOverTest": {
+      "env": {
+        "CI": "",
+        "TEST": "1"
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 0
+    },
+    "emptyVendor": {
+      "env": {
+        "CF_PAGES": "",
+        "VERCEL": ""
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "falseVendorIsPresent": {
+      "env": {
+        "CF_PAGES": "false",
+        "VERCEL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "cloudflare"
+        }
+      },
+      "authEvents": 1
+    },
+    "zeroVendorIsPresent": {
+      "env": {
+        "VERCEL": "0"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "vercel"
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-BUILD_ID": {
+      "env": {
+        "BUILD_ID": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-BUILD_NUMBER": {
+      "env": {
+        "BUILD_NUMBER": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-CI": {
+      "env": {
+        "CI": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-CI_APP_ID": {
+      "env": {
+        "CI_APP_ID": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-CI_BUILD_ID": {
+      "env": {
+        "CI_BUILD_ID": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-CI_BUILD_NUMBER": {
+      "env": {
+        "CI_BUILD_NUMBER": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-CI_NAME": {
+      "env": {
+        "CI_NAME": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-CONTINUOUS_INTEGRATION": {
+      "env": {
+        "CONTINUOUS_INTEGRATION": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "ciPresence-RUN_ID": {
+      "env": {
+        "RUN_ID": ""
+      },
+      "metadata": {
+        "environment": "ci",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-cloudflare-CF_PAGES": {
+      "env": {
+        "CF_PAGES": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "cloudflare"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-cloudflare-CF_PAGES_URL": {
+      "env": {
+        "CF_PAGES_URL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "cloudflare"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-cloudflare-CF_ACCOUNT_ID": {
+      "env": {
+        "CF_ACCOUNT_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "cloudflare"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-vercel-VERCEL": {
+      "env": {
+        "VERCEL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "vercel"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-vercel-VERCEL_URL": {
+      "env": {
+        "VERCEL_URL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "vercel"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-vercel-VERCEL_ENV": {
+      "env": {
+        "VERCEL_ENV": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "vercel"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-netlify-NETLIFY": {
+      "env": {
+        "NETLIFY": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "netlify"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-netlify-NETLIFY_URL": {
+      "env": {
+        "NETLIFY_URL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "netlify"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-render-RENDER": {
+      "env": {
+        "RENDER": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "render"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-render-RENDER_URL": {
+      "env": {
+        "RENDER_URL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "render"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-render-RENDER_INTERNAL_HOSTNAME": {
+      "env": {
+        "RENDER_INTERNAL_HOSTNAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "render"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-render-RENDER_SERVICE_ID": {
+      "env": {
+        "RENDER_SERVICE_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "render"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-aws-AWS_LAMBDA_FUNCTION_NAME": {
+      "env": {
+        "AWS_LAMBDA_FUNCTION_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "aws"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-aws-AWS_EXECUTION_ENV": {
+      "env": {
+        "AWS_EXECUTION_ENV": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "aws"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-aws-LAMBDA_TASK_ROOT": {
+      "env": {
+        "LAMBDA_TASK_ROOT": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "aws"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-gcp-GOOGLE_CLOUD_FUNCTION_NAME": {
+      "env": {
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "gcp"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-gcp-GOOGLE_CLOUD_PROJECT": {
+      "env": {
+        "GOOGLE_CLOUD_PROJECT": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "gcp"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-gcp-GCP_PROJECT": {
+      "env": {
+        "GCP_PROJECT": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "gcp"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-gcp-K_SERVICE": {
+      "env": {
+        "K_SERVICE": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "gcp"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-azure-AZURE_FUNCTION_NAME": {
+      "env": {
+        "AZURE_FUNCTION_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "azure"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-azure-FUNCTIONS_WORKER_RUNTIME": {
+      "env": {
+        "FUNCTIONS_WORKER_RUNTIME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "azure"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-azure-WEBSITE_INSTANCE_ID": {
+      "env": {
+        "WEBSITE_INSTANCE_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "azure"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-azure-WEBSITE_SITE_NAME": {
+      "env": {
+        "WEBSITE_SITE_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "azure"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-deno-deploy-DENO_DEPLOYMENT_ID": {
+      "env": {
+        "DENO_DEPLOYMENT_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "deno-deploy"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-deno-deploy-DENO_REGION": {
+      "env": {
+        "DENO_REGION": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "deno-deploy"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-fly-io-FLY_APP_NAME": {
+      "env": {
+        "FLY_APP_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "fly-io"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-fly-io-FLY_REGION": {
+      "env": {
+        "FLY_REGION": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "fly-io"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-fly-io-FLY_ALLOC_ID": {
+      "env": {
+        "FLY_ALLOC_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "fly-io"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-railway-RAILWAY_STATIC_URL": {
+      "env": {
+        "RAILWAY_STATIC_URL": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "railway"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-railway-RAILWAY_ENVIRONMENT_NAME": {
+      "env": {
+        "RAILWAY_ENVIRONMENT_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "railway"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-heroku-DYNO": {
+      "env": {
+        "DYNO": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "heroku"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-heroku-HEROKU_APP_NAME": {
+      "env": {
+        "HEROKU_APP_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "heroku"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-digitalocean-DO_DEPLOYMENT_ID": {
+      "env": {
+        "DO_DEPLOYMENT_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "digitalocean"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-digitalocean-DO_APP_NAME": {
+      "env": {
+        "DO_APP_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "digitalocean"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-digitalocean-DIGITALOCEAN": {
+      "env": {
+        "DIGITALOCEAN": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "digitalocean"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-koyeb-KOYEB": {
+      "env": {
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "koyeb"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-koyeb-KOYEB_DEPLOYMENT_ID": {
+      "env": {
+        "KOYEB_DEPLOYMENT_ID": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "koyeb"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendor-koyeb-KOYEB_APP_NAME": {
+      "env": {
+        "KOYEB_APP_NAME": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "koyeb"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-cloudflare": {
+      "env": {
+        "CF_PAGES": "1",
+        "VERCEL": "1",
+        "NETLIFY": "1",
+        "RENDER": "1",
+        "AWS_LAMBDA_FUNCTION_NAME": "1",
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1",
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "cloudflare"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-vercel": {
+      "env": {
+        "VERCEL": "1",
+        "NETLIFY": "1",
+        "RENDER": "1",
+        "AWS_LAMBDA_FUNCTION_NAME": "1",
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1",
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "vercel"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-netlify": {
+      "env": {
+        "NETLIFY": "1",
+        "RENDER": "1",
+        "AWS_LAMBDA_FUNCTION_NAME": "1",
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1",
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "netlify"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-render": {
+      "env": {
+        "RENDER": "1",
+        "AWS_LAMBDA_FUNCTION_NAME": "1",
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1",
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "render"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-aws": {
+      "env": {
+        "AWS_LAMBDA_FUNCTION_NAME": "1",
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1",
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "aws"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-gcp": {
+      "env": {
+        "GOOGLE_CLOUD_FUNCTION_NAME": "1",
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "gcp"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-azure": {
+      "env": {
+        "AZURE_FUNCTION_NAME": "1",
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "azure"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-deno-deploy": {
+      "env": {
+        "DENO_DEPLOYMENT_ID": "1",
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "deno-deploy"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-fly-io": {
+      "env": {
+        "FLY_APP_NAME": "1",
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "fly-io"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-railway": {
+      "env": {
+        "RAILWAY_STATIC_URL": "1",
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "railway"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-heroku": {
+      "env": {
+        "DYNO": "1",
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "heroku"
+        }
+      },
+      "authEvents": 1
+    },
+    "vendorPriority-digitalocean": {
+      "env": {
+        "DO_DEPLOYMENT_ID": "1",
+        "KOYEB": "1"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": "digitalocean"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-empty": {
+      "env": {
+        "npm_config_user_agent": ""
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        }
+      },
+      "authEvents": 1
+    },
+    "package-npm": {
+      "env": {
+        "npm_config_user_agent": "npm/10.8.2 node/v22.1.0"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "npm",
+          "version": "10.8.2"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-pnpm": {
+      "env": {
+        "npm_config_user_agent": "pnpm/10.4.1 npm/? node/v22.1.0"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "pnpm",
+          "version": "10.4.1"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-yarn": {
+      "env": {
+        "npm_config_user_agent": "yarn/4.0.0"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "yarn",
+          "version": "4.0.0"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-bun": {
+      "env": {
+        "npm_config_user_agent": "bun/1.4.2"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "bun",
+          "version": "1.4.2"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-cnpm": {
+      "env": {
+        "npm_config_user_agent": "npminstall/7.12.0"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "cnpm",
+          "version": "7.12.0"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-scoped": {
+      "env": {
+        "npm_config_user_agent": "@scope/pnpm/10.4.1 node/v22.1.0"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "@scope/pnpm",
+          "version": "10.4.1"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-noSlash": {
+      "env": {
+        "npm_config_user_agent": "npm"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "",
+          "version": "npm"
+        }
+      },
+      "authEvents": 1
+    },
+    "package-leadingSpace": {
+      "env": {
+        "npm_config_user_agent": " npm/10.8.2"
+      },
+      "metadata": {
+        "environment": "development",
+        "systemInfo": {
+          "deploymentVendor": null
+        },
+        "packageManager": {
+          "name": "",
+          "version": ""
+        }
+      },
+      "authEvents": 1
+    }
+  }
+}

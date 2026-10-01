@@ -83,7 +83,7 @@ pub async fn run(input: Value) -> AuthResult<Value> {
         fallback: (scenario == "fallback").then(|| "https://fallback.auth.test".into()),
         protocol: None,
     });
-    config.trusted_origins = TrustedValues::Dynamic(Arc::new(probe.clone()));
+    config.trusted_origins = Some(TrustedValues::Dynamic(Arc::new(probe.clone())));
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let store = SeaOrmStore::<BundledSchema>::new(Arc::new(config.clone()), database);

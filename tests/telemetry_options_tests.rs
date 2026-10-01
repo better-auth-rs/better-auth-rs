@@ -34,6 +34,15 @@ mod network;
 #[path = "telemetry_options/id.rs"]
 mod id;
 
+#[path = "telemetry_options/trusted.rs"]
+mod trusted;
+
+#[path = "telemetry_options/plugins.rs"]
+mod plugins;
+
+#[path = "telemetry_options/cache.rs"]
+mod cache;
+
 #[derive(Default)]
 struct Reports(Mutex<Vec<Value>>);
 #[async_trait]
@@ -125,9 +134,14 @@ fn oracle(name: &str) -> AuthResult<Value> {
 }
 
 #[tokio::test]
-async fn configured_options_keep_omission_before_runtime_defaults() -> AuthResult<()> {
+async fn configured_options_keep_omission_after_storage_normalization() -> AuthResult<()> {
     for name in ["omitted", "explicitDefaults", "explicitValues"] {
         let expected = oracle(name)?;
+        let expected_session = if name == "omitted" {
+            cache::oracle("stateless-omitted")?
+        } else {
+            expected.clone()
+        };
         let (mut config, reports) = configuration();
         if name != "omitted" {
             let custom = name == "explicitValues";
@@ -203,9 +217,13 @@ async fn configured_options_keep_omission_before_runtime_defaults() -> AuthResul
         }
         let _auth = builder.build().await?;
         let actual = reports.config()?;
+        assert_eq!(
+            actual.get("session"),
+            expected_session.get("session"),
+            "{name}"
+        );
         for path in [
             "/logger",
-            "/session",
             "/account",
             "/verification",
             "/advanced/useSecureCookies",
@@ -260,7 +278,7 @@ async fn session_duration_metadata_preserves_fractional_seconds() -> AuthResult<
     let _auth = BetterAuth::stateless(config).build().await?;
     assert_eq!(
         reports.config()?.get("session"),
-        oracle("fractionalDurations")?.get("session")
+        cache::oracle("stateless-fractionalDurations")?.get("session")
     );
     Ok(())
 }
@@ -411,6 +429,10 @@ async fn plugin_callback_metadata_includes_typed_wrappers_before_init() -> AuthR
         }
         let _auth = builder.build().await?;
         let actual = reports.config()?;
+        assert_eq!(
+            actual.get("plugins"),
+            Some(&serde_json::json!(["init-order"]))
+        );
         assert_eq!(
             actual.get("emailVerification"),
             expected.get("emailVerification")

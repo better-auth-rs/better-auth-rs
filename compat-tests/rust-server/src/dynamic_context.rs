@@ -192,7 +192,10 @@ impl AuthPlugin<StatelessSchema> for OriginPlugin {
             self.source.values.clone().into()
         };
         let config = Arc::make_mut(&mut context.config);
-        config.trusted_origins = TrustedValues::merge(vec![config.trusted_origins.clone(), source]);
+        config.trusted_origins = Some(TrustedValues::merge(vec![
+            config.trusted_origins.clone().unwrap_or_default(),
+            source,
+        ]));
         Ok(())
     }
     async fn on_request(
@@ -347,10 +350,14 @@ async fn run(input: Input) -> AuthResult<Value> {
         config.base_path = path;
     }
     config.advanced.trusted_proxy_headers = input.proxy.unwrap_or(false);
-    config.advanced.cross_sub_domain_cookies = input
-        .cross_subdomain
-        .unwrap_or(false)
-        .then_some(better_auth_core::CrossSubDomainConfig { enabled: Some(true), ..Default::default() });
+    config.advanced.cross_sub_domain_cookies =
+        input
+            .cross_subdomain
+            .unwrap_or(false)
+            .then_some(better_auth_core::CrossSubDomainConfig {
+                enabled: Some(true),
+                ..Default::default()
+            });
     config.advanced.default_cookie_attributes.domain = input.default_cookie_domain;
     if let Some(domain) = input.session_cookie_domain {
         config.advanced.cookies.get_or_insert_default().insert(
@@ -364,21 +371,21 @@ async fn run(input: Input) -> AuthResult<Value> {
             },
         );
     }
-    config.trusted_origins = input.origins.map(TrustedValues::from).unwrap_or_else(|| {
+    config.trusted_origins = Some(input.origins.map(TrustedValues::from).unwrap_or_else(|| {
         TrustedValues::Dynamic(Arc::new(Trust {
             fixture: fixture.clone(),
             stage: "origins",
             source: None,
         }))
-    });
+    }));
     config.account.account_linking.trusted_providers =
-        input.providers.map(TrustedValues::from).unwrap_or_else(|| {
+        Some(input.providers.map(TrustedValues::from).unwrap_or_else(|| {
             TrustedValues::Dynamic(Arc::new(Trust {
                 fixture: fixture.clone(),
                 stage: "providers",
                 source: None,
             }))
-        });
+        }));
     let mut builder =
         BetterAuth::stateless(config).rate_limit(RateLimitConfig::new().enabled(false));
     for source in input.plugin_origins.unwrap_or_default() {

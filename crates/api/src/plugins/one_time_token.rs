@@ -263,7 +263,7 @@ pub(crate) async fn find_session<S: AuthSchema>(
     };
     if let Some(mut data) = snapshot {
         data.session.filter_returned_fields(&ctx.config.session);
-        return Ok(Some((data.session, ctx.user_view(&data.user)?)));
+        return Ok(Some((data.session, ctx.user_view(&data.user).await?)));
     }
     let Some(user) = ctx
         .database
@@ -274,7 +274,7 @@ pub(crate) async fn find_session<S: AuthSchema>(
     };
     Ok(Some((
         ctx.session_view(&session).await?,
-        ctx.user_view(&user)?,
+        ctx.user_view(&user).await?,
     )))
 }
 

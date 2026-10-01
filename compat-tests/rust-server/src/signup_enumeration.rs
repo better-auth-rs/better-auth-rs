@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use std::sync::Arc;
 
 use better_auth::config::UserFieldConfig;
@@ -44,13 +45,13 @@ pub fn configure(profile: &str, config: &mut AuthConfig) {
             UserFieldConfig {
                 required: Some(false),
                 default_value: Some(json!("guest")),
-                input_transform: Some(Arc::new(|value| {
+                input_transform: Some(UserFieldTransform::new(|value| {
                     Ok(
                         value
                             .map(|value| json!(format!("{}:in", value.as_str().unwrap_or("null")))),
                     )
                 })),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(value
                         .map(|value| json!(format!("{}:out", value.as_str().unwrap_or("null")))))
                 })),

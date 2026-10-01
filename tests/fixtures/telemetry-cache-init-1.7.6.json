@@ -1,0 +1,207 @@
+{
+  "stateless-omitted": {
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "maxAge": 604800,
+        "strategy": "jwe"
+      }
+    },
+    "expiresIn": 604800,
+    "cache": {
+      "enabled": true,
+      "strategy": "jwe",
+      "refreshCache": true,
+      "maxAge": 604800
+    }
+  },
+  "stateless-empty": {
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "maxAge": 604800,
+        "strategy": "jwe"
+      }
+    },
+    "expiresIn": 604800,
+    "cache": {
+      "enabled": true,
+      "strategy": "jwe",
+      "refreshCache": true,
+      "maxAge": 604800
+    }
+  },
+  "stateless-disabled": {
+    "session": {
+      "cookieCache": {
+        "enabled": false,
+        "maxAge": 604800,
+        "strategy": "jwe"
+      }
+    },
+    "expiresIn": 604800,
+    "cache": {
+      "enabled": false,
+      "strategy": "jwe",
+      "refreshCache": true,
+      "maxAge": 604800
+    }
+  },
+  "stateless-zeroLifetime": {
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "maxAge": 604800,
+        "strategy": "jwe"
+      },
+      "expiresIn": 0
+    },
+    "expiresIn": 604800,
+    "cache": {
+      "enabled": true,
+      "strategy": "jwe",
+      "refreshCache": true,
+      "maxAge": 604800
+    }
+  },
+  "stateless-customLifetime": {
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "maxAge": 90,
+        "strategy": "jwe"
+      },
+      "expiresIn": 90
+    },
+    "expiresIn": 90,
+    "cache": {
+      "enabled": true,
+      "strategy": "jwe",
+      "refreshCache": true,
+      "maxAge": 90
+    }
+  },
+  "stateless-fractionalDurations": {
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "maxAge": 1e-9,
+        "strategy": "jwe"
+      },
+      "expiresIn": 12.25,
+      "freshAge": -0.125,
+      "updateAge": 0.5
+    },
+    "expiresIn": 12.25,
+    "cache": {
+      "enabled": true,
+      "strategy": "jwe",
+      "refreshCache": true,
+      "maxAge": 1e-9
+    }
+  },
+  "database-omitted": {
+    "session": {
+      "cookieCache": {}
+    },
+    "expiresIn": 604800
+  },
+  "database-empty": {
+    "session": {
+      "cookieCache": {}
+    },
+    "expiresIn": 604800,
+    "cache": {}
+  },
+  "database-disabled": {
+    "session": {
+      "cookieCache": {
+        "enabled": false
+      }
+    },
+    "expiresIn": 604800,
+    "cache": {
+      "enabled": false
+    }
+  },
+  "database-zeroLifetime": {
+    "session": {
+      "cookieCache": {},
+      "expiresIn": 0
+    },
+    "expiresIn": 604800
+  },
+  "database-customLifetime": {
+    "session": {
+      "cookieCache": {},
+      "expiresIn": 90
+    },
+    "expiresIn": 90
+  },
+  "database-fractionalDurations": {
+    "session": {
+      "cookieCache": {
+        "maxAge": 1e-9
+      },
+      "expiresIn": 12.25,
+      "freshAge": -0.125,
+      "updateAge": 0.5
+    },
+    "expiresIn": 12.25,
+    "cache": {
+      "maxAge": 1e-9
+    }
+  },
+  "secondary-omitted": {
+    "session": {
+      "cookieCache": {}
+    },
+    "expiresIn": 604800
+  },
+  "secondary-empty": {
+    "session": {
+      "cookieCache": {}
+    },
+    "expiresIn": 604800,
+    "cache": {}
+  },
+  "secondary-disabled": {
+    "session": {
+      "cookieCache": {
+        "enabled": false
+      }
+    },
+    "expiresIn": 604800,
+    "cache": {
+      "enabled": false
+    }
+  },
+  "secondary-zeroLifetime": {
+    "session": {
+      "cookieCache": {},
+      "expiresIn": 0
+    },
+    "expiresIn": 604800
+  },
+  "secondary-customLifetime": {
+    "session": {
+      "cookieCache": {},
+      "expiresIn": 90
+    },
+    "expiresIn": 90
+  },
+  "secondary-fractionalDurations": {
+    "session": {
+      "cookieCache": {
+        "maxAge": 1e-9
+      },
+      "expiresIn": 12.25,
+      "freshAge": -0.125,
+      "updateAge": 0.5
+    },
+    "expiresIn": 12.25,
+    "cache": {
+      "maxAge": 1e-9
+    }
+  }
+}

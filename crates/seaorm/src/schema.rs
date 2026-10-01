@@ -180,14 +180,18 @@ pub trait SeaOrmAccountModel:
         fields: &better_auth_core::user_fields::UserConfig,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<better_auth_core::wire::AccountView> {
-        let records = vec![self.record_fields(fields)?];
-        // Projection preserves the one input row.
-        Ok(better_auth_core::wire::AccountView::from_adapter_fields(
-            fields
-                .project_adapter_records(records, supports_native_json, supports_native_dates)?
-                .remove(0),
-        ))
+    ) -> impl std::future::Future<Output = AuthResult<better_auth_core::wire::AccountView>> + Send
+    {
+        async move {
+            let records = vec![self.record_fields(fields)?];
+            // Projection preserves the one input row.
+            Ok(better_auth_core::wire::AccountView::from_adapter_fields(
+                fields
+                    .project_adapter_records(records, supports_native_json, supports_native_dates)
+                    .await?
+                    .remove(0),
+            ))
+        }
     }
 }
 
@@ -235,15 +239,23 @@ pub trait SeaOrmVerificationModel:
         fields: &better_auth_core::user_fields::UserConfig,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<better_auth_core::wire::VerificationView> {
-        let records = vec![self.record_fields(fields)?];
-        // Projection preserves the one input row.
-        Ok(
-            better_auth_core::wire::VerificationView::from_adapter_fields(
-                fields
-                    .project_adapter_records(records, supports_native_json, supports_native_dates)?
-                    .remove(0),
-            ),
-        )
+    ) -> impl std::future::Future<Output = AuthResult<better_auth_core::wire::VerificationView>> + Send
+    {
+        async move {
+            let records = vec![self.record_fields(fields)?];
+            // Projection preserves the one input row.
+            Ok(
+                better_auth_core::wire::VerificationView::from_adapter_fields(
+                    fields
+                        .project_adapter_records(
+                            records,
+                            supports_native_json,
+                            supports_native_dates,
+                        )
+                        .await?
+                        .remove(0),
+                ),
+            )
+        }
     }
 }

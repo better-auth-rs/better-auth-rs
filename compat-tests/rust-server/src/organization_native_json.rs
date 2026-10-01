@@ -1,10 +1,11 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn replace(from: &'static str, to: &'static str) -> better_auth::config::UserFieldTransform {
-    Arc::new(move |value| {
+    UserFieldTransform::new(move |value| {
         Ok(value.map(|value| match value {
             Value::String(value) => json!(value.replace(from, to)),
             value => value,
@@ -28,7 +29,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                 required: Some(false),
                 default_value: Some(json!(r#"{"source":"default"}"#)),
                 input_transform: Some(replace("source", "stored")),
-                output_transform: Some(Arc::new(move |value| {
+                output_transform: Some(UserFieldTransform::new(move |value| {
                     if json_type
                         && value
                             .as_ref()
@@ -38,7 +39,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                             "JSON output callback requires stored text",
                         ));
                     }
-                    replace("stored", "visible")(value)
+                    replace("stored", "visible").call_sync(value)
                 })),
                 ..Default::default()
             },

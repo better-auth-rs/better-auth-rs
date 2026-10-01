@@ -575,7 +575,7 @@ pub(super) async fn verify_backup_code_core(
                 Ok((
                     SessionTokenResponse {
                         token: Some(session.token().to_string()),
-                        user: ctx.user_view(&user)?,
+                        user: ctx.user_view(&user).await?,
                     },
                     Vec::new(),
                 ))
@@ -588,7 +588,7 @@ pub(super) async fn verify_backup_code_core(
                 return Ok((
                     SessionTokenResponse {
                         token: None,
-                        user: ctx.user_view(&pending.user)?,
+                        user: ctx.user_view(&pending.user).await?,
                     },
                     Vec::new(),
                 ));

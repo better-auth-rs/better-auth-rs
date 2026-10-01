@@ -10,6 +10,8 @@ use crate::plugins::organization::hooks::*;
 use crate::plugins::organization::types::{NullableStringField, deserialize_nullable_string_field};
 use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
 
+mod lifecycle;
+
 #[cfg(test)]
 #[path = "team_input_tests.rs"]
 mod input_tests;
@@ -156,8 +158,17 @@ pub(crate) async fn handle_team_request(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<Option<AuthResponse>> {
+    match (req.method(), req.path()) {
+        (HttpMethod::Post, "/organization/create-team") => {
+            return lifecycle::create(req, ctx, config).await.map(Some);
+        }
+        (HttpMethod::Post, "/organization/remove-team") => {
+            return lifecycle::remove(req, ctx, config).await.map(Some);
+        }
+        _ => {}
+    }
     let (user, session) = require_session(req, ctx).await?;
-    let user_view = ctx.user_view(&user)?;
+    let user_view = ctx.user_view(&user).await?;
     let session_view = ctx.session_view(&session).await?;
     let actor = OrganizationSession {
         user: &user_view,
@@ -169,88 +180,6 @@ pub(crate) async fn handle_team_request(
         };
     }
     let response = match (req.method(), req.path()) {
-        (HttpMethod::Post, "/organization/create-team") => {
-            let body = body!(CreateBody);
-            let additional_fields = body.additional_fields.clone();
-            let organization_id = optional_string(body.organization_id, "body.organizationId")?;
-            let org =
-                resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
-            if ctx
-                .database
-                .get_member(&org, user.id().typed()?)
-                .await?
-                .is_none()
-            {
-                return Err(AuthError::forbidden(
-                    "You are not allowed to invite users to this organization",
-                ));
-            }
-            authorize(
-                user.id().typed()?,
-                &org,
-                ("team", "create"),
-                "You are not allowed to create teams in this organization",
-                config,
-                ctx,
-            )
-            .await?;
-            let count = ctx.database.count_organization_teams(&org).await?;
-            if let Some(maximum) = config
-                .team_limit(
-                    OrganizationTeamLimit {
-                        organization_id: &org,
-                        session: Some(actor),
-                    },
-                    OrganizationEndpoint::new(ctx, Some(req)),
-                )
-                .await?
-                .filter(|limit| *limit > 0)
-                && count >= maximum as u64
-            {
-                return Err(AuthError::bad_request(
-                    "You have reached the maximum number of teams",
-                ));
-            }
-            let organization = ctx
-                .database
-                .get_organization_by_id(&org)
-                .await?
-                .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-            let organization_view =
-                crate::plugins::organization::fields::organization(&organization, ctx);
-            let created_at = chrono::Utc::now();
-            let mut data = OrganizationTeamDraft {
-                id: additional_fields
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_owned),
-                additional_fields,
-                name: body.name,
-                organization_id: org.into(),
-                created_at: None,
-                updated_at: None,
-            };
-            if let Some(hooks) = &config.hooks {
-                hooks
-                    .before_create_team(&mut data, &organization_view, Some(&user_view))
-                    .await?;
-            }
-            let team = ctx
-                .database
-                .create_team(data.into_create(created_at, Some(created_at)))
-                .await?;
-            let team = crate::plugins::organization::fields::team(team, ctx);
-            if let Some(hooks) = &config.hooks {
-                hooks
-                    .after_create_team(OrganizationTeamEvent {
-                        team: &team,
-                        user: Some(&user_view),
-                        organization: &organization_view,
-                    })
-                    .await?;
-            }
-            AuthResponse::json(200, &team)?
-        }
         (HttpMethod::Post, "/organization/update-team") => {
             let body = body!(UpdateBody);
             let additional_fields = body.data.additional_fields.clone();
@@ -300,60 +229,6 @@ pub(crate) async fn handle_team_request(
                     .await?;
             }
             AuthResponse::json(200, &updated)?
-        }
-        (HttpMethod::Post, "/organization/remove-team") => {
-            let body = body!(TeamBody);
-            let org = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx)
-                .await?;
-            if session.active_team_id() == Some(body.team_id.as_str())
-                || ctx
-                    .database
-                    .get_member(&org, user.id().typed()?)
-                    .await?
-                    .is_none()
-            {
-                return Err(AuthError::forbidden(
-                    "You are not allowed to delete this team",
-                ));
-            }
-            authorize(
-                user.id().typed()?,
-                &org,
-                ("team", "delete"),
-                "You are not allowed to delete teams in this organization",
-                config,
-                ctx,
-            )
-            .await?;
-            let team = find_team(&body.team_id, &org, ctx).await?;
-            if !config.teams.allow_removing_all_teams
-                && ctx.database.count_organization_teams(&org).await? <= 1
-            {
-                return Err(AuthError::bad_request("Unable to remove last team"));
-            }
-            let organization = ctx
-                .database
-                .get_organization_by_id(&org)
-                .await?
-                .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-            let organization_view =
-                crate::plugins::organization::fields::organization(&organization, ctx);
-            let event = OrganizationTeamEvent {
-                team: &team,
-                user: Some(&user_view),
-                organization: &organization_view,
-            };
-            if let Some(hooks) = &config.hooks {
-                hooks.before_delete_team(event).await?;
-            }
-            ctx.database.delete_team(team.id.typed()?).await?;
-            if let Some(hooks) = &config.hooks {
-                hooks.after_delete_team(event).await?;
-            }
-            AuthResponse::json(
-                200,
-                &serde_json::json!({"message":"Team removed successfully."}),
-            )?
         }
         (HttpMethod::Get, "/organization/list-teams") => {
             let org =
@@ -559,7 +434,7 @@ pub(crate) async fn handle_team_request(
                 .get_user_by_id(&body.user_id)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("User not found"))?;
-            let target_view = ctx.internal_user_view(&target_user)?;
+            let target_view = ctx.internal_user_view(&target_user).await?;
             let target = OrganizationTeamMemberTarget {
                 team: &team,
                 organization: &organization_view,

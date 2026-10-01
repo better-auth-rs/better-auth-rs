@@ -434,7 +434,7 @@ impl PhoneNumberPlugin {
         self.notify_verified(
             PhoneVerification {
                 phone_number: phone.to_owned(),
-                user: ctx.internal_user_view(&user)?,
+                user: ctx.internal_user_view(&user).await?,
             },
             &endpoint,
         )
@@ -442,13 +442,13 @@ impl PhoneNumberPlugin {
         if let Some((_, session)) = existing_session {
             return Ok(AuthResponse::json(
                 200,
-                &json!({"status":true,"token":session.token,"user":ctx.user_view(&user)?}),
+                &json!({"status":true,"token":session.token,"user":ctx.user_view(&user).await?}),
             )?);
         }
         if body.get("disableSession") == Some(&Value::Bool(true)) {
             return Ok(AuthResponse::json(
                 200,
-                &json!({"status":true,"token":null,"user":ctx.user_view(&user)?}),
+                &json!({"status":true,"token":null,"user":ctx.user_view(&user).await?}),
             )?);
         }
         self.session_response(ctx, req, &user, false, true).await
@@ -545,7 +545,10 @@ impl PhoneNumberPlugin {
         .map_err(SessionIssueError::into_auth_error)?;
         let mut output = serde_json::Map::from_iter([
             (String::from("token"), json!(issued.session.token())),
-            (String::from("user"), json!(ctx.user_view(&issued.user)?)),
+            (
+                String::from("user"),
+                json!(ctx.user_view(&issued.user).await?),
+            ),
         ]);
         if status {
             let _ = output.insert("status".into(), json!(true));
@@ -652,7 +655,7 @@ impl PhoneNumberPlugin {
         }
         if let Some(callback) = &ctx.password_policy.on_password_reset {
             callback(better_auth_core::utils::password::PasswordResetEvent {
-                user: ctx.internal_user_view(&user)?,
+                user: ctx.internal_user_view(&user).await?,
                 request: Some(req.clone()),
             })
             .await?;

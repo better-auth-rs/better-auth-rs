@@ -1,3 +1,4 @@
+mod metadata;
 mod options;
 pub use options::{
     EmailPasswordTelemetry, EmailVerificationTelemetry, PasswordTelemetry, PluginTelemetry,
@@ -9,7 +10,7 @@ use async_trait::async_trait;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use rand::{Rng, distributions::Alphanumeric};
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 use super::logger::{LogArgument, LoggerConfig};
@@ -59,6 +60,11 @@ fn is_test() -> bool {
 }
 
 impl Telemetry {
+    /// Read common initialization metadata without invoking transports or application callbacks.
+    pub fn initialization_metadata() -> Map<String, Value> {
+        metadata::initialization_metadata()
+    }
+
     pub fn enabled(&self) -> bool {
         self.transport.is_some()
     }

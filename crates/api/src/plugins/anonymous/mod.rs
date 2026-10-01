@@ -182,7 +182,7 @@ impl AnonymousPlugin {
             .await?;
         Ok(AuthResponse::json(
             200,
-            &serde_json::json!({"token": issued.session.token(),"user":ctx.user_view(&issued.user)?}),
+            &serde_json::json!({"token": issued.session.token(),"user":ctx.user_view(&issued.user).await?}),
         )?)
     }
     async fn delete(
@@ -321,7 +321,7 @@ impl AnonymousPlugin {
                             .find(|(session, _)| session.expires_at() > chrono::Utc::now());
                         if let Some((session, snapshot)) = session {
                             Some(better_auth_core::session::SessionData {
-                                user: ctx.internal_user_view(&user)?,
+                                user: ctx.internal_user_view(&user).await?,
                                 session: match snapshot {
                                     Some(session) => session,
                                     None => {

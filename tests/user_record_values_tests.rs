@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use better_auth_core::store::UserStore;
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema, AuthStore, CreateUser, UpdateUser, UserView,
@@ -218,11 +219,11 @@ async fn mapped_json_columns_preserve_raw_values_and_apply_each_storage_transfor
         "name".into(),
         UserFieldConfig {
             field_name: Some("storedName".into()),
-            input_transform: Some(Arc::new(move |value| {
+            input_transform: Some(UserFieldTransform::new(move |value| {
                 let _ = input_count.fetch_add(1, Ordering::SeqCst);
                 Ok(value.map(|value| json!({"stored":value})))
             })),
-            output_transform: Some(Arc::new(move |value| {
+            output_transform: Some(UserFieldTransform::new(move |value| {
                 let _ = output_count.fetch_add(1, Ordering::SeqCst);
                 Ok(value.map(|value| json!({"shown":value})))
             })),

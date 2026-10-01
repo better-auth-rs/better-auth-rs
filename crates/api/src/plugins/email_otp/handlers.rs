@@ -128,7 +128,7 @@ impl EmailOtpPlugin {
         }
         Ok(AuthResponse::json(
             200,
-            &json!({"status": true, "token": null, "user": ctx.user_view(&user)?}),
+            &json!({"status": true, "token": null, "user": ctx.user_view(&user).await?}),
         )?)
     }
 
@@ -262,7 +262,7 @@ impl EmailOtpPlugin {
         }
         if let Some(hook) = &ctx.password_policy.on_password_reset {
             hook(password::PasswordResetEvent {
-                user: ctx.internal_user_view(&user)?,
+                user: ctx.internal_user_view(&user).await?,
                 request: Some(req.clone()),
             })
             .await?;
@@ -389,7 +389,7 @@ impl EmailOtpPlugin {
         email: String,
     ) -> AuthResult<better_auth_core::wire::UserView> {
         if let Some(hook) = &ctx.email_verification_policy.before_email_verification {
-            hook(&ctx.user_view(user)?).await?;
+            hook(&ctx.user_view(user).await?).await?;
         }
         let user = ctx
             .database
@@ -403,7 +403,7 @@ impl EmailOtpPlugin {
             )
             .await?;
         if let Some(hook) = &ctx.email_verification_policy.after_email_verification {
-            hook(&ctx.user_view(&user)?).await?;
+            hook(&ctx.user_view(&user).await?).await?;
         }
         Ok(user)
     }
@@ -419,7 +419,7 @@ impl EmailOtpPlugin {
         let issued = issue_user_session(ctx, user_id, meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
-        let user = ctx.user_view(&issued.user)?;
+        let user = ctx.user_view(&issued.user).await?;
         let body = if verification {
             json!({"status": true, "token": issued.session.token(), "user": user})
         } else {

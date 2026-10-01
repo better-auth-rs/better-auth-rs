@@ -131,6 +131,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
         "oauth"
     }
 
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        (!self.generic.is_empty()).then_some("generic-oauth")
+    }
+
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
         ctx.extensions.insert(self.config.clone());
         ctx.extensions.insert(self.resolved_config().await?.clone());

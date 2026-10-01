@@ -395,7 +395,7 @@ async fn state<S: AuthSchema>(fixture: &Fixture<S>) -> AuthResult<Value> {
             .get_user_by_email(&email)
             .await?
             .unwrap();
-        let view = fixture.auth.context().user_view(&user)?;
+        let view = fixture.auth.context().user_view(&user).await?;
         let mut user = json!({"email":email,"username":view.username});
         if fixture.display {
             user["displayUsername"] = json!(view.display_username);
@@ -478,7 +478,7 @@ async fn invoke<S: AuthSchema>(
             user.additional_fields = fields;
             let user = fixture.auth.store().create_user(user).await?;
             Ok(serde_json::to_value(
-                fixture.auth.context().user_view(&user)?,
+                fixture.auth.context().user_view(&user).await?,
             )?)
         }
         "update" => {
@@ -500,7 +500,7 @@ async fn invoke<S: AuthSchema>(
                 )
                 .await?;
             Ok(serde_json::to_value(
-                fixture.auth.context().user_view(&user)?,
+                fixture.auth.context().user_view(&user).await?,
             )?)
         }
         operation => {

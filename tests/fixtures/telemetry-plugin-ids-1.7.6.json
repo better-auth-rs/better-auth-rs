@@ -1,0 +1,54 @@
+{
+  "omitted": {
+    "plugins": [],
+    "initializedPlugins": []
+  },
+  "empty": {
+    "plugins": [],
+    "initializedPlugins": []
+  },
+  "core": {
+    "plugins": [],
+    "initializedPlugins": []
+  },
+  "social": {
+    "plugins": [],
+    "initializedPlugins": []
+  },
+  "generic": {
+    "plugins": [
+      "generic-oauth"
+    ],
+    "initializedPlugins": [
+      "generic-oauth"
+    ]
+  },
+  "multipleGeneric": {
+    "plugins": [
+      "generic-oauth"
+    ],
+    "initializedPlugins": [
+      "generic-oauth"
+    ]
+  },
+  "mixed": {
+    "plugins": [
+      "first",
+      "generic-oauth",
+      "last"
+    ],
+    "initializedPlugins": [
+      "first",
+      "generic-oauth",
+      "last"
+    ]
+  },
+  "customCoreName": {
+    "plugins": [
+      "email-password"
+    ],
+    "initializedPlugins": [
+      "email-password"
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -46,7 +47,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
             "lastLoginMethod".into(),
             UserFieldConfig {
                 field_name: Some(field.into()),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(value
                         .map(|value| serde_json::json!(format!("{}:out", value.as_str().unwrap()))))
                 })),
@@ -86,11 +87,21 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
     .await
     .unwrap();
     assert_eq!(
-        first.context().user_view(&one).unwrap().additional_fields["lastLoginMethod"],
+        first
+            .context()
+            .user_view(&one)
+            .await
+            .unwrap()
+            .additional_fields["lastLoginMethod"],
         "http://first.example:out"
     );
     assert_eq!(
-        second.context().user_view(&two).unwrap().additional_fields["lastLoginMethod"],
+        second
+            .context()
+            .user_view(&two)
+            .await
+            .unwrap()
+            .additional_fields["lastLoginMethod"],
         "http://second.example:out"
     );
     assert_eq!(store.list_users(Default::default()).await.unwrap().1, 2);

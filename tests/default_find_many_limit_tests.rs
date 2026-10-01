@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -166,7 +167,7 @@ async fn default_limits_apply_before_projection_and_cap_snapshots_without_cappin
             let _ = config.account.additional_fields.insert(
                 "providerId".into(),
                 UserFieldConfig {
-                    output_transform: Some(Arc::new(move |value| {
+                    output_transform: Some(UserFieldTransform::new(move |value| {
                         let _ = capture.fetch_add(1, Ordering::SeqCst);
                         Ok(value)
                     })),

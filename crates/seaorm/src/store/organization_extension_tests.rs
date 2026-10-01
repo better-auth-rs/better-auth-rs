@@ -3,6 +3,7 @@
     reason = "test setup intentionally discards created records"
 )]
 use super::{SeaOrmStore, bundled_schema::BundledSchema, migrator::run_migrations};
+use better_auth_core::user_fields::UserFieldTransform;
 use better_auth_core::{
     AuthConfig, CreateInvitation, CreateMember, CreateOrganization, CreateOrganizationRole,
     CreateTeam, CreateUser, UpdateOrganizationRole,
@@ -61,7 +62,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
         "permission".into(),
         UserFieldConfig {
             field_type: UserFieldType::Json,
-            input_transform: Some(Arc::new(|value| {
+            input_transform: Some(UserFieldTransform::new(|value| {
                 value
                     .map(|value| {
                         let value: Value = match value {
@@ -73,7 +74,7 @@ async fn json_policies_keep_native_model_values_and_transform_each_read_once() {
                     })
                     .transpose()
             })),
-            output_transform: Some(Arc::new(|value| {
+            output_transform: Some(UserFieldTransform::new(|value| {
                 Ok(value.map(|value| {
                     json!(
                         value

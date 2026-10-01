@@ -136,9 +136,14 @@ impl CsrfMiddleware {
             .filter(|value| value != "null")
             .ok_or_else(|| AuthError::forbidden(MISSING_OR_NULL_ORIGIN))?;
 
-        let trusted = if self.auth_config.trusted_origins.is_dynamic() {
+        let trusted = if self.auth_config.trusted_origin_values().is_dynamic() {
             let mut origins = self.trusted_origins.clone().unwrap_or_default();
-            origins.extend(self.auth_config.trusted_origins.resolve(Some(req)).await?);
+            origins.extend(
+                self.auth_config
+                    .trusted_origin_values()
+                    .resolve(Some(req))
+                    .await?,
+            );
             origins.iter().any(|pattern| {
                 glob_match::glob_match(&extract_origin(pattern).unwrap_or_default(), &origin)
             })
@@ -469,7 +474,7 @@ mod tests {
         let mut config = AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
             .base_url("http://localhost:3000")
             .disable_origin_check(true);
-        config.trusted_origins = vec![].into();
+        config.trusted_origins = Some(vec![].into());
         let mw = CsrfMiddleware::new(CsrfConfig::new(), Arc::new(config));
         let mut req = make_request("/sign-in/social", None, false, &[]);
         req.body = Some(

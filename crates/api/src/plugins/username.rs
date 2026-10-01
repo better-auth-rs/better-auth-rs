@@ -1,4 +1,5 @@
 //! Username login with endpoint, database-hook and adapter policies.
+use better_auth_core::user_fields::UserFieldTransform;
 
 use std::sync::Arc;
 
@@ -40,7 +41,7 @@ impl UsernamePlugin {
             UserFieldConfig {
                 required: Some(false),
                 field_name: config.username_field_name.clone(),
-                input_transform: Some(Arc::new(move |value| match value {
+                input_transform: Some(UserFieldTransform::new(move |value| match value {
                     Some(Value::String(value)) => {
                         config.normalize(&value).map(|value| Some(value.into()))
                     }
@@ -56,7 +57,7 @@ impl UsernamePlugin {
                 UserFieldConfig {
                     required: Some(false),
                     field_name: config.display_username_field_name.clone(),
-                    input_transform: Some(Arc::new(move |value| match value {
+                    input_transform: Some(UserFieldTransform::new(move |value| match value {
                         Some(Value::String(value)) => config
                             .normalize_display(&value)
                             .map(|value| Some(value.into())),

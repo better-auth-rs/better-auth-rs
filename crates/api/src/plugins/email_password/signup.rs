@@ -286,7 +286,8 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                             &user_config,
                             &user_metadata,
                             supports_native_json,
-                        )?
+                        )
+                        .await?
                         .into(),
                     }))
                 } else {
@@ -298,7 +299,8 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                             &user_config,
                             &user_metadata,
                             supports_native_json,
-                        )?
+                        )
+                        .await?
                         .into(),
                     }))
                 }

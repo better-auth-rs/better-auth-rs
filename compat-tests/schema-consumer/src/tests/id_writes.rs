@@ -1,4 +1,5 @@
 use super::*;
+use better_auth::config::UserFieldTransform;
 use better_auth::{
     __private_core::{
         CreateApiKey, CreateDeviceCode, Member, UpdateDeviceCode, UpdateTeam,
@@ -144,7 +145,7 @@ pub(super) async fn reference_writes<
                 model: "user".into(),
                 field: "id".into(),
             }),
-            input_transform: Some(Arc::new(move |value| {
+            input_transform: Some(UserFieldTransform::new(move |value| {
                 if value == Some(json!("@owner")) {
                     observed.fetch_add(1, Ordering::SeqCst);
                     Ok(Some(json!(transformed_owner)))

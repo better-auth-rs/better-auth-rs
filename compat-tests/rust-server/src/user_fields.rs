@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth_seaorm::sea_orm::{self, entity::prelude::*};
 use serde::Serialize;
 
@@ -91,8 +92,8 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             "alias".into(),
             UserFieldConfig {
                 default_value: Some(json!("guest")),
-                input_transform: Some(Arc::new(|value| suffix(value, "in"))),
-                output_transform: Some(Arc::new(|value| suffix(value, "out"))),
+                input_transform: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
+                output_transform: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
                 ..Default::default()
             },
         ),
@@ -100,8 +101,8 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             "optionalAlias".into(),
             UserFieldConfig {
                 required: Some(false),
-                input_transform: Some(Arc::new(|value| suffix(value, "in"))),
-                output_transform: Some(Arc::new(|value| suffix(value, "out"))),
+                input_transform: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
+                output_transform: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
                 ..Default::default()
             },
         ),

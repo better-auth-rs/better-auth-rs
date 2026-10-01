@@ -25,12 +25,12 @@ impl EphemeralStore {
         Ok(user)
     }
 
-    fn output_user(&self, user: UserView) -> AuthResult<UserView> {
+    async fn output_user(&self, user: UserView) -> AuthResult<UserView> {
         // Projection preserves the one input row.
-        Ok(self.output_users(vec![user])?.remove(0))
+        Ok(self.output_users(vec![user]).await?.remove(0))
     }
 
-    fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
+    async fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
         let storage = users
             .iter_mut()
             .map(|user| {
@@ -46,7 +46,7 @@ impl EphemeralStore {
                 Ok(input)
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let fields = self.config.user.output_fields_many(&storage)?;
+        let fields = self.config.user.output_fields_many(&storage).await?;
         for (user, mut fields) in users.iter_mut().zip(fields) {
             if self.config.user.additional_fields.contains_key("name") {
                 user.name = crate::SchemaValue::from_json(fields.remove("name"));
@@ -91,7 +91,7 @@ impl EphemeralStore {
             }
         }
         let fields = update.take_user_field_input(&self.config.user)?;
-        update.additional_fields = self.config.user.storage_fields(fields, false)?;
+        update.additional_fields = self.config.user.storage_fields(fields, false).await?;
         for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
             if let Some(field) = self.config.user.additional_fields.get(name) {
                 *target = crate::SchemaValue::from_json(
@@ -204,7 +204,9 @@ impl EphemeralStore {
                 })
             })
             .await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
 }
 
@@ -265,7 +267,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             create_user.prepare_user_fields(&self.config.user)?;
         }
         let fields = create_user.take_user_field_input(&self.config.user)?;
-        let mut fields = self.config.user.storage_fields(fields, true)?;
+        let mut fields = self.config.user.storage_fields(fields, true).await?;
         for (name, target) in [
             ("name", &mut create_user.name),
             ("image", &mut create_user.image),
@@ -353,7 +355,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             },
         )
         .await?;
-        let user = self.output_user(user)?;
+        let user = self.output_user(user).await?;
         self.after(CommittedWrite::UserCreated(user.clone()))
             .await?;
         Ok(Some(user))
@@ -366,13 +368,17 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let user = self
             .raw("user", "findOne", |state| state.users.get(id))
             .await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
         let user = self
             .raw("user", "findOne", |state| state.users.get(id))
             .await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
     async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<UserView>> {
         let user = self
@@ -385,7 +391,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .cloned())
             })
             .await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
@@ -404,7 +412,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        self.output_users(users)
+        self.output_users(users).await
     }
 
     async fn get_user_with_accounts(
@@ -415,7 +423,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             return Ok(None);
         };
         let stored_user_id = record.id.clone();
-        let user = self.output_user(record)?;
+        let user = self.output_user(record).await?;
         let accounts = match stored_user_id.as_str() {
             Some(id) => self.get_user_accounts(id).await?,
             None => Vec::new(),
@@ -425,7 +433,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
         let user = self.user_record_by_email(email).await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
@@ -439,7 +449,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .cloned())
             })
             .await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
 
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<UserView>> {
@@ -453,7 +465,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .cloned())
             })
             .await?;
-        user.map(|user| self.output_user(user)).transpose()
+        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+            .await
+            .transpose()
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
@@ -490,7 +504,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findOne", |state| state.users.get(id))
             .await?;
         // Upstream deleteWithHooks treats snapshot projection failures as a missing row.
-        let Some(user) = user.and_then(|user| self.output_user(user).ok()) else {
+        let Some(user) = (match user {
+            Some(user) => self.output_user(user).await.ok(),
+            None => None,
+        }) else {
             return Ok(None);
         };
         let transaction = EphemeralTransaction {
@@ -528,7 +545,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findMany", |state| state.users.snapshot())
             .await?;
         let (users, _) = crate::user_query::apply_list_users(users, &params);
-        let users = self.output_users(users)?;
+        let users = self.output_users(users).await?;
         let total = self
             .raw("user", "count", |state| {
                 Ok(crate::user_query::count_users(

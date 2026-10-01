@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 
 impl UserConfig {
     /// Apply storage policies before converting JSON for the selected adapter.
-    pub fn storage_fields_for_adapter(
+    pub async fn storage_fields_for_adapter(
         &self,
         input: Map<String, Value>,
         create: bool,
@@ -14,16 +14,17 @@ impl UserConfig {
         self.storage_fields_with_binding(input, create, |name, field, value| {
             Ok(field.adapter_input(value, supports_native_json, native_json_field(name)))
         })
+        .await
     }
 
     /// Bind transformed fields to an adapter without repeating defaults or application transforms.
-    pub fn storage_fields_with_binding(
+    pub async fn storage_fields_with_binding(
         &self,
         input: Map<String, Value>,
         create: bool,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<Map<String, Value>> {
-        let mut fields = self.storage_fields(input, create)?;
+        let mut fields = self.storage_fields(input, create).await?;
         for (name, field) in &self.additional_fields {
             let storage_name = field.field_name.as_ref().unwrap_or(name);
             if let Some(value) = fields.get_mut(storage_name) {
@@ -71,22 +72,49 @@ impl UserFieldConfig {
             .is_some_and(|reference| reference.field == "id")
     }
 
-    /// Run the output policy on adapter storage values, then decode text-backed JSON.
-    pub fn adapter_output(
+    /// Await the output policy before decoding adapter storage values.
+    pub async fn adapter_output(
         &self,
-        mut value: Option<Value>,
+        value: Option<Value>,
         supports_native_json: bool,
     ) -> AuthResult<Option<Value>> {
-        let text_json = !supports_native_json && matches!(self.field_type, UserFieldType::Json);
-        if text_json {
-            value = value.map(|value| match value {
+        let mut value = self.prepare_output(value, supports_native_json);
+        if let Some(transform) = &self.output_transform {
+            value = transform.call(value).await?;
+        }
+        self.finish_output(value, supports_native_json)
+    }
+
+    /// Project a value at the synchronous Organization boundary.
+    /// Async callbacks fail explicitly before application work starts.
+    pub fn adapter_output_sync(
+        &self,
+        value: Option<Value>,
+        supports_native_json: bool,
+    ) -> AuthResult<Option<Value>> {
+        let mut value = self.prepare_output(value, supports_native_json);
+        if let Some(transform) = &self.output_transform {
+            value = transform.call_sync(value)?;
+        }
+        self.finish_output(value, supports_native_json)
+    }
+
+    fn prepare_output(&self, value: Option<Value>, supports_native_json: bool) -> Option<Value> {
+        if !supports_native_json && matches!(self.field_type, UserFieldType::Json) {
+            value.map(|value| match value {
                 Value::Object(_) | Value::Array(_) => Value::String(value.to_string()),
                 value => value,
-            });
+            })
+        } else {
+            value
         }
-        if let Some(transform) = &self.output_transform {
-            value = transform(value)?;
-        }
+    }
+
+    fn finish_output(
+        &self,
+        value: Option<Value>,
+        supports_native_json: bool,
+    ) -> AuthResult<Option<Value>> {
         if self.references_id() {
             return value
                 .map(|value| {
@@ -101,7 +129,11 @@ impl UserFieldConfig {
                 .transpose();
         }
         Ok(value.map(|value| match value {
-            Value::String(text) if text_json => crate::utils::json::safe_json_parse(&text),
+            Value::String(text)
+                if !supports_native_json && matches!(self.field_type, UserFieldType::Json) =>
+            {
+                crate::utils::json::safe_json_parse(&text)
+            }
             value => value,
         }))
     }

@@ -42,16 +42,20 @@ impl<S: AuthSchema> PasskeyUsers for Users<'_, S> {
             Some(tx) => tx.get_user_by_id(id).await?,
             None => self.ctx.database.get_user_by_id(id).await?,
         };
-        user.map(|user| self.ctx.internal_user_view(&user))
-            .transpose()
+        match user {
+            Some(user) => self.ctx.internal_user_view(&user).await.map(Some),
+            None => Ok(None),
+        }
     }
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
         let user = match self.transaction {
             Some(tx) => tx.get_user_by_email(email).await?,
             None => self.ctx.database.get_user_by_email(email).await?,
         };
-        user.map(|user| self.ctx.internal_user_view(&user))
-            .transpose()
+        match user {
+            Some(user) => self.ctx.internal_user_view(&user).await.map(Some),
+            None => Ok(None),
+        }
     }
     async fn update_user(
         &self,
@@ -62,7 +66,7 @@ impl<S: AuthSchema> PasskeyUsers for Users<'_, S> {
             Some(tx) => tx.update_user(id, update).await?,
             None => self.ctx.database.update_user(id, update).await?,
         };
-        self.ctx.internal_user_view(&user)
+        self.ctx.internal_user_view(&user).await
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         match self.transaction {
@@ -76,7 +80,7 @@ impl<S: AuthSchema> PasskeyUsers for Users<'_, S> {
             Some(tx) => tx.create_user(user).await?,
             None => self.ctx.database.create_user(user).await?,
         };
-        self.ctx.internal_user_view(&user)
+        self.ctx.internal_user_view(&user).await
     }
 }
 impl<'a> PasskeyEndpoint<'a> {

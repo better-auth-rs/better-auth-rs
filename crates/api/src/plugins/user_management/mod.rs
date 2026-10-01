@@ -266,7 +266,7 @@ impl UserManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, session) = ctx.require_session(req).await?;
-        let user = ctx.user_view(&user)?;
+        let user = ctx.user_view(&user).await?;
         let body = request::delete_user(req)?;
         let response = delete_user_core(&body, &user, &session, req, &self.config, ctx).await?;
         let mut response = AuthResponse::json(200, &response)?;
@@ -292,7 +292,7 @@ impl UserManagementPlugin {
                     error
                 }
             })?;
-        let user = ctx.user_view(&user)?;
+        let user = ctx.user_view(&user).await?;
         let query: TokenQuery = serde_json::from_value(serde_json::json!({
             "token": req.query_string("token")?.map(str::to_owned),
             "callbackURL": req.query_string("callbackURL")?.map(str::to_owned),
@@ -336,6 +336,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
 
     fn name(&self) -> &'static str {
         "user-management"
+    }
+
+    fn telemetry_plugin_id(&self) -> Option<&'static str> {
+        None
     }
 
     fn routes(&self) -> Vec<AuthRoute> {

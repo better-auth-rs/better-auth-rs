@@ -114,7 +114,7 @@ impl<S: AuthSchema> SessionManager<S> {
         self
     }
 
-    fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
+    async fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
         UserView::with_field_policies(
             user,
             &self.adapter_user_fields,
@@ -122,6 +122,7 @@ impl<S: AuthSchema> SessionManager<S> {
             &self.user_metadata,
             self.database.supports_native_json(),
         )
+        .await
     }
 
     pub async fn session_view(&self, session: &impl AuthSession) -> AuthResult<SessionView> {
@@ -146,7 +147,8 @@ impl<S: AuthSchema> SessionManager<S> {
             session,
             &self.config.session,
             self.database.supports_native_json(),
-        )?;
+        )
+        .await?;
         view.visible_fields = Some(
             [
                 ("admin.enabled", "impersonatedBy"),
@@ -171,13 +173,14 @@ impl<S: AuthSchema> SessionManager<S> {
         Ok(view)
     }
 
-    fn internal_user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
+    async fn internal_user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
         UserView::with_internal_fields_for_adapter(
             user,
             &self.adapter_user_fields,
             &self.user_metadata,
             self.database.supports_native_json(),
         )
+        .await
     }
 
     /// Project an adapter result without removing fields available to trusted callbacks.
@@ -187,7 +190,7 @@ impl<S: AuthSchema> SessionManager<S> {
         session: &impl AuthSession,
     ) -> AuthResult<SessionData> {
         Ok(SessionData {
-            user: self.internal_user_view(user)?,
+            user: self.internal_user_view(user).await?,
             session: self.internal_session_view(session).await?,
         })
     }
@@ -351,7 +354,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 .ok_or(AuthError::UserNotFound)?;
             let data = SessionData {
                 session: session.clone(),
-                user: self.user_view(&user)?,
+                user: self.user_view(&user).await?,
             };
             req.set_session_snapshot(Some(data.clone()))?;
             return Ok(SessionResolution {
@@ -450,7 +453,7 @@ impl<S: AuthSchema> SessionManager<S> {
             return Ok(none());
         };
         let mut data = if let Some(mut data) = cached_data {
-            data.user = self.user_view(&data.user)?;
+            data.user = self.user_view(&data.user).await?;
             data.session.filter_returned_fields(&self.config.session);
             data
         } else {
@@ -464,7 +467,7 @@ impl<S: AuthSchema> SessionManager<S> {
             };
             SessionData {
                 session: self.session_view(&session).await?,
-                user: self.user_view(&user)?,
+                user: self.user_view(&user).await?,
             }
         };
         req.set_session_snapshot(Some(data.clone()))?;
@@ -657,24 +660,29 @@ impl<S: AuthSchema> SessionManager<S> {
         &self,
         user_id: impl AsRef<str>,
     ) -> AuthResult<Vec<SessionView>> {
-        self.database
+        let snapshots = self
+            .database
             .get_user_session_snapshots(user_id.as_ref())
-            .await?
+            .await?;
+        let mut views = Vec::new();
+        for (session, cached) in snapshots
             .into_iter()
             .filter(|(session, _)| session.expires_at() > Utc::now() && session.active())
-            .map(|(session, cached)| {
-                if let Some(mut view) = cached {
-                    view.filter_returned_fields(&self.config.session);
-                    Ok(view)
-                } else {
-                    SessionView::with_fields_for_adapter(
-                        &session,
-                        &self.config.session,
-                        self.database.supports_native_json(),
-                    )
-                }
-            })
-            .collect()
+        {
+            let view = if let Some(mut view) = cached {
+                view.filter_returned_fields(&self.config.session);
+                view
+            } else {
+                SessionView::with_fields_for_adapter(
+                    &session,
+                    &self.config.session,
+                    self.database.supports_native_json(),
+                )
+                .await?
+            };
+            views.push(view);
+        }
+        Ok(views)
     }
 
     /// Revoke a specific session by token

@@ -271,7 +271,10 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
                     "session".into(),
                     serde_json::to_value(ctx.session_view(&session).await?)?,
                 );
-                let _ = object.insert("user".into(), serde_json::to_value(ctx.user_view(&user)?)?);
+                let _ = object.insert(
+                    "user".into(),
+                    serde_json::to_value(ctx.user_view(&user).await?)?,
+                );
             }
             Some(ctx.session_manager().internal_data(&user, &session).await?)
         } else {

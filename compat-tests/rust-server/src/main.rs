@@ -826,7 +826,8 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
             config.base_url = base_url.into();
         }
         if let Some(origins) = case.get("trustedOrigins") {
-            config.trusted_origins = serde_json::from_value::<Vec<String>>(origins.clone())?.into();
+            config.trusted_origins =
+                Some(serde_json::from_value::<Vec<String>>(origins.clone())?.into());
         }
     }
     if device_profile == "organization-cache" {

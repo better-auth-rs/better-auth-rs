@@ -38,11 +38,13 @@ where
     ) -> AuthResult<bool> {
         let reservation_id = self.parse_id(id, S::Verification::parse_id)?;
         let result: AuthResult<()> = async {
-            let active = self.new_verification_active(
-                self.connection(),
-                Some(reservation_id.clone()),
-                verification.with_timestamps(Utc::now()),
-            )?;
+            let active = self
+                .new_verification_active(
+                    self.connection(),
+                    Some(reservation_id.clone()),
+                    verification.with_timestamps(Utc::now()),
+                )
+                .await?;
             let row =
                 database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                     self.config(),
@@ -50,14 +52,14 @@ where
                     async { active.insert(self.connection()).await.map_err(map_db_err) },
                 )
                 .await?;
-            let _ = self.output_verification(&row, self.connection())?;
+            let _ = self.output_verification(&row, self.connection()).await?;
             Ok(())
         }
         .await;
         match result {
             Ok(()) => Ok(true),
             Err(cause) => {
-                if database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                if match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                     self.config(),
                     "findOne",
                     async {
@@ -69,9 +71,7 @@ where
                     },
                 )
                 .await?
-                .as_ref()
-                .map(|row| self.output_verification(row, self.connection()))
-                .transpose()?
+                .as_ref() { Some(row) => self.output_verification(row, self.connection()).await.map(Some), None => Ok(None) }?
                 .is_some()
                 {
                     Ok(false)
@@ -186,7 +186,7 @@ where
         identifier: &str,
         value: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+        match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -207,12 +207,17 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_verification(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self
+                .output_verification(row, self.connection())
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
-        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+        match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -229,15 +234,20 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_verification(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self
+                .output_verification(row, self.connection())
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_verification_by_identifier(
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+        match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -257,8 +267,13 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_verification(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self
+                .output_verification(row, self.connection())
+                .await
+                .map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn consume_verification(
@@ -333,7 +348,7 @@ where
         let filter = <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(now);
         // Only the upstream deleteMany snapshot is best-effort. Hook and write errors propagate.
         let snapshot: AuthResult<Vec<VerificationView>> = async {
-            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
                 "findMany",
                 async {
@@ -349,7 +364,10 @@ where
                 },
             )
             .await
-            .and_then(|rows| self.output_verifications(&rows, connection))
+            {
+                Ok(rows) => self.output_verifications(&rows, connection).await,
+                Err(error) => Err(error),
+            }
         }
         .await;
         let records = snapshot.unwrap_or_default();
@@ -389,7 +407,7 @@ where
     S::Account: crate::schema::SeaOrmAccountModel,
     S::Session: crate::schema::SeaOrmSessionModel,
 {
-    pub(super) fn output_verifications(
+    pub(super) async fn output_verifications(
         &self,
         rows: &[S::Verification],
         db: &impl ConnectionTrait,
@@ -404,13 +422,14 @@ where
                 records,
                 db.get_database_backend() == sea_orm::DbBackend::Postgres,
                 db.get_database_backend() != sea_orm::DbBackend::Sqlite,
-            )?
+            )
+            .await?
             .into_iter()
             .map(better_auth_core::wire::VerificationView::from_adapter_fields)
             .collect())
     }
 
-    pub(super) fn output_verification(
+    pub(super) async fn output_verification(
         &self,
         row: &S::Verification,
         db: &impl ConnectionTrait,
@@ -420,9 +439,10 @@ where
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
             db.get_database_backend() != sea_orm::DbBackend::Sqlite,
         )
+        .await
     }
 
-    fn new_verification_active(
+    async fn new_verification_active(
         &self,
         db: &impl ConnectionTrait,
         id: Option<<S::Verification as SeaOrmVerificationModel>::Id>,
@@ -430,12 +450,14 @@ where
     ) -> AuthResult<<S::Verification as SeaOrmVerificationModel>::ActiveModel> {
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
-        let input = fields.record_storage_fields_for_adapter(
-            input.fields()?,
-            true,
-            backend == sea_orm::DbBackend::Postgres,
-            S::Verification::native_json_field,
-        )?;
+        let input = fields
+            .record_storage_fields_for_adapter(
+                input.fields()?,
+                true,
+                backend == sea_orm::DbBackend::Postgres,
+                S::Verification::native_json_field,
+            )
+            .await?;
         let mut active = S::Verification::new_active(id, input)?;
         crate::reference_id::apply_bindings(
             &mut active,
@@ -471,12 +493,14 @@ where
         }
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
-        let input = fields.record_storage_fields_for_adapter(
-            update.fields()?,
-            false,
-            backend == sea_orm::DbBackend::Postgres,
-            S::Verification::native_json_field,
-        )?;
+        let input = fields
+            .record_storage_fields_for_adapter(
+                update.fields()?,
+                false,
+                backend == sea_orm::DbBackend::Postgres,
+                S::Verification::native_json_field,
+            )
+            .await?;
         let mut active = <S::Verification as SeaOrmVerificationModel>::ActiveModel::default();
         S::Verification::apply_fields(&mut active, input)?;
         crate::reference_id::apply_bindings(
@@ -493,26 +517,29 @@ where
             (_, sea_orm::ActiveValue::Set(value)) => S::Verification::identifier_column().eq(value),
             _ => S::Verification::identifier_column().eq(identifier),
         };
-        let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
-            self.config(),
-            "update",
-            async {
-                super::updates::update_returning_one::<
-                    <S::Verification as SeaOrmVerificationModel>::Entity,
-                    _,
-                >(
-                    db,
-                    active,
-                    S::Verification::identifier_column().eq(identifier),
-                    reselect,
-                )
-                .await
-            },
-        )
-        .await?
-        .as_ref()
-        .map(|row| self.output_verification(row, db))
-        .transpose()?;
+        let row =
+            match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                self.config(),
+                "update",
+                async {
+                    super::updates::update_returning_one::<
+                        <S::Verification as SeaOrmVerificationModel>::Entity,
+                        _,
+                    >(
+                        db,
+                        active,
+                        S::Verification::identifier_column().eq(identifier),
+                        reselect,
+                    )
+                    .await
+                },
+            )
+            .await?
+            .as_ref()
+            {
+                Some(row) => self.output_verification(row, db).await.map(Some),
+                None => Ok(None),
+            }?;
         let updated = row.clone();
         let request = context.request.clone();
         let store = self.clone();
@@ -539,7 +566,7 @@ where
     ) -> AuthResult<()> {
         // A failed findMany projection is caught before single-delete hooks or writes run.
         let snapshot: AuthResult<Option<VerificationView>> = async {
-            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
                 "findOne",
                 async {
@@ -552,8 +579,10 @@ where
             )
             .await?
             .as_ref()
-            .map(|row| self.output_verification(row, db))
-            .transpose()
+            {
+                Some(row) => self.output_verification(row, db).await.map(Some),
+                None => Ok(None),
+            }
         }
         .await;
         let Ok(Some(row)) = snapshot else {
@@ -641,7 +670,9 @@ where
                 .and_then(|id| id.as_str().map(str::to_owned)),
         )?;
         let parsed = id.as_deref().map(S::Verification::parse_id).transpose()?;
-        let mut active = self.new_verification_active(connection, parsed, verification)?;
+        let mut active = self
+            .new_verification_active(connection, parsed, verification)
+            .await?;
         if id.is_none() {
             active.not_set(S::Verification::id_column());
         }
@@ -651,7 +682,7 @@ where
             async { active.insert(connection).await.map_err(map_db_err) },
         )
         .await?;
-        self.output_verification(&row, connection)
+        self.output_verification(&row, connection).await
     }
 
     pub(super) async fn find_verification_with_connection<C: ConnectionTrait>(
@@ -659,7 +690,7 @@ where
         connection: &C,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+        match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
@@ -673,8 +704,10 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_verification(row, connection))
-        .transpose()
+        {
+            Some(row) => self.output_verification(row, connection).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     pub(super) async fn consume_verification_with_transaction(
@@ -703,7 +736,7 @@ where
         else {
             return Ok(None);
         };
-        let snapshot = self.output_verification(&model, transaction)?;
+        let snapshot = self.output_verification(&model, transaction).await?;
         if let Some(expected) = expected_value
             && snapshot.value.typed()? != expected
         {
@@ -744,7 +777,7 @@ where
             return Ok(None);
         }
         // consumeOne output runs before removing older rows, inside the same transaction.
-        let consumed = self.output_verification(&model, transaction)?;
+        let consumed = self.output_verification(&model, transaction).await?;
         let _ = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "deleteMany",

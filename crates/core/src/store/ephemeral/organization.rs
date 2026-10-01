@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::user_fields::UserFieldTransform;
 use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 
@@ -773,7 +775,7 @@ mod query_tests {
         let store = EphemeralStore::default();
         let replace =
             |from: &'static str, to: &'static str| -> crate::user_fields::UserFieldTransform {
-                Arc::new(move |value| {
+                UserFieldTransform::new(move |value| {
                     Ok(value.map(|value| match value {
                         Value::String(value) => json!(value.replace(from, to)),
                         value => value,
@@ -879,12 +881,12 @@ mod query_tests {
                 "label".into(),
                 UserFieldConfig {
                     field_name: Some("stored_label".into()),
-                    input_transform: Some(Arc::new(|value| {
+                    input_transform: Some(UserFieldTransform::new(|value| {
                         Ok(value.map(|value| {
                             json!(format!("{}:in", value.as_str().unwrap_or_default()))
                         }))
                     })),
-                    output_transform: Some(Arc::new(|value| {
+                    output_transform: Some(UserFieldTransform::new(|value| {
                         Ok(value.map(|value| {
                             json!(format!("{}:out", value.as_str().unwrap_or_default()))
                         }))

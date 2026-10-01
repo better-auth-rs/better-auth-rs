@@ -172,7 +172,7 @@ pub(crate) async fn invite_member_core(
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
     let expires_at =
         chrono::Utc::now() + chrono::Duration::seconds(config.invitation_lifetime() as i64);
-    let user_view = ctx.user_view(user)?;
+    let user_view = ctx.user_view(user).await?;
     let session_view = ctx.session_view(session).await?;
     let is_resend = existing.is_some() && resend;
     let invitation = if let Some(existing) = existing.as_ref().filter(|_| resend) {
@@ -515,7 +515,7 @@ pub(crate) async fn accept_invitation_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let user_view = ctx.user_view(user)?;
+    let user_view = ctx.user_view(user).await?;
     let limit = config
         .member_limit(OrganizationUser {
             organization: &organization_view,
@@ -617,7 +617,7 @@ pub(crate) async fn reject_invitation_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let user_view = ctx.user_view(user)?;
+    let user_view = ctx.user_view(user).await?;
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
         user: &user_view,
@@ -687,7 +687,7 @@ pub(crate) async fn cancel_invitation_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let user_view = ctx.user_view(user)?;
+    let user_view = ctx.user_view(user).await?;
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
         user: &user_view,

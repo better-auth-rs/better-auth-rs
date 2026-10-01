@@ -45,7 +45,7 @@ where
         .await
     }
 
-    pub(super) fn output_accounts(
+    pub(super) async fn output_accounts(
         &self,
         rows: &[S::Account],
         db: &impl ConnectionTrait,
@@ -60,22 +60,25 @@ where
                 records,
                 db.get_database_backend() == sea_orm::DbBackend::Postgres,
                 db.get_database_backend() != sea_orm::DbBackend::Sqlite,
-            )?
+            )
+            .await?
             .into_iter()
             .map(better_auth_core::wire::AccountView::from_adapter_fields)
             .collect())
     }
 
-    pub(super) fn output_account(
+    pub(super) async fn output_account(
         &self,
         account: &S::Account,
         db: &impl ConnectionTrait,
     ) -> AuthResult<AccountView> {
-        account.record(
-            &self.config().account.field_schema(),
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-            db.get_database_backend() != sea_orm::DbBackend::Sqlite,
-        )
+        account
+            .record(
+                &self.config().account.field_schema(),
+                db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                db.get_database_backend() != sea_orm::DbBackend::Sqlite,
+            )
+            .await
     }
 
     async fn create_account_with_connection<C>(
@@ -103,21 +106,23 @@ where
             }
         }
         let fields = self.config().account.field_schema();
-        let input = fields.record_storage_fields_with_binding(
-            create_account.fields()?,
-            true,
-            |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::Account::field_column,
-                    S::Account::native_json_field,
-                    db.get_database_backend(),
-                )
-            },
-        )?;
+        let input = fields
+            .record_storage_fields_with_binding(
+                create_account.fields()?,
+                true,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::Account::field_column,
+                        S::Account::native_json_field,
+                        db.get_database_backend(),
+                    )
+                },
+            )
+            .await?;
         let id = self.generated_id(
             "account",
             input
@@ -142,7 +147,7 @@ where
             async { active.insert(db).await.map_err(map_db_err) },
         )
         .await?;
-        let account = self.output_account(&account, db)?;
+        let account = self.output_account(&account, db).await?;
         if tx.is_none() {
             for hook in self.hooks() {
                 better_auth_core::observability::database::with_database_hook(
@@ -196,7 +201,7 @@ where
         provider_account_id: &str,
     ) -> AuthResult<Option<AccountView>> {
         let records = self.account_records(provider, provider_account_id).await?;
-        let accounts = self.output_accounts(&records, self.connection())?;
+        let accounts = self.output_accounts(&records, self.connection()).await?;
         if accounts.len() > 1 {
             return Err(crate::error::AuthError::internal(format!(
                 "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
@@ -212,10 +217,10 @@ where
         account_id: &str,
     ) -> AuthResult<Option<better_auth_core::store::AccountOwner>> {
         let records = self.account_records(provider, account_id).await?;
-        let projected = records
-            .iter()
-            .map(|record| self.output_account(record, self.connection()))
-            .collect::<Vec<_>>();
+        let mut projected = Vec::with_capacity(records.len());
+        for record in &records {
+            projected.push(self.output_account(record, self.connection()).await);
+        }
         let lookup = |entry: Option<(S::Account, AuthResult<AccountView>)>| async move {
             let Some((record, account)) = entry else {
                 return Ok(None);
@@ -255,10 +260,10 @@ where
                 },
             )
             .await?;
-            let user = owner
-                .as_ref()
-                .map(|row| self.output_user(row, self.connection()))
-                .transpose()?;
+            let user = match owner.as_ref() {
+                Some(row) => self.output_user(row, self.connection()).await.map(Some),
+                None => Ok(None),
+            }?;
             better_auth_core::store::AccountOwner::new(account, user, &stored_owner_id).map(Some)
         };
         let mut entries = records.into_iter().zip(projected);
@@ -275,7 +280,7 @@ where
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
         let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
-        database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+        match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
@@ -291,7 +296,10 @@ where
             },
         )
         .await
-        .and_then(|rows| self.output_accounts(&rows, self.connection()))
+        {
+            Ok(rows) => self.output_accounts(&rows, self.connection()).await,
+            Err(error) => Err(error),
+        }
     }
 
     async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<AccountView> {
@@ -324,10 +332,8 @@ where
         }
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
-        let input = fields.record_storage_fields_with_binding(
-            update.fields()?,
-            false,
-            |name, field, value| {
+        let input = fields
+            .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
                 crate::reference_id::input_binding(
                     name,
                     field,
@@ -337,8 +343,8 @@ where
                     S::Account::native_json_field,
                     backend,
                 )
-            },
-        )?;
+            })
+            .await?;
         let mut active = <S::Account as SeaOrmAccountModel>::ActiveModel::default();
         S::Account::apply_fields(&mut active, input)?;
         crate::reference_id::apply_bindings(
@@ -351,7 +357,7 @@ where
             sea_orm::ActiveValue::Set(value) => S::Account::id_column().eq(value),
             _ => S::Account::id_column().eq(account_id.clone()),
         };
-        let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+        let account = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "update",
             async {
@@ -369,8 +375,13 @@ where
         )
         .await?
         .as_ref()
-        .map(|record| self.output_account(record, self.connection()))
-        .transpose()?;
+        {
+            Some(record) => self
+                .output_account(record, self.connection())
+                .await
+                .map(Some),
+            None => Ok(None),
+        }?;
         for hook in self.hooks() {
             better_auth_core::observability::database::with_database_hook(
                 hook_context.config,
@@ -387,7 +398,7 @@ where
         let account_id = self.parse_id(id, <S::Account as SeaOrmAccountModel>::parse_id)?;
         // The upstream single-delete snapshot catch also covers adapter output failures.
         let snapshot: AuthResult<Option<AccountView>> = async {
-            database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
                 "findOne",
                 async {
@@ -400,8 +411,13 @@ where
             )
             .await?
             .as_ref()
-            .map(|record| self.output_account(record, self.connection()))
-            .transpose()
+            {
+                Some(record) => self
+                    .output_account(record, self.connection())
+                    .await
+                    .map(Some),
+                None => Ok(None),
+            }
         }
         .await;
         let Ok(Some(account_model)) = snapshot else {

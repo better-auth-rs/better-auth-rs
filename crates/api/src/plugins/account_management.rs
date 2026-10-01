@@ -43,6 +43,11 @@ better_auth_core::impl_auth_plugin! {
         get "/list-accounts" => handle_list_accounts, "listUserAccounts";
         post "/unlink-account" => handle_unlink_account, "unlinkAccount", body = unlink_account_body;
     }
+    extra {
+        fn telemetry_plugin_id(&self) -> Option<&'static str> {
+            None
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

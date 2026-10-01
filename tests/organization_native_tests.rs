@@ -12,6 +12,7 @@
 mod models;
 
 use async_trait::async_trait;
+use better_auth::config::UserFieldTransform;
 use better_auth::plugins::{
     endpoint_context::EndpointContext,
     organization::{OrganizationConfig, OrganizationPlugin, hooks::*},
@@ -233,13 +234,13 @@ fn options(state: &Arc<State>) -> OrganizationConfig {
                 required: Some(false),
                 field_name: Some("storedLabel".into()),
                 default_value: Some(json!("default")),
-                input_transform: Some(Arc::new(|value| {
+                input_transform: Some(UserFieldTransform::new(|value| {
                     Ok(Some(json!(format!(
                         "{}:in",
                         value.unwrap().as_str().unwrap()
                     ))))
                 })),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(Some(json!(format!(
                         "{}:out",
                         value.unwrap().as_str().unwrap()
@@ -519,7 +520,7 @@ async fn deletion_projection_failure<S: AuthSchema>(
     let _ = fields.team.additional_fields.insert(
         "name".into(),
         UserFieldConfig {
-            output_transform: Some(Arc::new(move |value| {
+            output_transform: Some(UserFieldTransform::new(move |value| {
                 if transform_reject.load(Ordering::SeqCst) {
                     return Err(AuthError::internal("team projection rejected"));
                 }

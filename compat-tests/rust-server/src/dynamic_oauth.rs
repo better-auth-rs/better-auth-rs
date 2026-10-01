@@ -65,7 +65,8 @@ pub async fn run() -> AuthResult<Value> {
         fallback: None,
         protocol: None,
     });
-    config.account.account_linking.trusted_providers = TrustedValues::Dynamic(Arc::new(Provider));
+    config.account.account_linking.trusted_providers =
+        Some(TrustedValues::Dynamic(Arc::new(Provider)));
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let store = SeaOrmStore::<BundledSchema>::new(config.clone(), database);

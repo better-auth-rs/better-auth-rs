@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::{
     AuthConfig, BetterAuth, SchemaValue,
     config::{UserFieldConfig, UserFieldType},
@@ -6,7 +7,6 @@ use better_auth::{
     seaorm::{Database, SeaOrmStore, sea_orm::EntityTrait},
 };
 use serde_json::json;
-use std::sync::Arc;
 
 mod generated {
     include!(env!("BETTER_AUTH_DYNAMIC_SCHEMA"));
@@ -23,7 +23,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
             UserFieldConfig {
                 field_type: UserFieldType::Number,
                 required: Some(false),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(value.filter(|value| value.as_f64() != Some(99.0)))
                 })),
                 ..Default::default()
@@ -49,7 +49,9 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
             "createdAt".into(),
             UserFieldConfig {
                 input: false,
-                input_transform: Some(Arc::new(|_| Ok(Some(json!("2000-01-02T03:04:05+02:00"))))),
+                input_transform: Some(UserFieldTransform::new(|_| {
+                    Ok(Some(json!("2000-01-02T03:04:05+02:00")))
+                })),
                 ..Default::default()
             },
         ),

@@ -1,17 +1,17 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::config::{UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth_seaorm::sea_orm::{
     ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, Schema,
 };
 use serde_json::json;
-use std::sync::Arc;
 
 pub fn configure(config: &mut OrganizationConfig) {
     config.teams.enabled = true;
     config.teams.default_team = false;
     let raw_date = UserFieldConfig {
         input: false,
-        input_transform: Some(Arc::new(|_| Ok(Some(json!("2000-01-02T03:04:05+02:00"))))),
+        input_transform: Some(UserFieldTransform::new(|_| Ok(Some(json!("2000-01-02T03:04:05+02:00"))))),
         ..Default::default()
     };
     config.schema.organization.additional_fields.extend([
@@ -20,7 +20,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             UserFieldConfig {
                 field_type: UserFieldType::Number,
                 required: Some(false),
-                output_transform: Some(Arc::new(|value| {
+                output_transform: Some(UserFieldTransform::new(|value| {
                     Ok(value.filter(|value| value.as_f64() != Some(99.0)))
                 })),
                 ..Default::default()

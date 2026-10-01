@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use serde_json::{Value, json};
@@ -5,12 +6,12 @@ use std::sync::Arc;
 
 fn text(input: &'static str, output: &'static str) -> UserFieldConfig {
     let suffix = |suffix: &'static str| {
-        Arc::new(move |value: Option<Value>| {
+        UserFieldTransform::new(move |value: Option<Value>| {
             let value = value
                 .and_then(|value| value.as_str().map(str::to_owned))
                 .ok_or_else(|| better_auth::AuthError::bad_request("Expected a string field"))?;
             Ok(Some(json!(format!("{value}{suffix}"))))
-        }) as better_auth::config::UserFieldTransform
+        })
     };
     UserFieldConfig {
         required: Some(true),
@@ -92,12 +93,12 @@ fn id() -> UserFieldConfig {
         required: Some(false),
         field_name: Some("unused_id".into()),
         default_value: Some(json!("unused-default")),
-        input_transform: Some(Arc::new(|_| {
+        input_transform: Some(UserFieldTransform::new(|_| {
             Err(better_auth::AuthError::bad_request(
                 "ID policies must not execute",
             ))
         })),
-        output_transform: Some(Arc::new(|_| {
+        output_transform: Some(UserFieldTransform::new(|_| {
             Err(better_auth::AuthError::bad_request(
                 "ID policies must not execute",
             ))

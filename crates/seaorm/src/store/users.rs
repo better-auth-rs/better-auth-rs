@@ -20,7 +20,7 @@ where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
 {
-    pub(super) fn output_users(
+    pub(super) async fn output_users(
         &self,
         rows: &[S::User],
         db: &impl ConnectionTrait,
@@ -30,7 +30,8 @@ where
             &self.config().user,
             &Default::default(),
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
-        )?;
+        )
+        .await?;
         use better_auth_core::AuthUser;
         for (view, row) in output.iter_mut().zip(rows) {
             view.visible_fields = row.field_presence().cloned();
@@ -54,7 +55,7 @@ where
         .await
     }
 
-    pub(super) fn output_user(
+    pub(super) async fn output_user(
         &self,
         row: &S::User,
         db: &impl ConnectionTrait,
@@ -65,7 +66,8 @@ where
             &self.config().user,
             &Default::default(),
             db.get_database_backend() == sea_orm::DbBackend::Postgres,
-        )?;
+        )
+        .await?;
         output.visible_fields = row.field_presence().cloned();
         Ok(output)
     }
@@ -78,7 +80,7 @@ where
         let Some(column) = S::User::username_column() else {
             return Ok(None);
         };
-        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -91,8 +93,10 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_user(row, db))
-        .transpose()
+        {
+            Some(row) => self.output_user(row, db).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     pub(crate) async fn create_user_with_connection<C>(
@@ -124,21 +128,25 @@ where
         let now = Utc::now();
         let generated_id = self.generated_id("user", create_user.id.take())?;
         let user_id = generated_id.as_deref().map(S::User::parse_id).transpose()?;
-        let mut fields = self.config().user.storage_fields_with_binding(
-            create_user.take_user_field_input(&self.config().user)?,
-            true,
-            |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::User::field_column,
-                    S::User::native_json_field,
-                    db.get_database_backend(),
-                )
-            },
-        )?;
+        let mut fields = self
+            .config()
+            .user
+            .storage_fields_with_binding(
+                create_user.take_user_field_input(&self.config().user)?,
+                true,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::User::field_column,
+                        S::User::native_json_field,
+                        db.get_database_backend(),
+                    )
+                },
+            )
+            .await?;
         let mut name = std::mem::take(&mut create_user.name);
         let mut image = std::mem::take(&mut create_user.image);
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
@@ -174,7 +182,7 @@ where
             async { super::user_values::insert::<S::User>(db, model, name, image).await },
         )
         .await?;
-        let user = self.output_user(&user, db)?;
+        let user = self.output_user(&user, db).await?;
         if tx.is_none() {
             for hook in self.hooks() {
                 better_auth_core::observability::database::with_database_hook(
@@ -256,7 +264,7 @@ where
             return Ok(std::ops::ControlFlow::Continue(None));
         };
 
-        let user = self.output_user(&user, db)?;
+        let user = self.output_user(&user, db).await?;
         if tx.is_none() {
             for hook in self.hooks() {
                 better_auth_core::observability::database::with_database_hook(
@@ -277,21 +285,25 @@ where
         user_id: <S::User as SeaOrmUserModel>::Id,
         mut update: UpdateUser,
     ) -> AuthResult<Option<S::User>> {
-        let mut fields = self.config().user.storage_fields_with_binding(
-            update.take_user_field_input(&self.config().user)?,
-            false,
-            |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::User::field_column,
-                    S::User::native_json_field,
-                    db.get_database_backend(),
-                )
-            },
-        )?;
+        let mut fields = self
+            .config()
+            .user
+            .storage_fields_with_binding(
+                update.take_user_field_input(&self.config().user)?,
+                false,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::User::field_column,
+                        S::User::native_json_field,
+                        db.get_database_backend(),
+                    )
+                },
+            )
+            .await?;
         let mut name = std::mem::take(&mut update.name);
         let mut image = std::mem::take(&mut update.image);
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
@@ -391,7 +403,7 @@ where
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let user_id = self.parse_id(id, S::User::parse_id)?;
-        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -404,8 +416,10 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_user(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self.output_user(row, self.connection()).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_user_by_id_value(
@@ -415,7 +429,7 @@ where
         if let Some(id) = id.as_str() {
             return self.get_user_by_id(id).await;
         }
-        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -431,8 +445,10 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_user(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self.output_user(row, self.connection()).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn list_users_by_ids(
@@ -445,7 +461,7 @@ where
             .map(|id| self.parse_id(id, S::User::parse_id))
             .collect::<AuthResult<Vec<_>>>()?;
 
-        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
@@ -465,7 +481,10 @@ where
             },
         )
         .await
-        .and_then(|rows| self.output_users(&rows, self.connection()))
+        {
+            Ok(rows) => self.output_users(&rows, self.connection()).await,
+            Err(error) => Err(error),
+        }
     }
 
     async fn get_user_with_accounts(
@@ -477,7 +496,7 @@ where
             return Ok(None);
         };
         let stored_user_id = record.id().into_owned();
-        let user = self.output_user(&record, self.connection())?;
+        let user = self.output_user(&record, self.connection()).await?;
         let accounts = match stored_user_id.as_str() {
             Some(id) => self.get_user_accounts(id).await?,
             None => Vec::new(),
@@ -489,11 +508,10 @@ where
         &self,
         email: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.user_record_by_email(email)
-            .await?
-            .as_ref()
-            .map(|row| self.output_user(row, self.connection()))
-            .transpose()
+        match self.user_record_by_email(email).await?.as_ref() {
+            Some(row) => self.output_user(row, self.connection()).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn get_user_by_username(
@@ -510,7 +528,7 @@ where
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let column = S::User::phone_number_column()
             .ok_or_else(|| AuthError::config("The user entity requires phone_number"))?;
-        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
@@ -523,8 +541,10 @@ where
         )
         .await?
         .as_ref()
-        .map(|row| self.output_user(row, self.connection()))
-        .transpose()
+        {
+            Some(row) => self.output_user(row, self.connection()).await.map(Some),
+            None => Ok(None),
+        }
     }
 
     async fn update_user(
@@ -602,7 +622,7 @@ where
                 Ok(model.clone())
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let users = self.output_users(&selected, self.connection())?;
+        let users = self.output_users(&selected, self.connection()).await?;
         let total = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "count",

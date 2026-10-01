@@ -273,7 +273,7 @@ pub async fn admin_banned_user_message(
         .get::<super::admin::BannedUserMessage>()
         .cloned()
         .unwrap_or_default();
-    message.resolve(&ctx.internal_user_view(user)?).await
+    message.resolve(&ctx.internal_user_view(user).await?).await
 }
 
 /// Issue a session for the given user, applying admin-plugin ban semantics

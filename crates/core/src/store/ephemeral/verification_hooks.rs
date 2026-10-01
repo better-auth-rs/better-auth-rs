@@ -31,7 +31,8 @@ impl EphemeralStore {
             .config
             .verification
             .field_schema()
-            .record_storage_fields_for_adapter(update.fields()?, false, true, |_| true)?;
+            .record_storage_fields_for_adapter(update.fields()?, false, true, |_| true)
+            .await?;
         let record = self
             .raw("verification", "update", |state| {
                 Ok({
@@ -48,10 +49,13 @@ impl EphemeralStore {
                 })
             })
             .await?;
-        let record = record
-            .as_ref()
-            .map(|record| self.output_verification(record))
-            .transpose()?;
+        let record = futures_util::future::OptionFuture::from(
+            record
+                .as_ref()
+                .map(|record| self.output_verification(record)),
+        )
+        .await
+        .transpose()?;
         self.after(CommittedWrite::VerificationUpdated(record.clone()))
             .await?;
         Ok(record)
@@ -86,7 +90,7 @@ impl EphemeralStore {
             )
             .await?;
         // Single and batch delete both catch snapshot output errors; only batch still deletes on an empty snapshot.
-        let rows = self.output_verifications(&rows).unwrap_or_default();
+        let rows = self.output_verifications(&rows).await.unwrap_or_default();
         if !many && rows.is_empty() {
             return Ok(0);
         }
@@ -167,7 +171,7 @@ impl EphemeralStore {
         else {
             return Ok(None);
         };
-        let consumed = self.output_verification(&consumed)?;
+        let consumed = self.output_verification(&consumed).await?;
         self.raw("verification", "deleteMany", |state| {
             state.verifications.retain(|row| {
                 self.verification_field(row, "identifier")

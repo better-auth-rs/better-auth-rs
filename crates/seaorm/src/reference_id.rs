@@ -249,8 +249,8 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
-    #[test]
-    fn serial_references_skip_json_encoding_after_one_application_transform() {
+    #[tokio::test]
+    async fn serial_references_skip_json_encoding_after_one_application_transform() {
         let calls = Arc::new(AtomicUsize::new(0));
         let observed = calls.clone();
         let config = UserConfig {
@@ -262,11 +262,13 @@ mod tests {
                         model: "user".into(),
                         field: "id".into(),
                     }),
-                    input_transform: Some(Arc::new(move |value| {
-                        assert_eq!(value, Some(json!("alias")));
-                        let _ = observed.fetch_add(1, Ordering::SeqCst);
-                        Ok(Some(json!(["0x10", null, [], ["1e0"]])))
-                    })),
+                    input_transform: Some(better_auth_core::user_fields::UserFieldTransform::new(
+                        move |value| {
+                            assert_eq!(value, Some(json!("alias")));
+                            let _ = observed.fetch_add(1, Ordering::SeqCst);
+                            Ok(Some(json!(["0x10", null, [], ["1e0"]])))
+                        },
+                    )),
                     ..Default::default()
                 },
             )]
@@ -276,21 +278,23 @@ mod tests {
             (IdGeneration::Serial, json!([16, null, 0, 1])),
             (IdGeneration::Random, json!("[\"0x10\",null,[],[\"1e0\"]]")),
         ] {
-            let values = config.storage_fields_with_binding(
-                [("owner".into(), json!("alias"))].into_iter().collect(),
-                true,
-                |name, field, value| {
-                    input_binding(
-                        name,
-                        field,
-                        value,
-                        &policy,
-                        |_| Ok(crate::store::entities::user::Column::Metadata),
-                        |_| true,
-                        sea_orm::DbBackend::Sqlite,
-                    )
-                },
-            );
+            let values = config
+                .storage_fields_with_binding(
+                    [("owner".into(), json!("alias"))].into_iter().collect(),
+                    true,
+                    |name, field, value| {
+                        input_binding(
+                            name,
+                            field,
+                            value,
+                            &policy,
+                            |_| Ok(crate::store::entities::user::Column::Metadata),
+                            |_| true,
+                            sea_orm::DbBackend::Sqlite,
+                        )
+                    },
+                )
+                .await;
             assert!(
                 values
                     .as_ref()

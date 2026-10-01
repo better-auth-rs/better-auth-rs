@@ -363,6 +363,7 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?,
             user: ctx
                 .user_view(&issued.user)
+                .await
                 .map_err(|error| error.to_string())?,
             is_register: false,
             account_cookie,
@@ -525,6 +526,7 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?,
             user: ctx
                 .user_view(&issued.user)
+                .await
                 .map_err(|error| error.to_string())?,
             is_register: false,
             account_cookie,
@@ -645,6 +647,7 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?,
             user: ctx
                 .user_view(&issued.user)
+                .await
                 .map_err(|error| error.to_string())?,
             is_register: true,
             account_cookie,

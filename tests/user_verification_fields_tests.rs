@@ -1,5 +1,6 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::config::UserFieldTransform;
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession, CreateUser,
     UpdateUser, UserView,
@@ -207,7 +208,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
         "name".into(),
         UserFieldConfig {
             field_name: Some("storedName".into()),
-            input_transform: Some(Arc::new(move |value| {
+            input_transform: Some(UserFieldTransform::new(move |value| {
                 let _ = observed.fetch_add(1, Ordering::SeqCst);
                 Ok(value.map(|value| json!({"stored":value})))
             })),
@@ -222,7 +223,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
                 model: "user".into(),
                 field: "id".into(),
             }),
-            input_transform: Some(Arc::new(|value| {
+            input_transform: Some(UserFieldTransform::new(|value| {
                 Ok(value.map(|value| {
                     assert_eq!(value, json!("sponsor"));
                     json!("1.6e1")

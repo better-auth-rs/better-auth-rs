@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth_seaorm::sea_orm::{
@@ -26,8 +27,8 @@ fn fields() -> UserConfig {
                     required: Some(false),
                     field_name: Some("storedLabel".into()),
                     default_value: Some(json!("guest")),
-                    input_transform: Some(Arc::new(|value| suffix(value, "in"))),
-                    output_transform: Some(Arc::new(|value| suffix(value, "out"))),
+                    input_transform: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
+                    output_transform: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
                     ..Default::default()
                 },
             ),

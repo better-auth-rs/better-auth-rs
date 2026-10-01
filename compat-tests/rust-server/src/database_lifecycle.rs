@@ -475,7 +475,7 @@ impl Fixture {
             }
             if self.secondary {
                 let cached = json!({"session":{"id":id,"token":format!("{id}-token"),"userId":"u1","label":format!("{id}-old"),
-                    "createdAt":CREATED_AT,"updatedAt":UPDATED_AT,"expiresAt":EXPIRES_AT},"user":self.auth.context().internal_user_view(&user)?});
+                    "createdAt":CREATED_AT,"updatedAt":UPDATED_AT,"expiresAt":EXPIRES_AT},"user":self.auth.context().internal_user_view(&user).await?});
                 let _ = self
                     .events
                     .trace

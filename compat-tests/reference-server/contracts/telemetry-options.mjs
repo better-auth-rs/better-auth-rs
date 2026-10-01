@@ -28,6 +28,9 @@ cases.idDatabase = { advanced: { database: { generateId: false } } };
 cases.idSerial = { advanced: { database: { generateId: "serial" } } };
 cases.idUuid = { advanced: { database: { generateId: "uuid" } } };
 cases.idCustom = { advanced: { database: { generateId: () => { throw new Error("telemetry must not call generateId"); } } } };
+cases.trustedEmpty = { trustedOrigins: [], account: { accountLinking: { trustedProviders: [] } } };
+cases.trustedStatic = { trustedOrigins: ["https://first.test", "https://second.test"], account: { accountLinking: { trustedProviders: ["provider-one", "provider-two"] } } };
+cases.trustedDynamic = { trustedOrigins: (_request) => { throw new Error("telemetry must not resolve trusted origins"); }, account: { accountLinking: { trustedProviders: (_request) => { throw new Error("telemetry must not resolve trusted providers"); } } } };
 export const fixturePath = new URL("../../../tests/fixtures/telemetry-options-1.7.6.json", import.meta.url);
 
 export async function collectTelemetryOptions(modulePath) {

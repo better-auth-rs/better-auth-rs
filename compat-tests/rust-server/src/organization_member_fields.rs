@@ -1,3 +1,4 @@
+use better_auth::config::UserFieldTransform;
 use better_auth::config::{UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth::plugins::organization::hooks::{
@@ -65,7 +66,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
     let json = UserFieldConfig {
         field_type: UserFieldType::Json,
         required: Some(false),
-        input_transform: Some(std::sync::Arc::new(|value| {
+        input_transform: Some(UserFieldTransform::new(|value| {
             Ok(value.map(|value| {
                 if value.is_string() {
                     serde_json::json!(value.to_string())
