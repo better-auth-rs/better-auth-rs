@@ -39,6 +39,9 @@ pub struct SeaOrmHookContext<'a, S: AuthSchema> {
 /// SeaORM lifecycle hooks for intercepting auth writes.
 #[async_trait]
 pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
+    /// Declare actual callback implementations; `#[database_hooks]` generates this method.
+    fn hook_metadata(&self) -> better_auth_core::observability::database::DatabaseHookMetadata;
+
     async fn before_create_user(
         &self,
         user: &mut CreateUser,

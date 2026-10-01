@@ -105,9 +105,11 @@ pub fn create_chunked_cookies(
             }
         }
     } else {
-        tracing::warn!(
-            cookie = name,
-            "Cookie exceeds the 100 chunk limit; cache not stored"
+        crate::observability::logger::current().warn(
+            "Cookie exceeds the 100 chunk limit; cache not stored",
+            &[crate::observability::LogArgument::Value(
+                &serde_json::json!(name),
+            )],
         );
     }
     Ok(cookies.into_values().collect())

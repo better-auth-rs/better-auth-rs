@@ -36,9 +36,7 @@ impl AuthConfig {
                     cache.refresh,
                     Some(CookieCacheRefresh::Enabled | CookieCacheRefresh::After(_))
                 ) {
-                    tracing::warn!(
-                        "session.cookie_cache.refresh is disabled when a database or secondary storage is configured"
-                    );
+                    self.logger.warn("session.cookie_cache.refresh is disabled when a database or secondary storage is configured", &[]);
                 }
                 cache.refresh = Some(CookieCacheRefresh::Disabled);
             } else {

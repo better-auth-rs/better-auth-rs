@@ -104,22 +104,22 @@ where
             context.request = request;
             for hook in self.hooks() {
                 match effect.as_ref() {
-                    Effect::UserCreated(record) => hook.after_create_user(record, &context).await?,
+                    Effect::UserCreated(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateUser, hook.after_create_user(record, &context)).await?,
                     Effect::UserUpdated(record) => {
-                        hook.after_update_user(record.as_ref(), &context).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterUpdateUser, hook.after_update_user(record.as_ref(), &context)).await?
                     }
-                    Effect::UserDeleted(record) => hook.after_delete_user(record, &context).await?,
+                    Effect::UserDeleted(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteUser, hook.after_delete_user(record, &context)).await?,
                     Effect::AccountCreated(record) => {
-                        hook.after_create_account(record, &context).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateAccount, hook.after_create_account(record, &context)).await?
                     }
                     Effect::SessionCreated(record) => {
-                        hook.after_create_session(record, &context).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateSession, hook.after_create_session(record, &context)).await?
                     }
                     Effect::Created(record) => {
-                        hook.after_create_verification(record, &context).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateVerification, hook.after_create_verification(record, &context)).await?
                     }
                     Effect::Deleted(record) => {
-                        hook.after_delete_verification(record, &context).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification, hook.after_delete_verification(record, &context)).await?
                     }
                 }
             }

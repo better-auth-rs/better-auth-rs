@@ -371,7 +371,10 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         Sender::Legacy(sender) => sender.send(state.user(), &otp).await,
     };
     if let Err(error) = delivered {
-        tracing::warn!(error = %error, "Failed to send two-factor OTP");
+        better_auth_core::observability::logger::current().warn(
+            "Failed to send two-factor OTP",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
     }
 
     Ok(StatusResponse { status: true })

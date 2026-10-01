@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::{sync::Barrier, task::JoinSet};
 
 struct FailAfterVerification;
-#[async_trait::async_trait]
+#[better_auth_core::database_hooks()]
 impl crate::hooks::SeaOrmHooks<BundledSchema> for FailAfterVerification {
     async fn after_update_user(
         &self,

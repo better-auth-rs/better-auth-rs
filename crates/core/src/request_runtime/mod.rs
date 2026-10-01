@@ -401,3 +401,7 @@ fn native_url_error(message: String) -> AuthError {
         Err(error) => error.into(),
     }
 }
+
+pub(crate) fn current_logger() -> Option<crate::observability::LoggerConfig> {
+    scope::current_logger()
+}

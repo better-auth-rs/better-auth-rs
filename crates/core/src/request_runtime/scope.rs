@@ -3,6 +3,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use crate::{AuthContext, AuthSchema};
+use tracing::Instrument;
 
 /// Identity belongs to an auth instance, including all request-derived clones.
 #[derive(Clone, Default)]
@@ -17,6 +18,7 @@ impl Identity {
 #[derive(Clone)]
 struct Binding {
     identity: Identity,
+    logger: crate::observability::LoggerConfig,
     context: Arc<dyn Any + Send + Sync>,
 }
 
@@ -44,6 +46,7 @@ pub(super) fn run<S: AuthSchema, T>(
     let mut contexts = CONTEXTS.try_with(Clone::clone).unwrap_or_default();
     contexts.push(Binding {
         identity: context.request_runtime.identity.clone(),
+        logger: context.config.logger.clone(),
         context,
     });
     // Keep large endpoint futures off each nested runtime scope's stack frame.
@@ -56,10 +59,23 @@ pub(crate) fn spawn<T: Send + 'static>(
 ) -> tokio::task::JoinHandle<T> {
     let contexts = CONTEXTS.try_with(Clone::clone).unwrap_or_default();
     let request = crate::hooks::current_request_hook_context();
-    tokio::spawn(CONTEXTS.scope(contexts, async move {
-        match request {
-            Some(request) => crate::hooks::with_request_hook_context_value(request, future).await,
-            None => future.await,
-        }
-    }))
+    tokio::spawn(
+        CONTEXTS
+            .scope(contexts, async move {
+                match request {
+                    Some(request) => {
+                        crate::hooks::with_request_hook_context_value(request, future).await
+                    }
+                    None => future.await,
+                }
+            })
+            .in_current_span(),
+    )
+}
+
+pub(super) fn current_logger() -> Option<crate::observability::LoggerConfig> {
+    CONTEXTS
+        .try_with(|contexts| contexts.last().map(|binding| binding.logger.clone()))
+        .ok()
+        .flatten()
 }

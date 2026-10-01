@@ -13,7 +13,18 @@ where
     E: EntityTrait,
     C: ConnectionTrait,
 {
-    let query = E::update_many().set(active).filter(filter);
+    execute_update_returning_one(db, E::update_many().set(active).filter(filter), reselect).await
+}
+
+pub(super) async fn execute_update_returning_one<E, C>(
+    db: &C,
+    query: sea_orm::UpdateMany<E>,
+    reselect: SimpleExpr,
+) -> AuthResult<Option<E::Model>>
+where
+    E: EntityTrait,
+    C: ConnectionTrait,
+{
     if db.support_returning() {
         return query
             .exec_with_returning(db)
@@ -26,4 +37,39 @@ where
     }
     // MySQL has no UPDATE RETURNING. Select with the updated key, as the upstream adapter does.
     E::find().filter(reselect).one(db).await.map_err(map_db_err)
+}
+
+pub(super) async fn increment_returning_one<E>(
+    db: &sea_orm::DbConn,
+    query: sea_orm::UpdateMany<E>,
+    filter: SimpleExpr,
+) -> AuthResult<Option<E::Model>>
+where
+    E: EntityTrait,
+{
+    use sea_orm::{QuerySelect, TransactionTrait};
+    if db.get_database_backend() != sea_orm::DbBackend::MySql {
+        return execute_update_returning_one(db, query, filter).await;
+    }
+    let tx = db.begin().await.map_err(map_db_err)?;
+    let result = async {
+        if E::find()
+            .filter(filter.clone())
+            .lock_exclusive()
+            .one(&tx)
+            .await
+            .map_err(map_db_err)?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        execute_update_returning_one(&tx, query, filter).await
+    }
+    .await;
+    if result.is_ok() {
+        tx.commit().await.map_err(map_db_err)?;
+    } else {
+        tx.rollback().await.map_err(map_db_err)?;
+    }
+    result
 }

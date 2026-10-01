@@ -48,6 +48,12 @@ pub mod core_paths {
 /// Main configuration for BetterAuth
 #[derive(Clone)]
 pub struct AuthConfig {
+    /// Per-instance diagnostics. Custom sinks receive unformatted messages and arguments.
+    pub logger: crate::observability::LoggerConfig,
+    /// Experimental runtime instrumentation.
+    pub experimental: crate::observability::ExperimentalConfig,
+    /// Usage reporting is disabled by default.
+    pub telemetry: crate::observability::TelemetryConfig,
     pub(crate) resolved_cookies: Option<crate::request_runtime::CookieSettings>,
     /// Secret key for signing tokens and sessions
     pub secret: String,
@@ -546,6 +552,9 @@ pub struct AdvancedDatabaseConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
+            logger: Default::default(),
+            experimental: Default::default(),
+            telemetry: Default::default(),
             resolved_cookies: None,
             secret: String::new(),
             secrets: None,
@@ -840,13 +849,13 @@ impl AuthConfig {
     }
     pub fn validate(&self) -> Result<(), AuthError> {
         if self.secrets.is_some() {
-            return self.encryption_secret().validate();
+            return self.encryption_secret().validate(&self.logger);
         }
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
         }
 
-        secrets::warn_secret_strength(&self.secret);
+        secrets::warn_secret_strength(&self.secret, &self.logger);
         Ok(())
     }
 }

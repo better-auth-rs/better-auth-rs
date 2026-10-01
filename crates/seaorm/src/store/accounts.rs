@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
@@ -41,10 +42,14 @@ where
         create_account = create_account.with_timestamps(Utc::now());
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
-            if hook
-                .before_create_account(&mut create_account, &hook_context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeCreateAccount,
+                hook.before_create_account(&mut create_account, &hook_context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Ok(None);
             }
@@ -63,11 +68,22 @@ where
             db.get_database_backend(),
             S::Account::field_column,
         )?;
-        let account = active.insert(db).await.map_err(map_db_err)?;
+        let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "create",
+            async { active.insert(db).await.map_err(map_db_err) },
+        )
+        .await?;
         let account = self.output_account(&account, db)?;
         if tx.is_none() {
             for hook in self.hooks() {
-                hook.after_create_account(&account, &hook_context).await?;
+                better_auth_core::observability::database::with_database_hook(
+                    hook_context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::AfterCreateAccount,
+                    hook.after_create_account(&account, &hook_context),
+                )
+                .await?;
             }
         }
         Ok(Some(account))
@@ -110,27 +126,44 @@ where
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Option<AccountView>> {
-        <S::Account as SeaOrmAccountModel>::Entity::find()
-            .filter(<S::Account as SeaOrmAccountModel>::provider_id_column().eq(provider))
-            .filter(<S::Account as SeaOrmAccountModel>::account_id_column().eq(provider_account_id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .as_ref()
-            .map(|record| self.output_account(record, self.connection()))
-            .transpose()
+        database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Account as SeaOrmAccountModel>::Entity::find()
+                    .filter(<S::Account as SeaOrmAccountModel>::provider_id_column().eq(provider))
+                    .filter(
+                        <S::Account as SeaOrmAccountModel>::account_id_column()
+                            .eq(provider_account_id),
+                    )
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .as_ref()
+        .map(|record| self.output_account(record, self.connection()))
+        .transpose()
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
         let user_id = <S::Account as SeaOrmAccountModel>::parse_user_id(user_id)?;
-        <S::Account as SeaOrmAccountModel>::Entity::find()
-            .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .iter()
-            .map(|record| self.output_account(record, self.connection()))
-            .collect()
+        database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "findMany",
+            async {
+                <S::Account as SeaOrmAccountModel>::Entity::find()
+                    .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
+                    .all(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .iter()
+        .map(|record| self.output_account(record, self.connection()))
+        .collect()
     }
 
     async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<AccountView> {
@@ -148,9 +181,13 @@ where
         let hook_context = self.hook_context(None);
         let original = update.clone();
         for hook in self.hooks() {
-            match hook
-                .before_update_account(id, &original, &hook_context)
-                .await?
+            match better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeUpdateAccount,
+                hook.before_update_account(id, &original, &hook_context),
+            )
+            .await?
             {
                 DatabaseHookUpdate::Continue => {}
                 DatabaseHookUpdate::Cancel => return Ok(None),
@@ -177,20 +214,34 @@ where
             sea_orm::ActiveValue::Set(value) => S::Account::id_column().eq(value),
             _ => S::Account::id_column().eq(account_id.clone()),
         };
-        let account =
-            super::updates::update_returning_one::<<S::Account as SeaOrmAccountModel>::Entity, _>(
-                self.connection(),
-                active,
-                S::Account::id_column().eq(account_id),
-                reselect,
-            )
-            .await?
-            .as_ref()
-            .map(|record| self.output_account(record, self.connection()))
-            .transpose()?;
+        let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "update",
+            async {
+                super::updates::update_returning_one::<
+                        <S::Account as SeaOrmAccountModel>::Entity,
+                        _,
+                    >(
+                        self.connection(),
+                        active,
+                        S::Account::id_column().eq(account_id),
+                        reselect,
+                    )
+                    .await
+            },
+        )
+        .await?
+        .as_ref()
+        .map(|record| self.output_account(record, self.connection()))
+        .transpose()?;
         for hook in self.hooks() {
-            hook.after_update_account(account.as_ref(), &hook_context)
-                .await?;
+            better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterUpdateAccount,
+                hook.after_update_account(account.as_ref(), &hook_context),
+            )
+            .await?;
         }
         Ok(account)
     }
@@ -199,14 +250,21 @@ where
         let account_id = <S::Account as SeaOrmAccountModel>::parse_id(id)?;
         // The upstream single-delete snapshot catch also covers adapter output failures.
         let snapshot: AuthResult<Option<AccountView>> = async {
-            <S::Account as SeaOrmAccountModel>::Entity::find()
-                .filter(S::Account::id_column().eq(account_id.clone()))
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?
-                .as_ref()
-                .map(|record| self.output_account(record, self.connection()))
-                .transpose()
+            database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+                self.config(),
+                "findOne",
+                async {
+                    <S::Account as SeaOrmAccountModel>::Entity::find()
+                        .filter(S::Account::id_column().eq(account_id.clone()))
+                        .one(self.connection())
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?
+            .as_ref()
+            .map(|record| self.output_account(record, self.connection()))
+            .transpose()
         }
         .await;
         let Ok(Some(account_model)) = snapshot else {
@@ -214,22 +272,38 @@ where
         };
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
-            if hook
-                .before_delete_account(&account_model, &hook_context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeDeleteAccount,
+                hook.before_delete_account(&account_model, &hook_context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Ok(());
             }
         }
-        let _ = <S::Account as SeaOrmAccountModel>::Entity::delete_many()
-            .filter(<S::Account as SeaOrmAccountModel>::id_column().eq(account_id))
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+        let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "delete",
+            async {
+                <S::Account as SeaOrmAccountModel>::Entity::delete_many()
+                    .filter(<S::Account as SeaOrmAccountModel>::id_column().eq(account_id))
+                    .exec(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
         for hook in self.hooks() {
-            hook.after_delete_account(&account_model, &hook_context)
-                .await?;
+            better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterDeleteAccount,
+                hook.after_delete_account(&account_model, &hook_context),
+            )
+            .await?;
         }
         Ok(())
     }

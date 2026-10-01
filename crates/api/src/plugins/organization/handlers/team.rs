@@ -16,17 +16,17 @@ mod input_tests;
 
 pub(crate) fn routes() -> Vec<AuthRoute> {
     vec![
-        AuthRoute::post("/organization/create-team", "create_team"),
-        AuthRoute::post("/organization/update-team", "update_team"),
-        AuthRoute::post("/organization/remove-team", "remove_team"),
-        AuthRoute::post("/organization/set-active-team", "set_active_team"),
-        AuthRoute::post("/organization/add-team-member", "add_team_member"),
-        AuthRoute::post("/organization/remove-team-member", "remove_team_member"),
-        AuthRoute::get("/organization/list-teams", "list_teams")
+        AuthRoute::post("/organization/create-team", "createTeam"),
+        AuthRoute::post("/organization/update-team", "updateTeam"),
+        AuthRoute::post("/organization/remove-team", "removeTeam"),
+        AuthRoute::post("/organization/set-active-team", "setActiveTeam"),
+        AuthRoute::post("/organization/add-team-member", "addTeamMember"),
+        AuthRoute::post("/organization/remove-team-member", "removeTeamMember"),
+        AuthRoute::get("/organization/list-teams", "listOrganizationTeams")
             .query_validator(crate::plugins::query_input::organization_id),
-        AuthRoute::get("/organization/list-user-teams", "list_user_teams")
+        AuthRoute::get("/organization/list-user-teams", "listUserTeams")
             .query_validator(crate::plugins::query_input::user_teams),
-        AuthRoute::get("/organization/list-team-members", "list_team_members")
+        AuthRoute::get("/organization/list-team-members", "listTeamMembers")
             .query_validator(crate::plugins::query_input::team_members),
     ]
 }

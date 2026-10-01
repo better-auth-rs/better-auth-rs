@@ -5,7 +5,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, AuthUser, CreateUser, UpdateUser,
     store::{
@@ -46,7 +45,7 @@ impl ImageHooks {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
     async fn before_create_user(
         &self,

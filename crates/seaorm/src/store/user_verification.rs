@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use better_auth_core::store::VerificationSessionCleanup;
 use better_auth_core::{AuthResult, AuthUser, UpdateUser};
 use chrono::Utc;
@@ -38,12 +39,12 @@ where
         };
         let mut revoked = None;
         let result = async {
-            let Some(user) = <S::User as SeaOrmUserModel>::Entity::find()
+            let Some(user) = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "findOne", async { <S::User as SeaOrmUserModel>::Entity::find()
                 .filter(S::User::id_column().eq(S::User::parse_id(user_id)?))
                 .lock_exclusive()
                 .one(&tx)
                 .await
-                .map_err(map_db_err)?
+                .map_err(map_db_err) }).await?
             else {
                 return Ok(None);
             };
@@ -51,27 +52,27 @@ where
                 return Ok(Some(user));
             }
             let hook_context = self.hook_context(Some((&tx, &hook_transaction)));
-            let accounts = <S::Account as SeaOrmAccountModel>::Entity::find()
+            let accounts = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "findMany", async { <S::Account as SeaOrmAccountModel>::Entity::find()
                 .filter(S::Account::user_id_column().eq(S::Account::parse_user_id(user_id)?))
                 .all(&tx)
                 .await
-                .map_err(map_db_err)?
+                .map_err(map_db_err) }).await?
                 .iter()
                 .map(|row| self.output_account(row, &tx))
                 .collect::<AuthResult<Vec<_>>>()?;
             let sessions = if database_sessions {
-                <S::Session as SeaOrmSessionModel>::Entity::find()
+                database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "findMany", async { <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
                     .all(&tx)
                     .await
-                    .map_err(map_db_err)?
+                    .map_err(map_db_err) }).await?
             } else {
                 Vec::new()
             };
             for account in &accounts {
                 for hook in self.hooks() {
-                    if hook
-                        .before_delete_account(account, &hook_context)
+                    if better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeDeleteAccount, hook
+                        .before_delete_account(account, &hook_context))
                         .await?
                         .is_cancelled()
                     {
@@ -81,8 +82,8 @@ where
             }
             for session in &sessions {
                 for hook in self.hooks() {
-                    if hook
-                        .before_delete_session(session, &hook_context)
+                    if better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeDeleteSession, hook
+                        .before_delete_session(session, &hook_context))
                         .await?
                         .is_cancelled()
                     {
@@ -96,8 +97,8 @@ where
             };
             let original = update.clone();
             for hook in self.hooks() {
-                match hook
-                    .before_update_user(user_id, &original, &hook_context)
+                match better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeUpdateUser, hook
+                    .before_update_user(user_id, &original, &hook_context))
                     .await?
                 {
                     crate::hooks::DatabaseHookUpdate::Continue => {}
@@ -107,17 +108,17 @@ where
                     crate::hooks::DatabaseHookUpdate::Patch(patch) => update.merge(patch),
                 }
             }
-            let _ = <S::Account as SeaOrmAccountModel>::Entity::delete_many()
+            let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "deleteMany", async { <S::Account as SeaOrmAccountModel>::Entity::delete_many()
                 .filter(S::Account::user_id_column().eq(S::Account::parse_user_id(user_id)?))
                 .exec(&tx)
                 .await
-                .map_err(map_db_err)?;
+                .map_err(map_db_err) }).await?;
             if database_sessions {
-                let _ = <S::Session as SeaOrmSessionModel>::Entity::delete_many()
+                let _ = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "deleteMany", async { <S::Session as SeaOrmSessionModel>::Entity::delete_many()
                     .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
                     .exec(&tx)
                     .await
-                    .map_err(map_db_err)?;
+                    .map_err(map_db_err) }).await?;
             }
             let mut active = user.into_active_model();
             let fields = self.config().user.storage_fields_for_adapter(
@@ -134,7 +135,7 @@ where
                 tx.get_database_backend(),
                 S::User::field_column,
             )?;
-            let user = active.update(&tx).await.map_err(map_db_err)?;
+            let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "update", async { active.update(&tx).await.map_err(map_db_err) }).await?;
             // External revocation must succeed before the database publishes verified ownership.
             if let Some(cleanup) = session_cleanup {
                 cleanup.revoke().await?;
@@ -157,12 +158,30 @@ where
             let hook_context = self.hook_context(None);
             for hook in self.hooks() {
                 for account in &accounts {
-                    hook.after_delete_account(account, &hook_context).await?;
+                    better_auth_core::observability::database::with_database_hook(
+                        hook_context.config,
+                        hook.hook_metadata(),
+                        better_auth_core::observability::database::DatabaseHook::AfterDeleteAccount,
+                        hook.after_delete_account(account, &hook_context),
+                    )
+                    .await?;
                 }
                 for session in &sessions {
-                    hook.after_delete_session(session, &hook_context).await?;
+                    better_auth_core::observability::database::with_database_hook(
+                        hook_context.config,
+                        hook.hook_metadata(),
+                        better_auth_core::observability::database::DatabaseHook::AfterDeleteSession,
+                        hook.after_delete_session(session, &hook_context),
+                    )
+                    .await?;
                 }
-                hook.after_update_user(Some(user), &hook_context).await?;
+                better_auth_core::observability::database::with_database_hook(
+                    hook_context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::AfterUpdateUser,
+                    hook.after_update_user(Some(user), &hook_context),
+                )
+                .await?;
             }
         }
         Ok(user)

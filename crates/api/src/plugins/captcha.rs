@@ -384,7 +384,8 @@ impl<S: AuthSchema> AuthPlugin<S> for CaptchaPlugin {
         match result {
             Ok(response) => Ok(response),
             Err(_) => {
-                tracing::error!("CAPTCHA verification service or callback failed");
+                better_auth_core::observability::logger::current()
+                    .error("CAPTCHA verification service or callback failed", &[]);
                 failure(500, "UNKNOWN_ERROR", "Something went wrong").map(Some)
             }
         }

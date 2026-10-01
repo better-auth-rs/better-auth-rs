@@ -1,8 +1,9 @@
+use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use sea_orm::sea_query::Expr;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::{Map, json};
 use uuid::Uuid;
 
@@ -21,7 +22,7 @@ where
     S: AuthSchema + Send + Sync,
 {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
-        P::DeviceCode::active(Map::from_iter([
+        let active = P::DeviceCode::active(Map::from_iter([
             ("id".to_owned(), json!(Uuid::new_v4().to_string())),
             ("device_code".to_owned(), json!(input.device_code)),
             ("user_code".to_owned(), json!(input.user_code)),
@@ -32,10 +33,11 @@ where
             ("polling_interval".to_owned(), json!(input.polling_interval)),
             ("client_id".to_owned(), json!(input.client_id)),
             ("scope".to_owned(), json!(input.scope)),
-        ]))?
-        .insert(self.connection())
-        .await
-        .map_err(map_db_err)?
+        ]))?;
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "create", async {
+            active.insert(self.connection()).await.map_err(map_db_err)
+        })
+        .await?
         .record()
     }
 
@@ -43,26 +45,32 @@ where
         &self,
         device_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        Entity::<P::DeviceCode>::find()
-            .filter(P::DeviceCode::column("device_code")?.eq(device_code))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .map(|model| model.record())
-            .transpose()
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "findOne", async {
+            Entity::<P::DeviceCode>::find()
+                .filter(P::DeviceCode::column("device_code")?.eq(device_code))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        .map(|model| model.record())
+        .transpose()
     }
 
     async fn get_device_code_by_user_code(
         &self,
         user_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        Entity::<P::DeviceCode>::find()
-            .filter(P::DeviceCode::column("user_code")?.eq(user_code))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .map(|model| model.record())
-            .transpose()
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "findOne", async {
+            Entity::<P::DeviceCode>::find()
+                .filter(P::DeviceCode::column("user_code")?.eq(user_code))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        .map(|model| model.record())
+        .transpose()
     }
 
     async fn update_device_code(
@@ -70,16 +78,8 @@ where
         id: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
-        let Some(model) = Entity::<P::DeviceCode>::find()
-            .filter(P::DeviceCode::column("id")?.eq(id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::not_found("Device code not found"));
-        };
+        let mut active = <<P::DeviceCode as SeaOrmPluginModel>::ActiveModel as Default>::default();
 
-        let mut active = model.into_active_model();
         if let Some(status) = update.status {
             set::<P::DeviceCode>(&mut active, "status", status)?;
         }
@@ -90,11 +90,19 @@ where
             set::<P::DeviceCode>(&mut active, "last_polled_at", last_polled_at)?;
         }
 
-        active
-            .update(self.connection())
+        let filter = P::DeviceCode::column("id")?.eq(id);
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
+            super::updates::update_returning_one::<Entity<P::DeviceCode>, _>(
+                self.connection(),
+                active,
+                filter.clone(),
+                filter,
+            )
             .await
-            .map_err(map_db_err)?
-            .record()
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Device code not found"))?
+        .record()
     }
 
     async fn update_device_code_if_status(
@@ -119,43 +127,55 @@ where
             );
         }
 
-        update_many
-            .filter(P::DeviceCode::column("id")?.eq(id))
-            .filter(P::DeviceCode::column("status")?.eq(current_status))
-            .exec(self.connection())
-            .await
-            .map(|result| result.rows_affected == 1)
-            .map_err(map_db_err)
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
+            update_many
+                .filter(P::DeviceCode::column("id")?.eq(id))
+                .filter(P::DeviceCode::column("status")?.eq(current_status))
+                .exec(self.connection())
+                .await
+                .map(|result| result.rows_affected == 1)
+                .map_err(map_db_err)
+        })
+        .await
     }
 
     async fn claim_device_code(&self, id: &str, user_id: &str) -> AuthResult<bool> {
-        Entity::<P::DeviceCode>::update_many()
-            .col_expr(P::DeviceCode::column("user_id")?, Expr::value(user_id))
-            .filter(P::DeviceCode::column("id")?.eq(id))
-            .filter(P::DeviceCode::column("status")?.eq("pending"))
-            .filter(P::DeviceCode::column("user_id")?.is_null())
-            .exec(self.connection())
-            .await
-            .map(|result| result.rows_affected == 1)
-            .map_err(map_db_err)
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "incrementOne", async {
+            Entity::<P::DeviceCode>::update_many()
+                .col_expr(P::DeviceCode::column("user_id")?, Expr::value(user_id))
+                .filter(P::DeviceCode::column("id")?.eq(id))
+                .filter(P::DeviceCode::column("status")?.eq("pending"))
+                .filter(P::DeviceCode::column("user_id")?.is_null())
+                .exec(self.connection())
+                .await
+                .map(|result| result.rows_affected == 1)
+                .map_err(map_db_err)
+        })
+        .await
     }
 
     async fn delete_device_code(&self, id: &str) -> AuthResult<()> {
-        Entity::<P::DeviceCode>::delete_many()
-            .filter(P::DeviceCode::column("id")?.eq(id))
-            .exec(self.connection())
-            .await
-            .map(|_| ())
-            .map_err(map_db_err)
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "delete", async {
+            Entity::<P::DeviceCode>::delete_many()
+                .filter(P::DeviceCode::column("id")?.eq(id))
+                .exec(self.connection())
+                .await
+                .map(|_| ())
+                .map_err(map_db_err)
+        })
+        .await
     }
 
     async fn delete_device_code_if_status(&self, id: &str, status: &str) -> AuthResult<bool> {
-        Entity::<P::DeviceCode>::delete_many()
-            .filter(P::DeviceCode::column("id")?.eq(id))
-            .filter(P::DeviceCode::column("status")?.eq(status))
-            .exec(self.connection())
-            .await
-            .map(|result| result.rows_affected == 1)
-            .map_err(map_db_err)
+        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "delete", async {
+            Entity::<P::DeviceCode>::delete_many()
+                .filter(P::DeviceCode::column("id")?.eq(id))
+                .filter(P::DeviceCode::column("status")?.eq(status))
+                .exec(self.connection())
+                .await
+                .map(|result| result.rows_affected == 1)
+                .map_err(map_db_err)
+        })
+        .await
     }
 }

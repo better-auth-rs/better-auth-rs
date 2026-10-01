@@ -12,7 +12,14 @@ impl EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match hook.before_update_verification(&original, &context).await? {
+            match crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeUpdateVerification,
+                hook.before_update_verification(&original, &context),
+            )
+            .await?
+            {
                 DatabaseHookUpdate::Continue => {}
                 DatabaseHookUpdate::Cancel => return Ok(None),
                 DatabaseHookUpdate::Patch(patch) => update.merge(patch),
@@ -23,30 +30,33 @@ impl EphemeralStore {
             .verification
             .field_schema()
             .record_storage_fields_for_adapter(update.fields()?, false, true, |_| true)?;
-        let record = {
-            let mut state = self.lock()?;
-            let position = state.verifications.values().position(|row| {
-                self.verification_field(row, "identifier")
-                    == Some(&Value::String(identifier.to_owned()))
-            });
-            if let Some(position) = position {
-                let (_, mut record) = state
-                    .verifications
-                    .shift_remove_index(position)
-                    .ok_or_else(|| {
-                        AuthError::internal("Verification position changed while locked")
-                    })?;
-                record.extend(patch);
-                let id = crate::SchemaValue::<String>::from_json(record.get("id").cloned())
-                    .display_string()?;
-                let _ = state
-                    .verifications
-                    .shift_insert(position, id, record.clone());
-                Some(record)
-            } else {
-                None
-            }
-        };
+        let record = self
+            .raw("verification", "update", |state| {
+                Ok({
+                    let position = state.verifications.values().position(|row| {
+                        self.verification_field(row, "identifier")
+                            == Some(&Value::String(identifier.to_owned()))
+                    });
+                    if let Some(position) = position {
+                        let (_, mut record) = state
+                            .verifications
+                            .shift_remove_index(position)
+                            .ok_or_else(|| {
+                                AuthError::internal("Verification position changed while locked")
+                            })?;
+                        record.extend(patch);
+                        let id = crate::SchemaValue::<String>::from_json(record.get("id").cloned())
+                            .display_string()?;
+                        let _ = state
+                            .verifications
+                            .shift_insert(position, id, record.clone());
+                        Some(record)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .await?;
         let record = record
             .as_ref()
             .map(|record| self.output_verification(record))
@@ -62,13 +72,20 @@ impl EphemeralStore {
         many: bool,
     ) -> AuthResult<usize> {
         let rows: Vec<_> = self
-            .lock()?
-            .verifications
-            .values()
-            .filter(|row| predicate(row))
-            .take(if many { usize::MAX } else { 1 })
-            .cloned()
-            .collect();
+            .raw(
+                "verification",
+                if many { "findMany" } else { "findOne" },
+                |state| {
+                    Ok(state
+                        .verifications
+                        .values()
+                        .filter(|row| predicate(row))
+                        .take(if many { usize::MAX } else { 1 })
+                        .cloned()
+                        .collect())
+                },
+            )
+            .await?;
         // Single and batch delete both catch snapshot output errors; only batch still deletes on an empty snapshot.
         let rows = rows
             .iter()
@@ -82,19 +99,32 @@ impl EphemeralStore {
         let context = self.hook_context(&transaction);
         for row in &rows {
             for hook in &self.hooks {
-                if hook.before_delete_verification(row, &context).await?
+                if crate::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    crate::observability::database::DatabaseHook::BeforeDeleteVerification,
+                    hook.before_delete_verification(row, &context),
+                )
+                .await?
                     == DatabaseHookControl::Cancel
                 {
                     return Ok(0);
                 }
             }
         }
-        let count = {
-            let mut state = self.lock()?;
-            let count = state.verifications.len();
-            state.verifications.retain(|_, row| !predicate(row));
-            count - state.verifications.len()
-        };
+        let count = self
+            .raw(
+                "verification",
+                if many { "deleteMany" } else { "delete" },
+                |state| {
+                    Ok({
+                        let count = state.verifications.len();
+                        state.verifications.retain(|_, row| !predicate(row));
+                        count - state.verifications.len()
+                    })
+                },
+            )
+            .await?;
         for row in rows {
             self.after(CommittedWrite::VerificationDeleted(row)).await?;
         }
@@ -115,24 +145,36 @@ impl EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if hook.before_delete_verification(&snapshot, &context).await?
+            if crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeDeleteVerification,
+                hook.before_delete_verification(&snapshot, &context),
+            )
+            .await?
                 == DatabaseHookControl::Cancel
             {
                 return Ok(None);
             }
         }
-        let consumed = {
-            let mut state = self.lock()?;
-            let Some(consumed) = state.verifications.shift_remove(snapshot.id.typed()?) else {
-                return Ok(None);
-            };
-            consumed
+        let id = snapshot.id.typed()?;
+        let Some(consumed) = self
+            .raw("verification", "consumeOne", |state| {
+                Ok(state.verifications.shift_remove(id))
+            })
+            .await?
+        else {
+            return Ok(None);
         };
         let consumed = self.output_verification(&consumed)?;
-        self.lock()?.verifications.retain(|_, row| {
-            self.verification_field(row, "identifier")
-                != Some(&Value::String(identifier.to_owned()))
-        });
+        self.raw("verification", "deleteMany", |state| {
+            state.verifications.retain(|_, row| {
+                self.verification_field(row, "identifier")
+                    != Some(&Value::String(identifier.to_owned()))
+            });
+            Ok(())
+        })
+        .await?;
         self.after(CommittedWrite::VerificationDeleted(consumed.clone()))
             .await?;
         Ok(Some(consumed))

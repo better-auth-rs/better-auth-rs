@@ -116,7 +116,10 @@ fn generation_error(error: AuthError) -> AuthError {
     if error.status_code() >= 500
         && !matches!(error, AuthError::Response(_) | AuthError::Upstream { .. })
     {
-        tracing::error!(%error, "Passkey options callback failed");
+        better_auth_core::observability::logger::current().error(
+            "Passkey options callback failed",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
         better_auth_core::AuthResponse::new(500).into()
     } else {
         error
@@ -126,7 +129,10 @@ pub(super) fn verification_error(error: AuthError, registration: bool) -> AuthEr
     if error.status_code() >= 500
         && !matches!(error, AuthError::Response(_) | AuthError::Upstream { .. })
     {
-        tracing::error!(%error, "Passkey verification failed");
+        better_auth_core::observability::logger::current().error(
+            "Passkey verification failed",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
         if registration {
             AuthError::Upstream {
                 status: 500,

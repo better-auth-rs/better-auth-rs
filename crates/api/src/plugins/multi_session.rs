@@ -37,8 +37,9 @@ better_auth_core::impl_auth_plugin! {
     }
     extra {
         async fn after_request(&self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>) -> AuthResult<()> {
-            self.remember_session(req, response, ctx).await?;
+            better_auth_core::observability::instrumentation::with_endpoint_hook(&ctx.config, req, "after", "plugin:multi-session", self.remember_session(req, response, ctx)).await?;
             if req.path() == "/sign-out" {
+                better_auth_core::observability::instrumentation::with_endpoint_hook(&ctx.config, req, "after", "plugin:multi-session", async {
                 let mut tokens = Vec::new();
                 for (name, token) in device_cookies(req, &ctx.config) {
                     response.headers.append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
@@ -47,6 +48,7 @@ better_auth_core::impl_auth_plugin! {
                 if !tokens.is_empty() {
                     ctx.database.delete_sessions(&tokens).await?;
                 }
+                Ok(()) }).await?;
             }
             Ok(())
         }

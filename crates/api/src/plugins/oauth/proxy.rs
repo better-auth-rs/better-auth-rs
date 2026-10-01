@@ -134,7 +134,7 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
     }
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::get("/callback/{id}/oauth-proxy", "oauthProxyCompletion")
+            AuthRoute::get("/callback/{id}/oauth-proxy", "oAuthProxyCompletion")
                 .query_validator(crate::plugins::query_input::proxy),
             AuthRoute::get("/oauth-proxy-callback", "oauthProxyCallback")
                 .query_validator(crate::plugins::query_input::proxy),
@@ -169,17 +169,33 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
         if req.method() == &HttpMethod::Post
             && matches!(req.path(), "/sign-in/social" | "/link-social")
         {
-            return self.initiate(req, ctx);
+            return better_auth_core::observability::instrumentation::with_endpoint_hook(
+                &ctx.config,
+                req,
+                "before",
+                "plugin:oauth-proxy",
+                async { self.initiate(req, ctx) },
+            )
+            .await;
         }
         if let Some(provider) = req
             .path()
             .strip_prefix("/callback/")
             .filter(|provider| !provider.is_empty() && !provider.contains('/'))
         {
-            return Ok(self
-                .production_callback(provider, req, ctx)
-                .await?
-                .map(BeforeRequestAction::Respond));
+            return better_auth_core::observability::instrumentation::with_endpoint_hook(
+                &ctx.config,
+                req,
+                "before",
+                "plugin:oauth-proxy",
+                async {
+                    Ok(self
+                        .production_callback(provider, req, ctx)
+                        .await?
+                        .map(BeforeRequestAction::Respond))
+                },
+            )
+            .await;
         }
         Ok(None)
     }
@@ -189,10 +205,20 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
         response: &mut AuthResponse,
         ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
-        if matches!(req.path(), "/sign-in/social" | "/link-social")
-            && req.server_context(REDIRECT_BASE_CONTEXT)?.is_some()
-        {
-            return self.wrap_authorization(response, ctx).await;
+        if req.path().starts_with("/sign-in/social") || req.path() == "/link-social" {
+            return better_auth_core::observability::instrumentation::with_endpoint_hook(
+                &ctx.config,
+                req,
+                "after",
+                "plugin:oauth-proxy",
+                async {
+                    if req.server_context(REDIRECT_BASE_CONTEXT)?.is_some() {
+                        self.wrap_authorization(response, ctx).await?;
+                    }
+                    Ok(())
+                },
+            )
+            .await;
         }
         if !req
             .path()
@@ -201,28 +227,38 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
         {
             return Ok(());
         }
-        let Some(location) = response.headers.get("location").filter(|location| {
-            location.contains("/oauth-proxy?callbackURL")
-                || location.contains("/oauth-proxy-callback?callbackURL")
-        }) else {
-            return Ok(());
-        };
-        let Ok(location) = Url::parse(location) else {
-            return Ok(());
-        };
-        let production = parse_url(
-            self.config
-                .production_url
-                .as_deref()
-                .filter(|url| !url.is_empty())
-                .unwrap_or(ctx.base_url()),
-        )?;
-        if location.origin() == production.origin()
-            && let Some((_, target)) = location.query_pairs().find(|(key, _)| key == "callbackURL")
-        {
-            let _ = response.headers.insert("location", target.into_owned());
-        }
-        Ok(())
+        better_auth_core::observability::instrumentation::with_endpoint_hook(
+            &ctx.config,
+            req,
+            "after",
+            "plugin:oauth-proxy",
+            async {
+                let Some(location) = response.headers.get("location").filter(|location| {
+                    location.contains("/oauth-proxy?callbackURL")
+                        || location.contains("/oauth-proxy-callback?callbackURL")
+                }) else {
+                    return Ok(());
+                };
+                let Ok(location) = Url::parse(location) else {
+                    return Ok(());
+                };
+                let production = parse_url(
+                    self.config
+                        .production_url
+                        .as_deref()
+                        .filter(|url| !url.is_empty())
+                        .unwrap_or(ctx.base_url()),
+                )?;
+                if location.origin() == production.origin()
+                    && let Some((_, target)) =
+                        location.query_pairs().find(|(key, _)| key == "callbackURL")
+                {
+                    let _ = response.headers.insert("location", target.into_owned());
+                }
+                Ok(())
+            },
+        )
+        .await
     }
 }
 

@@ -334,9 +334,9 @@ async fn finalize_sign_in_with_user_core(
             .send_verification_on_sign_in_with_request(&user, callback_url, Some(req), ctx)
             .await
     {
-        tracing::warn!(
-            error = %e,
-            "Failed to send verification email on sign-in"
+        better_auth_core::observability::logger::current().warn(
+            "Failed to send verification email on sign-in",
+            &[better_auth_core::observability::LogArgument::Error(&e)],
         );
     }
 
@@ -565,21 +565,21 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
 
     fn routes(&self) -> Vec<AuthRoute> {
         let mut routes = vec![
-            AuthRoute::post("/sign-in/email", "sign_in_email")
+            AuthRoute::post("/sign-in/email", "signInEmail")
                 .body_validator(request::sign_in_body)
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
         ];
         if self.config.username {
-            routes.push(AuthRoute::post("/sign-in/username", "sign_in_username"));
+            routes.push(AuthRoute::post("/sign-in/username", "signInUsername"));
             routes.push(AuthRoute::post(
                 "/is-username-available",
-                "is_username_available",
+                "isUsernameAvailable",
             ));
         }
 
         if self.config.enable_signup {
             routes.push(
-                AuthRoute::post("/sign-up/email", "sign_up_email")
+                AuthRoute::post("/sign-up/email", "signUpWithEmailAndPassword")
                     .body_validator(request::sign_up_body)
                     .allowed_media_types(&[
                         "application/x-www-form-urlencoded",

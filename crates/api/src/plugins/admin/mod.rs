@@ -81,21 +81,21 @@ pub struct AdminConfig {
 better_auth_core::impl_auth_plugin! {
     AdminPlugin, "admin";
     routes {
-        post "/admin/set-role" => handle_set_role, "admin_set_role";
-        get  "/admin/get-user" => handle_get_user, "admin_get_user", query = crate::plugins::query_input::get_user;
-        post "/admin/create-user" => handle_create_user, "admin_create_user";
-        post "/admin/update-user" => handle_update_user, "admin_update_user";
-        get  "/admin/list-users" => handle_list_users, "admin_list_users", query = crate::plugins::query_input::list_users;
-        post "/admin/list-user-sessions" => handle_list_user_sessions, "admin_list_user_sessions";
-        post "/admin/ban-user" => handle_ban_user, "admin_ban_user";
-        post "/admin/unban-user" => handle_unban_user, "admin_unban_user";
-        post "/admin/impersonate-user" => handle_impersonate_user, "admin_impersonate_user";
-        post "/admin/stop-impersonating" => handle_stop_impersonating, "admin_stop_impersonating";
-        post "/admin/revoke-user-session" => handle_revoke_user_session, "admin_revoke_user_session";
-        post "/admin/revoke-user-sessions" => handle_revoke_user_sessions, "admin_revoke_user_sessions";
-        post "/admin/remove-user" => handle_remove_user, "admin_remove_user";
-        post "/admin/set-user-password" => handle_set_user_password, "admin_set_user_password";
-        post "/admin/has-permission" => handle_has_permission, "admin_has_permission";
+        post "/admin/set-role" => handle_set_role, "setUserRole";
+        get  "/admin/get-user" => handle_get_user, "getUser", query = crate::plugins::query_input::get_user;
+        post "/admin/create-user" => handle_create_user, "createUser";
+        post "/admin/update-user" => handle_update_user, "adminUpdateUser";
+        get  "/admin/list-users" => handle_list_users, "listUsers", query = crate::plugins::query_input::list_users;
+        post "/admin/list-user-sessions" => handle_list_user_sessions, "adminListUserSessions";
+        post "/admin/ban-user" => handle_ban_user, "banUser";
+        post "/admin/unban-user" => handle_unban_user, "unbanUser";
+        post "/admin/impersonate-user" => handle_impersonate_user, "impersonateUser";
+        post "/admin/stop-impersonating" => handle_stop_impersonating, "stopImpersonating";
+        post "/admin/revoke-user-session" => handle_revoke_user_session, "revokeUserSession";
+        post "/admin/revoke-user-sessions" => handle_revoke_user_sessions, "revokeUserSessions";
+        post "/admin/remove-user" => handle_remove_user, "removeUser";
+        post "/admin/set-user-password" => handle_set_user_password, "setUserPassword";
+        post "/admin/has-permission" => handle_has_permission, "userHasPermission";
     }
     extra {
         async fn on_init(

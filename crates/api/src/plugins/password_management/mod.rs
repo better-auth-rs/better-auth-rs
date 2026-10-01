@@ -128,16 +128,16 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/request-password-reset", "request_password_reset")
+            AuthRoute::post("/request-password-reset", "requestPasswordReset")
                 .body_validator(request::request_reset_body),
-            AuthRoute::post("/reset-password", "reset_password")
+            AuthRoute::post("/reset-password", "resetPassword")
                 .body_validator(request::reset_body)
                 .query_validator(crate::plugins::query_input::reset_password),
-            AuthRoute::get("/reset-password/{token}", "reset_password_token")
+            AuthRoute::get("/reset-password/{token}", "resetPasswordCallback")
                 .query_validator(crate::plugins::query_input::reset_password_token),
-            AuthRoute::post("/change-password", "change_password")
+            AuthRoute::post("/change-password", "changePassword")
                 .body_validator(request::change_body),
-            AuthRoute::post("/verify-password", "verify_password")
+            AuthRoute::post("/verify-password", "verifyPassword")
                 .body_validator(request::verify_body),
         ]
     }

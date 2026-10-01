@@ -496,14 +496,14 @@ impl TwoFactorPlugin {
 better_auth_core::impl_auth_plugin! {
     TwoFactorPlugin, "two-factor";
     routes {
-        post "/two-factor/enable" => handle_enable, "enable_two_factor";
-        post "/two-factor/disable" => handle_disable, "disable_two_factor";
-        post "/two-factor/get-totp-uri" => handle_get_totp_uri, "get_totp_uri";
-        post "/two-factor/verify-totp" => handle_verify_totp, "verify_totp";
-        post "/two-factor/send-otp" => handle_send_otp, "send_otp";
-        post "/two-factor/verify-otp" => handle_verify_otp, "verify_otp";
-        post "/two-factor/generate-backup-codes" => handle_generate_backup_codes, "generate_backup_codes";
-        post "/two-factor/verify-backup-code" => handle_verify_backup_code, "verify_backup_code";
+        post "/two-factor/enable" => handle_enable, "enableTwoFactor";
+        post "/two-factor/disable" => handle_disable, "disableTwoFactor";
+        post "/two-factor/get-totp-uri" => handle_get_totp_uri, "getTOTPURI";
+        post "/two-factor/verify-totp" => handle_verify_totp, "verifyTOTP";
+        post "/two-factor/send-otp" => handle_send_otp, "sendTwoFactorOTP";
+        post "/two-factor/verify-otp" => handle_verify_otp, "verifyTwoFactorOTP";
+        post "/two-factor/generate-backup-codes" => handle_generate_backup_codes, "generateBackupCodes";
+        post "/two-factor/verify-backup-code" => handle_verify_backup_code, "verifyBackupCode";
     }
     extra {
         async fn on_init(

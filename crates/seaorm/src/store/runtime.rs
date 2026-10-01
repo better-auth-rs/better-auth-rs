@@ -54,6 +54,10 @@ struct PluginHook<S: AuthSchema>(Arc<dyn DatabaseHooks<S>>);
 
 #[async_trait]
 impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
+    fn hook_metadata(&self) -> better_auth_core::observability::database::DatabaseHookMetadata {
+        self.0.hook_metadata()
+    }
+
     async fn before_create_user(
         &self,
         _data: &mut CreateUser,

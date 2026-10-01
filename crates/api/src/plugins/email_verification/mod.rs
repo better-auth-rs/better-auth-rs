@@ -72,8 +72,8 @@ impl EmailVerificationPlugin {
 better_auth_core::impl_auth_plugin! {
     EmailVerificationPlugin, "email-verification";
     routes {
-        post "/send-verification-email" => handle_send_verification_email, "send_verification_email";
-        get "/verify-email" => handle_verify_email, "verify_email", query = crate::plugins::query_input::verify_email;
+        post "/send-verification-email" => handle_send_verification_email, "sendVerificationEmail";
+        get "/verify-email" => handle_verify_email, "verifyEmail", query = crate::plugins::query_input::verify_email;
     }
     extra {
         async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
@@ -262,9 +262,11 @@ impl EmailVerificationPlugin {
                     .send(email, subject, &html, &text)
                     .await?;
             } else {
-                tracing::warn!(
-                    email = %email,
-                    "No email provider configured, skipping verification email"
+                better_auth_core::observability::logger::current().warn(
+                    "No email provider configured, skipping verification email",
+                    &[better_auth_core::observability::LogArgument::Value(
+                        &serde_json::json!(email),
+                    )],
                 );
             }
         }
@@ -338,7 +340,10 @@ impl EmailVerificationPlugin {
                 .await
         {
             // Upstream logs sender failures without changing the OAuth verification decision.
-            tracing::error!(%error, "Failed to send OAuth verification email");
+            better_auth_core::observability::logger::current().error(
+                "Failed to send OAuth verification email",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
     }
 

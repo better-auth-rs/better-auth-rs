@@ -101,7 +101,15 @@ pub(crate) async fn send_verification_override(
     .await;
     // The upstream override invokes the complete OTP endpoint through runInBackgroundOrAwait.
     if let Err(error) = result {
-        tracing::error!(plugin = "email-otp", %error, "Failed to run background task");
+        better_auth_core::observability::logger::current().error(
+            "Failed to run background task",
+            &[
+                better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                    "email-otp"
+                )),
+                better_auth_core::observability::LogArgument::Error(&error),
+            ],
+        );
     }
     Ok(())
 }

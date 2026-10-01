@@ -7,22 +7,24 @@ impl TwoFactorStore for EphemeralStore {
         id: &str,
         update: crate::types::UpdateTwoFactor,
     ) -> AuthResult<TwoFactor> {
-        let mut state = self.lock()?;
-        let factor = state
-            .two_factors
-            .get_mut(id)
-            .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
-        if let Some(secret) = update.secret {
-            factor.secret = secret;
-        }
-        if let Some(codes) = update.backup_codes {
-            factor.backup_codes = codes;
-        }
-        if let Some(verified) = update.verified {
-            factor.verified = verified;
-        }
-        factor.updated_at = Utc::now();
-        Ok(factor.clone())
+        self.raw("twoFactor", "update", |state| {
+            let Some(factor) = state.two_factors.get_mut(id) else {
+                return Ok(None);
+            };
+            if let Some(secret) = update.secret {
+                factor.secret = secret;
+            }
+            if let Some(codes) = update.backup_codes {
+                factor.backup_codes = codes;
+            }
+            if let Some(verified) = update.verified {
+                factor.verified = verified;
+            }
+            factor.updated_at = Utc::now();
+            Ok(Some(factor.clone()))
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))
     }
     async fn compare_exchange_two_factor_backup_codes(
         &self,
@@ -30,17 +32,19 @@ impl TwoFactorStore for EphemeralStore {
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
-        let mut state = self.lock()?;
-        let Some(factor) = state
-            .two_factors
-            .get_mut(id)
-            .filter(|factor| factor.backup_codes == previous)
-        else {
-            return Ok(false);
-        };
-        factor.backup_codes = replacement.to_owned();
-        factor.updated_at = Utc::now();
-        Ok(true)
+        self.raw("twoFactor", "incrementOne", |state| {
+            let Some(factor) = state
+                .two_factors
+                .get_mut(id)
+                .filter(|factor| factor.backup_codes == previous)
+            else {
+                return Ok(false);
+            };
+            factor.backup_codes = replacement.to_owned();
+            factor.updated_at = Utc::now();
+            Ok(true)
+        })
+        .await
     }
     async fn record_two_factor_failure(
         &self,
@@ -48,11 +52,26 @@ impl TwoFactorStore for EphemeralStore {
         max_attempts: i64,
         locked_until: chrono::DateTime<Utc>,
     ) -> AuthResult<()> {
-        if let Some(factor) = self.lock()?.two_factors.get_mut(id) {
-            factor.failed_verification_count += 1;
-            if factor.failed_verification_count >= max_attempts {
-                factor.locked_until = Some(locked_until);
-            }
+        let failures = self
+            .raw("twoFactor", "incrementOne", |state| {
+                Ok(state.two_factors.get_mut(id).map_or(0, |factor| {
+                    factor.failed_verification_count += 1;
+                    factor.failed_verification_count
+                }))
+            })
+            .await?;
+        if failures >= max_attempts {
+            self.raw("twoFactor", "incrementOne", |state| {
+                if let Some(factor) = state
+                    .two_factors
+                    .get_mut(id)
+                    .filter(|factor| factor.failed_verification_count >= max_attempts)
+                {
+                    factor.locked_until = Some(locked_until);
+                }
+                Ok(())
+            })
+            .await?;
         }
         Ok(())
     }
@@ -61,14 +80,26 @@ impl TwoFactorStore for EphemeralStore {
         id: &str,
         locked_before: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
-        if let Some(factor) = self.lock()?.two_factors.get_mut(id).filter(|factor| {
-            locked_before
-                .is_none_or(|before| factor.locked_until.is_some_and(|until| until <= before))
-        }) {
-            factor.failed_verification_count = 0;
-            factor.locked_until = None;
-        }
-        Ok(())
+        self.raw(
+            "twoFactor",
+            if locked_before.is_some() {
+                "incrementOne"
+            } else {
+                "update"
+            },
+            |state| {
+                if let Some(factor) = state.two_factors.get_mut(id).filter(|factor| {
+                    locked_before.is_none_or(|before| {
+                        factor.locked_until.is_some_and(|until| until <= before)
+                    })
+                }) {
+                    factor.failed_verification_count = 0;
+                    factor.locked_until = None;
+                }
+                Ok(())
+            },
+        )
+        .await
     }
     async fn create_two_factor(&self, input: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let factor = TwoFactor {
@@ -82,39 +113,49 @@ impl TwoFactorStore for EphemeralStore {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-        let _ = self
-            .lock()?
-            .two_factors
-            .insert(factor.id.clone(), factor.clone());
-        Ok(factor)
+        self.raw("twoFactor", "create", |state| {
+            let _ = state.two_factors.insert(factor.id.clone(), factor.clone());
+            Ok(factor)
+        })
+        .await
     }
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
-        Ok(self
-            .lock()?
-            .two_factors
-            .values()
-            .find(|factor| factor.user_id == user_id)
-            .cloned())
+        self.raw("twoFactor", "findOne", |state| {
+            Ok(state
+                .two_factors
+                .values()
+                .find(|factor| factor.user_id == user_id)
+                .cloned())
+        })
+        .await
     }
     async fn update_two_factor_backup_codes(
         &self,
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        let mut state = self.lock()?;
-        let factor = state
-            .two_factors
-            .values_mut()
-            .find(|factor| factor.user_id == user_id)
-            .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
-        factor.backup_codes = backup_codes.to_owned();
-        factor.updated_at = Utc::now();
-        Ok(factor.clone())
+        self.raw("twoFactor", "update", |state| {
+            let Some(factor) = state
+                .two_factors
+                .values_mut()
+                .find(|factor| factor.user_id == user_id)
+            else {
+                return Ok(None);
+            };
+            factor.backup_codes = backup_codes.to_owned();
+            factor.updated_at = Utc::now();
+            Ok(Some(factor.clone()))
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))
     }
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
-        self.lock()?
-            .two_factors
-            .retain(|_, factor| factor.user_id != user_id);
-        Ok(())
+        self.raw("twoFactor", "delete", |state| {
+            state
+                .two_factors
+                .retain(|_, factor| factor.user_id != user_id);
+            Ok(())
+        })
+        .await
     }
 }

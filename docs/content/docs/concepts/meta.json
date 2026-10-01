@@ -6,6 +6,7 @@
     "secondary-storage",
     "middleware",
     "hooks",
+    "observability",
     "users-accounts",
     "oauth",
     "email",

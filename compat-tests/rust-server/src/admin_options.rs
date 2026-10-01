@@ -1,5 +1,4 @@
 use super::TestSchema;
-use async_trait::async_trait;
 use axum::{Json, Router, routing::post};
 use better_auth::plugins::admin::{
     AdminConfig, AdminPlugin, BannedUserMessage, access::RolePermissions,
@@ -164,7 +163,7 @@ fn native_error(error: AuthError) -> AuthResult<Value> {
     Ok(json!({"error":{"kind":"api","status":response.status,"body":body}}))
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for AdminOptionsFixture {
     async fn after_update_user(
         &self,

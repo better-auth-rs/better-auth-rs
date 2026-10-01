@@ -8,7 +8,7 @@ struct AfterCreate {
     fail: bool,
 }
 
-#[async_trait]
+#[crate::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for AfterCreate {
     async fn after_create_user(
         &self,

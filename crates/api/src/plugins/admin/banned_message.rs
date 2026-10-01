@@ -39,7 +39,10 @@ impl BannedUserMessage {
                             | better_auth_core::AuthError::Upstream { .. }
                     )
                 {
-                    tracing::error!(%error, "Admin banned-user message callback failed");
+                    better_auth_core::observability::logger::current().error(
+                        "Admin banned-user message callback failed",
+                        &[better_auth_core::observability::LogArgument::Error(&error)],
+                    );
                     better_auth_core::AuthResponse::new(500).into()
                 } else {
                     error

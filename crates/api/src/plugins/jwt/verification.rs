@@ -41,7 +41,10 @@ impl JwtPlugin {
             Ok(Some(keys)) => keys,
             Ok(None) => return Ok(None),
             Err(error) => {
-                tracing::debug!(%error, "JWT verification failed");
+                better_auth_core::observability::logger::current().debug(
+                    "JWT verification failed",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
                 return Ok(None);
             }
         };

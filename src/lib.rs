@@ -58,9 +58,12 @@ pub mod wire;
 
 pub use better_auth_core::{
     ApiKeyStart, Argon2PasswordHasher, AuthConfig, AuthError, AuthResult, AuthSchema,
-    PasswordHasher, SchemaValue, ScryptPasswordHasher,
+    PasswordHasher, SchemaValue, ScryptPasswordHasher, database_hooks,
 };
 pub use core::{AuthBuilder, BetterAuth};
 
 #[doc(hidden)]
 pub use better_auth_core as __private_core;
+
+/// Per-instance diagnostics, tracing, and optional telemetry.
+pub use better_auth_core::observability;

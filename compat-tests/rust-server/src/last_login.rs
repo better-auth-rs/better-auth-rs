@@ -143,7 +143,7 @@ impl<S: AuthSchema> AuthPlugin<S> for Events {
 
 macro_rules! hooks {
     ($hook:ident, $context:ident, $control:ident $(, $id:ident)?) => {
-        #[async_trait::async_trait]
+        #[better_auth::database_hooks]
         impl<S: AuthSchema> $hook<S> for Events {
             async fn before_create_user(&self, user: &mut CreateUser, context: &$context<'_,S>) -> AuthResult<$control> {
                 self.record("user.before", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").cloned().unwrap_or(Value::Null)));

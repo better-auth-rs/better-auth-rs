@@ -156,7 +156,10 @@ pub(crate) async fn validate<S: AuthSchema>(
         Ok(_) => Ok(()),
         Err(error) => {
             // Upstream deliberately masks application exceptions at this fail-closed boundary.
-            tracing::error!(%error, "User validation callback failed");
+            better_auth_core::observability::logger::current().error(
+                "User validation callback failed",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
             Err(UserValidationRejection::new("validation_failed")
                 .with_description("User validation failed"))
         }

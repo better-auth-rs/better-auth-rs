@@ -55,7 +55,7 @@ impl ProjectionHooks {
         Ok(())
     }
 }
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<ProjectionSchema> for ProjectionHooks {
     async fn before_delete_session(
         &self,
@@ -73,7 +73,7 @@ impl SeaOrmHooks<ProjectionSchema> for ProjectionHooks {
         self.record(row)
     }
 }
-#[async_trait]
+#[better_auth::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for ProjectionHooks {
     async fn before_delete_session(
         &self,
@@ -200,7 +200,7 @@ impl Hooks {
         Ok(())
     }
 }
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
     async fn before_delete_session(
         &self,
@@ -247,7 +247,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
         self.after("user.after")
     }
 }
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn before_delete_session(
         &self,

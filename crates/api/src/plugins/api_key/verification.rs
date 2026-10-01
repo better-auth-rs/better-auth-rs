@@ -140,7 +140,10 @@ impl ApiKeyVerificationError {
             }
             Self::Validation(error) => error,
             Self::Internal(error) => {
-                tracing::error!(%error, "Failed to validate API key");
+                better_auth_core::observability::logger::current().error(
+                    "Failed to validate API key",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
                 ApiKeyValidationError::invalid_constant(ApiKeyErrorCode::InvalidApiKey)
             }
         };
@@ -365,111 +368,141 @@ impl ApiKeyPlugin {
             Ok(None) => return Ok(None),
             Ok(Some(_)) => {}
             Err(error) => {
-                tracing::error!(%error, "API key hook matcher failed");
+                better_auth_core::observability::logger::current().error(
+                    "API key hook matcher failed",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
                 return Err(AuthResponse::json(500, &serde_json::json!({
                     "message": "An error occurred during hook matcher execution. Check the logs for more details."
                 }))?.into());
             }
         }
-        let endpoint = ApiKeyEndpoint {
-            path: endpoint.path.or(Some("/")),
-            ..endpoint
-        };
-        let Some((config, key)) = self
-            .find_session_key(endpoint)
-            .map_err(|error| super::callbacks::callback_error(error, endpoint.request))?
-        else {
-            return Err(AuthError::internal(
-                "API key getter stopped matching during hook execution",
-            ));
-        };
-        if key.encode_utf16().count() < config.key_length {
-            return Err(AuthResponse::json(
-                403,
-                &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
-            )?
-            .into());
-        }
-        if let Some(validator) = &config.custom_api_key_validator
-            && !validator
-                .validate(&key, endpoint)
-                .await
-                .map_err(|error| super::callbacks::callback_error(error, endpoint.request))?
-        {
-            return Err(AuthResponse::json(
-                403,
-                &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
-            )?
-            .into());
-        }
-        let input = VerifyApiKey {
-            key: &key,
-            config_id: Some(&config.config_id),
-            permissions: None,
-        };
-        let view = match self.validate_api_key(&input, ctx, endpoint, false).await {
-            Ok(view) => view,
-            Err(ApiKeyVerificationError::Validation(error)) => {
-                return Err(error.response()?.into());
-            }
-            Err(
-                ApiKeyVerificationError::Internal(error)
-                | ApiKeyVerificationError::Endpoint(error)
-                | ApiKeyVerificationError::Rejected(error),
-            ) => return Err(error),
-        };
-        self.maybe_delete_expired(ctx).await;
+        let context = better_auth_core::hooks::current_request_hook_context();
+        let route = context
+            .as_ref()
+            .map(|context| context.path.as_str())
+            .or(endpoint.path)
+            .unwrap_or("/");
+        let operation_id = context
+            .as_ref()
+            .and_then(|context| context.operation_id.as_deref())
+            .unwrap_or(route);
+        better_auth_core::observability::with_span(
+            &ctx.config.experimental.instrumentation,
+            &format!("hook before {route} plugin:api-key"),
+            better_auth_core::observability::SpanAttributes {
+                route: Some(route),
+                operation_id: Some(operation_id),
+                hook_type: Some("before"),
+                context: Some("plugin:api-key"),
+                ..Default::default()
+            },
+            async {
+                let endpoint = ApiKeyEndpoint {
+                    path: endpoint.path.or(Some("/")),
+                    ..endpoint
+                };
+                let Some((config, key)) = self
+                    .find_session_key(endpoint)
+                    .map_err(|error| super::callbacks::callback_error(error, endpoint.request))?
+                else {
+                    return Err(AuthError::internal(
+                        "API key getter stopped matching during hook execution",
+                    ));
+                };
+                if key.encode_utf16().count() < config.key_length {
+                    return Err(AuthResponse::json(
+                        403,
+                        &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
+                    )?
+                    .into());
+                }
+                if let Some(validator) = &config.custom_api_key_validator
+                    && !validator.validate(&key, endpoint).await.map_err(|error| {
+                        super::callbacks::callback_error(error, endpoint.request)
+                    })?
+                {
+                    return Err(AuthResponse::json(
+                        403,
+                        &ApiKeyValidationError::new(ApiKeyErrorCode::InvalidApiKey),
+                    )?
+                    .into());
+                }
+                let input = VerifyApiKey {
+                    key: &key,
+                    config_id: Some(&config.config_id),
+                    permissions: None,
+                };
+                let view = match self.validate_api_key(&input, ctx, endpoint, false).await {
+                    Ok(view) => view,
+                    Err(ApiKeyVerificationError::Validation(error)) => {
+                        return Err(error.response()?.into());
+                    }
+                    Err(
+                        ApiKeyVerificationError::Internal(error)
+                        | ApiKeyVerificationError::Endpoint(error)
+                        | ApiKeyVerificationError::Rejected(error),
+                    ) => return Err(error),
+                };
+                self.maybe_delete_expired(ctx).await;
 
-        if config.references != ApiKeyReferences::User {
-            return Err(
-                ApiKeyValidationError::new(ApiKeyErrorCode::InvalidReferenceIdFromApiKey)
+                if config.references != ApiKeyReferences::User {
+                    return Err(ApiKeyValidationError::new(
+                        ApiKeyErrorCode::InvalidReferenceIdFromApiKey,
+                    )
                     .response()?
-                    .into(),
-            );
-        }
-        let Some(user) = ctx.database.get_user_by_id(&view.reference_id).await? else {
-            return Err(
-                ApiKeyValidationError::new(ApiKeyErrorCode::InvalidReferenceIdFromApiKey)
+                    .into());
+                }
+                let Some(user) = ctx.database.get_user_by_id(&view.reference_id).await? else {
+                    return Err(ApiKeyValidationError::new(
+                        ApiKeyErrorCode::InvalidReferenceIdFromApiKey,
+                    )
                     .response()?
-                    .into(),
-            );
-        };
+                    .into());
+                };
 
-        let now = chrono::Utc::now();
-        let expires_at = match view.expires_at {
-            Some(value) => chrono::DateTime::parse_from_rfc3339(&value)
-                .map_err(|error| {
-                    AuthError::internal(format!("Invalid stored API key expiration: {error}"))
-                })?
-                .with_timezone(&chrono::Utc),
-            // Upstream passes its session lifetime in seconds to getDate(..., "ms").
-            None => {
-                now + chrono::Duration::milliseconds(ctx.config.session.expires_in.num_seconds())
-            }
-        };
-        let meta = endpoint.request.map(|req| {
-            better_auth_core::RequestMeta::from_request_with_config(
-                req,
-                &ctx.config.advanced.ip_address,
-            )
-        });
-        let session = SessionView {
-            visible_fields: None,
-            id: view.id,
-            token: key.to_owned(),
-            user_id: user.id().into_owned(),
-            created_at: now,
-            updated_at: now,
-            expires_at,
-            ip_address: meta.as_ref().and_then(|meta| meta.ip_address.clone()),
-            user_agent: meta.and_then(|meta| meta.user_agent),
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
-            active: true,
-            additional_fields: Default::default(),
-        };
-        Ok(Some((session, ctx.user_view(&user)?)))
+                let now = chrono::Utc::now();
+                let expires_at = match view.expires_at {
+                    Some(value) => chrono::DateTime::parse_from_rfc3339(&value)
+                        .map_err(|error| {
+                            AuthError::internal(format!(
+                                "Invalid stored API key expiration: {error}"
+                            ))
+                        })?
+                        .with_timezone(&chrono::Utc),
+                    // Upstream passes its session lifetime in seconds to getDate(..., "ms").
+                    None => {
+                        now + chrono::Duration::milliseconds(
+                            ctx.config.session.expires_in.num_seconds(),
+                        )
+                    }
+                };
+                let meta = endpoint.request.map(|req| {
+                    better_auth_core::RequestMeta::from_request_with_config(
+                        req,
+                        &ctx.config.advanced.ip_address,
+                    )
+                });
+                let session = SessionView {
+                    visible_fields: None,
+                    id: view.id,
+                    token: key.to_owned(),
+                    user_id: user.id().into_owned(),
+                    created_at: now,
+                    updated_at: now,
+                    expires_at,
+                    ip_address: meta.as_ref().and_then(|meta| meta.ip_address.clone()),
+                    user_agent: meta.and_then(|meta| meta.user_agent),
+                    impersonated_by: None,
+                    active_organization_id: None,
+                    active_team_id: None,
+                    active: true,
+                    additional_fields: Default::default(),
+                };
+                Ok(Some((session, ctx.user_view(&user)?)))
+            },
+        )
+        .await
     }
 
     fn find_session_key(

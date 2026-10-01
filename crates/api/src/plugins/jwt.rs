@@ -236,37 +236,49 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
         response: &mut AuthResponse,
         ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
-        if self.config.disable_setting_jwt_header || req.path() != "/get-session" {
+        if !(req.path() == "/get-session") {
             return Ok(());
         }
-        let Some(data) = req.session_snapshot()?.or(req.new_session()?) else {
-            return Ok(());
-        };
-        let payload = serde_json::to_value(&data)?;
-        let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
-        endpoint.session = Some((data.user, data.session));
-        endpoint.response = Some(response);
-        let token = self.sign_session(payload, &endpoint).await?;
-        let _ = response.headers.insert("set-auth-jwt", token);
-        let mut exposed: Vec<_> = response
-            .headers
-            .get("access-control-expose-headers")
-            .map(|value| {
-                value
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_owned)
-                    .collect()
-            })
-            .unwrap_or_default();
-        if !exposed.iter().any(|value| value == "set-auth-jwt") {
-            exposed.push("set-auth-jwt".into());
-        }
-        let _ = response
-            .headers
-            .insert("Access-Control-Expose-Headers", exposed.join(", "));
-        Ok(())
+        better_auth_core::observability::instrumentation::with_endpoint_hook(
+            &ctx.config,
+            req,
+            "after",
+            "plugin:jwt",
+            async {
+                if self.config.disable_setting_jwt_header || req.path() != "/get-session" {
+                    return Ok(());
+                }
+                let Some(data) = req.session_snapshot()?.or(req.new_session()?) else {
+                    return Ok(());
+                };
+                let payload = serde_json::to_value(&data)?;
+                let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
+                endpoint.session = Some((data.user, data.session));
+                endpoint.response = Some(response);
+                let token = self.sign_session(payload, &endpoint).await?;
+                let _ = response.headers.insert("set-auth-jwt", token);
+                let mut exposed: Vec<_> = response
+                    .headers
+                    .get("access-control-expose-headers")
+                    .map(|value| {
+                        value
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !exposed.iter().any(|value| value == "set-auth-jwt") {
+                    exposed.push("set-auth-jwt".into());
+                }
+                let _ = response
+                    .headers
+                    .insert("Access-Control-Expose-Headers", exposed.join(", "));
+                Ok(())
+            },
+        )
+        .await
     }
 }
 

@@ -23,20 +23,28 @@ pub(super) async fn send_email_or_log(
 ) {
     if let Ok(provider) = ctx.email_provider() {
         if let Err(error) = provider.send(to, subject, html, text).await {
-            tracing::warn!(
-                plugin = "user-management",
-                action = action,
-                email = to,
-                error = %error,
-                "Failed to send email"
+            better_auth_core::observability::logger::current().warn(
+                "Failed to send email",
+                &[
+                    better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                        "user-management"
+                    )),
+                    better_auth_core::observability::LogArgument::Value(&serde_json::json!(action)),
+                    better_auth_core::observability::LogArgument::Value(&serde_json::json!(to)),
+                    better_auth_core::observability::LogArgument::Error(&error),
+                ],
             );
         }
     } else {
-        tracing::warn!(
-            plugin = "user-management",
-            action = action,
-            email = to,
-            "No email provider configured, skipping email"
+        better_auth_core::observability::logger::current().warn(
+            "No email provider configured, skipping email",
+            &[
+                better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                    "user-management"
+                )),
+                better_auth_core::observability::LogArgument::Value(&serde_json::json!(action)),
+                better_auth_core::observability::LogArgument::Value(&serde_json::json!(to)),
+            ],
         );
     }
 }
@@ -179,7 +187,10 @@ pub(crate) async fn delete_user_core(
         );
         // Upstream runInBackgroundOrAwait logs notification failures after storing the token.
         if let Err(error) = sender.send(user, &url, &token, Some(req)).await {
-            tracing::error!(%error, "Delete account verification sender failed");
+            better_auth_core::observability::logger::current().error(
+                "Delete account verification sender failed",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
         return Ok(SuccessMessageResponse {
             success: true,

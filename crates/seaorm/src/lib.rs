@@ -41,3 +41,5 @@ pub use sea_orm as __private_seaorm;
 
 #[doc(hidden)]
 pub use chrono as __private_chrono;
+
+extern crate better_auth_core as better_auth;

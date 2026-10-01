@@ -430,7 +430,10 @@ pub(super) async fn delete_for_verification(
         }
         .await;
         if let Err(error) = result {
-            tracing::error!(%error, "Deferred API key deletion failed");
+            better_auth_core::observability::logger::current().error(
+                "Deferred API key deletion failed",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
     });
     Ok(())

@@ -387,11 +387,17 @@ impl DeviceAuthorizationPlugin {
                 {
                     Ok(issued) => issued.session,
                     Err(error) => {
-                        tracing::error!(
-                            error = %error,
-                            device_code_id = %device_code.id,
-                            user_id,
-                            "failed to create session after device code redemption"
+                        better_auth_core::observability::logger::current().error(
+                            "failed to create session after device code redemption",
+                            &[
+                                better_auth_core::observability::LogArgument::Error(&error),
+                                better_auth_core::observability::LogArgument::Value(
+                                    &serde_json::json!(device_code.id),
+                                ),
+                                better_auth_core::observability::LogArgument::Value(
+                                    &serde_json::json!(user_id),
+                                ),
+                            ],
                         );
                         return device_error_response(
                             500,
@@ -596,11 +602,11 @@ fn validate_generated_code(code: String, label: &str) -> AuthResult<String> {
 better_auth_core::impl_auth_plugin! {
     DeviceAuthorizationPlugin, "device-authorization";
     routes {
-        post "/device/code" => handle_device_code, "device_code", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"];
-        post "/device/token" => handle_device_token, "device_token";
-        get "/device" => handle_device_verify, "device_verify", query = crate::plugins::query_input::device;
-        post "/device/approve" => handle_device_approve, "device_approve";
-        post "/device/deny" => handle_device_deny, "device_deny";
+        post "/device/code" => handle_device_code, "deviceCode", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"];
+        post "/device/token" => handle_device_token, "deviceToken";
+        get "/device" => handle_device_verify, "deviceVerify", query = crate::plugins::query_input::device;
+        post "/device/approve" => handle_device_approve, "deviceApprove";
+        post "/device/deny" => handle_device_deny, "deviceDeny";
     }
     extra {
         async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {

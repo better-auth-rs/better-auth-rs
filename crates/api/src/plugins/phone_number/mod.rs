@@ -471,7 +471,15 @@ impl PhoneNumberPlugin {
                     )
                     .await
                 {
-                    tracing::error!(plugin = "phone-number", %error, "Failed to run background task");
+                    better_auth_core::observability::logger::current().error(
+                        "Failed to run background task",
+                        &[
+                            better_auth_core::observability::LogArgument::Value(
+                                &serde_json::json!("phone-number"),
+                            ),
+                            better_auth_core::observability::LogArgument::Error(&error),
+                        ],
+                    );
                 }
             }
             return Err(error(
@@ -573,7 +581,15 @@ impl PhoneNumberPlugin {
                 )
                 .await
             {
-                tracing::error!(plugin = "phone-number", %error, "Failed to run background task");
+                better_auth_core::observability::logger::current().error(
+                    "Failed to run background task",
+                    &[
+                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                            "phone-number"
+                        )),
+                        better_auth_core::observability::LogArgument::Error(&error),
+                    ],
+                );
             }
         }
         Ok(AuthResponse::json(200, &json!({"status":true}))?)
@@ -782,11 +798,9 @@ better_auth_core::impl_auth_plugin!(PhoneNumberPlugin, "phone-number";
                     .and_then(|body| body.get("phoneNumber"))
                     .is_some_and(|value| !value.is_null())
                 {
-                    return Err(error(
-                        400,
-                        "PHONE_NUMBER_CANNOT_BE_UPDATED",
-                        "Phone number cannot be updated",
-                    ));
+                    return better_auth_core::observability::instrumentation::with_endpoint_hook(&_ctx.config, req, "before", "plugin:phone-number", async {
+                        Err(error(400, "PHONE_NUMBER_CANNOT_BE_UPDATED", "Phone number cannot be updated"))
+                    }).await;
                 }
             }
             Ok(None)

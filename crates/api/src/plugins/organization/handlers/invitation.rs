@@ -318,7 +318,10 @@ pub(crate) async fn invite_member_core(
             .await
     {
         // Upstream runInBackgroundOrAwait logs delivery failures and preserves success.
-        tracing::error!(%error, "Failed to send organization invitation email");
+        better_auth_core::observability::logger::current().error(
+            "Failed to send organization invitation email",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
     }
     if !is_resend && let Some(hooks) = &config.hooks {
         hooks

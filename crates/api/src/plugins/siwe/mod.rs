@@ -304,7 +304,10 @@ impl SiwePlugin {
                 let reserved = match reserved {
                     Ok(reserved) => reserved,
                     Err(cause) => {
-                        tracing::warn!(error=?cause,"SIWE email reservation failed; using wallet placeholder email");
+                        better_auth_core::observability::logger::current().warn(
+                            "SIWE email reservation failed; using wallet placeholder email",
+                            &[better_auth_core::observability::LogArgument::Error(&cause)],
+                        );
                         false
                     }
                 };
@@ -345,7 +348,10 @@ impl SiwePlugin {
                     .consume_verification_by_identifier(&identifier)
                     .await
             {
-                tracing::warn!(error=?cause,"SIWE email reservation cleanup failed");
+                better_auth_core::observability::logger::current().warn(
+                    "SIWE email reservation cleanup failed",
+                    &[better_auth_core::observability::LogArgument::Error(&cause)],
+                );
             }
             created?
         };

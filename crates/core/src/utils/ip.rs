@@ -124,10 +124,7 @@ impl IpAddressConfig {
             .filter(|entry| network(entry).is_none())
             .collect();
         if !invalid.is_empty() {
-            tracing::warn!(
-                ?invalid,
-                "Ignoring invalid advanced.ipAddress.trustedProxies entries; each entry must be an IP address or CIDR range"
-            );
+            crate::observability::logger::current().warn("Ignoring invalid advanced.ipAddress.trustedProxies entries; each entry must be an IP address or CIDR range", &[crate::observability::LogArgument::Value(&serde_json::json!(invalid))]);
         }
     }
 

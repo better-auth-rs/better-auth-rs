@@ -126,7 +126,10 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
             let user = ctx.internal_user_view(&user)?;
             if let Err(error) = callback.on_existing_user_sign_up(&user, Some(req)).await {
                 // Upstream runs this notification through runInBackgroundOrAwait, which logs failures.
-                tracing::error!(%error, "Existing-user signup notification failed");
+                better_auth_core::observability::logger::current().error(
+                    "Existing-user signup notification failed",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
             }
         }
         return synthetic_response(body, &create_user, config, ctx);
@@ -279,7 +282,10 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
             .await
         {
             // Delivery is a background-compatible notification in the upstream signup route.
-            tracing::error!(%error, "Signup verification email failed");
+            better_auth_core::observability::logger::current().error(
+                "Signup verification email failed",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
     }
     Ok(response)

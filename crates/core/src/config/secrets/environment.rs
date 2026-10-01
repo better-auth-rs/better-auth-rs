@@ -69,7 +69,7 @@ impl AuthConfig {
                 keys,
                 legacy_secret: None,
             }
-            .validate()?;
+            .validate(&self.logger)?;
         } else if !env.is_test() {
             let secret = if legacy.is_empty() {
                 DEFAULT_SECRET
@@ -81,7 +81,7 @@ impl AuthConfig {
                     "You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
                 ));
             }
-            warn_secret_strength(secret);
+            warn_secret_strength(secret, &self.logger);
         }
         self.secret = if keys.is_none() && legacy.is_empty() {
             DEFAULT_SECRET

@@ -90,7 +90,7 @@ impl<S: AuthSchema> AuthPlugin<S> for BodyBefore {
     }
 }
 
-#[async_trait::async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     async fn before_update_user(
         &self,

@@ -309,47 +309,47 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         let mut routes = vec![
             // Organization CRUD
-            AuthRoute::post("/organization/create", "create_organization"),
-            AuthRoute::post("/organization/update", "update_organization"),
-            AuthRoute::post("/organization/delete", "delete_organization"),
-            AuthRoute::get("/organization/list", "list_organizations"),
-            AuthRoute::get("/organization/get-organization", "get_organization")
+            AuthRoute::post("/organization/create", "createOrganization"),
+            AuthRoute::post("/organization/update", "updateOrganization"),
+            AuthRoute::post("/organization/delete", "deleteOrganization"),
+            AuthRoute::get("/organization/list", "listOrganizations"),
+            AuthRoute::get("/organization/get-organization", "getOrganization")
                 .query_validator(crate::plugins::query_input::organization),
-            AuthRoute::get(
-                "/organization/get-full-organization",
-                "get_full_organization",
-            )
-            .query_validator(crate::plugins::query_input::full_organization),
-            AuthRoute::post("/organization/check-slug", "check_slug"),
-            AuthRoute::post("/organization/set-active", "set_active_organization"),
-            AuthRoute::post("/organization/leave", "leave_organization"),
+            AuthRoute::get("/organization/get-full-organization", "getFullOrganization")
+                .query_validator(crate::plugins::query_input::full_organization),
+            AuthRoute::post("/organization/check-slug", "checkOrganizationSlug"),
+            AuthRoute::post("/organization/set-active", "setActiveOrganization"),
+            AuthRoute::post("/organization/leave", "leaveOrganization"),
             // Member management
-            AuthRoute::get("/organization/get-active-member", "get_active_member"),
+            AuthRoute::get("/organization/get-active-member", "getActiveMember"),
             AuthRoute::get(
                 "/organization/get-active-member-role",
-                "get_active_member_role",
+                "getActiveMemberRole",
             )
             .query_validator(crate::plugins::query_input::active_member_role),
-            AuthRoute::get("/organization/list-members", "list_members")
+            AuthRoute::get("/organization/list-members", "listMembers")
                 .query_validator(crate::plugins::query_input::list_members),
-            AuthRoute::post("/organization/remove-member", "remove_member"),
-            AuthRoute::post("/organization/update-member-role", "update_member_role"),
+            AuthRoute::post("/organization/remove-member", "removeMember"),
+            AuthRoute::post(
+                "/organization/update-member-role",
+                "updateOrganizationMemberRole",
+            ),
             // Invitations
-            AuthRoute::post("/organization/invite-member", "invite_member"),
-            AuthRoute::get("/organization/get-invitation", "get_invitation")
+            AuthRoute::post(
+                "/organization/invite-member",
+                "createOrganizationInvitation",
+            ),
+            AuthRoute::get("/organization/get-invitation", "getInvitation")
                 .query_validator(crate::plugins::query_input::invitation),
-            AuthRoute::get("/organization/list-invitations", "list_invitations")
+            AuthRoute::get("/organization/list-invitations", "listInvitations")
                 .query_validator(crate::plugins::query_input::organization_id),
-            AuthRoute::get(
-                "/organization/list-user-invitations",
-                "list_user_invitations",
-            )
-            .query_validator(crate::plugins::query_input::user_invitations),
-            AuthRoute::post("/organization/accept-invitation", "accept_invitation"),
-            AuthRoute::post("/organization/reject-invitation", "reject_invitation"),
-            AuthRoute::post("/organization/cancel-invitation", "cancel_invitation"),
+            AuthRoute::get("/organization/list-user-invitations", "listUserInvitations")
+                .query_validator(crate::plugins::query_input::user_invitations),
+            AuthRoute::post("/organization/accept-invitation", "acceptInvitation"),
+            AuthRoute::post("/organization/reject-invitation", "rejectInvitation"),
+            AuthRoute::post("/organization/cancel-invitation", "cancelInvitation"),
             // Permission check
-            AuthRoute::post("/organization/has-permission", "has_permission"),
+            AuthRoute::post("/organization/has-permission", "hasPermission"),
         ];
         if self.config.teams.enabled {
             routes.extend(handlers::team::routes());

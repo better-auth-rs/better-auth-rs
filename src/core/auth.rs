@@ -24,6 +24,7 @@ fn endpoint_error(error: AuthError, request: &AuthRequest) -> AuthResult<AuthErr
 
 pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
+    hooks: better_auth_core::observability::EndpointHooks<S>,
     plugins: Vec<Box<dyn AuthPlugin<S>>>,
     middlewares: Vec<Box<dyn Middleware>>,
     http_middlewares: Vec<Box<dyn Middleware>>,
@@ -38,6 +39,7 @@ type EphemeralStoreFactory<S> = Box<dyn FnOnce(Arc<AuthConfig>) -> Arc<dyn AuthS
 /// Initial builder for configuring BetterAuth.
 pub struct AuthBuilder<S: AuthSchema> {
     config: AuthConfig,
+    hooks: better_auth_core::observability::EndpointHooks<S>,
     validate_user_info:
         Option<Arc<dyn better_auth_api::plugins::user_admission::ValidateUserInfo<S>>>,
     api_error_handler: Option<Arc<dyn better_auth_core::api_error::ApiErrorHandler<S>>>,
@@ -56,6 +58,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
     pub fn new(config: AuthConfig) -> Self {
         Self {
             config,
+            hooks: Default::default(),
             validate_user_info: None,
             api_error_handler: None,
             store: None,
@@ -109,6 +112,12 @@ impl<S: AuthSchema> AuthBuilder<S> {
         callback: Arc<dyn better_auth_core::api_error::ApiErrorHandler<S>>,
     ) -> Self {
         self.api_error_handler = Some(callback);
+        self
+    }
+
+    /// Install global user hooks before the corresponding plugin hooks.
+    pub fn hooks(mut self, hooks: better_auth_core::observability::EndpointHooks<S>) -> Self {
+        self.hooks = hooks;
         self
     }
 
@@ -188,6 +197,23 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 init_context.password_policy.hasher = Some(hasher);
             }
         }
+
+        let telemetry = better_auth_api::observability::initialize_telemetry(&init_context.config);
+        if telemetry.enabled() {
+            let payload = super::telemetry::init_payload(
+                &init_context.config,
+                &self
+                    .plugins
+                    .iter()
+                    .map(|plugin| plugin.name())
+                    .collect::<Vec<_>>(),
+                self.hooks.before.is_some(),
+                self.hooks.after.is_some(),
+                init_context.secondary_storage.is_some(),
+            );
+            super::telemetry::start_init(telemetry.clone(), payload).await?;
+        }
+        init_context.extensions.insert(telemetry);
 
         // Initialize all plugins.
         for plugin in &self.plugins {
@@ -320,6 +346,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
         middlewares.extend(self.custom_middlewares);
 
         Ok(BetterAuth {
+            hooks: self.hooks,
             config,
             plugins: self.plugins,
             middlewares,
@@ -485,7 +512,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             better_auth_core::AuthRoute::get(core_paths::OK, "ok"),
             better_auth_core::AuthRoute::get(core_paths::ERROR, "error"),
             better_auth_core::AuthRoute::get(core_paths::OPENAPI_SPEC, "openapi_spec"),
-            better_auth_core::AuthRoute::post(core_paths::UPDATE_USER, "update_user"),
+            better_auth_core::AuthRoute::post(core_paths::UPDATE_USER, "updateUser"),
         ];
         let selected = core_routes
             .into_iter()
@@ -515,6 +542,43 @@ impl<S: AuthSchema> BetterAuth<S> {
     }
 
     pub(crate) async fn dispatch_endpoint(
+        &self,
+        req: &mut AuthRequest,
+        http: bool,
+        context: &AuthContext<S>,
+    ) -> AuthResult<AuthResponse> {
+        use better_auth_core::observability::{SpanAttributes, with_span};
+        let snapshot = better_auth_core::hooks::current_request_hook_context();
+        let route = snapshot
+            .as_ref()
+            .map_or_else(|| req.path().to_owned(), |snapshot| snapshot.path.clone());
+        let operation_id = snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.operation_id.as_deref())
+            .unwrap_or(&route);
+        let method = match req.method() {
+            HttpMethod::Get => "GET",
+            HttpMethod::Post => "POST",
+            HttpMethod::Put => "PUT",
+            HttpMethod::Patch => "PATCH",
+            HttpMethod::Delete => "DELETE",
+            HttpMethod::Options => "OPTIONS",
+            HttpMethod::Head => "HEAD",
+        };
+        with_span(
+            &context.config.experimental.instrumentation,
+            &format!("{method} {route}"),
+            SpanAttributes {
+                route: Some(&route),
+                operation_id: Some(operation_id),
+                ..Default::default()
+            },
+            self.dispatch_endpoint_inner(req, http, context),
+        )
+        .await
+    }
+
+    async fn dispatch_endpoint_inner(
         &self,
         req: &mut AuthRequest,
         http: bool,
@@ -568,36 +632,38 @@ impl<S: AuthSchema> BetterAuth<S> {
         );
         update_request_hook_context(&internal_req)?;
 
+        let mut input_patch = better_auth_core::endpoint_input::EndpointInputPatch::default();
+        if let Some(hook) = &self.hooks.before {
+            let action = match better_auth_core::observability::instrumentation::with_endpoint_hook(
+                &context.config,
+                &internal_req,
+                "before",
+                "user",
+                hook.before(&internal_req, context),
+            )
+            .await
+            {
+                Ok(action) => action,
+                Err(error) => return Err(endpoint_error(error, &internal_req)?),
+            };
+            if let Some(response) =
+                apply_before_action(action, &mut internal_req, req, &mut input_patch)?
+            {
+                return Ok(response);
+            }
+        }
+
         // Run plugin before_request hooks (e.g. API-key → session emulation)
         // Plugins now see the normalised (base_path-stripped) path.
-        let mut input_patch = better_auth_core::endpoint_input::EndpointInputPatch::default();
         for plugin in &self.plugins {
             let action = match plugin.before_request(&internal_req, context).await {
                 Ok(action) => action,
                 Err(error) => return Err(endpoint_error(error, &internal_req)?),
             };
-            if let Some(action) = action {
-                match action {
-                    BeforeRequestAction::Respond(mut response) => {
-                        response
-                            .headers
-                            .merge(internal_req.take_response_headers()?);
-                        return Ok(response);
-                    }
-                    BeforeRequestAction::MergeContext(patch) => input_patch.merge(patch),
-                    BeforeRequestAction::ReplaceBody(body) => {
-                        internal_req.body = Some(body.clone());
-                        req.body = Some(body);
-                        let raw_body = internal_req.input_body()?;
-                        internal_req.set_endpoint_body(
-                            better_auth_core::endpoint_input::ValidatedBody::unvalidated(raw_body),
-                        );
-                        update_request_hook_context(&internal_req)?;
-                    }
-                    BeforeRequestAction::InjectSession { session } => {
-                        internal_req.set_virtual_session(*session);
-                    }
-                }
+            if let Some(response) =
+                apply_before_action(action, &mut internal_req, req, &mut input_patch)?
+            {
+                return Ok(response);
             }
         }
 
@@ -611,33 +677,53 @@ impl<S: AuthSchema> BetterAuth<S> {
             .iter()
             .flat_map(|plugin| plugin.routes())
             .find(|route| route.matches(internal_req.method(), internal_req.path()));
-        let input = (|| -> AuthResult<_> {
-            let body = match route.as_ref().and_then(|route| route.body_validator) {
-                Some(validate) => validate(&internal_req)?,
-                None => better_auth_core::endpoint_input::ValidatedBody::unvalidated(
-                    internal_req.input_body()?,
-                ),
-            };
-            let query = match route.as_ref().and_then(|route| route.query_validator) {
-                Some(validate) => validate(internal_req.query.clone())?,
-                None => internal_req.query.clone(),
-            };
-            let mut request = internal_req.clone();
-            request.set_endpoint_body(body);
-            request.query = query;
-            Ok(request)
-        })();
-        let result = match input {
-            Ok(request) => {
-                better_auth_core::endpoint_input::with_validated_input(
-                    request.input_body()?,
-                    request.query.clone(),
-                    self.execute_endpoint(&request, context),
-                )
-                .await
-            }
-            Err(error) => Err(error),
-        };
+        let snapshot = better_auth_core::hooks::current_request_hook_context();
+        let route_name = snapshot
+            .as_ref()
+            .map_or(internal_req.path(), |snapshot| snapshot.path.as_str());
+        let operation_id = snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.operation_id.as_deref())
+            .unwrap_or(route_name);
+        let result = better_auth_core::observability::with_span(
+            &context.config.experimental.instrumentation,
+            &format!("handler {route_name}"),
+            better_auth_core::observability::SpanAttributes {
+                route: Some(route_name),
+                operation_id: Some(operation_id),
+                ..Default::default()
+            },
+            async {
+                let input = (|| -> AuthResult<_> {
+                    let body = match route.as_ref().and_then(|route| route.body_validator) {
+                        Some(validate) => validate(&internal_req)?,
+                        None => better_auth_core::endpoint_input::ValidatedBody::unvalidated(
+                            internal_req.input_body()?,
+                        ),
+                    };
+                    let query = match route.as_ref().and_then(|route| route.query_validator) {
+                        Some(validate) => validate(internal_req.query.clone())?,
+                        None => internal_req.query.clone(),
+                    };
+                    let mut request = internal_req.clone();
+                    request.set_endpoint_body(body);
+                    request.query = query;
+                    Ok(request)
+                })();
+                match input {
+                    Ok(request) => {
+                        better_auth_core::endpoint_input::with_validated_input(
+                            request.input_body()?,
+                            request.query.clone(),
+                            self.execute_endpoint(&request, context),
+                        )
+                        .await
+                    }
+                    Err(error) => Err(error),
+                }
+            },
+        )
+        .await;
         let mut response = match result {
             Ok(response) => response,
             Err(error) if error.is_api_error() => error.to_auth_response(),
@@ -646,22 +732,22 @@ impl<S: AuthSchema> BetterAuth<S> {
         context
             .session_manager()
             .finish_response(&internal_req, &mut response)?;
+        if let Some(hook) = &self.hooks.after {
+            let result = better_auth_core::observability::instrumentation::with_endpoint_hook(
+                &context.config,
+                &internal_req,
+                "after",
+                "user",
+                hook.after(&internal_req, &mut response, context),
+            )
+            .await;
+            apply_after_result(result, &internal_req, &mut response)?;
+        }
         for plugin in &self.plugins {
-            match plugin
+            let result = plugin
                 .after_request(&internal_req, &mut response, context)
-                .await
-            {
-                Ok(()) => response
-                    .headers
-                    .merge(internal_req.take_response_headers()?),
-                Err(error) if error.is_api_error() => {
-                    response
-                        .headers
-                        .merge(internal_req.take_response_headers()?);
-                    response.replace_returned(error.to_auth_response());
-                }
-                Err(error) => return Err(error),
-            }
+                .await;
+            apply_after_result(result, &internal_req, &mut response)?;
         }
         if response.is_api_error() && !http {
             response.capture_error_headers(response.headers.clone());
@@ -880,4 +966,48 @@ impl<S: AuthSchema> BetterAuth<S> {
             &better_auth_core::StatusResponse { status: true },
         )?)
     }
+}
+
+fn apply_before_action(
+    action: Option<BeforeRequestAction>,
+    internal: &mut AuthRequest,
+    original: &mut AuthRequest,
+    input_patch: &mut better_auth_core::endpoint_input::EndpointInputPatch,
+) -> AuthResult<Option<AuthResponse>> {
+    match action {
+        Some(BeforeRequestAction::Respond(mut response)) => {
+            response.headers.merge(internal.take_response_headers()?);
+            return Ok(Some(response));
+        }
+        Some(BeforeRequestAction::MergeContext(patch)) => input_patch.merge(patch),
+        Some(BeforeRequestAction::ReplaceBody(body)) => {
+            internal.body = Some(body.clone());
+            original.body = Some(body);
+            let raw_body = internal.input_body()?;
+            internal.set_endpoint_body(
+                better_auth_core::endpoint_input::ValidatedBody::unvalidated(raw_body),
+            );
+            update_request_hook_context(internal)?;
+        }
+        Some(BeforeRequestAction::InjectSession { session }) => {
+            internal.set_virtual_session(*session)
+        }
+        None => (),
+    }
+    Ok(None)
+}
+fn apply_after_result(
+    result: AuthResult<()>,
+    request: &AuthRequest,
+    response: &mut AuthResponse,
+) -> AuthResult<()> {
+    match result {
+        Ok(()) => response.headers.merge(request.take_response_headers()?),
+        Err(error) if error.is_api_error() => {
+            response.headers.merge(request.take_response_headers()?);
+            response.replace_returned(error.to_auth_response());
+        }
+        Err(error) => return Err(error),
+    }
+    Ok(())
 }

@@ -82,7 +82,7 @@ impl MissingUpdateHooks {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
     async fn before_update_user(
         &self,
@@ -108,7 +108,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> DatabaseHooks<S> for MissingUpdateHooks {
     async fn before_update_user(
         &self,

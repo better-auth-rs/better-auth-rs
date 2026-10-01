@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
@@ -42,7 +43,13 @@ where
                 Some(reservation_id.clone()),
                 verification.with_timestamps(Utc::now()),
             )?;
-            let row = active.insert(self.connection()).await.map_err(map_db_err)?;
+            let row =
+                database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                    self.config(),
+                    "create",
+                    async { active.insert(self.connection()).await.map_err(map_db_err) },
+                )
+                .await?;
             let _ = self.output_verification(&row, self.connection())?;
             Ok(())
         }
@@ -50,15 +57,22 @@ where
         match result {
             Ok(()) => Ok(true),
             Err(cause) => {
-                if <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(S::Verification::id_column().eq(reservation_id))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)?
-                    .as_ref()
-                    .map(|row| self.output_verification(row, self.connection()))
-                    .transpose()?
-                    .is_some()
+                if database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                    self.config(),
+                    "findOne",
+                    async {
+                        <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                            .filter(S::Verification::id_column().eq(reservation_id))
+                            .one(self.connection())
+                            .await
+                            .map_err(map_db_err)
+                    },
+                )
+                .await?
+                .as_ref()
+                .map(|row| self.output_verification(row, self.connection()))
+                .transpose()?
+                .is_some()
                 {
                     Ok(false)
                 } else {
@@ -150,8 +164,13 @@ where
     ) -> AuthResult<()> {
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
-            hook.after_create_verification(verification, &hook_context)
-                .await?;
+            better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterCreateVerification,
+                hook.after_create_verification(verification, &hook_context),
+            )
+            .await?;
         }
         Ok(())
     }
@@ -161,53 +180,79 @@ where
         identifier: &str,
         value: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        <S::Verification as SeaOrmVerificationModel>::Entity::find()
-            .filter(
-                <S::Verification as SeaOrmVerificationModel>::identifier_column().eq(identifier),
-            )
-            .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
-            .filter(
-                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
-            )
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .as_ref()
-            .map(|row| self.output_verification(row, self.connection()))
-            .transpose()
+        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(
+                        <S::Verification as SeaOrmVerificationModel>::identifier_column()
+                            .eq(identifier),
+                    )
+                    .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+                    .filter(
+                        <S::Verification as SeaOrmVerificationModel>::expires_at_column()
+                            .gt(Utc::now()),
+                    )
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .as_ref()
+        .map(|row| self.output_verification(row, self.connection()))
+        .transpose()
     }
 
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
-        <S::Verification as SeaOrmVerificationModel>::Entity::find()
-            .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
-            .filter(
-                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
-            )
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .as_ref()
-            .map(|row| self.output_verification(row, self.connection()))
-            .transpose()
+        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+                    .filter(
+                        <S::Verification as SeaOrmVerificationModel>::expires_at_column()
+                            .gt(Utc::now()),
+                    )
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .as_ref()
+        .map(|row| self.output_verification(row, self.connection()))
+        .transpose()
     }
 
     async fn get_verification_by_identifier(
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        <S::Verification as SeaOrmVerificationModel>::Entity::find()
-            .filter(
-                <S::Verification as SeaOrmVerificationModel>::identifier_column().eq(identifier),
-            )
-            .filter(
-                <S::Verification as SeaOrmVerificationModel>::expires_at_column().gt(Utc::now()),
-            )
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .as_ref()
-            .map(|row| self.output_verification(row, self.connection()))
-            .transpose()
+        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(
+                        <S::Verification as SeaOrmVerificationModel>::identifier_column()
+                            .eq(identifier),
+                    )
+                    .filter(
+                        <S::Verification as SeaOrmVerificationModel>::expires_at_column()
+                            .gt(Utc::now()),
+                    )
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .as_ref()
+        .map(|row| self.output_verification(row, self.connection()))
+        .transpose()
     }
 
     async fn consume_verification(
@@ -257,7 +302,7 @@ where
         let context = self.hook_context(None);
         for record in &records {
             for hook in self.hooks() {
-                hook.after_delete_verification(record, &context).await?;
+                better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification, hook.after_delete_verification(record, &context)).await?;
             }
         }
         Ok(count)
@@ -281,34 +326,48 @@ where
         let filter = <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(now);
         // Only the upstream deleteMany snapshot is best-effort. Hook and write errors propagate.
         let snapshot: AuthResult<Vec<VerificationView>> = async {
-            <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                .filter(filter.clone())
-                .all(connection)
-                .await
-                .map_err(map_db_err)?
-                .iter()
-                .map(|row| self.output_verification(row, connection))
-                .collect()
+            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                self.config(),
+                "findMany",
+                async {
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .filter(filter.clone())
+                        .all(connection)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?
+            .iter()
+            .map(|row| self.output_verification(row, connection))
+            .collect()
         }
         .await;
         let records = snapshot.unwrap_or_default();
         let context = self.hook_context(tx);
         for record in &records {
             for hook in self.hooks() {
-                if hook
-                    .before_delete_verification(record, &context)
-                    .await?
+                if better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeDeleteVerification, hook
+                    .before_delete_verification(record, &context)).await?
                     .is_cancelled()
                 {
                     return Ok((0, Vec::new()));
                 }
             }
         }
-        let deleted = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-            .filter(filter)
-            .exec(connection)
-            .await
-            .map_err(map_db_err)?;
+        let deleted =
+            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                self.config(),
+                "deleteMany",
+                async {
+                    <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+                        .filter(filter)
+                        .exec(connection)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?;
         Ok((deleted.rows_affected as usize, records))
     }
 }
@@ -367,9 +426,13 @@ where
         let original = update.clone();
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            match hook
-                .before_update_verification(identifier, &original, &context)
-                .await?
+            match better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeUpdateVerification,
+                hook.before_update_verification(identifier, &original, &context),
+            )
+            .await?
             {
                 DatabaseHookUpdate::Continue => {}
                 DatabaseHookUpdate::Cancel => return Ok(None),
@@ -400,14 +463,21 @@ where
             (_, sea_orm::ActiveValue::Set(value)) => S::Verification::identifier_column().eq(value),
             _ => S::Verification::identifier_column().eq(identifier),
         };
-        let row = super::updates::update_returning_one::<
-            <S::Verification as SeaOrmVerificationModel>::Entity,
-            _,
-        >(
-            db,
-            active,
-            S::Verification::identifier_column().eq(identifier),
-            reselect,
+        let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "update",
+            async {
+                super::updates::update_returning_one::<
+                    <S::Verification as SeaOrmVerificationModel>::Entity,
+                    _,
+                >(
+                    db,
+                    active,
+                    S::Verification::identifier_column().eq(identifier),
+                    reselect,
+                )
+                .await
+            },
         )
         .await?
         .as_ref()
@@ -420,8 +490,7 @@ where
             Box::pin(async move {
                 let context = store.hook_context(None);
                 for hook in store.hooks() {
-                    hook.after_update_verification(updated.as_ref(), &context)
-                        .await?;
+                    better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterUpdateVerification, hook.after_update_verification(updated.as_ref(), &context)).await?;
                 }
                 Ok(())
             }),
@@ -437,14 +506,21 @@ where
     ) -> AuthResult<()> {
         // A failed findMany projection is caught before single-delete hooks or writes run.
         let snapshot: AuthResult<Option<VerificationView>> = async {
-            <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                .filter(condition.clone())
-                .one(db)
-                .await
-                .map_err(map_db_err)?
-                .as_ref()
-                .map(|row| self.output_verification(row, db))
-                .transpose()
+            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                self.config(),
+                "findOne",
+                async {
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .filter(condition.clone())
+                        .one(db)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?
+            .as_ref()
+            .map(|row| self.output_verification(row, db))
+            .transpose()
         }
         .await;
         let Ok(Some(row)) = snapshot else {
@@ -452,21 +528,38 @@ where
         };
         let context = self.hook_context(None);
         for hook in self.hooks() {
-            if hook
-                .before_delete_verification(&row, &context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeDeleteVerification,
+                hook.before_delete_verification(&row, &context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Ok(());
             }
         }
-        let _ = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-            .filter(condition)
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
+        let _ = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "delete",
+            async {
+                <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+                    .filter(condition)
+                    .exec(db)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
         for hook in self.hooks() {
-            hook.after_delete_verification(&row, &context).await?;
+            better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification,
+                hook.after_delete_verification(&row, &context),
+            )
+            .await?;
         }
         Ok(())
     }
@@ -478,10 +571,14 @@ where
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            if hook
-                .before_create_verification(verification, &context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeCreateVerification,
+                hook.before_create_verification(verification, &context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Err(cancelled_by_hook("verification creation"));
             }
@@ -498,11 +595,13 @@ where
         verification = verification.with_timestamps(Utc::now());
         self.before_runtime_verification_in_tx(&mut verification, tx)
             .await?;
-        let row = self
-            .new_verification_active(connection, None, verification)?
-            .insert(connection)
-            .await
-            .map_err(map_db_err)?;
+        let active = self.new_verification_active(connection, None, verification)?;
+        let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "create",
+            async { active.insert(connection).await.map_err(map_db_err) },
+        )
+        .await?;
         self.output_verification(&row, connection)
     }
 
@@ -511,15 +610,22 @@ where
         connection: &C,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        <S::Verification as SeaOrmVerificationModel>::Entity::find()
-            .filter(S::Verification::identifier_column().eq(identifier))
-            .order_by_desc(S::Verification::created_at_column())
-            .one(connection)
-            .await
-            .map_err(map_db_err)?
-            .as_ref()
-            .map(|row| self.output_verification(row, connection))
-            .transpose()
+        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "findMany",
+            async {
+                <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(S::Verification::identifier_column().eq(identifier))
+                    .order_by_desc(S::Verification::created_at_column())
+                    .one(connection)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?
+        .as_ref()
+        .map(|row| self.output_verification(row, connection))
+        .transpose()
     }
 
     async fn consume_latest_verification(
@@ -541,7 +647,7 @@ where
             effects: std::sync::Mutex::new(Vec::new()),
         };
         let result: AuthResult<Option<VerificationView>> = async {
-            let Some(model) = <S::Verification as SeaOrmVerificationModel>::Entity::find()
+            let Some(model) = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "findMany", async { <S::Verification as SeaOrmVerificationModel>::Entity::find()
                 .filter(
                     <S::Verification as SeaOrmVerificationModel>::identifier_column()
                         .eq(identifier),
@@ -550,7 +656,7 @@ where
                 .lock_exclusive()
                 .one(&transaction)
                 .await
-                .map_err(map_db_err)?
+                .map_err(map_db_err) }).await?
             else {
                 return Ok(None);
             };
@@ -562,33 +668,32 @@ where
             }
             let hook_context = self.hook_context(Some((&transaction, &hook_transaction)));
             for hook in self.hooks() {
-                if hook
-                    .before_delete_verification(&snapshot, &hook_context)
-                    .await?
+                if better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeDeleteVerification, hook
+                    .before_delete_verification(&snapshot, &hook_context)).await?
                     .is_cancelled()
                 {
                     return Ok(None);
                 }
             }
             let id = <S::Verification as SeaOrmVerificationModel>::parse_id(snapshot.id.typed()?)?;
-            let deleted = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+            let deleted = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "consumeOne", async { <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
                 .filter(<S::Verification as SeaOrmVerificationModel>::id_column().eq(id))
                 .exec(&transaction)
                 .await
-                .map_err(map_db_err)?;
+                .map_err(map_db_err) }).await?;
             if deleted.rows_affected == 0 {
                 return Ok(None);
             }
             // consumeOne output runs before removing older rows, inside the same transaction.
             let consumed = self.output_verification(&model, &transaction)?;
-            let _ = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+            let _ = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "deleteMany", async { <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
                 .filter(
                     <S::Verification as SeaOrmVerificationModel>::identifier_column()
                         .eq(identifier),
                 )
                 .exec(&transaction)
                 .await
-                .map_err(map_db_err)?;
+                .map_err(map_db_err) }).await?;
             Ok(Some(consumed))
         }
         .await;
@@ -606,8 +711,13 @@ where
         };
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
-            hook.after_delete_verification(&model, &hook_context)
-                .await?;
+            better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification,
+                hook.after_delete_verification(&model, &hook_context),
+            )
+            .await?;
         }
         Ok(Some(model))
     }

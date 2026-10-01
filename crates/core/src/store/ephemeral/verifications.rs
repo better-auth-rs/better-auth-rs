@@ -40,7 +40,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if hook.before_create_verification(input, &context).await?
+            if crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeCreateVerification,
+                hook.before_create_verification(input, &context),
+            )
+            .await?
                 == DatabaseHookControl::Cancel
             {
                 return Err(AuthError::forbidden(
@@ -67,12 +73,17 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                 |_| true,
             )?;
         let _ = record.insert("id".into(), Value::String(id.to_owned()));
-        {
-            let mut state = self.lock()?;
-            if state.verifications.contains_key(id) {
-                return Ok(false);
-            }
-            let _ = state.verifications.insert(id.to_owned(), record.clone());
+        let inserted = self
+            .raw("verification", "create", |state| {
+                if state.verifications.contains_key(id) {
+                    return Ok(false);
+                }
+                let _ = state.verifications.insert(id.to_owned(), record.clone());
+                Ok(true)
+            })
+            .await?;
+        if !inserted {
+            return Ok(false);
         }
         // Reservation catches create errors and then reads the existing row through the adapter again.
         if self.output_verification(&record).is_err() {
@@ -102,7 +113,11 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .or_insert_with(|| Value::String(uuid::Uuid::new_v4().to_string()))
             .clone();
         let id = crate::SchemaValue::<String>::from_json(Some(id)).display_string()?;
-        let _ = self.lock()?.verifications.insert(id, record.clone());
+        self.raw("verification", "create", |state| {
+            let _ = state.verifications.insert(id, record.clone());
+            Ok(())
+        })
+        .await?;
         let projected = self.output_verification(&record)?;
         if let Some(writer) = writer {
             writer(projected.clone()).await?;
@@ -116,15 +131,18 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
         let records: Vec<_> = self
-            .lock()?
-            .verifications
-            .values()
-            .filter(|row| {
-                self.verification_field(row, "identifier")
-                    == Some(&Value::String(identifier.to_owned()))
+            .raw("verification", "findMany", |state| {
+                Ok(state
+                    .verifications
+                    .values()
+                    .filter(|row| {
+                        self.verification_field(row, "identifier")
+                            == Some(&Value::String(identifier.to_owned()))
+                    })
+                    .cloned()
+                    .collect())
             })
-            .cloned()
-            .collect();
+            .await?;
         let latest = records.iter().min_by_key(|row| {
             std::cmp::Reverse(
                 self.verification_field(row, "createdAt")
@@ -139,16 +157,19 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         value: &str,
     ) -> AuthResult<Option<VerificationView>> {
         let record = self
-            .lock()?
-            .verifications
-            .values()
-            .find(|row| {
-                self.verification_field(row, "identifier")
-                    == Some(&Value::String(identifier.to_owned()))
-                    && self.verification_field(row, "value")
-                        == Some(&Value::String(value.to_owned()))
+            .raw("verification", "findOne", |state| {
+                Ok(state
+                    .verifications
+                    .values()
+                    .find(|row| {
+                        self.verification_field(row, "identifier")
+                            == Some(&Value::String(identifier.to_owned()))
+                            && self.verification_field(row, "value")
+                                == Some(&Value::String(value.to_owned()))
+                    })
+                    .cloned())
             })
-            .cloned();
+            .await?;
         record
             .as_ref()
             .map(|record| self.output_verification(record))
@@ -156,13 +177,17 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     }
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
         let record = self
-            .lock()?
-            .verifications
-            .values()
-            .find(|row| {
-                self.verification_field(row, "value") == Some(&Value::String(value.to_owned()))
+            .raw("verification", "findOne", |state| {
+                Ok(state
+                    .verifications
+                    .values()
+                    .find(|row| {
+                        self.verification_field(row, "value")
+                            == Some(&Value::String(value.to_owned()))
+                    })
+                    .cloned())
             })
-            .cloned();
+            .await?;
         record
             .as_ref()
             .map(|record| self.output_verification(record))
@@ -173,14 +198,17 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
         let record = self
-            .lock()?
-            .verifications
-            .values()
-            .find(|row| {
-                self.verification_field(row, "identifier")
-                    == Some(&Value::String(identifier.to_owned()))
+            .raw("verification", "findOne", |state| {
+                Ok(state
+                    .verifications
+                    .values()
+                    .find(|row| {
+                        self.verification_field(row, "identifier")
+                            == Some(&Value::String(identifier.to_owned()))
+                    })
+                    .cloned())
             })
-            .cloned();
+            .await?;
         record
             .as_ref()
             .map(|record| self.output_verification(record))

@@ -67,9 +67,11 @@ impl ResolvedOAuthConfig {
             if let Some(provider) = resolve_generic(name, config.clone()).await?
                 && providers.insert(name.clone(), provider).is_some()
             {
-                tracing::warn!(
-                    provider = name,
-                    "Generic OAuth provider shadows a built-in provider"
+                better_auth_core::observability::logger::current().warn(
+                    "Generic OAuth provider shadows a built-in provider",
+                    &[better_auth_core::observability::LogArgument::Value(
+                        &serde_json::json!(name),
+                    )],
                 );
             }
         }
@@ -114,7 +116,15 @@ async fn resolve_generic(
                     let jwks_url = match jwks_url {
                         Ok(url) => url,
                         Err(error) => {
-                            tracing::error!(provider = name, %error, "Invalid discovery JWKS URL; provider skipped");
+                            better_auth_core::observability::logger::current().error(
+                                "Invalid discovery JWKS URL; provider skipped",
+                                &[
+                                    better_auth_core::observability::LogArgument::Value(
+                                        &serde_json::json!(name),
+                                    ),
+                                    better_auth_core::observability::LogArgument::Error(&error),
+                                ],
+                            );
                             return Ok(None);
                         }
                     };
@@ -134,7 +144,15 @@ async fn resolve_generic(
             }
             Err(error) => {
                 // Upstream retains explicit endpoints after discovery failure unless verification is required.
-                tracing::error!(provider = name, %error, "OIDC discovery failed");
+                better_auth_core::observability::logger::current().error(
+                    "OIDC discovery failed",
+                    &[
+                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                            name
+                        )),
+                        better_auth_core::observability::LogArgument::Error(&error),
+                    ],
+                );
             }
         }
         if config
@@ -143,9 +161,11 @@ async fn resolve_generic(
             .is_none_or(str::is_empty)
             || (config.token_url.as_deref().is_none_or(str::is_empty) && config.get_token.is_none())
         {
-            tracing::error!(
-                provider = name,
-                "Discovery left no usable authorization or token endpoint; provider skipped"
+            better_auth_core::observability::logger::current().error(
+                "Discovery left no usable authorization or token endpoint; provider skipped",
+                &[better_auth_core::observability::LogArgument::Value(
+                    &serde_json::json!(name),
+                )],
             );
             return Ok(None);
         }
@@ -159,7 +179,8 @@ async fn resolve_generic(
             .as_ref()
             .is_some_and(|url| !url.is_empty())
         {
-            tracing::error!("{message}; provider skipped");
+            better_auth_core::observability::logger::current()
+                .error(&format!("{message}; provider skipped"), &[]);
             return Ok(None);
         }
         return Err(AuthError::config(message));

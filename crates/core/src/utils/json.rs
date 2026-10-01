@@ -11,7 +11,10 @@ pub fn safe_json_parse(text: &str) -> Value {
         Ok(value) => value,
         Err(error) => {
             // The upstream adapter logs invalid JSON and returns null.
-            tracing::error!(%error, "Error parsing JSON");
+            crate::observability::logger::current().error(
+                "Error parsing JSON",
+                &[crate::observability::LogArgument::Error(&error)],
+            );
             return Value::Null;
         }
     };

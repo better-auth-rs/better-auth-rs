@@ -171,9 +171,7 @@ impl Middleware for RateLimitMiddleware {
         let path = normalize_path(path, &base_path);
         let ip = self.ip_address.resolve(request);
         if ip.is_none() && !IP_WARNING_LOGGED.swap(true, Ordering::Relaxed) {
-            tracing::warn!(
-                "Rate limiting could not determine a client IP; requests share one per-path bucket. Configure trusted client IP headers or proxies."
-            );
+            crate::observability::logger::current().warn("Rate limiting could not determine a client IP; requests share one per-path bucket. Configure trusted client IP headers or proxies.", &[]);
         }
         let Some(rule) = self.resolve(request, path).await? else {
             return Ok(None);

@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
@@ -28,38 +29,47 @@ where
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        Entity::<P::Passkey>::find()
-            .filter(P::Passkey::column("id")?.eq(id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .map(|model| model.record())
-            .transpose()
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
+            Entity::<P::Passkey>::find()
+                .filter(P::Passkey::column("id")?.eq(id))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        .map(|model| model.record())
+        .transpose()
     }
 
     async fn get_passkey_by_credential_id(
         &self,
         credential_id: &str,
     ) -> AuthResult<Option<Passkey>> {
-        Entity::<P::Passkey>::find()
-            .filter(P::Passkey::column("credential_id")?.eq(credential_id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .map(|model| model.record())
-            .transpose()
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
+            Entity::<P::Passkey>::find()
+                .filter(P::Passkey::column("credential_id")?.eq(credential_id))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        .map(|model| model.record())
+        .transpose()
     }
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
-        Entity::<P::Passkey>::find()
-            .filter(P::Passkey::column("user_id")?.eq(user_id))
-            .order_by_desc(P::Passkey::column("created_at")?)
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .iter()
-            .map(SeaOrmPluginModel::record)
-            .collect()
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "findMany", async {
+            Entity::<P::Passkey>::find()
+                .filter(P::Passkey::column("user_id")?.eq(user_id))
+                .order_by_desc(P::Passkey::column("created_at")?)
+                .all(self.connection())
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        .iter()
+        .map(SeaOrmPluginModel::record)
+        .collect()
     }
 
     async fn update_passkey_authentication(
@@ -67,60 +77,65 @@ where
         id: &str,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
-        let Some(model) = Entity::<P::Passkey>::find()
-            .filter(P::Passkey::column("id")?.eq(id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::not_found("Passkey not found"));
-        };
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+            let Some(model) = Entity::<P::Passkey>::find()
+                .filter(P::Passkey::column("id")?.eq(id))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)?
+            else {
+                return Ok(None);
+            };
 
-        let mut active = model.into_active_model();
-        set::<P::Passkey>(
-            &mut active,
-            "counter",
-            i64::try_from(update.counter)
-                .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?,
-        )?;
-        set::<P::Passkey>(&mut active, "backed_up", update.backed_up)?;
-        set::<P::Passkey>(&mut active, "device_type", update.device_type)?;
-        set::<P::Passkey>(&mut active, "credential", update.credential)?;
-        set::<P::Passkey>(&mut active, "updated_at", Utc::now())?;
-        active
-            .update(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .record()
+            let mut active = model.into_active_model();
+            set::<P::Passkey>(
+                &mut active,
+                "counter",
+                i64::try_from(update.counter)
+                    .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?,
+            )?;
+            set::<P::Passkey>(&mut active, "backed_up", update.backed_up)?;
+            set::<P::Passkey>(&mut active, "device_type", update.device_type)?;
+            set::<P::Passkey>(&mut active, "credential", update.credential)?;
+            set::<P::Passkey>(&mut active, "updated_at", Utc::now())?;
+            let model = active.update(self.connection()).await.map_err(map_db_err)?;
+            Ok(Some(model))
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))?
+        .record()
     }
-
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
-        let Some(model) = Entity::<P::Passkey>::find()
-            .filter(P::Passkey::column("id")?.eq(id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(AuthError::not_found("Passkey not found"));
-        };
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+            let Some(model) = Entity::<P::Passkey>::find()
+                .filter(P::Passkey::column("id")?.eq(id))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)?
+            else {
+                return Ok(None);
+            };
 
-        let mut active = model.into_active_model();
-        set::<P::Passkey>(&mut active, "name", Some(name.to_owned()))?;
-        set::<P::Passkey>(&mut active, "updated_at", Utc::now())?;
-        active
-            .update(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .record()
+            let mut active = model.into_active_model();
+            set::<P::Passkey>(&mut active, "name", Some(name.to_owned()))?;
+            set::<P::Passkey>(&mut active, "updated_at", Utc::now())?;
+            let model = active.update(self.connection()).await.map_err(map_db_err)?;
+            Ok(Some(model))
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))?
+        .record()
     }
-
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
-        Entity::<P::Passkey>::delete_many()
-            .filter(P::Passkey::column("id")?.eq(id))
-            .exec(self.connection())
-            .await
-            .map(|_| ())
-            .map_err(map_db_err)
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "delete", async {
+            Entity::<P::Passkey>::delete_many()
+                .filter(P::Passkey::column("id")?.eq(id))
+                .exec(self.connection())
+                .await
+                .map(|_| ())
+                .map_err(map_db_err)
+        })
+        .await
     }
 }
 
@@ -135,7 +150,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
-        P::Passkey::active(Map::from_iter([
+        let active = P::Passkey::active(Map::from_iter([
             ("id".to_owned(), json!(Uuid::new_v4().to_string())),
             ("name".to_owned(), json!(input.name)),
             ("public_key".to_owned(), json!(input.public_key)),
@@ -149,10 +164,11 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             ("aaguid".to_owned(), json!(input.aaguid)),
             ("created_at".to_owned(), json!(Utc::now())),
             ("updated_at".to_owned(), json!(Utc::now())),
-        ]))?
-        .insert(connection)
-        .await
-        .map_err(map_db_err)?
+        ]))?;
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
+            active.insert(connection).await.map_err(map_db_err)
+        })
+        .await?
         .record()
     }
 }

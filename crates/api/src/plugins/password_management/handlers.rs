@@ -50,7 +50,12 @@ pub(crate) async fn request_password_reset_core(
                 .database
                 .get_verification_by_identifier("dummy-verification-token")
                 .await?;
-            tracing::error!(email = %body.email, "Reset Password: User not found");
+            better_auth_core::observability::logger::current().error(
+                "Reset Password: User not found",
+                &[better_auth_core::observability::LogArgument::Value(
+                    &serde_json::json!(body.email),
+                )],
+            );
             return Ok(success);
         }
     };
@@ -95,10 +100,12 @@ pub(crate) async fn request_password_reset_core(
         .send_with_request(&user_value, &reset_url, &reset_token, Some(req))
         .await
     {
-        tracing::warn!(
-            email = %body.email,
-            error = %error,
-            "Custom send_reset_password callback failed"
+        better_auth_core::observability::logger::current().warn(
+            "Custom send_reset_password callback failed",
+            &[
+                better_auth_core::observability::LogArgument::Value(&serde_json::json!(body.email)),
+                better_auth_core::observability::LogArgument::Error(&error),
+            ],
         );
     }
 
@@ -361,7 +368,15 @@ fn build_redirect_url(
         base.join(callback_url).map_err(|error| {
             // Upstream sends the bare message so the response carries the
             // INVALID_CALLBACK_URL code; keep the parse detail in the log.
-            tracing::warn!(error = %error, callback_url, "Invalid callbackURL");
+            better_auth_core::observability::logger::current().warn(
+                "Invalid callbackURL",
+                &[
+                    better_auth_core::observability::LogArgument::Error(&error),
+                    better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                        callback_url
+                    )),
+                ],
+            );
             AuthError::bad_request("Invalid callbackURL")
         })?
     } else {

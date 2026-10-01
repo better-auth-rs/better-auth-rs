@@ -131,6 +131,26 @@ pub enum AuthError {
 }
 
 impl AuthError {
+    /// Diagnostic message for tracing. Response headers are never included.
+    pub fn instrumentation_message(&self) -> String {
+        match self {
+            Self::Response(response) => {
+                serde_json::from_slice::<serde_json::Value>(&response.0.body)
+                    .ok()
+                    .and_then(|body| {
+                        body.get("message")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned)
+                    })
+                    .unwrap_or_else(|| self.to_string())
+            }
+            Self::Internal(message) | Self::Config(message) | Self::PasswordHash(message) => {
+                message.clone()
+            }
+            _ => self.to_string(),
+        }
+    }
+
     /// Create a redirect that bypasses the HTTP error callback, like upstream `FOUND`.
     /// Numeric 302 errors created from `AuthResponse` retain the ordinary API error policy.
     pub fn redirect(location: impl Into<String>) -> Self {
@@ -204,7 +224,10 @@ impl AuthError {
         if self.is_api_error() {
             self.to_auth_response()
         } else {
-            tracing::error!(error = %self, "Authentication request failed");
+            crate::observability::logger::current().error(
+                "Authentication request failed",
+                &[crate::observability::LogArgument::Error(&self)],
+            );
             crate::AuthResponse::new(500)
         }
     }
@@ -281,7 +304,10 @@ impl AuthError {
             _ => {
                 let message = match status {
                     500 => {
-                        tracing::error!(error = %self, "Internal server error");
+                        crate::observability::logger::current().error(
+                            "Internal server error",
+                            &[crate::observability::LogArgument::Error(&self)],
+                        );
                         "Internal server error".to_string()
                     }
                     _ => self.to_string(),
@@ -303,7 +329,12 @@ impl AuthError {
             return response.0.into_api_error();
         }
         if let Self::PasswordHash(error) = self {
-            tracing::error!(%error, "Password hashing failed");
+            crate::observability::logger::current().error(
+                "Password hashing failed",
+                &[crate::observability::LogArgument::Value(
+                    &serde_json::json!(error),
+                )],
+            );
             return crate::types::AuthResponse::new(500);
         }
         let is_api_error = self.is_api_error();

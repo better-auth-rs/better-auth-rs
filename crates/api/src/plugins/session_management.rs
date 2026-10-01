@@ -63,20 +63,18 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::get("/get-session", "get_session")
+            AuthRoute::get("/get-session", "getSession")
                 .query_validator(better_auth_core::query::session_query),
             // Upstream declares `/get-session` as `method: ["GET", "POST"]`;
             // the POST form requires `session.defer_session_refresh`.
-            AuthRoute::post("/get-session", "get_session")
+            AuthRoute::post("/get-session", "getSession")
                 .query_validator(better_auth_core::query::session_query),
-            AuthRoute::post("/sign-out", "sign_out")
-                .body_validator(super::json_body::sign_out_body),
-            AuthRoute::post("/update-session", "update_session"),
-            AuthRoute::get("/list-sessions", "list_sessions"),
-            AuthRoute::post("/revoke-session", "revoke_session")
-                .body_validator(revoke_session_body),
-            AuthRoute::post("/revoke-sessions", "revoke_sessions"),
-            AuthRoute::post("/revoke-other-sessions", "revoke_other_sessions"),
+            AuthRoute::post("/sign-out", "signOut").body_validator(super::json_body::sign_out_body),
+            AuthRoute::post("/update-session", "updateSession"),
+            AuthRoute::get("/list-sessions", "listUserSessions"),
+            AuthRoute::post("/revoke-session", "revokeSession").body_validator(revoke_session_body),
+            AuthRoute::post("/revoke-sessions", "revokeSessions"),
+            AuthRoute::post("/revoke-other-sessions", "revokeOtherSessions"),
         ]
     }
 
@@ -196,7 +194,10 @@ impl SessionManagementPlugin {
             Ok(value) => value,
             Err(error) if error.status_code() < 500 => return Err(error),
             Err(error) => {
-                tracing::error!(error = %error, "Failed to read session");
+                better_auth_core::observability::logger::current().error(
+                    "Failed to read session",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
                 return Err(AuthError::Upstream {
                     status: 500,
                     code: "FAILED_TO_GET_SESSION",
@@ -287,7 +288,10 @@ pub(crate) async fn handle_sign_out(
         && let Err(error) = ctx.database.delete_session(&token).await
     {
         // Upstream completes browser logout even when deleting the stored session fails.
-        tracing::error!(error = %error, "Failed to delete session during sign-out");
+        better_auth_core::observability::logger::current().error(
+            "Failed to delete session during sign-out",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
     }
     ctx.session_manager().clear_cookies(req)?;
     let mut response = AuthResponse::json(200, &SuccessResponse { success: true })?;

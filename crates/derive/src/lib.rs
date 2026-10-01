@@ -17,3 +17,16 @@ pub fn derive_plugin_config(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     plugin_config::derive_plugin_config(&input).into()
 }
+
+mod database_hooks;
+
+/// Generate callback-presence metadata and asynchronous trait adaptation.
+#[proc_macro_attribute]
+pub fn database_hooks(source: TokenStream, item: TokenStream) -> TokenStream {
+    let source = if source.is_empty() {
+        None
+    } else {
+        Some(parse_macro_input!(source as syn::LitStr))
+    };
+    database_hooks::expand(source, parse_macro_input!(item as syn::ItemImpl)).into()
+}

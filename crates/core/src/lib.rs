@@ -25,6 +25,11 @@ pub mod error;
 mod error_codes;
 pub mod hooks;
 pub mod middleware;
+pub mod observability;
+pub use observability::{
+    ExperimentalConfig, InstrumentationConfig, LogArgument, LogLevel, LogSink, LoggerConfig,
+    TelemetryConfig,
+};
 pub mod openapi;
 pub mod plugin;
 pub mod plugin_runtime;
@@ -61,7 +66,9 @@ pub mod utils;
 pub mod wire;
 
 // Re-export commonly used items
-pub use better_auth_macros::{AuthSchema, PluginConfig};
+#[doc(hidden)]
+pub use async_trait as __private_async_trait;
+pub use better_auth_macros::{AuthSchema, PluginConfig, database_hooks};
 pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, BearerConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy,

@@ -78,7 +78,10 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
     {
         Ok(consumed) => consumed,
         Err(error) => {
-            tracing::warn!(%error, "Failed to consume two-factor attempt counter");
+            better_auth_core::observability::logger::current().warn(
+                "Failed to consume two-factor attempt counter",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
             None
         }
     }
@@ -98,7 +101,10 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
             clear_cookie_header(&ctx.config, TWO_FACTOR_COOKIE_SUFFIX),
         )?;
         if let Err(error) = invalidation {
-            tracing::error!(%error, "Failed to invalidate two-factor challenge");
+            better_auth_core::observability::logger::current().error(
+                "Failed to invalidate two-factor challenge",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
             return Err(AuthError::Upstream {
                 status: 500,
                 code: "FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE",
@@ -131,7 +137,10 @@ pub(super) async fn finish_attempt(
         // Upstream keeps the credential failure if rearming fails. The missing
         // counter invalidates the challenge on the next request.
         if let Err(error) = ctx.database.create_verification(verification).await {
-            tracing::warn!(%error, "Failed to rearm two-factor challenge");
+            better_auth_core::observability::logger::current().warn(
+                "Failed to rearm two-factor challenge",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
     }
 }

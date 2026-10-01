@@ -67,6 +67,9 @@ fn rethrow(error: AuthError) -> AuthResult<AuthResponse> {
 
 fn report_detached_error(result: AuthResult<()>) {
     if let Err(error) = result {
-        tracing::error!(error = %error, "Detached onAPIError callback failed");
+        crate::observability::logger::current().error(
+            "Detached onAPIError callback failed",
+            &[crate::observability::LogArgument::Error(&error)],
+        );
     }
 }

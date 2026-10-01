@@ -47,9 +47,7 @@ pub(super) fn render(
         && ctx.config.session.bearer.is_none()
         && !WARNED_MISSING_BEARER.swap(true, Ordering::Relaxed)
     {
-        tracing::warn!(
-            "OAuth popup returns a session token to its opener. Configure session.bearer to authenticate embedded applications with that token."
-        );
+        better_auth_core::observability::logger::current().warn("OAuth popup returns a session token to its opener. Configure session.bearer to authenticate embedded applications with that token.", &[]);
     }
     let payload = serde_json::to_string(&Message {
         message_type: "better-auth:oauth-popup",

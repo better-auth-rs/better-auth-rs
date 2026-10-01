@@ -88,6 +88,8 @@ better_auth_core::impl_auth_plugin! {
             response: &mut AuthResponse,
             ctx: &AuthContext<S>,
         ) -> AuthResult<()> {
+better_auth_core::observability::instrumentation::with_endpoint_hook(
+        &ctx.config, _req, "after", "plugin:one-time-token", async {
             if !self.config.set_ott_header_on_new_session {
                 return Ok(());
             }
@@ -107,7 +109,9 @@ better_auth_core::impl_auth_plugin! {
             }
             let _ = response.headers.insert("Access-Control-Expose-Headers", exposed.join(", "));
             Ok(())
-        }
+         }
+    ).await
+}
     }
 }
 

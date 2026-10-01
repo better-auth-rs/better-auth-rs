@@ -141,7 +141,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
 type Schema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 struct NestedHook(Arc<Mutex<Vec<String>>>);
-#[async_trait]
+#[better_auth::database_hooks()]
 impl DatabaseHooks<Schema> for NestedHook {
     async fn before_create_user(
         &self,
@@ -176,7 +176,7 @@ impl DatabaseHooks<Schema> for NestedHook {
 }
 
 struct ApplicationHook(Arc<Mutex<Vec<String>>>);
-#[async_trait]
+#[better_auth::database_hooks()]
 impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
     async fn before_create_user(
         &self,

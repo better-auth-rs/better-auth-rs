@@ -214,7 +214,10 @@ impl AnonymousPlugin {
             .delete_user_sessions(&user.id)
             .await
             .map_err(|cause| {
-                tracing::error!(error=?cause,"Failed to delete anonymous user sessions");
+                better_auth_core::observability::logger::current().error(
+                    "Failed to delete anonymous user sessions",
+                    &[better_auth_core::observability::LogArgument::Error(&cause)],
+                );
                 error(
                     500,
                     "FAILED_TO_DELETE_ANONYMOUS_USER_SESSIONS",
@@ -222,7 +225,10 @@ impl AnonymousPlugin {
                 )
             })?;
         ctx.database.delete_user(&user.id).await.map_err(|cause| {
-            tracing::error!(error=?cause,"Failed to delete anonymous user");
+            better_auth_core::observability::logger::current().error(
+                "Failed to delete anonymous user",
+                &[better_auth_core::observability::LogArgument::Error(&cause)],
+            );
             error(
                 500,
                 "FAILED_TO_DELETE_ANONYMOUS_USER",
@@ -382,7 +388,10 @@ impl AnonymousPlugin {
         {
             // Upstream keeps a successful sign-in when post-link cleanup fails.
             if let Err(cause) = ctx.database.delete_user(&previous.user.id).await {
-                tracing::error!(error=?cause,"Failed to clean up anonymous user during post-link cleanup");
+                better_auth_core::observability::logger::current().error(
+                    "Failed to clean up anonymous user during post-link cleanup",
+                    &[better_auth_core::observability::LogArgument::Error(&cause)],
+                );
             }
         }
         Ok(())
@@ -411,13 +420,36 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
             ctx.set_metadata("anonymous.enabled", serde_json::json!(true));
             Ok(())
         }
+        async fn before_request(
+            &self,
+            req: &AuthRequest,
+            ctx: &AuthContext<S>,
+        ) -> AuthResult<Option<better_auth_core::BeforeRequestAction>> {
+            if req.path() != "/sign-in/social" { return Ok(None); }
+            better_auth_core::observability::instrumentation::with_endpoint_hook(
+                &ctx.config, req, "before", "plugin:anonymous", async {
+                    let session = ctx.session_manager()
+                        .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+                        .await?.data;
+                    if let Some(session) = session.filter(|session| session.user.is_anonymous == Some(true)) {
+                        req.set_server_context("anonymousUserId", session.user.id.into())?;
+                    }
+                    Ok(None)
+                },
+            ).await
+        }
         async fn after_request(
             &self,
             req: &AuthRequest,
             response: &mut AuthResponse,
             ctx: &AuthContext<S>,
         ) -> AuthResult<()> {
+if !(["/sign-in","/sign-up","/callback","/magic-link/verify","/email-otp/verify-email","/one-tap/callback","/passkey/verify-authentication","/phone-number/verify","/verify-email"].iter().any(|prefix|req.path().starts_with(prefix))) { return Ok(()); }
+better_auth_core::observability::instrumentation::with_endpoint_hook(
+        &ctx.config, req, "after", "plugin:anonymous", async {
             self.link(req, response, ctx).await
-        }
+         }
+    ).await
+}
     }
 );

@@ -16,7 +16,14 @@ impl EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match hook.before_update_user(&original, &context).await? {
+            match crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeUpdateUser,
+                hook.before_update_user(&original, &context),
+            )
+            .await?
+            {
                 DatabaseHookUpdate::Continue => {}
                 DatabaseHookUpdate::Cancel => {
                     return Err(AuthError::forbidden(
@@ -44,81 +51,84 @@ impl EphemeralStore {
         Ok(update)
     }
 
-    pub(super) fn update_user_record(
+    pub(super) async fn update_user_record(
         &self,
         id: &str,
         mut update: UpdateUser,
     ) -> AuthResult<UserView> {
-        let user = {
-            let mut state = self.lock()?;
-            let user = state.users.get_mut(id).ok_or(AuthError::UserNotFound)?;
-            if update.phone_number == Some(None) {
-                update.phone_number_verified = Some(false);
-            }
-            if let Some(email) = update.email {
-                if let Some(fields) = &mut user.visible_fields {
-                    let _ = fields.insert("email".into());
-                }
-                user.email = Some(email.to_lowercase());
-            }
-            if let Some(name) = update.name {
-                if let Some(fields) = &mut user.visible_fields {
-                    let _ = fields.insert("name".into());
-                }
-                user.name = Some(name);
-            }
-            if let Some(image) = update.image {
-                if let Some(fields) = &mut user.visible_fields {
-                    let _ = fields.insert("image".into());
-                }
-                user.image = image;
-            }
-            if let Some(email_verified) = update.email_verified {
-                user.email_verified = email_verified;
-            }
-            if let Some(value) = update.is_anonymous {
-                user.is_anonymous = Some(value);
-            }
-            if let Some(value) = update.phone_number {
-                user.phone_number = value;
-            }
-            if let Some(value) = update.phone_number_verified {
-                user.phone_number_verified = Some(value);
-            }
-            if let Some(username) = update.username {
-                user.username = username;
-            }
-            if let Some(display_username) = update.display_username {
-                user.display_username = display_username;
-            }
-            if let Some(role) = update.role {
-                user.role = Some(role);
-            }
-            if let Some(banned) = update.banned {
-                user.banned = banned;
-            }
-            if let Some(ban_reason) = update.ban_reason {
-                if let Some(fields) = &mut user.visible_fields {
-                    let _ = fields.insert("banReason".into());
-                }
-                user.ban_reason = ban_reason;
-            }
-            if let Some(ban_expires) = update.ban_expires {
-                if let Some(fields) = &mut user.visible_fields {
-                    let _ = fields.insert("banExpires".into());
-                }
-                user.ban_expires = ban_expires;
-            }
-            if let Some(two_factor_enabled) = update.two_factor_enabled {
-                user.two_factor_enabled = two_factor_enabled;
-            }
-            if let Some(metadata) = update.metadata {
-                user.metadata = metadata;
-            }
-            user.updated_at = Utc::now();
-            user.additional_fields.extend(update.additional_fields);
-            user.clone()
-        };
+        let user = self
+            .raw("user", "update", |state| {
+                Ok({
+                    let user = state.users.get_mut(id).ok_or(AuthError::UserNotFound)?;
+                    if update.phone_number == Some(None) {
+                        update.phone_number_verified = Some(false);
+                    }
+                    if let Some(email) = update.email {
+                        if let Some(fields) = &mut user.visible_fields {
+                            let _ = fields.insert("email".into());
+                        }
+                        user.email = Some(email.to_lowercase());
+                    }
+                    if let Some(name) = update.name {
+                        if let Some(fields) = &mut user.visible_fields {
+                            let _ = fields.insert("name".into());
+                        }
+                        user.name = Some(name);
+                    }
+                    if let Some(image) = update.image {
+                        if let Some(fields) = &mut user.visible_fields {
+                            let _ = fields.insert("image".into());
+                        }
+                        user.image = image;
+                    }
+                    if let Some(email_verified) = update.email_verified {
+                        user.email_verified = email_verified;
+                    }
+                    if let Some(value) = update.is_anonymous {
+                        user.is_anonymous = Some(value);
+                    }
+                    if let Some(value) = update.phone_number {
+                        user.phone_number = value;
+                    }
+                    if let Some(value) = update.phone_number_verified {
+                        user.phone_number_verified = Some(value);
+                    }
+                    if let Some(username) = update.username {
+                        user.username = username;
+                    }
+                    if let Some(display_username) = update.display_username {
+                        user.display_username = display_username;
+                    }
+                    if let Some(role) = update.role {
+                        user.role = Some(role);
+                    }
+                    if let Some(banned) = update.banned {
+                        user.banned = banned;
+                    }
+                    if let Some(ban_reason) = update.ban_reason {
+                        if let Some(fields) = &mut user.visible_fields {
+                            let _ = fields.insert("banReason".into());
+                        }
+                        user.ban_reason = ban_reason;
+                    }
+                    if let Some(ban_expires) = update.ban_expires {
+                        if let Some(fields) = &mut user.visible_fields {
+                            let _ = fields.insert("banExpires".into());
+                        }
+                        user.ban_expires = ban_expires;
+                    }
+                    if let Some(two_factor_enabled) = update.two_factor_enabled {
+                        user.two_factor_enabled = two_factor_enabled;
+                    }
+                    if let Some(metadata) = update.metadata {
+                        user.metadata = metadata;
+                    }
+                    user.updated_at = Utc::now();
+                    user.additional_fields.extend(update.additional_fields);
+                    user.clone()
+                })
+            })
+            .await?;
         self.output_user(user)
     }
 }
@@ -156,7 +166,13 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if hook.before_create_user(&mut create_user, &context).await?
+            if crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeCreateUser,
+                hook.before_create_user(&mut create_user, &context),
+            )
+            .await?
                 == DatabaseHookControl::Cancel
             {
                 return Err(AuthError::forbidden(
@@ -233,7 +249,16 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 .metadata
                 .unwrap_or_else(|| serde_json::json!({})),
         };
-        let _ = self.lock()?.users.insert(id, user.clone());
+        crate::observability::database::with_database_operation(
+            &self.config,
+            "user",
+            "create",
+            async {
+                let _ = self.lock()?.users.insert(id, user.clone());
+                Ok(())
+            },
+        )
+        .await?;
         let user = self.output_user(user)?;
         self.after(CommittedWrite::UserCreated(user.clone()))
             .await?;
@@ -241,64 +266,81 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
-        self.lock()?
-            .users
-            .get(id)
-            .cloned()
-            .map(|user| self.output_user(user))
-            .transpose()
+        let user = self
+            .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
+            .await?;
+        user.map(|user| self.output_user(user)).transpose()
     }
     async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<UserView>> {
-        self.lock()?
-            .users
-            .values()
-            .find(|user| serde_json::json!(user.id) == *id)
-            .cloned()
-            .map(|user| self.output_user(user))
-            .transpose()
+        let user = self
+            .raw("user", "findOne", |state| {
+                Ok(state
+                    .users
+                    .values()
+                    .find(|user| serde_json::json!(user.id) == *id)
+                    .cloned())
+            })
+            .await?;
+        user.map(|user| self.output_user(user)).transpose()
     }
 
     async fn list_users_by_ids(&self, ids: &[String]) -> AuthResult<Vec<UserView>> {
-        let state = self.lock()?;
-        ids.iter()
-            .filter_map(|id| state.users.get(id).cloned())
+        let users: Vec<_> = self
+            .raw("user", "findMany", |state| {
+                Ok(ids
+                    .iter()
+                    .filter_map(|id| state.users.get(id).cloned())
+                    .collect())
+            })
+            .await?;
+        users
+            .into_iter()
             .map(|user| self.output_user(user))
             .collect()
     }
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
-        self.lock()?
-            .users
-            .values()
-            .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))
-            .cloned()
-            .map(|user| self.output_user(user))
-            .transpose()
+        let user = self
+            .raw("user", "findOne", |state| {
+                Ok(state
+                    .users
+                    .values()
+                    .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))
+                    .cloned())
+            })
+            .await?;
+        user.map(|user| self.output_user(user)).transpose()
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
-        self.lock()?
-            .users
-            .values()
-            .find(|user| user.username.as_deref() == Some(username))
-            .cloned()
-            .map(|user| self.output_user(user))
-            .transpose()
+        let user = self
+            .raw("user", "findOne", |state| {
+                Ok(state
+                    .users
+                    .values()
+                    .find(|user| user.username.as_deref() == Some(username))
+                    .cloned())
+            })
+            .await?;
+        user.map(|user| self.output_user(user)).transpose()
     }
 
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<UserView>> {
-        self.lock()?
-            .users
-            .values()
-            .find(|user| user.phone_number.as_deref() == Some(phone_number))
-            .cloned()
-            .map(|user| self.output_user(user))
-            .transpose()
+        let user = self
+            .raw("user", "findOne", |state| {
+                Ok(state
+                    .users
+                    .values()
+                    .find(|user| user.phone_number.as_deref() == Some(phone_number))
+                    .cloned())
+            })
+            .await?;
+        user.map(|user| self.output_user(user)).transpose()
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
         let update = self.prepare_user_update(update).await?;
-        let user = match self.update_user_record(id, update) {
+        let user = match self.update_user_record(id, update).await {
             Err(AuthError::UserNotFound) => {
                 self.after(CommittedWrite::UserUpdated(None)).await?;
                 return Err(AuthError::UserNotFound);
@@ -323,7 +365,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             self.delete_user_sessions(id).await?;
         }
         self.delete_user_accounts_with_hooks(id).await?;
-        let user = self.lock()?.users.get(id).cloned();
+        let user = self
+            .raw("user", "findOne", |state| Ok(state.users.get(id).cloned()))
+            .await?;
         // Upstream deleteWithHooks treats snapshot projection failures as a missing row.
         let Some(user) = user.and_then(|user| self.output_user(user).ok()) else {
             return Ok(None);
@@ -331,11 +375,23 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if hook.before_delete_user(&user, &context).await? == DatabaseHookControl::Cancel {
+            if crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeDeleteUser,
+                hook.before_delete_user(&user, &context),
+            )
+            .await?
+                == DatabaseHookControl::Cancel
+            {
                 return Ok(None);
             }
         }
-        let _ = self.lock()?.users.shift_remove(id);
+        self.raw("user", "delete", |state| {
+            let _ = state.users.shift_remove(id);
+            Ok(())
+        })
+        .await?;
         self.after(CommittedWrite::UserDeleted(user.clone()))
             .await?;
         Ok(Some(user))
@@ -345,7 +401,11 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let _ = params
             .limit
             .get_or_insert(self.config.advanced.database.default_find_many_limit as f64);
-        let users: Vec<_> = self.lock()?.users.values().cloned().collect();
+        let users: Vec<_> = self
+            .raw("user", "findMany", |state| {
+                Ok(state.users.values().cloned().collect())
+            })
+            .await?;
         let (users, total) = crate::user_query::apply_list_users(users, &params);
         Ok((
             users

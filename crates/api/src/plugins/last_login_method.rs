@@ -157,7 +157,7 @@ fn database_endpoint<'a, S: AuthSchema>(
     Some(endpoint)
 }
 
-#[async_trait]
+#[better_auth_core::database_hooks("plugin:last-login-method")]
 impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
     async fn before_create_user(
         &self,
@@ -214,7 +214,10 @@ impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
         };
         if let Err(error) = auth.database.update_user(&user_id, update).await {
             // Upstream treats this post-commit metadata update as best effort.
-            tracing::error!(%error, "Failed to update lastLoginMethod");
+            better_auth_core::observability::logger::current().error(
+                "Failed to update lastLoginMethod",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
         Ok(())
     }
@@ -277,6 +280,8 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
         response: &mut AuthResponse,
         auth: &AuthContext<S>,
     ) -> AuthResult<()> {
+        better_auth_core::observability::instrumentation::with_endpoint_hook(
+        &auth.config, request, "after", "plugin:last-login-method", async {
         let hook_context = better_auth_core::hooks::current_request_hook_context();
         let body = match &hook_context {
             Some(context) => context.body.clone().unwrap_or(serde_json::Value::Null),
@@ -306,7 +311,7 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
                 Ok(true) => {}
                 Ok(false) => return Ok(()),
                 Err(error) => {
-                    tracing::error!(%error, "[LastLoginMethod] Error in beforeStoreCookie hook");
+                    better_auth_core::observability::logger::current().error("[LastLoginMethod] Error in beforeStoreCookie hook", &[better_auth_core::observability::LogArgument::Error(&error)]);
                     return Ok(());
                 }
             }
@@ -342,5 +347,7 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
             ),
         );
         Ok(())
+     }
+    ).await
     }
 }

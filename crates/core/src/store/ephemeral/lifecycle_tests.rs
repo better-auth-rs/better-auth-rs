@@ -10,7 +10,7 @@ struct UpdateHooks {
     observed: Arc<Mutex<Vec<String>>>,
 }
 
-#[async_trait]
+#[crate::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for UpdateHooks {
     async fn before_update_account(
         &self,
@@ -151,7 +151,7 @@ struct ConsumeHooks {
     after: Arc<AtomicUsize>,
 }
 
-#[async_trait]
+#[crate::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for ConsumeHooks {
     async fn before_delete_verification(
         &self,
@@ -238,7 +238,7 @@ async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
 #[derive(Default)]
 struct MissingUpdates(Mutex<Vec<&'static str>>);
 
-#[async_trait]
+#[crate::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for MissingUpdates {
     async fn after_update_user(
         &self,

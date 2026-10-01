@@ -122,6 +122,9 @@ pub struct DatabaseHookContext<'a, S: AuthSchema> {
 /// Application lifecycle hooks for user, account, session, and verification writes.
 #[async_trait]
 pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
+    /// Declare actual callback implementations; `#[database_hooks]` generates this method.
+    fn hook_metadata(&self) -> crate::observability::database::DatabaseHookMetadata;
+
     /// Edit a user before creation or cancel the write.
     async fn before_create_user(
         &self,

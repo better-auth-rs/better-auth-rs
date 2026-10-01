@@ -45,7 +45,10 @@ impl<S: AuthSchema> Transaction<'_, S> {
                     if runtime.database_sessions()
                         && !runtime.config.session.preserve_session_in_database
                     {
-                        tracing::error!(%error, "Failed to mirror committed session to secondary storage");
+                        crate::observability::logger::current().error(
+                            "Failed to mirror committed session to secondary storage",
+                            &[crate::observability::LogArgument::Error(&error)],
+                        );
                     } else {
                         return Err(error);
                     }
@@ -128,7 +131,10 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         self.inner.queue_after_commit(Box::pin(async move {
             // Upstream logs a committed cache refresh failure and continues the hook queue.
             if let Err(error) = runtime.refresh_user_sessions(&updated).await {
-                tracing::error!(%error, "Failed to refresh committed user sessions in secondary storage");
+                crate::observability::logger::current().error(
+                    "Failed to refresh committed user sessions in secondary storage",
+                    &[crate::observability::LogArgument::Error(&error)],
+                );
             }
             Ok(())
         }))?;

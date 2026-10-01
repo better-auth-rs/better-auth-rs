@@ -8,7 +8,7 @@ type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_sch
 
 struct FailChallengeDeletion;
 
-#[async_trait]
+#[better_auth_core::database_hooks()]
 impl better_auth_seaorm::SeaOrmHooks<TestSchema> for FailChallengeDeletion {
     async fn before_delete_verification(
         &self,

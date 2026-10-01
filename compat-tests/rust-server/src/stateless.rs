@@ -67,7 +67,7 @@ impl Hooks {
         self.0.lock().unwrap().events.push(json!({ "kind":kind, "email":email, "path": context.request.as_ref().map(|request| request.path.as_str()), "http":context.request.as_ref().is_some_and(|request|request.is_http) }));
     }
 }
-#[async_trait::async_trait]
+#[better_auth::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for Hooks {
     async fn before_create_user(
         &self,

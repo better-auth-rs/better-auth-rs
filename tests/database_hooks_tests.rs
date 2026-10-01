@@ -88,7 +88,7 @@ struct OrderingHook {
     events: Arc<Mutex<Vec<&'static str>>>,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for OrderingHook {
     async fn before_create_user(
         &self,
@@ -108,7 +108,7 @@ struct RequestContextHook {
     seen: Arc<Mutex<Vec<Option<better_auth_core::RequestHookContext>>>>,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for RequestContextHook {
     async fn before_create_user(
         &self,
@@ -193,7 +193,7 @@ impl ProvisioningService {
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
             .columns([Alias::new("user_id"), Alias::new("name")])
-            .values_panic([user.id().to_owned().into(), "Default Workspace".into()])
+            .values_panic([user.id().into_owned().into(), "Default Workspace".into()])
             .to_owned();
 
         if let Some(tx) = ctx.tx {
@@ -218,7 +218,7 @@ struct OnboardingHook {
     service: ProvisioningService,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for OnboardingHook {
     async fn after_create_user(
         &self,
@@ -237,7 +237,7 @@ struct DeleteCaptureHook {
     emails: Arc<Mutex<Vec<Option<String>>>>,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for DeleteCaptureHook {
     async fn before_delete_user(
         &self,

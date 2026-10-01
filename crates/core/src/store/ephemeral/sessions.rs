@@ -253,7 +253,15 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if hook.before_create_session(input, &context).await? == DatabaseHookControl::Cancel {
+            if crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeCreateSession,
+                hook.before_create_session(input, &context),
+            )
+            .await?
+                == DatabaseHookControl::Cancel
+            {
                 return Err(AuthError::forbidden(
                     "session creation cancelled by database hook",
                 ));
@@ -303,19 +311,23 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 .field_schema()
                 .storage_fields(self.session_config.default_fields(), true)?,
         };
-        let _ = self.lock()?.sessions.insert(token, session.clone());
+        self.raw("session", "create", |state| {
+            let _ = state.sessions.insert(token, session.clone());
+            Ok(())
+        })
+        .await?;
         let session = self.output_session(session)?;
         self.after_create_runtime_session(&session).await?;
         Ok(session)
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
-        self.lock()?
-            .sessions
-            .get(token)
-            .cloned()
-            .map(|session| self.output_session(session))
-            .transpose()
+        self.raw("session", "findOne", |state| {
+            Ok(state.sessions.get(token).cloned())
+        })
+        .await?
+        .map(|session| self.output_session(session))
+        .transpose()
     }
 
     async fn update_session_fields(
@@ -334,11 +346,18 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
-        self.lock()?
-            .sessions
-            .values()
-            .filter(|session| session.user_id == user_id)
-            .cloned()
+        let sessions: Vec<_> = self
+            .raw("session", "findMany", |state| {
+                Ok(state
+                    .sessions
+                    .values()
+                    .filter(|session| session.user_id == user_id)
+                    .cloned()
+                    .collect())
+            })
+            .await?;
+        sessions
+            .into_iter()
             .map(|session| self.output_session(session))
             .collect()
     }
@@ -360,7 +379,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        let session = self.lock()?.sessions.get(token).cloned();
+        let session = self
+            .raw("session", "findOne", |state| {
+                Ok(state.sessions.get(token).cloned())
+            })
+            .await?;
         // A failed single-row snapshot prevents deletion, unlike a failed batch snapshot.
         let Some(session) = session.and_then(|row| self.output_session(row).ok()) else {
             return Ok(());
@@ -368,12 +391,23 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if hook.before_delete_session(&session, &context).await? == DatabaseHookControl::Cancel
+            if crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeDeleteSession,
+                hook.before_delete_session(&session, &context),
+            )
+            .await?
+                == DatabaseHookControl::Cancel
             {
                 return Ok(());
             }
         }
-        let _ = self.lock()?.sessions.shift_remove(token);
+        self.raw("session", "delete", |state| {
+            let _ = state.sessions.shift_remove(token);
+            Ok(())
+        })
+        .await?;
         self.after(CommittedWrite::SessionDeleted(session)).await?;
         Ok(())
     }

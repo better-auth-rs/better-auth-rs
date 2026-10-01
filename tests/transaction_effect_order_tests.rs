@@ -48,7 +48,7 @@ impl OrderedHooks {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<BundledSchema> for OrderedHooks {
     async fn after_update_user(
         &self,
@@ -67,7 +67,7 @@ impl SeaOrmHooks<BundledSchema> for OrderedHooks {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for OrderedHooks {
     async fn after_update_user(
         &self,

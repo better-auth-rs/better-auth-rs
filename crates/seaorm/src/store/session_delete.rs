@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
@@ -82,13 +83,20 @@ where
         if preserve {
             condition = condition.add(S::Session::expires_at_column().gt(now));
         }
-        let snapshot = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(condition.clone())
-            .all(db)
-            .await;
+        let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "findMany",
+            async {
+                <S::Session as SeaOrmSessionModel>::Entity::find()
+                    .filter(condition.clone())
+                    .all(db)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await;
         // Upstream deleteManyWithHooks ignores snapshot failures only. The batch write still runs.
         let sessions = snapshot
-            .map_err(map_db_err)
             .and_then(|sessions| {
                 sessions
                     .into_iter()
@@ -99,10 +107,14 @@ where
         let context = self.hook_context(transaction);
         for session in &sessions {
             for hook in self.hooks() {
-                if hook
-                    .before_delete_session(session, &context)
-                    .await?
-                    .is_cancelled()
+                if better_auth_core::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::BeforeDeleteSession,
+                    hook.before_delete_session(session, &context),
+                )
+                .await?
+                .is_cancelled()
                 {
                     return Ok(None);
                 }
@@ -121,20 +133,34 @@ where
                 },
             )?;
             self.apply_session_field_updates(&mut active)?;
-            <S::Session as SeaOrmSessionModel>::Entity::update_many()
-                .set(active)
-                .filter(condition)
-                .exec(db)
-                .await
-                .map_err(map_db_err)?
-                .rows_affected
+            database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+                self.config(),
+                "updateMany",
+                async {
+                    <S::Session as SeaOrmSessionModel>::Entity::update_many()
+                        .set(active)
+                        .filter(condition)
+                        .exec(db)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?
+            .rows_affected
         } else {
-            <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-                .filter(condition)
-                .exec(db)
-                .await
-                .map_err(map_db_err)?
-                .rows_affected
+            database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+                self.config(),
+                "deleteMany",
+                async {
+                    <S::Session as SeaOrmSessionModel>::Entity::delete_many()
+                        .filter(condition)
+                        .exec(db)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?
+            .rows_affected
         };
         for session in sessions {
             let store = self.clone();
@@ -143,7 +169,7 @@ where
                 Box::pin(async move {
                     let context = store.hook_context(None);
                     for hook in store.hooks() {
-                        hook.after_delete_session(&session, &context).await?;
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteSession, hook.after_delete_session(&session, &context)).await?;
                     }
                     Ok(())
                 }),

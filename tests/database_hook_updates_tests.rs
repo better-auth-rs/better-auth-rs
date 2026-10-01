@@ -4,7 +4,6 @@
     reason = "database hook fixtures fail immediately on setup and assertion errors"
 )]
 
-use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthSession, AuthUser, CreateAccount,
     CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
@@ -41,7 +40,7 @@ struct PatchHook {
     missing: Arc<Mutex<Vec<&'static str>>>,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<BundledSchema> for PatchHook {
     async fn before_update_user(
         &self,
@@ -346,7 +345,7 @@ struct CommitHook {
     fail: Arc<AtomicBool>,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<BundledSchema> for CommitHook {
     async fn before_create_user(
         &self,

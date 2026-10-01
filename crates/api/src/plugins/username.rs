@@ -77,8 +77,8 @@ impl<S: AuthSchema> AuthPlugin<S> for UsernamePlugin {
     }
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/sign-in/username", "sign_in_username"),
-            AuthRoute::post("/is-username-available", "is_username_available"),
+            AuthRoute::post("/sign-in/username", "signInUsername"),
+            AuthRoute::post("/is-username-available", "isUsernameAvailable"),
         ]
     }
     fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {

@@ -113,7 +113,7 @@ impl UsernameValidator for Validator {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_create_user(
         &self,

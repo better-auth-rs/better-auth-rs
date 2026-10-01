@@ -67,7 +67,7 @@ impl SecondaryStorage for Cache {
 
 struct Hooks(Arc<Mutex<Vec<&'static str>>>);
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<Schema> for Hooks {
     async fn after_create_verification(
         &self,

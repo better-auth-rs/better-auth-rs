@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
@@ -56,10 +57,14 @@ where
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            if hook
-                .before_create_session(session, &context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeCreateSession,
+                hook.before_create_session(session, &context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Err(cancelled_by_hook("session creation"));
             }
@@ -74,7 +79,13 @@ where
     ) -> AuthResult<()> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            hook.after_create_session(session, &context).await?;
+            better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterCreateSession,
+                hook.after_create_session(session, &context),
+            )
+            .await?;
         }
         Ok(())
     }
@@ -117,7 +128,12 @@ where
             db.get_database_backend(),
             S::Session::field_column,
         )?;
-        let session = active.insert(db).await.map_err(map_db_err)?;
+        let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "create",
+            async { active.insert(db).await.map_err(map_db_err) },
+        )
+        .await?;
         if tx.is_none() {
             self.after_runtime_session_in_tx(&session, None).await?;
         }
@@ -155,9 +171,13 @@ where
         let context = self.hook_context(tx);
         let original = update.clone();
         for hook in self.hooks() {
-            match hook
-                .before_update_session(token, &original, &context)
-                .await?
+            match better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeUpdateSession,
+                hook.before_update_session(token, &original, &context),
+            )
+            .await?
             {
                 DatabaseHookUpdate::Continue => {}
                 DatabaseHookUpdate::Cancel => return Ok(None),
@@ -181,8 +201,13 @@ where
         let after = Box::pin(async move {
             let context = store.hook_context(None);
             for hook in store.hooks() {
-                hook.after_update_session(updated.as_ref(), &context)
-                    .await?;
+                better_auth_core::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::AfterUpdateSession,
+                    hook.after_update_session(updated.as_ref(), &context),
+                )
+                .await?;
             }
             Ok(())
         });
@@ -223,10 +248,16 @@ where
             db.get_database_backend(),
             S::Session::field_column,
         )?;
-        let session = super::updates::update_returning_one::<
-            <S::Session as SeaOrmSessionModel>::Entity,
-            _,
-        >(db, active, S::Session::token_column().eq(token), reselect)
+        let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "update",
+            super::updates::update_returning_one::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+                db,
+                active,
+                S::Session::token_column().eq(token),
+                reselect,
+            ),
+        )
         .await?;
         Ok(session)
     }
@@ -276,22 +307,36 @@ where
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<S::Session>> {
-        <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
-            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)
+        database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Session as SeaOrmSessionModel>::Entity::find()
+                    .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
+                    .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<S::Session>> {
         let user_id = <S::Session as SeaOrmSessionModel>::parse_user_id(user_id)?;
-        <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
-            .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
-            .all(self.connection())
-            .await
-            .map_err(map_db_err)
+        database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "findMany",
+            async {
+                <S::Session as SeaOrmSessionModel>::Entity::find()
+                    .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
+                    .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+                    .all(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await
     }
 
     async fn update_session_fields(
@@ -331,10 +376,18 @@ where
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        let snapshot = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(S::Session::token_column().eq(token))
-            .one(self.connection())
-            .await;
+        let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::Session as SeaOrmSessionModel>::Entity::find()
+                    .filter(S::Session::token_column().eq(token))
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await;
         // Upstream deleteWithHooks treats only snapshot-read errors as a missing record.
         let session = snapshot
             .ok()
@@ -345,21 +398,38 @@ where
         };
         let context = self.hook_context(None);
         for hook in self.hooks() {
-            if hook
-                .before_delete_session(&session, &context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeDeleteSession,
+                hook.before_delete_session(&session, &context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Ok(());
             }
         }
-        let _ = <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-            .filter(S::Session::token_column().eq(token))
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+        let _ = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+            self.config(),
+            "delete",
+            async {
+                <S::Session as SeaOrmSessionModel>::Entity::delete_many()
+                    .filter(S::Session::token_column().eq(token))
+                    .exec(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
         for hook in self.hooks() {
-            hook.after_delete_session(&session, &context).await?;
+            better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::AfterDeleteSession,
+                hook.after_delete_session(&session, &context),
+            )
+            .await?;
         }
         Ok(())
     }

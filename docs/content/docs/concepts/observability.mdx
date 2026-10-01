@@ -1,0 +1,43 @@
+---
+title: Observability
+description: Configure per-instance logging, endpoint tracing, and opt-in telemetry.
+---
+
+Logging, tracing, and telemetry have separate controls. Disabling one does not disable the other two.
+
+## Logging
+
+`AuthConfig.logger` configures one authentication instance. The default threshold is `LogLevel::Warn`. Thresholds follow `Debug`, `Info`, `Success`, `Warn`, and `Error` order. Success messages reach a custom sink as `LogLevel::Info`.
+
+```rust
+use better_auth::observability::LogLevel;
+
+config.logger.level = LogLevel::Info;
+config.logger.disable_colors = Some(true);
+```
+
+Set `disabled` to suppress all instance logger output. Set `log` to an `Arc<dyn LogSink>` to receive the level, original message, and argument list. `LogArgument` preserves text, JSON values, and errors without applying format placeholders. The default sink uses Rust `tracing` events. Concurrent authentication instances retain their own logger configuration.
+
+## Tracing
+
+`config.experimental.instrumentation.enabled` defaults to `true`. Install a `tracing` subscriber to collect spans. The `better-auth` target reports the upstream span name through `otel.name` and the instrumentation scope through `otel.scope.name` and `otel.scope.version`.
+
+Endpoint dispatch produces a method-and-route span, a handler span, and spans for matched endpoint hooks. User hook spans precede plugin hook spans for each phase. Unmatched plugin hooks produce no span. Database hook spans identify the logical model; raw database operation spans identify the model's physical table. Input transforms run before a database operation span, and output transforms run after it. A logical update has one operation span even when the adapter reads and then writes a row.
+
+API errors and ordinary errors record an exception and an error status at the boundary that receives the error. Redirect errors record their response status and a successful span status. Instrumentation preserves the original error and does not log response headers.
+
+Use [`#[database_hooks]`](/docs/concepts/hooks) on database hook implementations. The attribute records the callbacks that the implementation actually supplies, so inherited no-op callbacks do not create spans.
+
+## Global endpoint hooks
+
+Register `EndpointHooks<S>` with `BetterAuth::hooks`. `BeforeEndpointHook<S>` returns an optional `BeforeRequestAction`; `AfterEndpointHook<S>` receives the response by mutable reference. Both callbacks are awaited.
+
+A before-hook error stops the endpoint and later hooks. An endpoint API error still reaches after hooks. An after-hook API error replaces the returned error while later after hooks continue. An ordinary error stops the remaining pipeline. These hooks use the same dispatch and response-header rules as plugin hooks.
+
+## Telemetry
+
+Telemetry defaults to disabled. Set `config.telemetry.enabled = true` or `BETTER_AUTH_TELEMETRY=true` to opt in. Configure `config.telemetry.track` with an application-controlled `TelemetryTransport`, or set `BETTER_AUTH_TELEMETRY_ENDPOINT` to an explicit HTTP endpoint. No default remote endpoint is contacted.
+
+A custom transport takes precedence over the HTTP endpoint and debug output. `config.telemetry.debug` prints reports through the default logger instead of using the HTTP transport. The logger threshold still applies. Telemetry is suppressed when `NODE_ENV=test` or a truthy `TEST` environment variable identifies a test process.
+
+Initialization starts the report before plugin initialization without waiting for a pending transport. The telemetry module reuses its first project identifier across instances. Transport failures are logged through the default logger and do not fail authentication. Application logger callbacks are not used for these transport failures. Report payloads must not contain authentication secrets or request records.

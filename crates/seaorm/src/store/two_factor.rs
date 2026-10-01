@@ -1,10 +1,10 @@
+use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, ExprTrait, IntoActiveModel, QueryFilter,
-    sea_query::Expr,
+    ActiveModelTrait, ColumnTrait, EntityTrait, ExprTrait, QueryFilter, sea_query::Expr,
 };
 use serde_json::{Map, json};
 use uuid::Uuid;
@@ -26,7 +26,7 @@ where
 {
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let now = Utc::now();
-        P::TwoFactor::active(Map::from_iter([
+        let active = P::TwoFactor::active(Map::from_iter([
             ("id".to_owned(), json!(Uuid::new_v4().to_string())),
             ("secret".to_owned(), json!(two_factor.secret)),
             ("backup_codes".to_owned(), json!(two_factor.backup_codes)),
@@ -36,21 +36,25 @@ where
             ("locked_until".to_owned(), serde_json::Value::Null),
             ("created_at".to_owned(), json!(now)),
             ("updated_at".to_owned(), json!(now)),
-        ]))?
-        .insert(self.connection())
-        .await
-        .map_err(map_db_err)?
+        ]))?;
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
+            active.insert(self.connection()).await.map_err(map_db_err)
+        })
+        .await?
         .record()
     }
 
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
-        Entity::<P::TwoFactor>::find()
-            .filter(P::TwoFactor::column("user_id")?.eq(user_id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .map(|model| model.record())
-            .transpose()
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "findOne", async {
+            Entity::<P::TwoFactor>::find()
+                .filter(P::TwoFactor::column("user_id")?.eq(user_id))
+                .one(self.connection())
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        .map(|model| model.record())
+        .transpose()
     }
 
     async fn update_two_factor_backup_codes(
@@ -58,34 +62,34 @@ where
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        let Some(model) = Entity::<P::TwoFactor>::find()
-            .filter(P::TwoFactor::column("user_id")?.eq(user_id))
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-        else {
-            return Err(crate::error::AuthError::not_found(
-                "Two-factor settings not found",
-            ));
-        };
-
-        let mut active = model.into_active_model();
+        let mut active = <<P::TwoFactor as SeaOrmPluginModel>::ActiveModel as Default>::default();
         set::<P::TwoFactor>(&mut active, "backup_codes", backup_codes.to_owned())?;
         set::<P::TwoFactor>(&mut active, "updated_at", Utc::now())?;
-        active
-            .update(self.connection())
+        let filter = P::TwoFactor::column("user_id")?.eq(user_id);
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
+            super::updates::update_returning_one::<Entity<P::TwoFactor>, _>(
+                self.connection(),
+                active,
+                filter.clone(),
+                filter,
+            )
             .await
-            .map_err(map_db_err)?
-            .record()
+        })
+        .await?
+        .ok_or_else(|| crate::error::AuthError::not_found("Two-factor settings not found"))?
+        .record()
     }
 
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
-        Entity::<P::TwoFactor>::delete_many()
-            .filter(P::TwoFactor::column("user_id")?.eq(user_id))
-            .exec(self.connection())
-            .await
-            .map(|_| ())
-            .map_err(map_db_err)
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "delete", async {
+            Entity::<P::TwoFactor>::delete_many()
+                .filter(P::TwoFactor::column("user_id")?.eq(user_id))
+                .exec(self.connection())
+                .await
+                .map(|_| ())
+                .map_err(map_db_err)
+        })
+        .await
     }
 
     async fn update_two_factor(&self, id: &str, update: UpdateTwoFactor) -> AuthResult<TwoFactor> {
@@ -102,11 +106,19 @@ where
         if let Some(verified) = update.verified {
             set::<P::TwoFactor>(&mut active, "verified", verified)?;
         }
-        active
-            .update(self.connection())
+        let filter = P::TwoFactor::column("id")?.eq(id);
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
+            super::updates::update_returning_one::<Entity<P::TwoFactor>, _>(
+                self.connection(),
+                active,
+                filter.clone(),
+                filter,
+            )
             .await
-            .map_err(map_db_err)?
-            .record()
+        })
+        .await?
+        .ok_or_else(|| crate::error::AuthError::not_found("Two-factor settings not found"))?
+        .record()
     }
 
     async fn compare_exchange_two_factor_backup_codes(
@@ -115,18 +127,21 @@ where
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
-        Entity::<P::TwoFactor>::update_many()
-            .col_expr(
-                P::TwoFactor::column("backup_codes")?,
-                Expr::value(replacement),
-            )
-            .col_expr(P::TwoFactor::column("updated_at")?, Expr::value(Utc::now()))
-            .filter(P::TwoFactor::column("id")?.eq(id))
-            .filter(P::TwoFactor::column("backup_codes")?.eq(previous))
-            .exec(self.connection())
-            .await
-            .map(|result| result.rows_affected == 1)
-            .map_err(map_db_err)
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
+            Entity::<P::TwoFactor>::update_many()
+                .col_expr(
+                    P::TwoFactor::column("backup_codes")?,
+                    Expr::value(replacement),
+                )
+                .col_expr(P::TwoFactor::column("updated_at")?, Expr::value(Utc::now()))
+                .filter(P::TwoFactor::column("id")?.eq(id))
+                .filter(P::TwoFactor::column("backup_codes")?.eq(previous))
+                .exec(self.connection())
+                .await
+                .map(|result| result.rows_affected == 1)
+                .map_err(map_db_err)
+        })
+        .await
     }
 
     async fn record_two_factor_failure(
@@ -135,26 +150,39 @@ where
         max_attempts: i64,
         locked_until: chrono::DateTime<Utc>,
     ) -> AuthResult<()> {
-        let _ = Entity::<P::TwoFactor>::update_many()
+        let filter = P::TwoFactor::column("id")?.eq(id);
+        let query = Entity::<P::TwoFactor>::update_many()
             .col_expr(
                 P::TwoFactor::column("failed_verification_count")?,
                 Expr::col(P::TwoFactor::column("failed_verification_count")?).add(1),
             )
-            .filter(P::TwoFactor::column("id")?.eq(id))
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
-        Entity::<P::TwoFactor>::update_many()
-            .col_expr(
-                P::TwoFactor::column("locked_until")?,
-                Expr::value(locked_until),
-            )
-            .filter(P::TwoFactor::column("id")?.eq(id))
-            .filter(P::TwoFactor::column("failed_verification_count")?.gte(max_attempts))
-            .exec(self.connection())
-            .await
-            .map(|_| ())
-            .map_err(map_db_err)
+            .filter(filter.clone());
+        let row =
+            database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
+                super::updates::increment_returning_one(self.connection(), query, filter).await
+            })
+            .await?;
+        let failures = row
+            .map(|row| row.record())
+            .transpose()?
+            .map_or(0, |row| row.failed_verification_count);
+        if failures >= max_attempts {
+            database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
+                Entity::<P::TwoFactor>::update_many()
+                    .col_expr(
+                        P::TwoFactor::column("locked_until")?,
+                        Expr::value(locked_until),
+                    )
+                    .filter(P::TwoFactor::column("id")?.eq(id))
+                    .filter(P::TwoFactor::column("failed_verification_count")?.gte(max_attempts))
+                    .exec(self.connection())
+                    .await
+                    .map(|_| ())
+                    .map_err(map_db_err)
+            })
+            .await?;
+        }
+        Ok(())
     }
 
     async fn reset_two_factor_failures(
@@ -175,10 +203,21 @@ where
         if let Some(expired) = locked_before {
             update = update.filter(P::TwoFactor::column("locked_until")?.lte(expired));
         }
-        update
-            .exec(self.connection())
-            .await
-            .map(|_| ())
-            .map_err(map_db_err)
+        database_operation::<Entity<P::TwoFactor>, _>(
+            self.config(),
+            if locked_before.is_some() {
+                "incrementOne"
+            } else {
+                "update"
+            },
+            async {
+                update
+                    .exec(self.connection())
+                    .await
+                    .map(|_| ())
+                    .map_err(map_db_err)
+            },
+        )
+        .await
     }
 }

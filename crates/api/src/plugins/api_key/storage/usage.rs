@@ -105,7 +105,10 @@ pub(in crate::plugins::api_key) async fn consume(
             if let Err(error) =
                 merge_usage(storage.as_ref(), &deferred, changed_rate, changed_count).await
             {
-                tracing::error!(%error, "Deferred API key usage update failed");
+                better_auth_core::observability::logger::current().error(
+                    "Deferred API key usage update failed",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
             }
         });
         return Ok(ConsumeApiKeyResult::Allowed(Box::new(snapshot)));

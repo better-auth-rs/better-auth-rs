@@ -299,7 +299,7 @@ impl PasskeyAuthenticationHook for PasskeyOptions {
         fail(self.control().get("authenticationMode"))
     }
 }
-#[async_trait]
+#[better_auth::database_hooks()]
 impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
     async fn before_create_session(
         &self,

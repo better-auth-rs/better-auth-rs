@@ -24,7 +24,10 @@ pub(crate) async fn handle_sign_out(
         match ctx.database.get_session(&token).await {
             Ok(session) => session.map(|session| session.user_id().into_owned()),
             Err(error) => {
-                tracing::error!(%error, "Failed to read session from database");
+                better_auth_core::observability::logger::current().error(
+                    "Failed to read session from database",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
                 None
             }
         }
@@ -40,7 +43,10 @@ pub(crate) async fn handle_sign_out(
     let mut accounts = match ctx.database.get_user_accounts(&user_id).await {
         Ok(accounts) => accounts,
         Err(error) => {
-            tracing::error!(%error, "Failed to create provider logout URL");
+            better_auth_core::observability::logger::current().error(
+                "Failed to create provider logout URL",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
             return Ok(response);
         }
     };

@@ -4,7 +4,6 @@
     reason = "integration fixtures fail immediately on setup or assertion errors"
 )]
 
-use async_trait::async_trait;
 use better_auth::plugins::{
     email_otp::{EmailOtpPlugin, EmailOtpType},
     endpoint_context::EndpointContext,
@@ -31,7 +30,7 @@ struct Hooks {
     fail_after: Arc<AtomicBool>,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_create_verification(
         &self,

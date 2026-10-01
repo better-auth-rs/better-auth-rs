@@ -100,6 +100,24 @@ impl EphemeralStore {
         self
     }
 
+    async fn raw<T>(
+        &self,
+        model: &str,
+        operation: &str,
+        action: impl FnOnce(&mut State) -> AuthResult<T> + Send,
+    ) -> AuthResult<T> {
+        crate::observability::database::with_database_operation(
+            &self.config,
+            model,
+            operation,
+            async {
+                let mut state = self.lock()?;
+                action(&mut state)
+            },
+        )
+        .await
+    }
+
     fn lock(&self) -> AuthResult<MutexGuard<'_, State>> {
         self.state
             .lock()

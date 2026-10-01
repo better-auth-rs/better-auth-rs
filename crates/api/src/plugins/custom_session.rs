@@ -119,59 +119,75 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
         response: &mut AuthResponse,
         context: &AuthContext<S>,
     ) -> AuthResult<()> {
-        if !self.mutate_list_device_sessions
-            || request.path() != "/multi-session/list-device-sessions"
-            || response.status != 200
+        if !(self.mutate_list_device_sessions
+            && request.path() == "/multi-session/list-device-sessions")
         {
             return Ok(());
         }
-        let sessions: Option<Vec<CustomSessionInput>> = serde_json::from_slice(&response.body)?;
-        if let Some(sessions) = sessions {
-            let context = Arc::new(context.clone());
-            let request = Arc::new(request.clone());
-            let hook_context = better_auth_core::hooks::current_request_hook_context();
-            // Promise.all rejects early while the other callbacks keep running.
-            // Dropping a JoinHandle detaches the callback instead of cancelling it.
-            let callbacks: Vec<_> = sessions
-                .into_iter()
-                .map(|session| {
-                    let callback = self.callback.clone();
-                    let context = context.clone();
-                    let request = request.clone();
-                    let hook_context = hook_context.clone();
-                    tokio::spawn(async move {
-                        let future = callback.customize(session, &request, &context);
-                        match hook_context {
-                            Some(hook_context) => {
-                                better_auth_core::with_request_hook_context_value(
-                                    hook_context,
-                                    future,
-                                )
-                                .await
-                            }
-                            None => future.await,
-                        }
-                    })
-                })
-                .collect();
-            let values =
-                futures_util::future::try_join_all(callbacks.into_iter().map(|callback| async {
-                    callback.await.map_err(|error| {
-                        better_auth_core::AuthError::internal(format!(
-                            "Custom session callback task failed: {error}"
-                        ))
-                    })?
-                }))
-                .await?;
-            response.body = serde_json::to_vec(&values)?;
-            for (name, value) in request.take_response_headers()? {
-                if name.eq_ignore_ascii_case("set-cookie") {
-                    response.headers.append(name, value);
-                } else {
-                    let _ = response.headers.insert(name, value);
+        better_auth_core::observability::instrumentation::with_endpoint_hook(
+            &context.config,
+            request,
+            "after",
+            "plugin:custom-session",
+            async {
+                if !self.mutate_list_device_sessions
+                    || request.path() != "/multi-session/list-device-sessions"
+                    || response.status != 200
+                {
+                    return Ok(());
                 }
-            }
-        }
-        Ok(())
+                let sessions: Option<Vec<CustomSessionInput>> =
+                    serde_json::from_slice(&response.body)?;
+                if let Some(sessions) = sessions {
+                    let context = Arc::new(context.clone());
+                    let request = Arc::new(request.clone());
+                    let hook_context = better_auth_core::hooks::current_request_hook_context();
+                    // Promise.all rejects early while the other callbacks keep running.
+                    // Dropping a JoinHandle detaches the callback instead of cancelling it.
+                    let callbacks: Vec<_> = sessions
+                        .into_iter()
+                        .map(|session| {
+                            let callback = self.callback.clone();
+                            let context = context.clone();
+                            let request = request.clone();
+                            let hook_context = hook_context.clone();
+                            tokio::spawn(async move {
+                                let future = callback.customize(session, &request, &context);
+                                match hook_context {
+                                    Some(hook_context) => {
+                                        better_auth_core::with_request_hook_context_value(
+                                            hook_context,
+                                            future,
+                                        )
+                                        .await
+                                    }
+                                    None => future.await,
+                                }
+                            })
+                        })
+                        .collect();
+                    let values = futures_util::future::try_join_all(callbacks.into_iter().map(
+                        |callback| async {
+                            callback.await.map_err(|error| {
+                                better_auth_core::AuthError::internal(format!(
+                                    "Custom session callback task failed: {error}"
+                                ))
+                            })?
+                        },
+                    ))
+                    .await?;
+                    response.body = serde_json::to_vec(&values)?;
+                    for (name, value) in request.take_response_headers()? {
+                        if name.eq_ignore_ascii_case("set-cookie") {
+                            response.headers.append(name, value);
+                        } else {
+                            let _ = response.headers.insert(name, value);
+                        }
+                    }
+                }
+                Ok(())
+            },
+        )
+        .await
     }
 }

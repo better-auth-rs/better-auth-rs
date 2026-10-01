@@ -38,7 +38,8 @@ fn parse_metadata(value: Value) -> AuthResult<Option<Value>> {
         match value {
             Value::Object(fields) => {
                 if fields.contains_key("__proto__") || fields.contains_key("constructor") {
-                    tracing::error!("Organization JSON contains a prototype pollution key");
+                    better_auth_core::observability::logger::current()
+                        .error("Organization JSON contains a prototype pollution key", &[]);
                     return Err(better_auth_core::AuthResponse::new(500).into());
                 }
                 for value in fields.values_mut() {
@@ -133,7 +134,10 @@ pub(super) fn permission(value: &SchemaValue<Value>) -> AuthResult<Value> {
 
 pub(super) fn parse_json(text: &str) -> AuthResult<Value> {
     serde_json::from_str(text).map_err(|error| {
-        tracing::error!(%error, "Organization JSON decoding failed");
+        better_auth_core::observability::logger::current().error(
+            "Organization JSON decoding failed",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
         better_auth_core::AuthResponse::new(500).into()
     })
 }

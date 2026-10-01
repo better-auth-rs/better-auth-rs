@@ -278,7 +278,15 @@ pub(crate) async fn check_permissions(
             )?) {
                 Ok(stored) => stored,
                 Err(error) => {
-                    tracing::error!(%error, role, "Invalid permissions for organization role");
+                    better_auth_core::observability::logger::current().error(
+                        "Invalid permissions for organization role",
+                        &[
+                            better_auth_core::observability::LogArgument::Error(&error),
+                            better_auth_core::observability::LogArgument::Value(
+                                &serde_json::json!(role),
+                            ),
+                        ],
+                    );
                     return Err(better_auth_core::AuthResponse::json(500, &serde_json::json!({"message": format!("Invalid permissions for role {role}")}))?.into());
                 }
             };

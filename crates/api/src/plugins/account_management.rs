@@ -40,8 +40,8 @@ pub(crate) type AccountResponse = serde_json::Map<String, serde_json::Value>;
 better_auth_core::impl_auth_plugin! {
     AccountManagementPlugin, "account-management";
     routes {
-        get "/list-accounts" => handle_list_accounts, "list_accounts";
-        post "/unlink-account" => handle_unlink_account, "unlink_account", body = unlink_account_body;
+        get "/list-accounts" => handle_list_accounts, "listUserAccounts";
+        post "/unlink-account" => handle_unlink_account, "unlinkAccount", body = unlink_account_body;
     }
 }
 

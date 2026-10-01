@@ -734,7 +734,10 @@ async fn apply_link_user_info(
     .await;
     // Upstream treats profile synchronization as optional after the account write succeeds.
     if let Err(error) = result {
-        tracing::warn!(%error, "Could not update user info on account link");
+        better_auth_core::observability::logger::current().warn(
+            "Could not update user info on account link",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
     }
 }
 
@@ -766,17 +769,9 @@ async fn social_sign_in_core(
         validate_redirect_target(new_user_callback_url, ctx, "Invalid newUserCallbackURL")?;
     }
 
-    let anonymous_user_id =
-        if ctx.get_metadata("anonymous.enabled") == Some(&serde_json::Value::Bool(true)) {
-            ctx.session_manager()
-                .resolve(req, better_auth_core::session::SessionRead::Authoritative)
-                .await?
-                .data
-                .filter(|session| session.user.is_anonymous == Some(true))
-                .map(|session| session.user.id)
-        } else {
-            None
-        };
+    let anonymous_user_id = req
+        .server_context("anonymousUserId")?
+        .and_then(|value| value.as_str().map(str::to_owned));
     initiate_oauth_flow_core(
         ctx,
         FlowStartRequest {

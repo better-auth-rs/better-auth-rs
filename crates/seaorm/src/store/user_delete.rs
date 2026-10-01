@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use sea_orm::{ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter};
 
 use super::transaction_hooks::after_write;
@@ -22,14 +23,21 @@ where
         let user_id = S::Account::parse_user_id(user_id)?;
         let condition = S::Account::user_id_column().eq(user_id);
         let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
-            <S::Account as SeaOrmAccountModel>::Entity::find()
-                .filter(condition.clone())
-                .all(db)
-                .await
-                .map_err(map_db_err)?
-                .iter()
-                .map(|row| self.output_account(row, db))
-                .collect()
+            database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+                self.config(),
+                "findMany",
+                async {
+                    <S::Account as SeaOrmAccountModel>::Entity::find()
+                        .filter(condition.clone())
+                        .all(db)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?
+            .iter()
+            .map(|row| self.output_account(row, db))
+            .collect()
         }
         .await;
         // Match the upstream snapshot-only catch; hook and write errors still propagate.
@@ -37,20 +45,31 @@ where
         let context = self.hook_context(tx);
         for account in &accounts {
             for hook in self.hooks() {
-                if hook
-                    .before_delete_account(account, &context)
-                    .await?
-                    .is_cancelled()
+                if better_auth_core::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::BeforeDeleteAccount,
+                    hook.before_delete_account(account, &context),
+                )
+                .await?
+                .is_cancelled()
                 {
                     return Ok(None);
                 }
             }
         }
-        let result = <S::Account as SeaOrmAccountModel>::Entity::delete_many()
-            .filter(condition)
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
+        let result = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "deleteMany",
+            async {
+                <S::Account as SeaOrmAccountModel>::Entity::delete_many()
+                    .filter(condition)
+                    .exec(db)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
         for account in accounts {
             let store = self.clone();
             after_write(
@@ -58,7 +77,7 @@ where
                 Box::pin(async move {
                     let context = store.hook_context(None);
                     for hook in store.hooks() {
-                        hook.after_delete_account(&account, &context).await?;
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteAccount, hook.after_delete_account(&account, &context)).await?;
                     }
                     Ok(())
                 }),
@@ -87,10 +106,18 @@ where
             .delete_user_accounts_with_connection(db, tx, id)
             .await?;
         let user_id = S::User::parse_id(id)?;
-        let snapshot = <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(S::User::id_column().eq(user_id.clone()))
-            .one(db)
-            .await;
+        let snapshot = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+            self.config(),
+            "findOne",
+            async {
+                <S::User as SeaOrmUserModel>::Entity::find()
+                    .filter(S::User::id_column().eq(user_id.clone()))
+                    .one(db)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await;
         // deleteWithHooks returns null after a missing or unreadable snapshot.
         let user = match snapshot {
             Ok(Some(user)) => user,
@@ -98,28 +125,52 @@ where
         };
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            if hook
-                .before_delete_user(&user, &context)
-                .await?
-                .is_cancelled()
+            if better_auth_core::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeDeleteUser,
+                hook.before_delete_user(&user, &context),
+            )
+            .await?
+            .is_cancelled()
             {
                 return Ok(None);
             }
         }
         // Retain the existing polymorphic API-key cleanup before the user write.
-        let _ = <P::ApiKey as crate::SeaOrmPluginModel>::Entity::delete_many()
-            .filter(<P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?.eq(id))
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
-        let _ = <S::User as SeaOrmUserModel>::Entity::delete_many()
-            .filter(S::User::id_column().eq(user_id))
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
+        let _ = database_operation::<<P::ApiKey as crate::SeaOrmPluginModel>::Entity, _>(
+            self.config(),
+            "deleteMany",
+            async {
+                <P::ApiKey as crate::SeaOrmPluginModel>::Entity::delete_many()
+                    .filter(<P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?.eq(id))
+                    .exec(db)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
+        let _ = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+            self.config(),
+            "delete",
+            async {
+                <S::User as SeaOrmUserModel>::Entity::delete_many()
+                    .filter(S::User::id_column().eq(user_id))
+                    .exec(db)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
         if tx.is_none() {
             for hook in self.hooks() {
-                hook.after_delete_user(&user, &context).await?;
+                better_auth_core::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::AfterDeleteUser,
+                    hook.after_delete_user(&user, &context),
+                )
+                .await?;
             }
         }
         Ok(Some(user))

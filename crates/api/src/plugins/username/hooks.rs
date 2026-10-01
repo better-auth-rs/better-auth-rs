@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use better_auth_core::plugin_runtime::PluginRuntime;
 use better_auth_core::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
@@ -56,7 +55,7 @@ fn endpoint_validated<S: AuthSchema>(context: &DatabaseHookContext<'_, S>) -> bo
         .is_some_and(|request| matches!(request.path.as_str(), "/sign-up/email" | "/update-user"))
 }
 
-#[async_trait]
+#[better_auth_core::database_hooks("plugin:username")]
 impl<S: AuthSchema> DatabaseHooks<S> for UsernameHooks<S> {
     async fn before_create_user(
         &self,

@@ -38,7 +38,7 @@ struct Hooks {
     pure: bool,
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_create_session(
         &self,
@@ -560,7 +560,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
 
 struct FailAfterVerification;
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<BundledSchema> for FailAfterVerification {
     async fn after_update_user(
         &self,

@@ -1,3 +1,4 @@
+use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
@@ -24,12 +25,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             Some(id) => query.filter(P::WalletAddress::column("chain_id")?.eq(id)),
             None => query,
         };
-        query
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .map(|model| model.record())
-            .transpose()
+        database_operation::<Entity<P::WalletAddress>, _>(self.config(), "findOne", async {
+            query.one(self.connection()).await.map_err(map_db_err)
+        })
+        .await?
+        .map(|model| model.record())
+        .transpose()
     }
     async fn create_wallet_address(&self, value: WalletAddress) -> AuthResult<WalletAddress> {
         let model = P::WalletAddress::active(Map::from_iter([
@@ -40,10 +41,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             ("is_primary".to_owned(), json!(value.is_primary)),
             ("created_at".to_owned(), json!(value.created_at)),
         ]))?;
-        model
-            .insert(self.connection())
-            .await
-            .map_err(map_db_err)?
-            .record()
+        database_operation::<Entity<P::WalletAddress>, _>(self.config(), "create", async {
+            model.insert(self.connection()).await.map_err(map_db_err)
+        })
+        .await?
+        .record()
     }
 }

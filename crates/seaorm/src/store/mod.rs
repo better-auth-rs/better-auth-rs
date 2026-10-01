@@ -7,6 +7,7 @@ mod bundled_schema;
 mod device_codes;
 pub mod entities;
 mod identity_schema;
+mod instrumentation;
 mod invitations;
 mod json_fields;
 mod jwks;

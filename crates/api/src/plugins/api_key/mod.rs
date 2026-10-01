@@ -593,7 +593,10 @@ impl ApiKeyPlugin {
             }
         };
         if should_run && let Err(error) = ctx.database.delete_expired_api_keys().await {
-            tracing::error!(%error, "Failed to delete expired API keys");
+            better_auth_core::observability::logger::current().error(
+                "Failed to delete expired API keys",
+                &[better_auth_core::observability::LogArgument::Error(&error)],
+            );
         }
     }
 
@@ -787,11 +790,11 @@ impl ApiKeyPlugin {
 better_auth_core::impl_auth_plugin! {
     ApiKeyPlugin, "api-key";
     routes {
-        post "/api-key/create"                    => handle_create,             "api_key_create";
-        get  "/api-key/get"                       => handle_get,                "api_key_get", query = crate::plugins::query_input::api_key_get;
-        post "/api-key/update"                    => handle_update,             "api_key_update";
-        post "/api-key/delete"                    => handle_delete,             "api_key_delete";
-        get  "/api-key/list"                      => handle_list,               "api_key_list", query = crate::plugins::query_input::api_key_list;
+        post "/api-key/create"                    => handle_create,             "createApiKey";
+        get  "/api-key/get"                       => handle_get,                "getApiKey", query = crate::plugins::query_input::api_key_get;
+        post "/api-key/update"                    => handle_update,             "updateApiKey";
+        post "/api-key/delete"                    => handle_delete,             "deleteApiKey";
+        get  "/api-key/list"                      => handle_list,               "listApiKeys", query = crate::plugins::query_input::api_key_list;
     }
     extra {
         fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {

@@ -197,7 +197,7 @@ password: Default::default(),
         }}))
     }
 }
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     async fn before_create_account(
         &self,

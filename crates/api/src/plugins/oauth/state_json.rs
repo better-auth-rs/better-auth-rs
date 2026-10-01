@@ -50,7 +50,10 @@ impl StateExtras {
             Ok(value) => value,
             Err(error) => {
                 // The upstream safeJSONParse logs invalid JSON and returns null.
-                tracing::error!(%error, "Error parsing JSON");
+                better_auth_core::observability::logger::current().error(
+                    "Error parsing JSON",
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
                 Self::default()
             }
         }

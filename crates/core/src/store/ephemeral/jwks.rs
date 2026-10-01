@@ -3,10 +3,14 @@ use super::*;
 #[async_trait]
 impl crate::store::JwksStore for EphemeralStore {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
-        Ok(self.lock()?.jwks.iter().find(|key| key.id == id).cloned())
+        self.raw("jwks", "findOne", |state| {
+            Ok(state.jwks.iter().find(|key| key.id == id).cloned())
+        })
+        .await
     }
     async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
-        Ok(self.lock()?.jwks.clone())
+        self.raw("jwks", "findMany", |state| Ok(state.jwks.clone()))
+            .await
     }
 
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
@@ -19,7 +23,10 @@ impl crate::store::JwksStore for EphemeralStore {
             alg: Some(input.alg),
             crv: input.crv,
         };
-        self.lock()?.jwks.push(key.clone());
-        Ok(key)
+        self.raw("jwks", "create", |state| {
+            state.jwks.push(key.clone());
+            Ok(key)
+        })
+        .await
     }
 }

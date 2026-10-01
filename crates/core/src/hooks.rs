@@ -11,6 +11,8 @@ pub struct RequestHookContext {
     pub method: HttpMethod,
     /// Matched endpoint template, with upstream `:parameter` segments.
     pub path: String,
+    /// Effective endpoint identifier for instrumentation.
+    pub operation_id: Option<String>,
     /// Values captured from the matched endpoint path.
     pub params: std::collections::HashMap<String, String>,
     pub headers: std::collections::HashMap<String, String>,
@@ -28,6 +30,7 @@ impl RequestHookContext {
             is_http: false,
             method: request.method().clone(),
             path: request.path().to_string(),
+            operation_id: None,
             params: Default::default(),
             headers: request.headers.clone(),
             query: request.query.clone(),
@@ -93,6 +96,14 @@ pub fn set_request_hook_route(path: &str, route: Option<&crate::AuthRoute>) {
     let _ = REQUEST_HOOK_CONTEXT.try_with(|context| {
         let mut context = context.borrow_mut();
         context.path = path;
+        context.operation_id = route.map(|route| {
+            route
+                .openapi
+                .as_ref()
+                .and_then(|metadata| metadata.operation_id.clone())
+                .or_else(|| route.endpoint_key.clone())
+                .unwrap_or_else(|| route.operation_id.clone())
+        });
         context.params = params;
     });
 }

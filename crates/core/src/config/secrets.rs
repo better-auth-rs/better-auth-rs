@@ -65,7 +65,7 @@ impl<'a> SecretKey<'a> {
         }
     }
 
-    pub(crate) fn validate(self) -> AuthResult<()> {
+    pub(crate) fn validate(self, logger: &crate::observability::LoggerConfig) -> AuthResult<()> {
         let Self::Versioned { keys, .. } = self else {
             return Ok(());
         };
@@ -91,20 +91,21 @@ impl<'a> SecretKey<'a> {
                 )));
             }
         }
-        warn_secret_strength(self.current()?);
+        warn_secret_strength(self.current()?, logger);
         Ok(())
     }
 }
 
-pub(super) fn warn_secret_strength(secret: &str) {
+pub(super) fn warn_secret_strength(secret: &str, logger: &crate::observability::LoggerConfig) {
     let length = secret.encode_utf16().count();
     if length < 32 {
-        tracing::warn!("The authentication secret should be at least 32 characters long");
+        logger.warn(
+            "The authentication secret should be at least 32 characters long",
+            &[],
+        );
     }
     let unique = secret.chars().collect::<HashSet<_>>().len();
     if (unique as f64).log2() * (length as f64) < 120.0 {
-        tracing::warn!(
-            "The authentication secret appears low-entropy; use a randomly generated secret for production"
-        );
+        logger.warn("The authentication secret appears low-entropy; use a randomly generated secret for production", &[]);
     }
 }

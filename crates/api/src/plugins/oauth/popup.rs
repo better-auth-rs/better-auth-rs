@@ -36,7 +36,7 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::get("/oauth-popup/start", "oauth_popup_start")
+            AuthRoute::get("/oauth-popup/start", "oauthPopupStart")
                 .query_validator(crate::plugins::query_input::popup),
         ]
     }
@@ -58,83 +58,97 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
         response: &mut AuthResponse,
         ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
-        if !req.path().starts_with("/callback/") && !req.path().starts_with("/oauth2/callback/") {
+        if !(req.path().starts_with("/callback/") || req.path().starts_with("/oauth2/callback/")) {
             return Ok(());
         }
-        let Some(redirect) = response
-            .headers
-            .get("location")
-            .cloned()
-            .filter(|value| !value.is_empty())
-        else {
-            return Ok(());
-        };
-        let name = related_cookie_name(&ctx.config, "oauth_popup");
-        let Some(marker) = get_cookie(req, &name)
-            .and_then(|value| verify_cookie_value(&value, ctx.config.signing_secret()))
-            .filter(|value| !value.is_empty())
-        else {
-            return Ok(());
-        };
-        response
-            .headers
-            .append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
-        let Ok(marker) = serde_json::from_str::<Value>(&marker) else {
-            return Ok(());
-        };
-        if marker.is_null() {
-            return Ok(());
-        }
-        let origin = marker.get("popupOrigin").cloned();
-        let nonce = marker
-            .get("popupNonce")
-            .filter(|value| !value.is_null())
-            .cloned()
-            .unwrap_or_else(|| "".into());
-        if let Some(token) = completion::session_token(
-            response,
-            &ctx.config
-                .auth_cookie("session_token", Default::default())
-                .name,
-        )
-        .filter(|value| !value.is_empty())
-        {
-            completion::render(
-                response,
-                origin,
-                nonce,
-                Some(token),
-                Some(redirect),
-                None,
-                ctx,
-            )?;
-        } else {
-            let target = url::Url::parse(&handlers::auth_base_url(ctx))
-                .and_then(|base| base.join(&redirect))
-                .map_err(|error| {
-                    AuthError::internal(format!("Invalid OAuth popup redirect: {error}"))
-                })?;
-            let error = target
-                .query_pairs()
-                .find(|(name, _)| name == "error")
-                .map(|(_, value)| value.into_owned());
-            if let Some(code) = error.filter(|value| !value.is_empty()) {
-                let description = target
-                    .query_pairs()
-                    .find(|(name, _)| name == "error_description")
-                    .map(|(_, value)| value.into_owned());
-                completion::render(
+        better_auth_core::observability::instrumentation::with_endpoint_hook(
+            &ctx.config,
+            req,
+            "after",
+            "plugin:oauth-popup",
+            async {
+                if !req.path().starts_with("/callback/")
+                    && !req.path().starts_with("/oauth2/callback/")
+                {
+                    return Ok(());
+                }
+                let Some(redirect) = response
+                    .headers
+                    .get("location")
+                    .cloned()
+                    .filter(|value| !value.is_empty())
+                else {
+                    return Ok(());
+                };
+                let name = related_cookie_name(&ctx.config, "oauth_popup");
+                let Some(marker) = get_cookie(req, &name)
+                    .and_then(|value| verify_cookie_value(&value, ctx.config.signing_secret()))
+                    .filter(|value| !value.is_empty())
+                else {
+                    return Ok(());
+                };
+                response
+                    .headers
+                    .append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
+                let Ok(marker) = serde_json::from_str::<Value>(&marker) else {
+                    return Ok(());
+                };
+                if marker.is_null() {
+                    return Ok(());
+                }
+                let origin = marker.get("popupOrigin").cloned();
+                let nonce = marker
+                    .get("popupNonce")
+                    .filter(|value| !value.is_null())
+                    .cloned()
+                    .unwrap_or_else(|| "".into());
+                if let Some(token) = completion::session_token(
                     response,
-                    origin,
-                    nonce,
-                    None,
-                    None,
-                    Some(completion::Failure { code, description }),
-                    ctx,
-                )?;
-            }
-        }
-        Ok(())
+                    &ctx.config
+                        .auth_cookie("session_token", Default::default())
+                        .name,
+                )
+                .filter(|value| !value.is_empty())
+                {
+                    completion::render(
+                        response,
+                        origin,
+                        nonce,
+                        Some(token),
+                        Some(redirect),
+                        None,
+                        ctx,
+                    )?;
+                } else {
+                    let target = url::Url::parse(&handlers::auth_base_url(ctx))
+                        .and_then(|base| base.join(&redirect))
+                        .map_err(|error| {
+                            AuthError::internal(format!("Invalid OAuth popup redirect: {error}"))
+                        })?;
+                    let error = target
+                        .query_pairs()
+                        .find(|(name, _)| name == "error")
+                        .map(|(_, value)| value.into_owned());
+                    if let Some(code) = error.filter(|value| !value.is_empty()) {
+                        let description = target
+                            .query_pairs()
+                            .find(|(name, _)| name == "error_description")
+                            .map(|(_, value)| value.into_owned());
+                        completion::render(
+                            response,
+                            origin,
+                            nonce,
+                            None,
+                            None,
+                            Some(completion::Failure { code, description }),
+                            ctx,
+                        )?;
+                    }
+                }
+                Ok(())
+            },
+        )
+        .await
     }
 }
 
@@ -284,7 +298,10 @@ fn failed_start(
     error: AuthError,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    tracing::error!(%error, "OAuth popup failed to start");
+    better_auth_core::observability::logger::current().error(
+        "OAuth popup failed to start",
+        &[better_auth_core::observability::LogArgument::Error(&error)],
+    );
     completion::render(
         &mut response,
         Some(origin.into()),

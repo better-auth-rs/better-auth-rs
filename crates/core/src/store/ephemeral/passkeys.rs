@@ -26,39 +26,46 @@ impl PasskeyStore for EphemeralStore {
             created_at: now,
             updated_at: now,
         };
-        let _ = self
-            .lock()?
-            .passkeys
-            .insert(passkey.id.clone(), passkey.clone());
-        Ok(passkey)
+        self.raw("passkey", "create", |state| {
+            let _ = state.passkeys.insert(passkey.id.clone(), passkey.clone());
+            Ok(passkey)
+        })
+        .await
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        Ok(self.lock()?.passkeys.get(id).cloned())
+        self.raw("passkey", "findOne", |state| {
+            Ok(state.passkeys.get(id).cloned())
+        })
+        .await
     }
 
     async fn get_passkey_by_credential_id(
         &self,
         credential_id: &str,
     ) -> AuthResult<Option<Passkey>> {
-        Ok(self
-            .lock()?
-            .passkeys
-            .values()
-            .find(|passkey| passkey.credential_id == credential_id)
-            .cloned())
+        self.raw("passkey", "findOne", |state| {
+            Ok(state
+                .passkeys
+                .values()
+                .find(|passkey| passkey.credential_id == credential_id)
+                .cloned())
+        })
+        .await
     }
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
-        let mut passkeys: Vec<_> = self
-            .lock()?
-            .passkeys
-            .values()
-            .filter(|passkey| passkey.user_id == user_id)
-            .cloned()
-            .collect();
-        passkeys.sort_by_key(|passkey| Reverse(passkey.created_at.timestamp_millis()));
-        Ok(passkeys)
+        self.raw("passkey", "findMany", |state| {
+            let mut passkeys: Vec<_> = state
+                .passkeys
+                .values()
+                .filter(|passkey| passkey.user_id == user_id)
+                .cloned()
+                .collect();
+            passkeys.sort_by_key(|passkey| Reverse(passkey.created_at.timestamp_millis()));
+            Ok(passkeys)
+        })
+        .await
     }
 
     async fn update_passkey_authentication(
@@ -66,32 +73,39 @@ impl PasskeyStore for EphemeralStore {
         id: &str,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
-        let mut state = self.lock()?;
-        let passkey = state
-            .passkeys
-            .get_mut(id)
-            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-        passkey.credential = update.credential;
-        passkey.counter = update.counter;
-        passkey.backed_up = update.backed_up;
-        passkey.device_type = update.device_type;
-        passkey.updated_at = Utc::now();
-        Ok(passkey.clone())
+        self.raw("passkey", "update", |state| {
+            let Some(passkey) = state.passkeys.get_mut(id) else {
+                return Ok(None);
+            };
+            passkey.credential = update.credential;
+            passkey.counter = update.counter;
+            passkey.backed_up = update.backed_up;
+            passkey.device_type = update.device_type;
+            passkey.updated_at = Utc::now();
+            Ok(Some(passkey.clone()))
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))
     }
 
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
-        let mut state = self.lock()?;
-        let passkey = state
-            .passkeys
-            .get_mut(id)
-            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-        passkey.name = Some(name.to_owned());
-        passkey.updated_at = Utc::now();
-        Ok(passkey.clone())
+        self.raw("passkey", "update", |state| {
+            let Some(passkey) = state.passkeys.get_mut(id) else {
+                return Ok(None);
+            };
+            passkey.name = Some(name.to_owned());
+            passkey.updated_at = Utc::now();
+            Ok(Some(passkey.clone()))
+        })
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))
     }
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
-        let _ = self.lock()?.passkeys.shift_remove(id);
-        Ok(())
+        self.raw("passkey", "delete", |state| {
+            let _ = state.passkeys.shift_remove(id);
+            Ok(())
+        })
+        .await
     }
 }

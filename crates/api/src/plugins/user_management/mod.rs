@@ -347,17 +347,17 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
         let mut routes = Vec::new();
         if self.config.change_email.enabled {
             routes.push(
-                AuthRoute::post("/change-email", "change_email")
+                AuthRoute::post("/change-email", "changeEmail")
                     .body_validator(request::change_email_body),
             );
         }
         if self.config.delete_user.enabled {
             routes.push(
-                AuthRoute::post("/delete-user", "delete_user")
+                AuthRoute::post("/delete-user", "deleteUser")
                     .body_validator(request::delete_user_body),
             );
             routes.push(
-                AuthRoute::get("/delete-user/callback", "delete_user_callback")
+                AuthRoute::get("/delete-user/callback", "deleteUserCallback")
                     .query_validator(crate::plugins::query_input::verify_email),
             );
         }

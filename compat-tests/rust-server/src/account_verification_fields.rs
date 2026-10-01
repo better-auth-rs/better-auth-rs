@@ -170,7 +170,7 @@ impl Hooks {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<Schema> for Hooks {
     async fn before_create_account(
         &self,

@@ -88,7 +88,10 @@ pub(super) fn callback_error(error: AuthError, request: Option<&AuthRequest>) ->
         && error.status_code() == 500
         && !matches!(error, AuthError::Response(_) | AuthError::Upstream { .. })
     {
-        tracing::error!(%error, "API key callback failed");
+        better_auth_core::observability::logger::current().error(
+            "API key callback failed",
+            &[better_auth_core::observability::LogArgument::Error(&error)],
+        );
         AuthResponse::new(500).into()
     } else {
         error

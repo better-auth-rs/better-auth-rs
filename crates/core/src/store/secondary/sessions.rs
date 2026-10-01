@@ -256,7 +256,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let effect = Box::pin(async move {
             // Upstream applies this onError policy both after commit and without a transaction.
             if let Err(error) = runtime.delete_cached_sessions(&user_id, &references).await {
-                tracing::error!(%error, "Failed to delete committed user sessions from secondary storage");
+                crate::observability::logger::current().error(
+                    "Failed to delete committed user sessions from secondary storage",
+                    &[crate::observability::LogArgument::Error(&error)],
+                );
             }
             Ok(())
         });
@@ -476,10 +479,12 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                     });
                     self.write_references(user_id, references).await?;
                 } else {
-                    tracing::error!("Active sessions list not found in secondary storage");
+                    crate::observability::logger::current()
+                        .error("Active sessions list not found in secondary storage", &[]);
                 }
             } else {
-                tracing::error!("Session not found in secondary storage");
+                crate::observability::logger::current()
+                    .error("Session not found in secondary storage", &[]);
                 return Ok(());
             }
         }

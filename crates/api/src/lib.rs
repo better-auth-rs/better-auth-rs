@@ -37,3 +37,7 @@ pub use plugins::passkey::{PasskeyConfig, PasskeyPlugin};
 pub use plugins::password_management::PasswordManagementPlugin;
 pub use plugins::session_management::SessionManagementPlugin;
 pub use plugins::two_factor::TwoFactorPlugin;
+
+extern crate better_auth_core as better_auth;
+
+pub mod observability;

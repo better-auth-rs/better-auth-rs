@@ -78,38 +78,113 @@ impl EphemeralStore {
         };
         for hook in &self.hooks {
             match write.as_ref() {
-                CommittedWrite::UserCreated(row) => hook.after_create_user(row, &context).await?,
-                CommittedWrite::UserUpdated(row) => {
-                    hook.after_update_user(row.as_ref(), &context).await?
+                CommittedWrite::UserCreated(row) => {
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterCreateUser,
+                        hook.after_create_user(row, &context),
+                    )
+                    .await?
                 }
-                CommittedWrite::UserDeleted(row) => hook.after_delete_user(row, &context).await?,
+                CommittedWrite::UserUpdated(row) => {
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterUpdateUser,
+                        hook.after_update_user(row.as_ref(), &context),
+                    )
+                    .await?
+                }
+                CommittedWrite::UserDeleted(row) => {
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterDeleteUser,
+                        hook.after_delete_user(row, &context),
+                    )
+                    .await?
+                }
                 CommittedWrite::AccountCreated(row) => {
-                    hook.after_create_account(row, &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterCreateAccount,
+                        hook.after_create_account(row, &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::AccountUpdated(row) => {
-                    hook.after_update_account(row.as_ref(), &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterUpdateAccount,
+                        hook.after_update_account(row.as_ref(), &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::AccountDeleted(row) => {
-                    hook.after_delete_account(row, &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterDeleteAccount,
+                        hook.after_delete_account(row, &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::SessionCreated(row) => {
-                    hook.after_create_session(row, &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterCreateSession,
+                        hook.after_create_session(row, &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::SessionUpdated(row) => {
-                    hook.after_update_session(row.as_ref(), &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterUpdateSession,
+                        hook.after_update_session(row.as_ref(), &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::SessionDeleted(row) => {
-                    hook.after_delete_session(row, &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterDeleteSession,
+                        hook.after_delete_session(row, &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::VerificationCreated(row) => {
-                    hook.after_create_verification(row, &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterCreateVerification,
+                        hook.after_create_verification(row, &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::VerificationUpdated(row) => {
-                    hook.after_update_verification(row.as_ref(), &context)
-                        .await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterUpdateVerification,
+                        hook.after_update_verification(row.as_ref(), &context),
+                    )
+                    .await?
                 }
                 CommittedWrite::VerificationDeleted(row) => {
-                    hook.after_delete_verification(row, &context).await?
+                    crate::observability::database::with_database_hook(
+                        context.config,
+                        hook.hook_metadata(),
+                        crate::observability::database::DatabaseHook::AfterDeleteVerification,
+                        hook.after_delete_verification(row, &context),
+                    )
+                    .await?
                 }
             }
         }

@@ -231,7 +231,7 @@ impl SecondaryStorage for Events {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<Schema> for Events {
     async fn before_delete_user(
         &self,

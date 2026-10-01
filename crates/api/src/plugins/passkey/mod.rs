@@ -192,12 +192,12 @@ impl PasskeyPlugin {
 better_auth_core::impl_auth_plugin! {
     PasskeyPlugin, "passkey";
     routes {
-        get  "/passkey/generate-register-options"      => handle_generate_register_options,      "passkey_generate_register_options", query = crate::plugins::query_input::passkey_registration;
-        post "/passkey/verify-registration"            => handle_verify_registration,            "passkey_verify_registration";
-        get  "/passkey/generate-authenticate-options"  => handle_generate_authenticate_options,  "passkey_generate_authenticate_options";
-        post "/passkey/verify-authentication"          => handle_verify_authentication,          "passkey_verify_authentication";
-        get  "/passkey/list-user-passkeys"             => handle_list_user_passkeys,             "passkey_list_user_passkeys";
-        post "/passkey/delete-passkey"                 => handle_delete_passkey,                 "passkey_delete_passkey";
-        post "/passkey/update-passkey"                 => handle_update_passkey,                 "passkey_update_passkey";
+        get  "/passkey/generate-register-options"      => handle_generate_register_options,      "generatePasskeyRegistrationOptions", query = crate::plugins::query_input::passkey_registration;
+        post "/passkey/verify-registration"            => handle_verify_registration,            "passkeyVerifyRegistration";
+        get  "/passkey/generate-authenticate-options"  => handle_generate_authenticate_options,  "passkeyGenerateAuthenticateOptions";
+        post "/passkey/verify-authentication"          => handle_verify_authentication,          "passkeyVerifyAuthentication";
+        get  "/passkey/list-user-passkeys"             => handle_list_user_passkeys,             "listPasskeys";
+        post "/passkey/delete-passkey"                 => handle_delete_passkey,                 "deletePasskey";
+        post "/passkey/update-passkey"                 => handle_update_passkey,                 "updatePasskey";
     }
 }

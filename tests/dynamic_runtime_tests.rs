@@ -13,7 +13,7 @@ use std::sync::{Arc, OnceLock};
 
 #[derive(Clone)]
 struct Capture(Arc<OnceLock<PluginRuntime<StatelessSchema>>>);
-#[async_trait]
+#[better_auth::database_hooks()]
 impl DatabaseHooks<StatelessSchema> for Capture {
     async fn before_create_user(
         &self,

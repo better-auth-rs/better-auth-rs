@@ -164,7 +164,7 @@ impl AuthPlugin<TestSchema> for OAuthPopupFixture {
     }
 }
 
-#[async_trait]
+#[better_auth::database_hooks()]
 impl SeaOrmHooks<TestSchema> for OAuthPopupFixture {
     async fn before_create_verification(
         &self,

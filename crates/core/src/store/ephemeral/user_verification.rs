@@ -25,7 +25,13 @@ impl EphemeralStore {
         let context = self.hook_context(&transaction);
         for account in &accounts {
             for hook in &self.hooks {
-                if hook.before_delete_account(account, &context).await?
+                if crate::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    crate::observability::database::DatabaseHook::BeforeDeleteAccount,
+                    hook.before_delete_account(account, &context),
+                )
+                .await?
                     == DatabaseHookControl::Cancel
                 {
                     return Err(AuthError::forbidden(
@@ -36,7 +42,13 @@ impl EphemeralStore {
         }
         for session in &sessions {
             for hook in &self.hooks {
-                if hook.before_delete_session(session, &context).await?
+                if crate::observability::database::with_database_hook(
+                    context.config,
+                    hook.hook_metadata(),
+                    crate::observability::database::DatabaseHook::BeforeDeleteSession,
+                    hook.before_delete_session(session, &context),
+                )
+                .await?
                     == DatabaseHookControl::Cancel
                 {
                     return Err(AuthError::forbidden(
@@ -51,18 +63,23 @@ impl EphemeralStore {
                 ..Default::default()
             })
             .await?;
-        {
-            let mut state = self.lock()?;
-            let schema = self.config.account.field_schema();
+        let schema = self.config.account.field_schema();
+        self.raw("account", "deleteMany", |state| {
             state.accounts.retain(|_, row| {
                 row.get(schema.record_storage_key("userId"))
                     != Some(&Value::String(user_id.to_owned()))
             });
-            if database_sessions {
+            Ok(())
+        })
+        .await?;
+        if database_sessions {
+            self.raw("session", "deleteMany", |state| {
                 state.sessions.retain(|_, row| row.user_id != user_id);
-            }
+                Ok(())
+            })
+            .await?;
         }
-        let user = self.update_user_record(user_id, update)?;
+        let user = self.update_user_record(user_id, update).await?;
         if let Some(cleanup) = session_cleanup {
             cleanup.revoke().await?;
         }

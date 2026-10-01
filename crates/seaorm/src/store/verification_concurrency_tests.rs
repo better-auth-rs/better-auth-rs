@@ -57,7 +57,7 @@ async fn email_claim_reservations_have_one_winner_and_can_be_released()
     Ok(())
 }
 
-#[async_trait]
+#[better_auth_core::database_hooks()]
 impl crate::hooks::SeaOrmHooks<BundledSchema> for RejectVerificationHook {
     async fn before_delete_verification(
         &self,
@@ -143,12 +143,17 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                 AuthConfig::new("a-secret-that-is-at-least-32-characters"),
                 database.clone(),
             ));
-            for value in ["old", "latest"] {
+            let created_at = Utc::now();
+            for (value, created_at) in [
+                ("old", created_at - chrono::Duration::seconds(1)),
+                ("latest", created_at),
+            ] {
                 let _ = store
                     .create_verification(CreateVerification {
                         identifier: "one-use".into(),
                         value: value.into(),
                         expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+                        created_at: created_at.into(),
                         ..Default::default()
                     })
                     .await?;
@@ -170,12 +175,17 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                 }
             }
             let consumed_again = store.consume_verification_by_identifier("one-use").await?;
-            for (value, seconds) in [("old-valid", 60), ("new-expired", -60)] {
+            let created_at = Utc::now();
+            for (value, seconds, created_at) in [
+                ("old-valid", 60, created_at - chrono::Duration::seconds(1)),
+                ("new-expired", -60, created_at),
+            ] {
                 let _ = store
                     .create_verification(CreateVerification {
                         identifier: "expired-latest".into(),
                         value: value.into(),
                         expires_at: (Utc::now() + chrono::Duration::seconds(seconds)).into(),
+                        created_at: created_at.into(),
                         ..Default::default()
                     })
                     .await?;
