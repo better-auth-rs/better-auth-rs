@@ -10,6 +10,11 @@ pub trait RuntimeStore<S: AuthSchema>: Send + Sync {
         "unknown"
     }
 
+    /// Original options for the rate-limit model bound to this adapter.
+    fn rate_limit_model_declaration(&self) -> Option<crate::schema::ModelDeclaration> {
+        None
+    }
+
     /// Declared callbacks installed on this adapter, without invoking any hook.
     fn database_hook_metadata(&self) -> Vec<crate::observability::database::DatabaseHookMetadata> {
         Vec::new()

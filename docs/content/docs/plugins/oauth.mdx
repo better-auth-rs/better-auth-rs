@@ -57,6 +57,7 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Reddit | `OAuthProvider::reddit(client_id, client_secret)` | `identity` |
 | Salesforce | `OAuthProvider::salesforce(client_id, client_secret)` | `openid`, `email`, `profile` |
 | Kakao | `OAuthProvider::kakao(client_id, client_secret)` | `account_email`, `profile_image`, `profile_nickname` |
+| Zoom | `OAuthProvider::zoom(client_id, client_secret)` | None; configured and request scopes are ignored |
 
 ### Social provider inputs
 
@@ -70,7 +71,7 @@ google.disable_implicit_sign_up = Some(true);
 let oauth = OAuthPlugin::new().add_provider("google", google);
 ```
 
-Social `scopes`, `disable_implicit_sign_up`, and `disable_sign_up` retain omission through `Option`. Omitted sign-up switches resolve to false. Built-in providers add their default scopes, configured scopes, and request scopes; Discord places request scopes before configured scopes. Explicit empty lists retain the defaults. Set `disable_default_scope = true` to request only the configured and request scopes. To migrate an old complete scope override, wrap the list in `Some` and enable `disable_default_scope`. Custom social providers retain request-scope replacement semantics. Generic OAuth options keep their existing types and merge behavior.
+Social `scopes`, `disable_implicit_sign_up`, and `disable_sign_up` retain omission through `Option`. Omitted sign-up switches resolve to false. Except for Zoom, built-in providers add their default scopes, configured scopes, and request scopes; Discord places request scopes before configured scopes. Explicit empty lists retain the defaults. Set `disable_default_scope = true` to request only the configured and request scopes. To migrate an old complete scope override, wrap the list in `Some` and enable `disable_default_scope`. Custom social providers retain request-scope replacement semantics. Generic OAuth options keep their existing types and merge behavior.
 
 `OAuthConfig.providers` uses an insertion-ordered map. `add_provider` preserves registration order, and replacing a name keeps its position. A custom provider map can be built with `[(name, provider)].into_iter().collect()`.
 
@@ -84,7 +85,7 @@ To migrate a handler, use `AuthResult<Option<OAuthUserInfoResponse>>`, wrap succ
 
 Discord prepares `image_url` before invoking the mapper. The default decoder reuses that value for PNG, animated GIF, and default avatars. Display names use `global_name`, then `username`, then an empty string.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, and Kakao ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, Kakao, and Zoom ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
 
 Set `redirect_uri` when the provider callback URI differs from the route URI. Authorization and code exchange use the same configured value. Omitted or empty values use the route URI. Register the configured URI with the provider and route the callback to Better Auth; the option does not create another HTTP route.
 
@@ -236,6 +237,11 @@ Set `require_id_token_verification: true` when using ID tokens for identity. Dis
 
 OIDC signature verification requires OpenSSL 3.0 or newer. OpenSSL 3.5 or newer is required for the complete ML-DSA algorithm set. The development shell supplies the native dependencies.
 
+Zoom uses client-secret-post for code exchange and refresh, and GET/Bearer userinfo. `OAuthProvider::zoom(client_id, client_secret)` enables authorization PKCE by default. Use `OAuthProvider::zoom_without_pkce(client_id, client_secret)` to represent the pinned `pkce: false` option. That option removes the authorization challenge; code exchange still forwards its supplied verifier. Both constructors use the same state and callback validation.
+
+Zoom ignores configured/request scopes, `disable_default_scope`, configured prompt, and standalone hints/nonces. Ordinary additional authorization parameters remain effective. The decoder reads `display_name`, `pic_url`, and email, and applies the shared truthiness rule to the documented numeric `verified` field. The async mapper receives the original profile; custom user-info handlers retain precedence. The ordinary contracts cover verified values 0/1, null pictures, mapper errors, HTTP 503, and both PKCE configurations through local HTTP and SQLite. Arbitrary JavaScript response shapes and provider-specific transport/error timing are outside this slice.
+
+
 ### Token endpoint authentication
 
 `token_endpoint_auth` applies to both authorization-code exchange and token refresh:
@@ -344,7 +350,7 @@ For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`. Access-t
 
 ### PKCE Flow
 
-Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for the fixed LinkedIn, Slack, Naver, Linear, Reddit, and Kakao protocols. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
+Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for the fixed LinkedIn, Slack, Naver, Linear, Reddit, and Kakao protocols. Zoom enables authorization PKCE by default and exposes `zoom_without_pkce` for its provider option. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
 
 1. A random `code_verifier` is generated
 2. A `code_challenge` is derived using SHA-256

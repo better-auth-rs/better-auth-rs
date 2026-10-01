@@ -19,6 +19,32 @@ cargo run --locked -p better-auth-cli -- generate --rate-limit-database --schema
 export BETTER_AUTH_RATE_LIMIT_SCHEMA="$schema_dir/rate_limit_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --schema-config compat-tests/schema-consumer/account-verification-schema.json --output "$schema_dir/account_verification_schema.rs"
 export BETTER_AUTH_ACCOUNT_VERIFICATION_SCHEMA="$schema_dir/account_verification_schema.rs"
+python3 - "$schema_dir" <<'PY'
+import json
+import pathlib
+import sys
+
+fixture = json.loads(pathlib.Path("tests/fixtures/telemetry-model-declarations-1.7.6.json").read_text())
+for name, case in fixture.items():
+    (pathlib.Path(sys.argv[1]) / f"declarations_{name}.json").write_text(json.dumps(case["options"]))
+rate_limits = json.loads(pathlib.Path("tests/fixtures/telemetry-rate-limit-model-1.7.6.json").read_text())
+for name, case in rate_limits.items():
+    (pathlib.Path(sys.argv[1]) / f"rate_model_{name}.json").write_text(json.dumps(case["options"]))
+PY
+for case in omitted empty explicitDefaults renamed; do
+  cargo run --locked -p better-auth-cli -- generate --schema-config "$schema_dir/declarations_${case}.json" --output "$schema_dir/declarations_${case}.rs"
+done
+export BETTER_AUTH_DECLARATIONS_OMITTED_SCHEMA="$schema_dir/declarations_omitted.rs"
+export BETTER_AUTH_DECLARATIONS_EMPTY_SCHEMA="$schema_dir/declarations_empty.rs"
+export BETTER_AUTH_DECLARATIONS_DEFAULTS_SCHEMA="$schema_dir/declarations_explicitDefaults.rs"
+export BETTER_AUTH_DECLARATIONS_RENAMED_SCHEMA="$schema_dir/declarations_renamed.rs"
+for case in omitted empty explicitDefaults renamed; do
+  cargo run --locked -p better-auth-cli -- generate --rate-limit-database --schema-config "$schema_dir/rate_model_${case}.json" --output "$schema_dir/rate_model_${case}.rs"
+done
+export BETTER_AUTH_RATE_MODEL_OMITTED_SCHEMA="$schema_dir/rate_model_omitted.rs"
+export BETTER_AUTH_RATE_MODEL_EMPTY_SCHEMA="$schema_dir/rate_model_empty.rs"
+export BETTER_AUTH_RATE_MODEL_DEFAULTS_SCHEMA="$schema_dir/rate_model_explicitDefaults.rs"
+export BETTER_AUTH_RATE_MODEL_RENAMED_SCHEMA="$schema_dir/rate_model_renamed.rs"
 for mode in serial uuid database; do
   cargo run --locked -p better-auth-cli -- generate --plugins all --generate-id "$mode" --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/${mode}_schema.rs"
 done

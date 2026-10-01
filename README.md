@@ -19,7 +19,7 @@ User record updates preserve raw `name` and `image` values through `SchemaValue`
 
 Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display values through `SchemaValue<Option<String>>`; see [plugin fields](docs/content/docs/concepts/database.mdx#plugin-fields).
 
-Configure LINE code login with `GenericOAuthConfig::line` and read resolved provider inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for the alpha callback migration and verification boundary. Social profile callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
+Configure LINE code login with `GenericOAuthConfig::line` and read resolved provider inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Social profile callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
 
 Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page.
 
@@ -52,6 +52,8 @@ Generate the core auth entities:
 cargo install better-auth-cli --git https://github.com/better-auth-rs/better-auth-rs --branch master --locked
 better-auth-rs generate --output src/auth_schema.rs
 ```
+
+The CLI also preserves explicit core model declarations and the bound rate-limit model name for initialization telemetry; see [schema generation](docs/content/docs/concepts/database.mdx#generate-an-initial-schema).
 
 Use `--generate-id serial` for integer IDs. Use `--generate-id uuid --database postgres` for native PostgreSQL UUIDs. Match the generated schema to `AuthConfig.advanced.database.generate_id`. Derived plugin and organization bindings expose declared ID references so Serial writes normalize numeric aliases after configured input transforms.
 

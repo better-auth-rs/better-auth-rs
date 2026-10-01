@@ -218,6 +218,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
                     secondary: init_context.secondary_storage.is_some(),
                     on_error: has_api_error_handler,
                     rate_limit: self.rate_limit_config.as_ref(),
+                    rate_limit_model: store.rate_limit_model_declaration(),
                     database_hooks: store.database_hook_metadata(),
                 },
             )?;

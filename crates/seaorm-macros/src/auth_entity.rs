@@ -86,8 +86,8 @@ fn resolve_roots() -> (TokenStream, TokenStream) {
 
 pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     let (seaorm_root, core_root) = resolve_roots();
-    let role = match parse_role(input) {
-        Ok(role) => role,
+    let (role, model_name) = match parse_options(input) {
+        Ok(options) => options,
         Err(err) => return err.to_compile_error(),
     };
 
@@ -280,10 +280,15 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         | EntityRole::TwoFactor
         | EntityRole::Jwk
         | EntityRole::WalletAddress
-        | EntityRole::RateLimit) => {
-            plugin_model::generate(input, fields, role, &seaorm_root, &core_root)
-                .unwrap_or_else(syn::Error::into_compile_error)
-        }
+        | EntityRole::RateLimit) => plugin_model::generate(
+            input,
+            fields,
+            role,
+            model_name.as_ref(),
+            &seaorm_root,
+            &core_root,
+        )
+        .unwrap_or_else(syn::Error::into_compile_error),
         role => gen_organization_model(input, fields, role, &seaorm_root, &core_root)
             .unwrap_or_else(|error| error.to_compile_error()),
     }
@@ -779,8 +784,9 @@ fn gen_session(
     })
 }
 
-fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {
+fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>)> {
     let mut parsed = None;
+    let mut model_name = None;
     for attr in &input.attrs {
         if !attr.path().is_ident("auth") {
             continue;
@@ -815,16 +821,28 @@ fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {
                     }
                 });
                 Ok(())
+            } else if meta.path.is_ident("model_name") {
+                model_name = Some(meta.value()?.parse::<LitStr>()?);
+                Ok(())
             } else {
-                Err(meta.error("expected `role = \"...\"`"))
+                Err(meta.error("expected `role = \"...\"` or `model_name = \"...\"`"))
             }
         })?;
     }
 
-    parsed.ok_or_else(|| {
+    let role = parsed.ok_or_else(|| {
         syn::Error::new_spanned(
             input,
             "missing #[auth(role = \"...\")] attribute for AuthEntity",
         )
-    })
+    })?;
+    if role != EntityRole::RateLimit
+        && let Some(name) = &model_name
+    {
+        return Err(syn::Error::new_spanned(
+            name,
+            "model_name is supported for the rate_limit role",
+        ));
+    }
+    Ok((role, model_name))
 }

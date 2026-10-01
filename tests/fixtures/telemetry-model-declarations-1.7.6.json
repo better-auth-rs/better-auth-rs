@@ -1,0 +1,149 @@
+{
+  "omitted": {
+    "options": {},
+    "expected": {
+      "user": {},
+      "session": {},
+      "account": {},
+      "verification": {}
+    }
+  },
+  "empty": {
+    "options": {
+      "user": {
+        "fields": {}
+      },
+      "session": {
+        "fields": {}
+      },
+      "account": {
+        "fields": {}
+      },
+      "verification": {
+        "fields": {}
+      }
+    },
+    "expected": {
+      "user": {
+        "fields": {}
+      },
+      "session": {
+        "fields": {}
+      },
+      "account": {
+        "fields": {}
+      },
+      "verification": {
+        "fields": {}
+      }
+    }
+  },
+  "explicitDefaults": {
+    "options": {
+      "user": {
+        "modelName": "user",
+        "fields": {
+          "email": "email"
+        }
+      },
+      "session": {
+        "modelName": "session",
+        "fields": {
+          "ipAddress": "ipAddress"
+        }
+      },
+      "account": {
+        "modelName": "account",
+        "fields": {
+          "providerId": "providerId"
+        }
+      },
+      "verification": {
+        "modelName": "verification",
+        "fields": {
+          "identifier": "identifier"
+        }
+      }
+    },
+    "expected": {
+      "user": {
+        "modelName": "user",
+        "fields": {
+          "email": "email"
+        }
+      },
+      "session": {
+        "modelName": "session",
+        "fields": {
+          "ipAddress": "ipAddress"
+        }
+      },
+      "account": {
+        "modelName": "account",
+        "fields": {
+          "providerId": "providerId"
+        }
+      },
+      "verification": {
+        "modelName": "verification",
+        "fields": {
+          "identifier": "identifier"
+        }
+      }
+    }
+  },
+  "renamed": {
+    "options": {
+      "user": {
+        "modelName": "app_user",
+        "fields": {
+          "email": "configured_email"
+        }
+      },
+      "session": {
+        "modelName": "app_session",
+        "fields": {
+          "ipAddress": "configured_ipAddress"
+        }
+      },
+      "account": {
+        "modelName": "app_account",
+        "fields": {
+          "providerId": "configured_providerId"
+        }
+      },
+      "verification": {
+        "modelName": "app_verification",
+        "fields": {
+          "identifier": "configured_identifier"
+        }
+      }
+    },
+    "expected": {
+      "user": {
+        "modelName": "app_user",
+        "fields": {
+          "email": "configured_email"
+        }
+      },
+      "session": {
+        "modelName": "app_session",
+        "fields": {
+          "ipAddress": "configured_ipAddress"
+        }
+      },
+      "account": {
+        "modelName": "app_account",
+        "fields": {
+          "providerId": "configured_providerId"
+        }
+      },
+      "verification": {
+        "modelName": "app_verification",
+        "fields": {
+          "identifier": "configured_identifier"
+        }
+      }
+    }
+  }
+}

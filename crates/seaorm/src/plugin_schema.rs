@@ -19,6 +19,10 @@ pub trait SeaOrmPluginModel:
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Default + Send;
     /// Entity columns.
     type Column: ColumnTrait;
+    /// Original model options, independent of the resolved SQL table name.
+    fn model_declaration() -> Option<better_auth_core::schema::ModelDeclaration> {
+        None
+    }
     /// Resolve a logical field name to its typed column.
     fn column(name: &str) -> AuthResult<Self::Column>;
     /// Project the stored model into its plugin record.

@@ -29,6 +29,10 @@ where
         "seaorm"
     }
 
+    fn rate_limit_model_declaration(&self) -> Option<better_auth_core::schema::ModelDeclaration> {
+        <P::RateLimit as crate::SeaOrmPluginModel>::model_declaration()
+    }
+
     fn database_hook_metadata(
         &self,
     ) -> Vec<better_auth_core::observability::database::DatabaseHookMetadata> {

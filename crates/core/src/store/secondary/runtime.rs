@@ -6,6 +6,10 @@ impl<S: AuthSchema> RuntimeStore<S> for SecondaryStore<S> {
         self.inner.adapter_id()
     }
 
+    fn rate_limit_model_declaration(&self) -> Option<crate::schema::ModelDeclaration> {
+        self.inner.rate_limit_model_declaration()
+    }
+
     fn database_hook_metadata(&self) -> Vec<crate::observability::database::DatabaseHookMetadata> {
         self.inner.database_hook_metadata()
     }

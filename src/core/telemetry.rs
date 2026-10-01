@@ -7,6 +7,7 @@ use better_auth_core::observability::telemetry::{PluginTelemetry, Telemetry};
 use better_auth_core::{AuthConfig, AuthPlugin, AuthResult, AuthSchema};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
+use std::collections::BTreeMap;
 
 pub(super) struct InitOptions<'a> {
     pub database: bool,
@@ -16,6 +17,7 @@ pub(super) struct InitOptions<'a> {
     pub secondary: bool,
     pub on_error: bool,
     pub rate_limit: Option<&'a RateLimitConfig>,
+    pub rate_limit_model: Option<better_auth_core::schema::ModelDeclaration>,
     pub database_hooks: Vec<DatabaseHookMetadata>,
 }
 
@@ -248,6 +250,11 @@ pub(super) fn init_payload<S: AuthSchema>(
     )]);
     option(
         &mut rate_limit,
+        "modelName",
+        options.rate_limit_model.and_then(|model| model.model_name),
+    )?;
+    option(
+        &mut rate_limit,
         "window",
         options.rate_limit.and_then(|config| config.window),
     )?;
@@ -321,6 +328,25 @@ pub(super) fn init_payload<S: AuthSchema>(
         "disableCleanup",
         config.verification.disable_cleanup,
     )?;
+
+    for declaration in S::model_declarations() {
+        use better_auth_core::schema::EntityRole;
+        let model = match declaration.role {
+            EntityRole::User => &mut user,
+            EntityRole::Session => &mut session,
+            EntityRole::Account => &mut account,
+            EntityRole::Verification => &mut verification,
+            _ => continue,
+        };
+        option(model, "modelName", declaration.model_name)?;
+        option(
+            model,
+            "fields",
+            declaration
+                .fields
+                .map(|fields| fields.iter().copied().collect::<BTreeMap<_, _>>()),
+        )?;
+    }
 
     let mut config_options = Map::from_iter([
         (

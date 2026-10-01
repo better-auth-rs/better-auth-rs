@@ -536,6 +536,30 @@ impl OAuthProvider {
         }
     }
 
+    /// Configure Zoom with authorization PKCE, client-secret-post, and its HTTP user profile.
+    /// The pinned Zoom provider ignores configured and request scopes.
+    pub fn zoom(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Zoom { pkce: true },
+            user_info_url: Some("https://api.zoom.us/v2/users/me".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://zoom.us/oauth/authorize",
+                "https://zoom.us/oauth/token",
+            )
+        }
+    }
+
+    /// Configure Zoom with its `pkce: false` option for the authorization URL.
+    /// Code exchange still forwards the supplied verifier, matching the pinned provider.
+    pub fn zoom_without_pkce(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Zoom { pkce: false },
+            ..Self::zoom(client_id, client_secret)
+        }
+    }
+
     pub(super) fn is_reddit(&self) -> bool {
         matches!(self.kind, ProviderKind::Reddit)
     }
@@ -549,7 +573,12 @@ impl OAuthProvider {
                 | ProviderKind::Linear
                 | ProviderKind::Reddit
                 | ProviderKind::Kakao
+                | ProviderKind::Zoom { pkce: false }
         )
+    }
+
+    pub(super) fn forwards_code_verifier(&self) -> bool {
+        matches!(self.kind, ProviderKind::Zoom { .. }) || self.uses_pkce()
     }
 
     pub(super) fn omits_request_hints(&self) -> bool {
@@ -562,6 +591,7 @@ impl OAuthProvider {
                 | ProviderKind::Reddit
                 | ProviderKind::Salesforce
                 | ProviderKind::Kakao
+                | ProviderKind::Zoom { .. }
         )
     }
 
@@ -577,6 +607,7 @@ impl OAuthProvider {
                 | ProviderKind::Reddit
                 | ProviderKind::Salesforce
                 | ProviderKind::Kakao
+                | ProviderKind::Zoom { .. }
         )
     }
 
@@ -710,6 +741,9 @@ impl OAuthProvider {
     }
 
     pub(super) fn social_scopes<'a>(&'a self, request: Option<&'a [String]>) -> Vec<&'a str> {
+        if matches!(self.kind, ProviderKind::Zoom { .. }) {
+            return Vec::new();
+        }
         let configured = self.scopes.as_deref().unwrap_or_default();
         if matches!(self.kind, ProviderKind::Custom) {
             return request
@@ -763,7 +797,8 @@ impl OAuthProvider {
             | ProviderKind::Reddit
             | ProviderKind::Cloudflare
             | ProviderKind::Salesforce
-            | ProviderKind::Kakao => None,
+            | ProviderKind::Kakao
+            | ProviderKind::Zoom { .. } => None,
         }
     }
 }

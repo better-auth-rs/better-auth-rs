@@ -77,7 +77,7 @@ pub(super) async fn validate_authorization_code_via_provider(
             .as_deref()
             .filter(|uri| !uri.is_empty())
             .unwrap_or(redirect_uri),
-        code_verifier: if provider.uses_pkce() {
+        code_verifier: if provider.forwards_code_verifier() {
             code_verifier
         } else {
             None

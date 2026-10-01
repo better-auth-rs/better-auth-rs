@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import fixture from "../../../tests/fixtures/social-redirect-uri-1.7.6.json";
 
-for (const id of ["google", "github", "discord", "gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "cloudflare", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "salesforce", "kakao"]) {
+for (const id of ["google", "github", "discord", "gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "cloudflare", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "salesforce", "kakao", "zoom"]) {
   for (const entry of fixture.cases) {
     test(`${id} ${entry.name} callback URI matches authorization and code exchange`, async () => {
       const bodies: URLSearchParams[] = [];

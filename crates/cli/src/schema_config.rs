@@ -40,8 +40,7 @@ pub(crate) struct SchemaConfig(pub BTreeMap<String, ModelConfig>);
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ModelConfig {
     pub model_name: Option<String>,
-    #[serde(default)]
-    pub fields: BTreeMap<String, String>,
+    pub fields: Option<BTreeMap<String, String>>,
     #[serde(default)]
     pub additional_fields: indexmap::IndexMap<String, AdditionalField>,
 }
@@ -272,7 +271,7 @@ impl Entity {
             if let Some(table) = &config.model_name {
                 entity.table.clone_from(table);
             }
-            for (name, column) in &config.fields {
+            for (name, column) in config.fields.iter().flatten() {
                 let field = entity
                     .fields
                     .iter_mut()

@@ -37,6 +37,7 @@ fn provider(id: &str) -> OAuthProvider {
         "atlassian" => OAuthProvider::atlassian("social-http-client", "secret"),
         "kakao" => OAuthProvider::kakao("social-http-client", "secret"),
         "reddit" => OAuthProvider::reddit("social-http-client", "secret"),
+        "zoom" => OAuthProvider::zoom("social-http-client", "secret"),
         "cloudflare" => OAuthProvider::cloudflare("social-http-client", "secret"),
         _ => {
             assert_eq!(id, "polar");
@@ -76,11 +77,16 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
         "atlassian",
         "reddit",
         "kakao",
+        "zoom",
         "cloudflare",
     ] {
         let expected = &fixture["providers"][id];
         for case in expected["scopeCases"].as_array().unwrap() {
-            let mut config = provider(id);
+            let mut config = if id == "zoom" && case["options"]["pkce"] == false {
+                OAuthProvider::zoom_without_pkce("social-http-client", "secret")
+            } else {
+                provider(id)
+            };
             assert_eq!(config.auth_url, expected["authorizationEndpoint"]);
             assert_eq!(config.token_url, expected["tokenEndpoint"]);
             assert_eq!(json!(config.user_info_url), expected["userinfoEndpoint"]);
@@ -130,14 +136,18 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
             if matches!(
                 id,
                 "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
-            ) {
+            ) || (id == "zoom" && case["options"]["pkce"] == false)
+            {
                 assert!(!query.contains_key("code_challenge_method"));
                 assert!(!query.contains_key("code_challenge"));
             } else {
                 assert_eq!(query["code_challenge_method"], "S256");
                 assert_eq!(query["code_challenge"], fixture["codeChallenge"]);
             }
-            if matches!(id, "slack" | "naver" | "atlassian" | "reddit" | "kakao") {
+            if matches!(
+                id,
+                "slack" | "naver" | "atlassian" | "reddit" | "kakao" | "zoom"
+            ) {
                 assert!(!query.contains_key("login_hint"));
             } else {
                 assert_eq!(json!(query.get("login_hint")), case["loginHint"]);
@@ -432,6 +442,7 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
         "atlassian",
         "reddit",
         "kakao",
+        "zoom",
         "cloudflare",
     ] {
         let case = &fixture["providers"][id];
@@ -869,5 +880,53 @@ async fn reddit_http_failure_skips_mapper_and_mapper_error_propagates() {
             );
         }
         assert_eq!(*events.lock().unwrap(), ["http"]);
+    }
+}
+
+struct FailedZoomMapper(Arc<Mutex<Vec<&'static str>>>);
+
+#[async_trait]
+impl OAuthProfileMapper for FailedZoomMapper {
+    async fn map_profile(&self, _: &Value) -> AuthResult<OAuthProfile> {
+        self.0.lock().unwrap().push("map");
+        Err(AuthError::internal("Ordinary Zoom mapper failed"))
+    }
+}
+
+#[tokio::test]
+async fn zoom_http_failure_skips_mapper_and_mapper_error_propagates() {
+    let data = &fixture()["providers"]["zoom"];
+    for status in ["503 Service Unavailable", "200 OK"] {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let server = ProfileServer::with_status(
+            data["profile"].clone(),
+            events.clone(),
+            "GET",
+            None,
+            status,
+        )
+        .await;
+        let mut config = provider("zoom");
+        config.user_info_url = Some(format!("{}/profile", server.url));
+        config.map_profile_to_user = Some(Arc::new(FailedZoomMapper(events.clone())));
+        let resolved = resolve("zoom", config).await;
+        let result = social_profile::fetch_user_info_for_code(
+            &resolved.providers["zoom"],
+            OAuthUserInfoRequest {
+                access_token: Some("ordinary-access".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .await;
+        if status.starts_with("503") {
+            assert!(result.unwrap().is_none());
+            assert_eq!(*events.lock().unwrap(), ["http"]);
+        } else {
+            assert!(
+                matches!(result, Err(AuthError::Internal(message)) if message == "Ordinary Zoom mapper failed")
+            );
+            assert_eq!(*events.lock().unwrap(), ["http", "map"]);
+        }
     }
 }

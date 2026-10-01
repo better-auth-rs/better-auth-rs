@@ -1,0 +1,49 @@
+{
+  "omitted": {
+    "options": {},
+    "expected": {
+      "storage": "database",
+      "customStorage": false
+    }
+  },
+  "empty": {
+    "options": {
+      "rateLimit": {
+        "fields": {}
+      }
+    },
+    "expected": {
+      "storage": "database",
+      "customStorage": false
+    }
+  },
+  "explicitDefaults": {
+    "options": {
+      "rateLimit": {
+        "modelName": "rateLimit"
+      }
+    },
+    "expected": {
+      "storage": "database",
+      "modelName": "rateLimit",
+      "customStorage": false
+    }
+  },
+  "renamed": {
+    "options": {
+      "rateLimit": {
+        "modelName": "app_request_limits",
+        "fields": {
+          "key": "request_bucket",
+          "count": "request_total",
+          "lastRequest": "requested_at_ms"
+        }
+      }
+    },
+    "expected": {
+      "storage": "database",
+      "modelName": "app_request_limits",
+      "customStorage": false
+    }
+  }
+}

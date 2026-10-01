@@ -4,6 +4,7 @@ pub(super) fn generate(
     input: &DeriveInput,
     fields: &syn::FieldsNamed,
     role: EntityRole,
+    model_name: Option<&LitStr>,
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -102,6 +103,17 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
+    let declaration = model_name.map(|name| {
+        quote! {
+            fn model_declaration() -> Option<#core_root::schema::ModelDeclaration> {
+                Some(#core_root::schema::ModelDeclaration {
+                    role: #core_root::schema::EntityRole::RateLimit,
+                    model_name: Some(#name),
+                    fields: None,
+                })
+            }
+        }
+    });
     let ident = &input.ident;
     Ok(quote! {
         impl #seaorm_root::SeaOrmPluginModel for #ident {
@@ -109,6 +121,7 @@ pub(super) fn generate(
             type Entity = Entity;
             type ActiveModel = ActiveModel;
             type Column = Column;
+            #declaration
             fn column(name: &str) -> #core_root::AuthResult<Column> {
                 match name { #(#columns)* _ => Err(#core_root::AuthError::config(format!("Unknown plugin model column: {name}"))) }
             }

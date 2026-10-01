@@ -2996,6 +2996,176 @@
           "scope": "account_email profile_image profile_nickname"
         }
       }
+    },
+    "zoom": {
+      "authorizationEndpoint": "https://zoom.us/oauth/authorize",
+      "tokenEndpoint": "https://zoom.us/oauth/token",
+      "userinfoEndpoint": "https://api.zoom.us/v2/users/me",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": null
+        },
+        {
+          "name": "ignores configured and request scopes",
+          "options": {
+            "scope": [
+              "user:read"
+            ],
+            "disableDefaultScope": true
+          },
+          "requestScopes": [
+            "meeting:read"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "ordinary-value"
+          },
+          "scope": null
+        },
+        {
+          "name": "explicit PKCE enabled",
+          "options": {
+            "pkce": true
+          },
+          "scope": null
+        },
+        {
+          "name": "explicit PKCE disabled",
+          "options": {
+            "pkce": false,
+            "scope": [
+              "user:read"
+            ]
+          },
+          "requestScopes": [
+            "meeting:read"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "ordinary-value"
+          },
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": "zoom-owner",
+        "display_name": "Zoom Owner",
+        "first_name": "Zoom",
+        "last_name": "Owner",
+        "email": "zoom-owner@example.test",
+        "pic_url": "https://images.example.test/zoom.png",
+        "verified": 1,
+        "status": "active",
+        "language": "en-US"
+      },
+      "defaultUser": {
+        "name": "Zoom Owner",
+        "email": "zoom-owner@example.test",
+        "image": "https://images.example.test/zoom.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Zoom Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Zoom Owner",
+        "email": "zoom-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Zoom Owner",
+        "email": "zoom-owner@example.test",
+        "image": "https://images.example.test/custom-zoom.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "zero verified maps to false",
+          "profile": {
+            "id": "zoom-owner",
+            "display_name": "Zoom Owner",
+            "first_name": "Zoom",
+            "last_name": "Owner",
+            "email": "zoom-owner@example.test",
+            "pic_url": "https://images.example.test/zoom.png",
+            "verified": 0,
+            "status": "active",
+            "language": "en-US"
+          },
+          "user": {
+            "name": "Zoom Owner",
+            "email": "zoom-owner@example.test",
+            "image": "https://images.example.test/zoom.png",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "empty display name stays empty",
+          "profile": {
+            "id": "zoom-owner",
+            "display_name": "",
+            "first_name": "Zoom",
+            "last_name": "Owner",
+            "email": "zoom-owner@example.test",
+            "pic_url": "https://images.example.test/zoom.png",
+            "verified": 1,
+            "status": "active",
+            "language": "en-US"
+          },
+          "user": {
+            "name": "",
+            "email": "zoom-owner@example.test",
+            "image": "https://images.example.test/zoom.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null picture stays null",
+          "profile": {
+            "id": "zoom-owner",
+            "display_name": "Zoom Owner",
+            "first_name": "Zoom",
+            "last_name": "Owner",
+            "email": "zoom-owner@example.test",
+            "pic_url": null,
+            "verified": 1,
+            "status": "active",
+            "language": "en-US"
+          },
+          "user": {
+            "name": "Zoom Owner",
+            "email": "zoom-owner@example.test",
+            "image": null,
+            "emailVerified": true
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/zoom",
+          "deviceId": "ordinary-device"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "zoom-access-token",
+          "refresh_token": "zoom-refresh-token",
+          "token_type": "Bearer",
+          "scope": "user:read"
+        }
+      }
     }
   },
   "promptCases": [
@@ -3091,6 +3261,11 @@
     },
     {
       "provider": "kakao",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "zoom",
       "configured": "consent",
       "expected": null
     }

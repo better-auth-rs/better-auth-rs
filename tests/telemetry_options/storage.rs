@@ -21,6 +21,8 @@ async fn storage_context_matches_real_initialization() -> AuthResult<()> {
             let auth = builder.build().await?;
             assert_eq!(auth.store().adapter_id(), "memory");
             let config = reports.config()?;
+            assert!(auth.store().rate_limit_model_declaration().is_none());
+            assert!(config["rateLimit"].get("modelName").is_none());
             let case = format!(
                 "{}-{}",
                 if database { "database" } else { "stateless" },

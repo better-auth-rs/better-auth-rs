@@ -139,7 +139,7 @@ test("uses pinned Better Auth core 1.7.6", async () => {
   expect(core.version).toBe(fixture.version);
 });
 
-for (const id of ["gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "kakao", "cloudflare"] as const) {
+for (const id of ["gitlab", "spotify", "huggingface", "polar", "vercel", "figma", "dropbox", "kick", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "kakao", "zoom", "cloudflare"] as const) {
   const data = fixture.providers[id];
   for (const scopeCase of data.scopeCases) {
     test(`${id} ${scopeCase.name} scopes preserve order and PKCE`, async () => {
@@ -159,11 +159,11 @@ for (const id of ["gitlab", "spotify", "huggingface", "polar", "vercel", "figma"
         client_id: fixture.clientId,
         state: fixture.state,
         redirect_uri: redirectURI,
-        ...(["linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) ? {} : {
+        ...(["linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) || ("pkce" in scopeCase.options && scopeCase.options.pkce === false) ? {} : {
           code_challenge_method: "S256",
           code_challenge: fixture.codeChallenge,
         }),
-        ...("loginHint" in scopeCase && !["slack", "naver", "atlassian", "reddit", "kakao"].includes(id) ? { login_hint: scopeCase.loginHint } : {}),
+        ...("loginHint" in scopeCase && !["slack", "naver", "atlassian", "reddit", "kakao", "zoom"].includes(id) ? { login_hint: scopeCase.loginHint } : {}),
         ...("additionalParams" in scopeCase ? scopeCase.additionalParams : {}),
         ...("duration" in scopeCase ? { duration: scopeCase.duration } : {}),
         ...(scopeCase.scope === null ? {} : { scope: scopeCase.scope }),
@@ -363,78 +363,81 @@ test("figma returns null when its default userinfo mapper rejects", async () => 
   });
 });
 
-for (const id of ["figma", "kick", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "kakao"] as const) {
-  for (const grant of ["code", "refresh"] as const) {
-    test(`${id} ${grant} grant sends configured client authentication and the original parameters over HTTP`, async () => {
-      const data = fixture.providers[id];
-      const contract = data.tokenContract;
-      const requests: unknown[] = [];
-      const server = Bun.serve({
-        hostname: "127.0.0.1",
-        port: 0,
-        async fetch(request) {
-          if (id === "reddit") {
-            expect(request.headers.get("accept")).toBe(fixture.providers.reddit.tokenContract.headers[grant].accept);
-            if (grant === "code") expect(request.headers.get("user-agent")).toBe("better-auth");
-            else expect(request.headers.get("user-agent")).not.toBe("better-auth");
-          }
-          requests.push({
-            path: new URL(request.url).pathname,
-            method: request.method,
-            authorization: request.headers.get("authorization"),
-            contentType: request.headers.get("content-type"),
-            body: Object.fromEntries(new URLSearchParams(await request.text())),
-          });
-          return Response.json(contract.response);
-        },
-      });
-      const originalFetch = globalThis.fetch;
-      const tokenPath = new URL(data.tokenEndpoint).pathname;
-      globalThis.fetch = Object.assign(
-        (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-          const url = input instanceof Request ? input.url : String(input);
-          return originalFetch(
-            url === data.tokenEndpoint ? new URL(tokenPath, server.url) : input,
-            init,
-          );
-        },
-        originalFetch,
-      );
-      try {
-        const configured = await provider(id, { clientSecret: fixture.clientSecret });
-        const result = grant === "code"
-          ? await configured.validateAuthorizationCode(contract.code)
-          : await configured.refreshAccessToken!(contract.refresh.refreshToken);
-        expect(requests).toEqual([{
-          path: tokenPath,
-          method: "POST",
-          authorization: contract.authorization,
-          contentType: "application/x-www-form-urlencoded",
-          body: {
-            ...(!["figma", "reddit"].includes(id) ? { client_id: fixture.clientId, client_secret: fixture.clientSecret } : {}),
-            ...(grant === "code" ? {
-              grant_type: "authorization_code",
-              code: contract.code.code,
-              ...(["linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) ? {} : { code_verifier: contract.code.codeVerifier }),
-              redirect_uri: contract.code.redirectURI,
-            } : {
-              grant_type: "refresh_token",
-              refresh_token: contract.refresh.refreshToken,
-            }),
+for (const id of ["figma", "kick", "linkedin", "slack", "naver", "linear", "atlassian", "reddit", "kakao", "zoom"] as const) {
+  for (const pkce of id === "zoom" ? [true, false] : [true]) {
+    for (const grant of ["code", "refresh"] as const) {
+      test(`${id} ${grant} grant${pkce ? "" : " without authorization PKCE"} sends configured client authentication and the original parameters over HTTP`, async () => {
+        const data = fixture.providers[id];
+        const contract = data.tokenContract;
+        const requests: unknown[] = [];
+        const server = Bun.serve({
+          hostname: "127.0.0.1",
+          port: 0,
+          async fetch(request) {
+            if (id === "reddit") {
+              expect(request.headers.get("accept")).toBe(fixture.providers.reddit.tokenContract.headers[grant].accept);
+              if (grant === "code") expect(request.headers.get("user-agent")).toBe("better-auth");
+              else expect(request.headers.get("user-agent")).not.toBe("better-auth");
+            }
+            requests.push({
+              path: new URL(request.url).pathname,
+              method: request.method,
+              authorization: request.headers.get("authorization"),
+              contentType: request.headers.get("content-type"),
+              body: Object.fromEntries(new URLSearchParams(await request.text())),
+            });
+            return Response.json(contract.response);
           },
-        }]);
-        expect(result).toMatchObject({
-          accessToken: contract.response.access_token,
-          refreshToken: contract.response.refresh_token,
-          tokenType: contract.response.token_type,
-          scopes: contract.response.scope.split(" "),
         });
-      } finally {
-        globalThis.fetch = originalFetch;
-        await server.stop(true);
-      }
-    });
+        const originalFetch = globalThis.fetch;
+        const tokenPath = new URL(data.tokenEndpoint).pathname;
+        globalThis.fetch = Object.assign(
+          (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+            const url = input instanceof Request ? input.url : String(input);
+            return originalFetch(
+              url === data.tokenEndpoint ? new URL(tokenPath, server.url) : input,
+              init,
+            );
+          },
+          originalFetch,
+        );
+        try {
+          const configured = await provider(id, { clientSecret: fixture.clientSecret, ...(id === "zoom" ? { pkce } : {}) });
+          const result = grant === "code"
+            ? await configured.validateAuthorizationCode(contract.code)
+            : await configured.refreshAccessToken!(contract.refresh.refreshToken);
+          expect(requests).toEqual([{
+            path: tokenPath,
+            method: "POST",
+            authorization: contract.authorization,
+            contentType: "application/x-www-form-urlencoded",
+            body: {
+              ...(!["figma", "reddit"].includes(id) ? { client_id: fixture.clientId, client_secret: fixture.clientSecret } : {}),
+              ...(grant === "code" ? {
+                grant_type: "authorization_code",
+                code: contract.code.code,
+                ...(["linkedin", "slack", "naver", "linear", "reddit", "kakao"].includes(id) ? {} : { code_verifier: contract.code.codeVerifier }),
+                redirect_uri: contract.code.redirectURI,
+              } : {
+                grant_type: "refresh_token",
+                refresh_token: contract.refresh.refreshToken,
+              }),
+            },
+          }]);
+          expect(result).toMatchObject({
+            accessToken: contract.response.access_token,
+            refreshToken: contract.response.refresh_token,
+            tokenType: contract.response.token_type,
+            scopes: contract.response.scope.split(" "),
+          });
+        } finally {
+          globalThis.fetch = originalFetch;
+          await server.stop(true);
+        }
+      });
+    }
   }
+
 }
 
 for (const authCase of fixture.providers.cloudflare.tokenAuthCases) {
@@ -624,3 +627,22 @@ test("kakao custom refresh callback retains precedence", async () => {
   expect(await configured.refreshAccessToken!("ordinary-refresh")).toEqual({ accessToken: "custom-kakao-access" });
   expect(events).toEqual(["ordinary-refresh"]);
 });
+
+for (const status of [200, 503]) {
+  test(`zoom ordinary mapper failure and HTTP ${status} retain the shared profile boundary`, async () => {
+    const failure = new Error("Ordinary Zoom mapper failed");
+    await withUserInfo("zoom", fixture.providers.zoom.profile, async ({ options, events }) => {
+      const configured = await provider("zoom", {
+        ...options,
+        mapProfileToUser: async () => { events.push("map"); throw failure; },
+      });
+      if (status === 503) {
+        expect(await configured.getUserInfo(tokens)).toBeNull();
+        expect(events).toEqual(["http"]);
+      } else {
+        await expect(configured.getUserInfo(tokens)).rejects.toBe(failure);
+        expect(events).toEqual(["http", "map"]);
+      }
+    }, status === 503 ? { message: "Ordinary unavailable response" } : fixture.providers.zoom.profile, status);
+  });
+}

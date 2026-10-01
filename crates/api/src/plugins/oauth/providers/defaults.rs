@@ -30,6 +30,9 @@ pub(super) enum ProviderKind {
     Atlassian,
     Reddit,
     Kakao,
+    Zoom {
+        pkce: bool,
+    },
     Cloudflare,
     Salesforce,
 }
@@ -37,7 +40,7 @@ pub(super) enum ProviderKind {
 impl ProviderKind {
     pub(super) fn scopes(&self) -> &'static [&'static str] {
         match self {
-            Self::Custom | Self::Vercel => &[],
+            Self::Custom | Self::Vercel | Self::Zoom { .. } => &[],
             Self::Google { .. } => &["email", "profile", "openid"],
             Self::GitHub { .. } => &["read:user", "user:email"],
             Self::Discord => &["identify", "email"],
@@ -89,6 +92,7 @@ impl ProviderKind {
             Self::Atlassian => atlassian_profile,
             Self::Reddit => reddit_profile,
             Self::Kakao => kakao_profile,
+            Self::Zoom { .. } => zoom_profile,
             Self::Cloudflare => cloudflare_profile,
             Self::Salesforce => salesforce_profile,
             Self::GitHub { .. } | Self::Custom => {
@@ -292,6 +296,31 @@ fn reddit_profile(v: Value) -> Result<OAuthUserInfo, String> {
         }),
         email_verified: false,
         additional_fields: Default::default(),
+    })
+}
+
+fn zoom_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("missing id")?
+            .into(),
+        email: profile_email(&v)?,
+        name: v
+            .get("display_name")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        image: v
+            .get("pic_url")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Zoom picture: {error}"))?,
+        email_verified: v
+            .get("verified")
+            .is_some_and(crate::plugins::json_body::is_truthy),
     })
 }
 

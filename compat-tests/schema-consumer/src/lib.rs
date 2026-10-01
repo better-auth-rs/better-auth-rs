@@ -4,8 +4,10 @@ mod tests {
     mod dynamic_fields;
     mod field_attributes;
     mod ids;
+    mod model_declarations;
     mod organization;
     mod plugins;
+    mod rate_limit_declarations;
     mod rate_limits;
     mod reference_fields;
 

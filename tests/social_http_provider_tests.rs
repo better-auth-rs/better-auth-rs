@@ -179,15 +179,17 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             "reddit",
             "salesforce",
             "kakao",
+            "zoom",
         ]
         .into_iter()
-        .map(|id| (id, None));
+        .map(|id| (id, None, true));
         let cloudflare = fixture["providers"]["cloudflare"]["tokenAuthCases"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|case| ("cloudflare", Some(case)));
-        for (id, authentication) in providers.chain(cloudflare) {
+            .map(|case| ("cloudflare", Some(case), true));
+        for (id, authentication, pkce) in providers.chain(cloudflare).chain([("zoom", None, false)])
+        {
             let case = &fixture["providers"][id];
             let profile = if id == "kick" {
                 json!({"data": [case["profile"]]})
@@ -228,6 +230,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 "salesforce" => {
                     OAuthProvider::salesforce("social-http-client", "ordinary-client-secret")
                 }
+                "zoom" if !pkce => {
+                    OAuthProvider::zoom_without_pkce("social-http-client", "ordinary-client-secret")
+                }
+                "zoom" => OAuthProvider::zoom("social-http-client", "ordinary-client-secret"),
                 "cloudflare" => {
                     OAuthProvider::cloudflare("social-http-client", "ordinary-client-secret")
                 }
@@ -272,6 +278,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 case["mapperPatch"].clone(),
                 case["profile"].clone(),
             )));
+            if id == "zoom" {
+                provider.scopes = Some(vec!["user:read".into()]);
+                provider.prompt = Some("consent".into());
+            }
             let auth = auth(id, provider).await;
             let mut sign_in = json!({"provider":id,"callbackURL":"http://app.example.test/welcome","disableRedirect":true});
             if matches!(
@@ -285,9 +295,13 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "reddit"
                     | "salesforce"
                     | "kakao"
+                    | "zoom"
             ) {
                 sign_in["loginHint"] = json!("owner@example.test");
                 sign_in["additionalParams"] = json!({"request_marker":"request-value"});
+            }
+            if id == "zoom" {
+                sign_in["scopes"] = json!(["meeting:read"]);
             }
             let start = auth
                 .call_endpoint(
@@ -307,7 +321,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             if matches!(
                 id,
                 "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
-            ) {
+            ) || (id == "zoom" && !pkce)
+            {
                 assert!(!query.contains_key("code_challenge_method"));
                 assert!(!query.contains_key("code_challenge"));
                 if matches!(id, "linkedin" | "linear") {
@@ -318,6 +333,12 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 assert_eq!(query["request_marker"], "request-value");
             } else {
                 assert_eq!(query["code_challenge_method"], "S256");
+            }
+            if id == "zoom" {
+                assert!(!query.contains_key("scope"));
+                assert!(!query.contains_key("prompt"));
+                assert!(!query.contains_key("login_hint"));
+                assert_eq!(query["request_marker"], "request-value");
             }
             if id == "atlassian" {
                 assert!(!query.contains_key("login_hint"));
@@ -352,6 +373,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "reddit"
                     | "salesforce"
                     | "kakao"
+                    | "zoom"
             ) {
                 callback_query["device_id"] = json!("ordinary-device");
             }
@@ -512,7 +534,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             } else {
                 assert_eq!(form["client_id"], "social-http-client");
                 assert_eq!(form["client_secret"], "ordinary-client-secret");
-                if matches!(id, "dropbox" | "kick" | "atlassian" | "salesforce") {
+                if matches!(id, "dropbox" | "kick" | "atlassian" | "salesforce" | "zoom") {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 6);
                     assert!(!form.contains_key("device_id"));
@@ -561,6 +583,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "atlassian"
                     | "reddit"
                     | "kakao"
+                    | "zoom"
                     | "cloudflare"
                     | "salesforce"
             ) {

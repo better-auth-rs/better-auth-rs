@@ -33,6 +33,13 @@ impl ResolvedProvider {
             .map_or_else(|| self.config.uses_pkce(), |generic| generic.config.pkce)
     }
 
+    pub(super) fn forwards_code_verifier(&self) -> bool {
+        self.generic.as_ref().map_or_else(
+            || self.config.forwards_code_verifier(),
+            |generic| generic.config.pkce,
+        )
+    }
+
     pub(super) fn requires_nonce(&self) -> bool {
         self.generic.as_ref().is_some_and(|generic| {
             generic.verifier.is_some() && !generic.config.disable_id_token_nonce_binding

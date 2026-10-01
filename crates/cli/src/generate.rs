@@ -90,12 +90,41 @@ pub(crate) fn generate_schema(
     }
     let entities = definitions
         .iter()
-        .map(|entity| gen_entity(entity, generation));
+        .map(|entity| gen_entity(entity, generation, config));
     let tables = definitions
         .iter()
         .map(|entity| gen_table(entity, &definitions, generation))
         .collect::<Result<Vec<_>, _>>()?;
     let indexes = definitions.iter().flat_map(gen_indexes);
+    let declarations = [
+        ("user", "User"),
+        ("session", "Session"),
+        ("account", "Account"),
+        ("verification", "Verification"),
+    ]
+    .into_iter()
+    .filter_map(|(name, role)| {
+        let model = config.0.get(name)?;
+        let role = format_ident!("{role}");
+        let model_name = match &model.model_name {
+            Some(name) => quote!(Some(#name)),
+            None => quote!(None),
+        };
+        let fields = match &model.fields {
+            Some(fields) => {
+                let fields = fields.iter().map(|(name, column)| quote!((#name, #column)));
+                quote!(Some(&[#(#fields),*]))
+            }
+            None => quote!(None),
+        };
+        Some(quote! {
+            better_auth::schema::ModelDeclaration {
+                role: better_auth::schema::EntityRole::#role,
+                model_name: #model_name,
+                fields: #fields,
+            }
+        })
+    });
     let organization_schema = definitions
         .iter()
         .any(|entity| entity.role == Some(EntityRole::Organization))
@@ -172,6 +201,10 @@ pub(crate) fn generate_schema(
             type Session = session::Model;
             type Account = account::Model;
             type Verification = verification::Model;
+
+            fn model_declarations() -> &'static [better_auth::schema::ModelDeclaration] {
+                &[#(#declarations),*]
+            }
         }
 
         /// Create auth tables in an empty database.
@@ -193,7 +226,7 @@ pub(crate) fn generate_schema(
     Ok(prettyplease::unparse(&file))
 }
 
-fn gen_entity(entity: &Entity, generation: IdGeneration) -> TokenStream {
+fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) -> TokenStream {
     let mod_ident = &entity.module;
     let table_name = &entity.table;
     let field_tokens = entity.fields.iter().map(|field| {
@@ -227,9 +260,18 @@ fn gen_entity(entity: &Entity, generation: IdGeneration) -> TokenStream {
     });
     let derives = if entity.role.is_some() {
         let role = entity.name;
+        let declaration = (entity.role == Some(EntityRole::RateLimit))
+            .then(|| {
+                config
+                    .0
+                    .get("rateLimit")
+                    .and_then(|model| model.model_name.as_ref())
+            })
+            .flatten()
+            .map(|name| quote!(, model_name = #name));
         quote! {
             #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
-            #[auth(role = #role)]
+            #[auth(role = #role #declaration)]
         }
     } else {
         quote! { #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel)] }

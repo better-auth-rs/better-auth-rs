@@ -19,7 +19,7 @@ The authorization code is a short-lived, single-use code returned by the OAuth p
 
 ### PKCE (Proof Key for Code Exchange)
 
-Better Auth uses PKCE for all OAuth flows, which protects against authorization code interception attacks:
+Providers that use PKCE protect the authorization code exchange with these steps:
 
 1. **Code Verifier**: A cryptographically random string generated for each authorization request
 2. **Code Challenge**: The SHA-256 hash of the verifier, sent in the authorization URL
@@ -80,7 +80,7 @@ Authenticated users can explicitly link additional providers via the `/link-soci
 
 ## Security Considerations
 
-- **PKCE is mandatory**: All OAuth flows use PKCE with S256 code challenge method
+- **Provider PKCE policy**: Social presets follow their provider protocol. Zoom enables authorization PKCE by default and offers `zoom_without_pkce` for its explicit option. Generic OAuth enables PKCE by default. See the [provider guide](/docs/plugins/oauth) for each preset.
 - **State validation**: Every callback validates the state parameter against stored verification records
 - **Short-lived state**: OAuth state verification records expire after 10 minutes
 - **Token storage**: Access and refresh tokens are stored server-side in the database, never exposed to the client
