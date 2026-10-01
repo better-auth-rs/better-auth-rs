@@ -1,0 +1,6460 @@
+[
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-update",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-confirm",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": true,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": true,
+        "newEmail": "new@example.com",
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-confirmation"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/change-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "change-verify",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/change-email",
+        "body": {
+          "newEmail": "new@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-confirm",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": "new@example.com",
+          "requestType": "change-email-verification"
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": true,
+        "requestPath": "/api/auth/verify-email",
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "verify-legacy",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "new@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": true
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/verify-email",
+        "body": null,
+        "request": false,
+        "requestPath": null,
+        "email": "new@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "new@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": true,
+        "requestPath": "/api/auth/send-verification-email",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-async",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-async",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "direct",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-async",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/send-verification-email",
+        "body": {
+          "email": "old@example.com"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": {
+          "email": "old@example.com",
+          "updateTo": null,
+          "requestType": null
+        },
+        "urlPath": "/api/auth/verify-email",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": true,
+        "requestPath": "/api/auth/delete-user",
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync",
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "delete",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "storedAfterResponse": {
+      "email": "old@example.com",
+      "verified": false,
+      "verifications": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null,
+      "cookie": false
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      },
+      {
+        "phase": "released",
+        "path": "/delete-user",
+        "body": {},
+        "request": false,
+        "requestPath": null,
+        "email": "old@example.com",
+        "verified": false,
+        "newEmail": null,
+        "token": null,
+        "urlPath": "/api/auth/delete-user/callback",
+        "callbackURL": "/"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  }
+]

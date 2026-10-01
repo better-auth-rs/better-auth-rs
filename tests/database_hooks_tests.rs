@@ -336,7 +336,7 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
                 request.is_some(),
                 request
                     .as_ref()
-                    .map(|request| request.path.clone())
+                    .and_then(|request| request.path.clone())
                     .unwrap_or_else(|| "<none>".to_string()),
                 request.as_ref().and_then(|request| request.body.clone()),
             ))
@@ -383,7 +383,7 @@ async fn dynamic_request_context_keeps_route_params_when_body_is_replaced() {
         .expect("one hook call")
         .as_ref()
         .expect("request context");
-    assert_eq!(request.path, "/callback/:id");
+    assert_eq!(request.path.as_deref(), Some("/callback/:id"));
     assert_eq!(
         request.params,
         [("id".to_owned(), "Mock-ID_123".to_owned())]

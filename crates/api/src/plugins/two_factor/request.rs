@@ -129,3 +129,9 @@ pub(super) struct ViewBackupCodesRequest {
     #[serde(rename = "userId")]
     pub user_id: String,
 }
+
+pub(super) fn validate_native(request: &AuthRequest, operation: &str) -> AuthResult<ValidatedBody> {
+    let mut input = request.clone();
+    input.path = operation.into();
+    validate(&input, false)
+}

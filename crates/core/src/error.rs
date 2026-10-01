@@ -61,7 +61,7 @@ pub enum AuthError {
     #[error("Invalid email or password")]
     InvalidCredentials,
 
-    #[error("Authentication required")]
+    #[error("Unauthorized")]
     Unauthenticated,
 
     #[error("{0}")]
@@ -847,10 +847,7 @@ mod tests {
             AuthError::InvalidCredentials.to_string(),
             "Invalid email or password"
         );
-        assert_eq!(
-            AuthError::Unauthenticated.to_string(),
-            "Authentication required"
-        );
+        assert_eq!(AuthError::Unauthenticated.to_string(), "Unauthorized");
         assert_eq!(
             AuthError::SessionNotFound.to_string(),
             "Session not found or expired"

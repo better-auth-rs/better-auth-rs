@@ -57,6 +57,8 @@ After a successful OAuth flow, Better Auth stores:
 
 These tokens are stored in the `account` table and can be retrieved via the `/get-access-token` endpoint.
 
+Direct ID-token sign-in stores the supplied access token and ID token. Its refresh token reaches the provider callback but is not stored. Direct account linking stores the supplied refresh token.
+
 ## Account Linking
 
 Better Auth handles several scenarios during the OAuth callback:

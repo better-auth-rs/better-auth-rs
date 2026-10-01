@@ -20,46 +20,54 @@ impl BodyTrace {
         response: Option<&AuthResponse>,
     ) {
         let Some(context) = context.filter(|context| {
-            (context.path.starts_with("/api-key/")
-                || context.path.starts_with("/two-factor/")
-                || context.path.starts_with("/admin/")
-                || context.path.starts_with("/organization/"))
-                || matches!(
-                    context.path.as_str(),
-                    "/sign-in/email"
-                        | "/sign-up/email"
-                        | "/update-user"
-                        | "/update-session"
-                        | "/request-password-reset"
-                        | "/change-password"
-                        | "/verify-password"
-                        | "/sign-out"
-                        | "/revoke-session"
-                        | "/unlink-account"
-                        | "/change-email"
-                        | "/delete-user"
-                        | "/get-access-token"
-                        | "/refresh-token"
-                        | "/sign-in/username"
-                        | "/is-username-available"
-                        | "/one-time-token/verify"
-                        | "/multi-session/set-active"
-                        | "/multi-session/revoke"
-                        | "/sign-in/magic-link"
-                        | "/one-tap/callback"
-                        | "/passkey/verify-registration"
-                        | "/passkey/verify-authentication"
-                        | "/passkey/update-passkey"
-                        | "/passkey/delete-passkey"
-                        | "/device/code"
-                        | "/device/token"
-                        | "/device/approve"
-                        | "/device/deny"
-                        | "/siwe/nonce"
-                        | "/siwe/get-nonce"
-                        | "/siwe/verify"
-                        | "/send-verification-email"
-                )
+            (context.path.as_deref().is_some_and(|path| {
+                path.starts_with("/email-otp/")
+                    || path.starts_with("/phone-number/")
+                    || path.starts_with("/two-factor/")
+                    || path.starts_with("/api-key/")
+                    || path.starts_with("/admin/")
+                    || path.starts_with("/organization/")
+            })) || matches!(
+                context.path.as_deref().unwrap_or_default(),
+                "/sign-in/social"
+                    | "/link-social"
+                    | "/sign-in/email-otp"
+                    | "/forget-password/email-otp"
+                    | "/sign-in/phone-number"
+                    | "/sign-in/email"
+                    | "/sign-up/email"
+                    | "/update-user"
+                    | "/update-session"
+                    | "/request-password-reset"
+                    | "/change-password"
+                    | "/verify-password"
+                    | "/sign-out"
+                    | "/revoke-session"
+                    | "/unlink-account"
+                    | "/change-email"
+                    | "/delete-user"
+                    | "/get-access-token"
+                    | "/refresh-token"
+                    | "/sign-in/username"
+                    | "/is-username-available"
+                    | "/one-time-token/verify"
+                    | "/multi-session/set-active"
+                    | "/multi-session/revoke"
+                    | "/sign-in/magic-link"
+                    | "/one-tap/callback"
+                    | "/passkey/verify-registration"
+                    | "/passkey/verify-authentication"
+                    | "/passkey/update-passkey"
+                    | "/passkey/delete-passkey"
+                    | "/device/code"
+                    | "/device/token"
+                    | "/device/approve"
+                    | "/device/deny"
+                    | "/siwe/nonce"
+                    | "/siwe/get-nonce"
+                    | "/siwe/verify"
+                    | "/send-verification-email"
+            )
         }) else {
             return;
         };
@@ -100,6 +108,16 @@ impl<S: AuthSchema> AuthPlugin<S> for BodyBefore {
         _: &AuthContext<S>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         self.0.current("before", None);
+        if request.path() == "/email-otp/send-verification-otp"
+            && request.headers.contains_key("x-otp-patch")
+        {
+            return Ok(Some(BeforeRequestAction::MergeContext(
+                better_auth_core::endpoint_input::EndpointInputPatch {
+                    body: Some(json!({"email":"patched@test.com","type":"sign-in"})),
+                    ..Default::default()
+                },
+            )));
+        }
         Ok((request.path() == "/sign-in/email" && request.headers.get("x-body-mode").map(String::as_str) == Some("replace"))
             .then(|| BeforeRequestAction::MergeContext(better_auth_core::endpoint_input::EndpointInputPatch {
                 body: Some(json!({"password":"fixture-password","callbackURL":"/replaced","added":"replacement"})),
@@ -126,7 +144,8 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     > {
         self.record("user.update.before", context.request.as_ref(), None);
         if context.request.as_ref().is_some_and(|request| {
-            request.path == "/change-email" && request.headers.contains_key("x-user-update-cancel")
+            request.path.as_deref() == Some("/change-email")
+                && request.headers.contains_key("x-user-update-cancel")
         }) {
             return Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Cancel);
         }
@@ -224,7 +243,7 @@ impl BodyTrace {
     ) -> AuthResult<()> {
         use base64::Engine;
         let context = current_request_hook_context().unwrap();
-        if context.path != "/change-email" {
+        if context.path.as_deref() != Some("/change-email") {
             return Ok(());
         }
         let claims: Value = serde_json::from_slice(
@@ -342,6 +361,23 @@ impl better_auth::plugins::two_factor::SendTwoFactorOtp for BodyTrace {
     async fn send(&self, _: &better_auth_core::wire::UserView, otp: &str) -> AuthResult<()> {
         self.current("otp.sender", None);
         self.1.lock().unwrap().push(json!({"kind":"otp","otp":otp}));
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl better_auth::plugins::email_otp::SendEmailOtp for BodyTrace {
+    async fn send(
+        &self,
+        message: &better_auth::plugins::email_otp::EmailOtpMessage,
+    ) -> AuthResult<()> {
+        self.current("email.otp.sender", None);
+        let mut value = serde_json::to_value(message)?;
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("kind".into(), "email-otp".into());
+        self.1.lock().unwrap().push(value);
         Ok(())
     }
 }

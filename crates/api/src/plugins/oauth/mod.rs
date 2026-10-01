@@ -26,6 +26,7 @@ mod providers;
 pub use popup::{OAUTH_POPUP_COMPLETE_SCRIPT, OAUTH_POPUP_SCRIPT_CSP_HASH, OAuthPopupPlugin};
 mod proxy;
 pub use proxy::{OAuthProxyConfig, OAuthProxyPlugin};
+mod request;
 mod resolved;
 mod signin;
 mod state;
@@ -138,7 +139,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/sign-in/social", "socialSignIn"),
+            AuthRoute::post("/sign-in/social", "socialSignIn").body_validator(request::validate),
             AuthRoute::get("/callback/{id}", "callbackOAuth")
                 .body_validator(callback::body)
                 .query_validator(crate::plugins::query_input::callback)
@@ -147,7 +148,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
                 .body_validator(callback::body)
                 .query_validator(crate::plugins::query_input::callback)
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
-            AuthRoute::post("/link-social", "linkSocialAccount"),
+            AuthRoute::post("/link-social", "linkSocialAccount")
+                .require_headers(true)
+                .body_validator(request::validate),
             AuthRoute::post("/get-access-token", "getAccessToken")
                 .body_validator(account::account_body),
             AuthRoute::post("/refresh-token", "refreshToken").body_validator(account::account_body),

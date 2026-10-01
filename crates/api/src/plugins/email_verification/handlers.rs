@@ -17,9 +17,9 @@ fn verification_url(base_url: &str, token: &str, callback_url: Option<&str>) -> 
     )
 }
 
-pub(super) async fn send_verification_email_core<U: AuthUser>(
+pub(super) async fn send_verification_email_core(
     body: &SendVerificationEmailRequest,
-    current_user: Option<&U>,
+    current_session: Option<&(UserView, SessionView)>,
     request: Option<&better_auth_core::AuthRequest>,
     config: &EmailVerificationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -29,15 +29,14 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
     if let Some(callback_url) = &body.callback_url {
         let _ = endpoint_body.insert("callbackURL".into(), serde_json::json!(callback_url));
     }
-    let endpoint =
+    let mut endpoint =
         crate::plugins::endpoint_context::EndpointContext::new(request, endpoint_body.into(), ctx);
-    if config.send_verification_email.is_none()
-        && !crate::plugins::email_otp::callbacks::overrides_verification(ctx)
-    {
+    endpoint.session = current_session.cloned();
+    if !super::delivery::available(Some(config), ctx) {
         return Err(AuthError::bad_request("Verification email isn't enabled"));
     }
 
-    match current_user {
+    match current_session.map(|(user, _)| user) {
         Some(user) => {
             let session_email = user.email().unwrap_or_default();
             if session_email != body.email {
@@ -56,16 +55,12 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             )?;
             let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
             let user = ctx.user_view(user)?;
-            if config.send_verification_email.is_none()
-                && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
-            {
-                crate::plugins::email_otp::callbacks::send_verification_override(
-                    &body.email,
-                    &endpoint,
-                )
-                .await?;
-            } else if let Some(ref sender) = config.send_verification_email {
-                sender.send(&user, &url, &token).await?;
+            if let Some(task) = super::delivery::delivery(
+                Some(config),
+                super::VerificationEmail { user, url, token },
+                &endpoint,
+            )? {
+                task.await?;
             }
         }
         None => {
@@ -94,16 +89,12 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             )?;
             let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
             let user = ctx.user_view(&user)?;
-            if config.send_verification_email.is_none()
-                && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
-            {
-                crate::plugins::email_otp::callbacks::send_verification_override(
-                    &body.email,
-                    &endpoint,
-                )
-                .await?;
-            } else if let Some(ref sender) = config.send_verification_email {
-                sender.send(&user, &url, &token).await?;
+            if let Some(task) = super::delivery::delivery(
+                Some(config),
+                super::VerificationEmail { user, url, token },
+                &endpoint,
+            )? {
+                task.await?;
             }
         }
     }
@@ -125,12 +116,16 @@ pub(super) async fn verify_email_core<U, S>(
     config: &EmailVerificationConfig,
     ip_address: Option<String>,
     user_agent: Option<String>,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    endpoint: &crate::plugins::endpoint_context::EndpointContext<
+        '_,
+        impl better_auth_core::AuthSchema,
+    >,
 ) -> AuthResult<VerifyEmailResult>
 where
     U: AuthUser,
     S: AuthSession,
 {
+    let ctx = endpoint.auth;
     let current_session = if let Some((user, session)) = current_session {
         Some((ctx.user_view(&user)?, ctx.session_view(&session).await?))
     } else {
@@ -197,10 +192,24 @@ where
                 )?;
                 let url =
                     verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
-                if let Some(ref sender) = config.send_verification_email {
+                if super::delivery::available(Some(config), ctx) {
                     let mut updated_user = ctx.user_view(&user)?;
                     updated_user.email = Some(update_to.to_string());
-                    sender.send(&updated_user, &url, &new_token).await?;
+                    let task = super::delivery::delivery(
+                        Some(config),
+                        super::VerificationEmail {
+                            user: updated_user,
+                            url,
+                            token: new_token,
+                        },
+                        endpoint,
+                    )?;
+                    better_auth_core::background::run_or_await(
+                        task,
+                        ctx.config.advanced.background_tasks.as_ref(),
+                        &ctx.config.logger,
+                    )
+                    .await;
                 }
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
@@ -307,9 +316,22 @@ where
                 )?;
                 let url =
                     verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
-                if let Some(ref sender) = config.send_verification_email {
-                    let wire_user = ctx.user_view(&updated_user)?;
-                    sender.send(&wire_user, &url, &new_token).await?;
+                if super::delivery::available(Some(config), ctx) {
+                    let task = super::delivery::delivery(
+                        Some(config),
+                        super::VerificationEmail {
+                            user: ctx.user_view(&updated_user)?,
+                            url,
+                            token: new_token,
+                        },
+                        endpoint,
+                    )?;
+                    better_auth_core::background::run_or_await(
+                        task,
+                        ctx.config.advanced.background_tasks.as_ref(),
+                        &ctx.config.logger,
+                    )
+                    .await;
                 }
                 session_user.email = Some(update_to.into());
                 session_user.email_verified = false;

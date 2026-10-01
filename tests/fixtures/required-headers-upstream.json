@@ -1,0 +1,2330 @@
+{
+  "records": [
+    {
+      "key": "getSession",
+      "path": "/get-session",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getSession",
+      "path": "/get-session",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getSession",
+      "path": "/get-session",
+      "method": "GET",
+      "kind": "empty",
+      "status": 200,
+      "result": null
+    },
+    {
+      "key": "getSession",
+      "path": "/get-session",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "signOut",
+      "path": "/sign-out",
+      "method": "POST",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "signOut",
+      "path": "/sign-out",
+      "method": "POST",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "signOut",
+      "path": "/sign-out",
+      "method": "POST",
+      "kind": "empty",
+      "status": 200,
+      "result": {
+        "success": true
+      }
+    },
+    {
+      "key": "signOut",
+      "path": "/sign-out",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listSessions",
+      "path": "/list-sessions",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listSessions",
+      "path": "/list-sessions",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listSessions",
+      "path": "/list-sessions",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "revokeSession",
+      "path": "/revoke-session",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "token": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeSession",
+      "path": "/revoke-session",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "token": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeSession",
+      "path": "/revoke-session",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "token": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "revokeSession",
+      "path": "/revoke-session",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeSessions",
+      "path": "/revoke-sessions",
+      "method": "POST",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeSessions",
+      "path": "/revoke-sessions",
+      "method": "POST",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeSessions",
+      "path": "/revoke-sessions",
+      "method": "POST",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "revokeOtherSessions",
+      "path": "/revoke-other-sessions",
+      "method": "POST",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeOtherSessions",
+      "path": "/revoke-other-sessions",
+      "method": "POST",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeOtherSessions",
+      "path": "/revoke-other-sessions",
+      "method": "POST",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "linkSocialAccount",
+      "path": "/link-social",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "provider": "apple"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "linkSocialAccount",
+      "path": "/link-social",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "provider": "apple"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "linkSocialAccount",
+      "path": "/link-social",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "provider": "apple"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "linkSocialAccount",
+      "path": "/link-social",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setRole",
+      "path": "/admin/set-role",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "userId": "fixture@example.test",
+        "role": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setRole",
+      "path": "/admin/set-role",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "userId": "fixture@example.test",
+        "role": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setRole",
+      "path": "/admin/set-role",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "userId": "fixture@example.test",
+        "role": "fixture@example.test"
+      },
+      "status": 401,
+      "result": null
+    },
+    {
+      "key": "setRole",
+      "path": "/admin/set-role",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "stopImpersonating",
+      "path": "/admin/stop-impersonating",
+      "method": "POST",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "stopImpersonating",
+      "path": "/admin/stop-impersonating",
+      "method": "POST",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "stopImpersonating",
+      "path": "/admin/stop-impersonating",
+      "method": "POST",
+      "kind": "empty",
+      "status": 401,
+      "result": null
+    },
+    {
+      "key": "updateOrganization",
+      "path": "/organization/update",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "data": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateOrganization",
+      "path": "/organization/update",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "data": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateOrganization",
+      "path": "/organization/update",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "data": {}
+      },
+      "status": 401,
+      "result": {
+        "message": "User not found"
+      }
+    },
+    {
+      "key": "updateOrganization",
+      "path": "/organization/update",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deleteOrganization",
+      "path": "/organization/delete",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "organizationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deleteOrganization",
+      "path": "/organization/delete",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "organizationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deleteOrganization",
+      "path": "/organization/delete",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "organizationId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": null
+    },
+    {
+      "key": "deleteOrganization",
+      "path": "/organization/delete",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveOrganization",
+      "path": "/organization/set-active",
+      "method": "POST",
+      "kind": "missing",
+      "body": {},
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveOrganization",
+      "path": "/organization/set-active",
+      "method": "POST",
+      "kind": "request",
+      "body": {},
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveOrganization",
+      "path": "/organization/set-active",
+      "method": "POST",
+      "kind": "empty",
+      "body": {},
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "setActiveOrganization",
+      "path": "/organization/set-active",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getOrganization",
+      "path": "/organization/get-organization",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getOrganization",
+      "path": "/organization/get-organization",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getOrganization",
+      "path": "/organization/get-organization",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "getOrganization",
+      "path": "/organization/get-organization",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getFullOrganization",
+      "path": "/organization/get-full-organization",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getFullOrganization",
+      "path": "/organization/get-full-organization",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getFullOrganization",
+      "path": "/organization/get-full-organization",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "getFullOrganization",
+      "path": "/organization/get-full-organization",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrganizations",
+      "path": "/organization/list",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrganizations",
+      "path": "/organization/list",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrganizations",
+      "path": "/organization/list",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "createInvitation",
+      "path": "/organization/invite-member",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "email": "fixture@example.test",
+        "role": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "createInvitation",
+      "path": "/organization/invite-member",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "email": "fixture@example.test",
+        "role": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "createInvitation",
+      "path": "/organization/invite-member",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "email": "fixture@example.test",
+        "role": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "createInvitation",
+      "path": "/organization/invite-member",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "cancelInvitation",
+      "path": "/organization/cancel-invitation",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "cancelInvitation",
+      "path": "/organization/cancel-invitation",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "cancelInvitation",
+      "path": "/organization/cancel-invitation",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "cancelInvitation",
+      "path": "/organization/cancel-invitation",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "acceptInvitation",
+      "path": "/organization/accept-invitation",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "acceptInvitation",
+      "path": "/organization/accept-invitation",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "acceptInvitation",
+      "path": "/organization/accept-invitation",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "acceptInvitation",
+      "path": "/organization/accept-invitation",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getInvitation",
+      "path": "/organization/get-invitation",
+      "method": "GET",
+      "kind": "missing",
+      "query": {
+        "id": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getInvitation",
+      "path": "/organization/get-invitation",
+      "method": "GET",
+      "kind": "request",
+      "query": {
+        "id": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getInvitation",
+      "path": "/organization/get-invitation",
+      "method": "GET",
+      "kind": "empty",
+      "query": {
+        "id": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Not authenticated"
+      }
+    },
+    {
+      "key": "getInvitation",
+      "path": "/organization/get-invitation",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "rejectInvitation",
+      "path": "/organization/reject-invitation",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "rejectInvitation",
+      "path": "/organization/reject-invitation",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "rejectInvitation",
+      "path": "/organization/reject-invitation",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "invitationId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "rejectInvitation",
+      "path": "/organization/reject-invitation",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listInvitations",
+      "path": "/organization/list-invitations",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listInvitations",
+      "path": "/organization/list-invitations",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listInvitations",
+      "path": "/organization/list-invitations",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "listInvitations",
+      "path": "/organization/list-invitations",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getActiveMember",
+      "path": "/organization/get-active-member",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getActiveMember",
+      "path": "/organization/get-active-member",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getActiveMember",
+      "path": "/organization/get-active-member",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "removeMember",
+      "path": "/organization/remove-member",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "memberIdOrEmail": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "removeMember",
+      "path": "/organization/remove-member",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "memberIdOrEmail": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "removeMember",
+      "path": "/organization/remove-member",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "memberIdOrEmail": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "removeMember",
+      "path": "/organization/remove-member",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateMemberRole",
+      "path": "/organization/update-member-role",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "role": "fixture@example.test",
+        "memberId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateMemberRole",
+      "path": "/organization/update-member-role",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "role": "fixture@example.test",
+        "memberId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateMemberRole",
+      "path": "/organization/update-member-role",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "role": "fixture@example.test",
+        "memberId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "updateMemberRole",
+      "path": "/organization/update-member-role",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "leaveOrganization",
+      "path": "/organization/leave",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "organizationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "leaveOrganization",
+      "path": "/organization/leave",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "organizationId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "leaveOrganization",
+      "path": "/organization/leave",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "organizationId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "leaveOrganization",
+      "path": "/organization/leave",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listMembers",
+      "path": "/organization/list-members",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listMembers",
+      "path": "/organization/list-members",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listMembers",
+      "path": "/organization/list-members",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "listMembers",
+      "path": "/organization/list-members",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getActiveMemberRole",
+      "path": "/organization/get-active-member-role",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getActiveMemberRole",
+      "path": "/organization/get-active-member-role",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getActiveMemberRole",
+      "path": "/organization/get-active-member-role",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "getActiveMemberRole",
+      "path": "/organization/get-active-member-role",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrganizationTeams",
+      "path": "/organization/list-teams",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrganizationTeams",
+      "path": "/organization/list-teams",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrganizationTeams",
+      "path": "/organization/list-teams",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "listOrganizationTeams",
+      "path": "/organization/list-teams",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateTeam",
+      "path": "/organization/update-team",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "teamId": "fixture@example.test",
+        "data": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateTeam",
+      "path": "/organization/update-team",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "teamId": "fixture@example.test",
+        "data": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateTeam",
+      "path": "/organization/update-team",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "teamId": "fixture@example.test",
+        "data": {}
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "updateTeam",
+      "path": "/organization/update-team",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveTeam",
+      "path": "/organization/set-active-team",
+      "method": "POST",
+      "kind": "missing",
+      "body": {},
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveTeam",
+      "path": "/organization/set-active-team",
+      "method": "POST",
+      "kind": "request",
+      "body": {},
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveTeam",
+      "path": "/organization/set-active-team",
+      "method": "POST",
+      "kind": "empty",
+      "body": {},
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "setActiveTeam",
+      "path": "/organization/set-active-team",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listUserTeams",
+      "path": "/organization/list-user-teams",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listUserTeams",
+      "path": "/organization/list-user-teams",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listUserTeams",
+      "path": "/organization/list-user-teams",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "listUserTeams",
+      "path": "/organization/list-user-teams",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listTeamMembers",
+      "path": "/organization/list-team-members",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listTeamMembers",
+      "path": "/organization/list-team-members",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listTeamMembers",
+      "path": "/organization/list-team-members",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "listTeamMembers",
+      "path": "/organization/list-team-members",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "addTeamMember",
+      "path": "/organization/add-team-member",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "teamId": "fixture@example.test",
+        "userId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "addTeamMember",
+      "path": "/organization/add-team-member",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "teamId": "fixture@example.test",
+        "userId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "addTeamMember",
+      "path": "/organization/add-team-member",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "teamId": "fixture@example.test",
+        "userId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "addTeamMember",
+      "path": "/organization/add-team-member",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "removeTeamMember",
+      "path": "/organization/remove-team-member",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "teamId": "fixture@example.test",
+        "userId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "removeTeamMember",
+      "path": "/organization/remove-team-member",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "teamId": "fixture@example.test",
+        "userId": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "removeTeamMember",
+      "path": "/organization/remove-team-member",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "teamId": "fixture@example.test",
+        "userId": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "removeTeamMember",
+      "path": "/organization/remove-team-member",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "createOrgRole",
+      "path": "/organization/create-role",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "role": "fixture@example.test",
+        "permission": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "createOrgRole",
+      "path": "/organization/create-role",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "role": "fixture@example.test",
+        "permission": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "createOrgRole",
+      "path": "/organization/create-role",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "role": "fixture@example.test",
+        "permission": {}
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "createOrgRole",
+      "path": "/organization/create-role",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deleteOrgRole",
+      "path": "/organization/delete-role",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "roleName": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deleteOrgRole",
+      "path": "/organization/delete-role",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "roleName": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deleteOrgRole",
+      "path": "/organization/delete-role",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "roleName": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "deleteOrgRole",
+      "path": "/organization/delete-role",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number; [body] Invalid input",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrgRoles",
+      "path": "/organization/list-roles",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrgRoles",
+      "path": "/organization/list-roles",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listOrgRoles",
+      "path": "/organization/list-roles",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "listOrgRoles",
+      "path": "/organization/list-roles",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getOrgRole",
+      "path": "/organization/get-role",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getOrgRole",
+      "path": "/organization/get-role",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getOrgRole",
+      "path": "/organization/get-role",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "getOrgRole",
+      "path": "/organization/get-role",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number; [query] Invalid input",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateOrgRole",
+      "path": "/organization/update-role",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "data": {},
+        "roleName": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateOrgRole",
+      "path": "/organization/update-role",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "data": {},
+        "roleName": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "updateOrgRole",
+      "path": "/organization/update-role",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "data": {},
+        "roleName": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "updateOrgRole",
+      "path": "/organization/update-role",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number; [body] Invalid input",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "hasPermission",
+      "path": "/organization/has-permission",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "permission": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "hasPermission",
+      "path": "/organization/has-permission",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "permission": {}
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "hasPermission",
+      "path": "/organization/has-permission",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "permission": {}
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "hasPermission",
+      "path": "/organization/has-permission",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number; [body] Invalid input",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listDeviceSessions",
+      "path": "/multi-session/list-device-sessions",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listDeviceSessions",
+      "path": "/multi-session/list-device-sessions",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "listDeviceSessions",
+      "path": "/multi-session/list-device-sessions",
+      "method": "GET",
+      "kind": "empty",
+      "status": 200,
+      "result": []
+    },
+    {
+      "key": "setActiveSession",
+      "path": "/multi-session/set-active",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "sessionToken": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveSession",
+      "path": "/multi-session/set-active",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "sessionToken": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "setActiveSession",
+      "path": "/multi-session/set-active",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "sessionToken": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Invalid session token",
+        "code": "INVALID_SESSION_TOKEN"
+      }
+    },
+    {
+      "key": "setActiveSession",
+      "path": "/multi-session/set-active",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeDeviceSession",
+      "path": "/multi-session/revoke",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "sessionToken": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeDeviceSession",
+      "path": "/multi-session/revoke",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "sessionToken": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "revokeDeviceSession",
+      "path": "/multi-session/revoke",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "sessionToken": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "revokeDeviceSession",
+      "path": "/multi-session/revoke",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "signInMagicLink",
+      "path": "/sign-in/magic-link",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "email": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "signInMagicLink",
+      "path": "/sign-in/magic-link",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "email": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "signInMagicLink",
+      "path": "/sign-in/magic-link",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "email": "fixture@example.test"
+      },
+      "status": 200,
+      "result": {
+        "status": true
+      }
+    },
+    {
+      "key": "signInMagicLink",
+      "path": "/sign-in/magic-link",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "magicLinkVerify",
+      "path": "/magic-link/verify",
+      "method": "GET",
+      "kind": "missing",
+      "query": {
+        "token": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "magicLinkVerify",
+      "path": "/magic-link/verify",
+      "method": "GET",
+      "kind": "request",
+      "query": {
+        "token": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "magicLinkVerify",
+      "path": "/magic-link/verify",
+      "method": "GET",
+      "kind": "empty",
+      "query": {
+        "token": "fixture@example.test"
+      },
+      "status": 302,
+      "result": null
+    },
+    {
+      "key": "magicLinkVerify",
+      "path": "/magic-link/verify",
+      "method": "GET",
+      "kind": "invalid-query",
+      "query": 7,
+      "status": 400,
+      "result": {
+        "message": "[query] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getToken",
+      "path": "/token",
+      "method": "GET",
+      "kind": "missing",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getToken",
+      "path": "/token",
+      "method": "GET",
+      "kind": "request",
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "getToken",
+      "path": "/token",
+      "method": "GET",
+      "kind": "empty",
+      "status": 401,
+      "result": {
+        "message": "Unauthorized",
+        "code": "UNAUTHORIZED"
+      }
+    },
+    {
+      "key": "deviceApprove",
+      "path": "/device/approve",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "userCode": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deviceApprove",
+      "path": "/device/approve",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "userCode": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deviceApprove",
+      "path": "/device/approve",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "userCode": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "error": "unauthorized",
+        "error_description": "Authentication required"
+      }
+    },
+    {
+      "key": "deviceApprove",
+      "path": "/device/approve",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deviceDeny",
+      "path": "/device/deny",
+      "method": "POST",
+      "kind": "missing",
+      "body": {
+        "userCode": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deviceDeny",
+      "path": "/device/deny",
+      "method": "POST",
+      "kind": "request",
+      "body": {
+        "userCode": "fixture@example.test"
+      },
+      "status": 400,
+      "result": {
+        "message": "Headers is required",
+        "code": "VALIDATION_ERROR"
+      }
+    },
+    {
+      "key": "deviceDeny",
+      "path": "/device/deny",
+      "method": "POST",
+      "kind": "empty",
+      "body": {
+        "userCode": "fixture@example.test"
+      },
+      "status": 401,
+      "result": {
+        "error": "unauthorized",
+        "error_description": "Authentication required"
+      }
+    },
+    {
+      "key": "deviceDeny",
+      "path": "/device/deny",
+      "method": "POST",
+      "kind": "invalid-body",
+      "body": 7,
+      "status": 400,
+      "result": {
+        "message": "[body] Invalid input: expected object, received number",
+        "code": "VALIDATION_ERROR"
+      }
+    }
+  ],
+  "trace": [
+    {
+      "phase": "before",
+      "query": null,
+      "body": {
+        "token": "fixture",
+        "unknown": 7
+      },
+      "request": false
+    },
+    {
+      "phase": "after",
+      "query": null,
+      "body": {
+        "token": "fixture",
+        "unknown": 7
+      },
+      "request": false
+    }
+  ]
+}

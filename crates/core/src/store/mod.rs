@@ -132,6 +132,25 @@ pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<crate::wire::VerificationView>>;
+    /// Consume the latest verification and remove older matches through this transaction.
+    async fn consume_verification_including_expired(
+        &self,
+        _identifier: &str,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
+        Err(AuthError::config(
+            "The store must support transactional verification consumption",
+        ))
+    }
+    /// Consume through this transaction, then discard an expired result.
+    async fn consume_verification_by_identifier(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
+        Ok(self
+            .consume_verification_including_expired(identifier)
+            .await?
+            .filter(|record| !record.expires_at.is_before(chrono::Utc::now())))
+    }
     /// Delete a verification through the active transaction and its storage policy.
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()>;
     /// Delete expired verification records inside the active transaction.
@@ -893,6 +912,15 @@ pub trait ApiKeyStore: Send + Sync {
         id: &crate::SchemaValue<String>,
         update: UpdateApiKey,
     ) -> AuthResult<ApiKey>;
+    /// Update a matching key, returning `None` when no row matches.
+    /// Legacy metadata repair permits a missing database row in secondary-storage mode.
+    async fn update_api_key_optional(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdateApiKey,
+    ) -> AuthResult<Option<ApiKey>> {
+        self.update_api_key(id, update).await.map(Some)
+    }
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()>;
     async fn delete_expired_api_keys(&self) -> AuthResult<usize>;
 

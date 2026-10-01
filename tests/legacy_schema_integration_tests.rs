@@ -30,6 +30,9 @@ use chrono::{DateTime, Utc};
 use rand::rngs::OsRng;
 use serde_json::json;
 
+#[path = "common/postgres_numeric_ids.rs"]
+mod postgres_numeric_ids;
+
 mod user {
     use super::*;
 
@@ -558,8 +561,10 @@ mod account {
             id: Option<Self::Id>,
             fields: serde_json::Map<String, serde_json::Value>,
         ) -> AuthResult<Self::ActiveModel> {
-            let mut active = <ActiveModel as Default>::default();
-            active.id = id.map_or(NotSet, Set);
+            let mut active = ActiveModel {
+                id: id.map_or(NotSet, Set),
+                ..Default::default()
+            };
             Self::apply_fields(&mut active, fields)?;
             Ok(active)
         }
@@ -617,10 +622,10 @@ mod account {
                 }
                 let key = field.field_name.as_deref().unwrap_or(logical);
                 let value = match Self::field_column(key)? {
-                    Column::Id => serde_json::to_value(&self.id)?,
+                    Column::Id => serde_json::to_value(self.id)?,
                     Column::AccountId => serde_json::to_value(&self.account_id)?,
                     Column::ProviderId => serde_json::to_value(&self.provider_id)?,
-                    Column::UserId => serde_json::to_value(&self.user_id)?,
+                    Column::UserId => serde_json::to_value(self.user_id)?,
                     Column::AccessToken => serde_json::to_value(&self.access_token)?,
                     Column::RefreshToken => serde_json::to_value(&self.refresh_token)?,
                     Column::IdToken => serde_json::to_value(&self.id_token)?,
@@ -743,8 +748,10 @@ mod verification {
             id: Option<Self::Id>,
             fields: serde_json::Map<String, serde_json::Value>,
         ) -> AuthResult<Self::ActiveModel> {
-            let mut active = <ActiveModel as Default>::default();
-            active.id = id.map_or(NotSet, Set);
+            let mut active = ActiveModel {
+                id: id.map_or(NotSet, Set),
+                ..Default::default()
+            };
             Self::apply_fields(&mut active, fields)?;
             Ok(active)
         }
@@ -782,7 +789,7 @@ mod verification {
                 }
                 let key = field.field_name.as_deref().unwrap_or(logical);
                 let value = match Self::field_column(key)? {
-                    Column::Id => serde_json::to_value(&self.id)?,
+                    Column::Id => serde_json::to_value(self.id)?,
                     Column::Identifier => serde_json::to_value(&self.identifier)?,
                     Column::Value => serde_json::to_value(&self.value)?,
                     Column::ExpiresAt => better_auth_core::utils::date::serialize(
@@ -1078,7 +1085,13 @@ async fn legacy_numeric_schema_store_verifications_use_public_string_ids() {
         .await
         .expect("verification should insert");
 
-    assert!(!verification.id.typed().unwrap().is_empty());
+    assert!(
+        !verification
+            .id
+            .typed()
+            .expect("numeric verification ID")
+            .is_empty()
+    );
 
     let loaded = auth
         .store()
@@ -1088,7 +1101,7 @@ async fn legacy_numeric_schema_store_verifications_use_public_string_ids() {
     assert!(loaded.is_some());
 
     auth.store()
-        .delete_verification(verification.id.typed().unwrap())
+        .delete_verification(verification.id.typed().expect("numeric verification ID"))
         .await
         .expect("delete should succeed");
 

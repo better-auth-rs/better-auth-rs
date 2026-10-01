@@ -4,6 +4,56 @@ use sea_orm::sea_query::{ArrayType, ColumnType, Nullable, Value, ValueType, Valu
 use sea_orm::{ColIdx, QueryResult, TryGetError, TryGetable};
 use serde::{Deserialize, Deserializer, Serialize};
 
+pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
+    name: &str,
+    field: &better_auth_core::user_fields::UserFieldConfig,
+    value: serde_json::Value,
+    policy: &better_auth_core::id::IdGeneration,
+    column: impl Fn(&str) -> better_auth_core::AuthResult<C>,
+    native_json_field: impl Fn(&str) -> bool,
+    backend: sea_orm::DbBackend,
+) -> better_auth_core::AuthResult<serde_json::Value> {
+    if matches!(policy, better_auth_core::id::IdGeneration::Serial) && field.references_id() {
+        let text_column = matches!(
+            column(name)?.def().get_column_type(),
+            ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
+        );
+        return serial_reference(value, text_column);
+    }
+    Ok(field.adapter_input(
+        value,
+        backend == sea_orm::DbBackend::Postgres,
+        native_json_field(name),
+    ))
+}
+
+fn serial_reference(
+    value: serde_json::Value,
+    text_column: bool,
+) -> better_auth_core::AuthResult<serde_json::Value> {
+    use serde_json::Value;
+    let convert = |value: Value| {
+        if value.is_null() {
+            return Ok(Value::Null);
+        }
+        let number = better_auth_core::query::number(&value)?;
+        let text = better_auth_core::schema_value::number_string(number);
+        if text_column {
+            Ok(Value::String(text))
+        } else {
+            Ok(serde_json::from_str(&text)?)
+        }
+    };
+    match value {
+        Value::Array(values) => values
+            .into_iter()
+            .map(convert)
+            .collect::<better_auth_core::AuthResult<Vec<_>>>()
+            .map(Value::Array),
+        value => convert(value),
+    }
+}
+
 pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
     active: &mut A,
     fields: &better_auth_core::user_fields::UserConfig,
@@ -16,7 +66,14 @@ pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
         }
         let column = column(field.field_name.as_deref().unwrap_or(name))?;
         if let sea_orm::ActiveValue::Set(value) = active.get(column) {
-            active.set(column, binding(value, backend)?);
+            use sea_orm::ColumnTrait;
+            let text_column = matches!(
+                column.def().get_column_type(),
+                ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
+            );
+            if backend != sea_orm::DbBackend::Postgres || text_column {
+                active.set(column, binding(value, backend)?);
+            }
         }
     }
     Ok(())
@@ -134,5 +191,71 @@ impl ValueType for ReferenceId {
 impl TryGetable for ReferenceId {
     fn try_get_by<I: ColIdx>(result: &QueryResult, index: I) -> Result<Self, TryGetError> {
         String::try_get_by(result, index).map(Self::Text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::input_binding;
+    use better_auth_core::id::IdGeneration;
+    use better_auth_core::user_fields::{
+        UserConfig, UserFieldConfig, UserFieldReference, UserFieldType,
+    };
+    use serde_json::json;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[test]
+    fn serial_references_skip_json_encoding_after_one_application_transform() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let config = UserConfig {
+            additional_fields: [(
+                "owner".into(),
+                UserFieldConfig {
+                    field_type: UserFieldType::Json,
+                    references: Some(UserFieldReference {
+                        model: "user".into(),
+                        field: "id".into(),
+                    }),
+                    input_transform: Some(Arc::new(move |value| {
+                        assert_eq!(value, Some(json!("alias")));
+                        let _ = observed.fetch_add(1, Ordering::SeqCst);
+                        Ok(Some(json!(["0x10", null, [], ["1e0"]])))
+                    })),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        };
+        for (policy, expected) in [
+            (IdGeneration::Serial, json!([16, null, 0, 1])),
+            (IdGeneration::Random, json!("[\"0x10\",null,[],[\"1e0\"]]")),
+        ] {
+            let values = config.storage_fields_with_binding(
+                [("owner".into(), json!("alias"))].into_iter().collect(),
+                true,
+                |name, field, value| {
+                    input_binding(
+                        name,
+                        field,
+                        value,
+                        &policy,
+                        |_| Ok(crate::store::entities::user::Column::Metadata),
+                        |_| true,
+                        sea_orm::DbBackend::Sqlite,
+                    )
+                },
+            );
+            assert!(
+                values
+                    .as_ref()
+                    .is_ok_and(|values| values.get("owner") == Some(&expected)),
+                "{values:?}"
+            );
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }

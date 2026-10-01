@@ -102,7 +102,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
             context
                 .request
                 .as_ref()
-                .map(|request| request.path.as_str()),
+                .and_then(|request| request.path.as_deref()),
         )
     }
 }
@@ -127,7 +127,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for MissingUpdateHooks {
             context
                 .request
                 .as_ref()
-                .map(|request| request.path.as_str()),
+                .and_then(|request| request.path.as_deref()),
         )
     }
 }

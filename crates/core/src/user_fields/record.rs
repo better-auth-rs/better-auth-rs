@@ -152,6 +152,18 @@ impl UserConfig {
         supports_native_json: bool,
         native_json_field: impl Fn(&str) -> bool,
     ) -> AuthResult<Map<String, Value>> {
+        self.record_storage_fields_with_binding(input, create, |name, field, value| {
+            Ok(field.adapter_input(value, supports_native_json, native_json_field(name)))
+        })
+    }
+
+    /// Bind a complete record after its storage policies, while retaining force-allowed IDs.
+    pub fn record_storage_fields_with_binding(
+        &self,
+        input: Map<String, Value>,
+        create: bool,
+        bind: impl Fn(&str, &super::UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<Map<String, Value>> {
         let mut output = Map::new();
         if let Some(id) = input.get("id") {
             let _ = output.insert("id".into(), id.clone());
@@ -163,14 +175,7 @@ impl UserConfig {
             }
             let storage = field.field_name.as_deref().unwrap_or(name);
             if let Some(value) = transformed.get(storage) {
-                let _ = output.insert(
-                    storage.to_owned(),
-                    field.adapter_input(
-                        value.clone(),
-                        supports_native_json,
-                        native_json_field(storage),
-                    ),
-                );
+                let _ = output.insert(storage.to_owned(), bind(storage, field, value.clone())?);
             }
         }
         Ok(output)

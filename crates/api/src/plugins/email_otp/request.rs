@@ -1,58 +1,21 @@
+use better_auth_core::endpoint_input::ValidatedBody;
 use better_auth_core::{AuthError, AuthRequest, AuthResponse, AuthResult};
 use serde_json::{Map, Value};
 
 use super::EmailOtpType;
 use crate::plugins::json_body;
 
+#[derive(Clone)]
 pub(super) struct Body(Map<String, Value>);
 
 impl Body {
-    pub(super) fn parse(
-        req: &AuthRequest,
-        required: &[&str],
-        optional: &[&str],
-    ) -> Result<Self, AuthResponse> {
-        let body = json_body::parse(req)?;
-        let Some(Value::Object(body)) = body.as_ref() else {
-            return Err(json_body::validation_error(&json_body::invalid_type(
-                "body",
-                "object",
-                body.as_ref(),
-            )));
-        };
-        let mut errors = Vec::new();
-        for field in required.iter().chain(optional) {
-            let value = body.get(*field);
-            if *field == "type" {
-                if !matches!(
-                    value.and_then(Value::as_str),
-                    Some("email-verification" | "sign-in" | "forget-password" | "change-email")
-                ) {
-                    errors.push("[body.type] Invalid option: expected one of \"email-verification\"|\"sign-in\"|\"forget-password\"|\"change-email\"".to_owned());
-                }
-            } else if (required.contains(field) || value.is_some())
-                && !value.is_some_and(Value::is_string)
-            {
-                errors.push(json_body::invalid_type(
-                    &format!("body.{field}"),
-                    "string",
-                    value,
-                ));
-            }
-        }
-        if !errors.is_empty() {
-            return Err(json_body::validation_error(&errors.join("; ")));
-        }
-        Ok(Self(body.clone()))
+    pub(super) fn parse(req: &AuthRequest) -> Result<Self, AuthResponse> {
+        req.validated_body::<Self>()
+            .cloned()
+            .map_or_else(|| parse(req).map_err(|error| error.to_auth_response()), Ok)
     }
-    pub(super) fn callback_body(&self, fields: &[&str]) -> Value {
-        Value::Object(
-            self.0
-                .iter()
-                .filter(|(key, _)| fields.contains(&key.as_str()))
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect(),
-        )
+    pub(super) fn value(&self) -> Value {
+        Value::Object(self.0.clone())
     }
     pub(super) fn get(&self, field: &str) -> &str {
         self.optional(field).unwrap_or_default()
@@ -73,32 +36,71 @@ impl Body {
     }
 }
 
+pub(super) fn validate(req: &AuthRequest) -> AuthResult<ValidatedBody> {
+    let body = parse(req)?;
+    Ok(ValidatedBody::new(Some(body.value()), body))
+}
+
+fn parse(req: &AuthRequest) -> AuthResult<Body> {
+    let (required, optional): (&[&str], &[&str]) = match req.path() {
+        "/email-otp/send-verification-otp" => (&["email", "type"], &[]),
+        "/email-otp/check-verification-otp" => (&["email", "type", "otp"], &[]),
+        "/email-otp/verify-email" => (&["email", "otp"], &[]),
+        "/sign-in/email-otp" => (&["email", "otp"], &["name", "image"]),
+        "/email-otp/request-password-reset" | "/forget-password/email-otp" => (&["email"], &[]),
+        "/email-otp/reset-password" => (&["email", "otp", "password"], &[]),
+        "/email-otp/request-email-change" => (&["newEmail"], &["otp"]),
+        "/email-otp/change-email" => (&["newEmail", "otp"], &[]),
+        _ => return Err(AuthError::internal("Unknown Email OTP body schema")),
+    };
+    let record = req.path() == "/sign-in/email-otp";
+    let input = req.input_body()?;
+    let body = input.as_ref().and_then(Value::as_object).ok_or_else(|| {
+        let mut message = json_body::invalid_type("body", "object", input.as_ref());
+        if record {
+            message.push_str("; ");
+            message.push_str(&json_body::invalid_type("body", "record", input.as_ref()));
+        }
+        AuthError::from(json_body::validation_error(&message))
+    })?;
+    let mut errors = Vec::new();
+    for field in required.iter().chain(optional) {
+        let value = body.get(*field);
+        if *field == "type" {
+            if !matches!(
+                value.and_then(Value::as_str),
+                Some("email-verification" | "sign-in" | "forget-password" | "change-email")
+            ) {
+                errors.push(r#"[body.type] Invalid option: expected one of "email-verification"|"sign-in"|"forget-password"|"change-email""#.to_owned());
+            }
+        } else if (required.contains(field) || value.is_some())
+            && !value.is_some_and(Value::is_string)
+        {
+            errors.push(json_body::invalid_type(
+                &format!("body.{field}"),
+                "string",
+                value,
+            ));
+        }
+    }
+    if !errors.is_empty() {
+        return Err(json_body::validation_error(&errors.join("; ")).into());
+    }
+    Ok(Body(
+        body.iter()
+            .filter(|(key, _)| {
+                key.as_str() != "__proto__"
+                    && (record
+                        || required.contains(&key.as_str())
+                        || optional.contains(&key.as_str()))
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
+    ))
+}
+
 pub(super) fn validate_email(email: &str) -> AuthResult<()> {
-    let valid = email.split_once('@').is_some_and(|(local, domain)| {
-        !local.is_empty()
-            && !local.starts_with('.')
-            && !local.contains("..")
-            && local
-                .bytes()
-                .all(|ch| ch.is_ascii_alphanumeric() || b"_'+-.".contains(&ch))
-            && local
-                .bytes()
-                .last()
-                .is_some_and(|ch| ch.is_ascii_alphanumeric() || b"_+-".contains(&ch))
-            && domain.rsplit_once('.').is_some_and(|(_, tld)| {
-                tld.len() >= 2 && tld.bytes().all(|ch| ch.is_ascii_alphabetic())
-            })
-            && domain.split('.').all(|label| {
-                label
-                    .bytes()
-                    .next()
-                    .is_some_and(|ch| ch.is_ascii_alphanumeric())
-                    && label
-                        .bytes()
-                        .all(|ch| ch.is_ascii_alphanumeric() || ch == b'-')
-            })
-    });
-    if valid {
+    if json_body::valid_email(email)? {
         Ok(())
     } else {
         Err(AuthError::Upstream {

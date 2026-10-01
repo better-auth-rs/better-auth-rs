@@ -145,15 +145,15 @@ pub struct EmailOtpPlugin {
 better_auth_core::impl_auth_plugin! {
     EmailOtpPlugin, "email-otp";
     routes {
-        post "/email-otp/send-verification-otp" => send, "sendEmailVerificationOTP";
-        post "/email-otp/check-verification-otp" => check, "verifyEmailWithOTP";
-        post "/email-otp/verify-email" => verify_email, "verifyEmailOTP";
-        post "/sign-in/email-otp" => sign_in, "signInWithEmailOTP";
-        post "/email-otp/request-password-reset" => request_password_reset, "requestPasswordResetWithEmailOTP";
-        post "/forget-password/email-otp" => request_password_reset, "forgetPasswordWithEmailOTP";
-        post "/email-otp/reset-password" => reset_password, "resetPasswordWithEmailOTP";
-        post "/email-otp/request-email-change" => request_email_change, "requestEmailChangeWithEmailOTP";
-        post "/email-otp/change-email" => handle_change_email, "changeEmailWithEmailOTP";
+        post "/email-otp/send-verification-otp" => send, "sendEmailVerificationOTP", body = request::validate;
+        post "/email-otp/check-verification-otp" => check, "verifyEmailWithOTP", body = request::validate;
+        post "/email-otp/verify-email" => verify_email, "verifyEmailOTP", body = request::validate;
+        post "/sign-in/email-otp" => sign_in, "signInWithEmailOTP", body = request::validate;
+        post "/email-otp/request-password-reset" => request_password_reset, "requestPasswordResetWithEmailOTP", body = request::validate;
+        post "/forget-password/email-otp" => request_password_reset, "forgetPasswordWithEmailOTP", body = request::validate;
+        post "/email-otp/reset-password" => reset_password, "resetPasswordWithEmailOTP", body = request::validate;
+        post "/email-otp/request-email-change" => request_email_change, "requestEmailChangeWithEmailOTP", body = request::validate;
+        post "/email-otp/change-email" => handle_change_email, "changeEmailWithEmailOTP", body = request::validate;
     }
     extra {
         async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {

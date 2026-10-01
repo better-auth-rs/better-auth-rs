@@ -64,18 +64,24 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::get("/get-session", "getSession")
+                .require_headers(true)
                 .query_validator(better_auth_core::query::session_query),
             // Upstream declares `/get-session` as `method: ["GET", "POST"]`;
             // the POST form requires `session.defer_session_refresh`.
             AuthRoute::post("/get-session", "getSession")
+                .require_headers(true)
                 .query_validator(better_auth_core::query::session_query),
-            AuthRoute::post("/sign-out", "signOut").body_validator(super::json_body::sign_out_body),
+            AuthRoute::post("/sign-out", "signOut")
+                .require_headers(true)
+                .body_validator(super::json_body::sign_out_body),
             AuthRoute::post("/update-session", "updateSession")
                 .body_validator(better_auth_core::endpoint_input::record_body),
-            AuthRoute::get("/list-sessions", "listUserSessions"),
-            AuthRoute::post("/revoke-session", "revokeSession").body_validator(revoke_session_body),
-            AuthRoute::post("/revoke-sessions", "revokeSessions"),
-            AuthRoute::post("/revoke-other-sessions", "revokeOtherSessions"),
+            AuthRoute::get("/list-sessions", "listUserSessions").require_headers(true),
+            AuthRoute::post("/revoke-session", "revokeSession")
+                .require_headers(true)
+                .body_validator(revoke_session_body),
+            AuthRoute::post("/revoke-sessions", "revokeSessions").require_headers(true),
+            AuthRoute::post("/revoke-other-sessions", "revokeOtherSessions").require_headers(true),
         ]
     }
 

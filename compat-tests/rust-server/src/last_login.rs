@@ -53,7 +53,7 @@ fn rejected() -> AuthError {
 
 impl Events {
     fn record(&self, kind: &str, request: Option<&RequestHookContext>, value: Option<Value>) {
-        let mut event = json!({"kind":kind,"path":request.map(|request|request.path.as_str()),"http":request.is_some_and(|request|request.is_http)});
+        let mut event = json!({"kind":kind,"path":request.and_then(|request|request.path.as_deref()),"http":request.is_some_and(|request|request.is_http)});
         if let Some(value) = value {
             event["value"] = value;
         }

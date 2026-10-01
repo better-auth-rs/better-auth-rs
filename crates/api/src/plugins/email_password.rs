@@ -7,15 +7,17 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, RequestMeta};
 
-use super::{email_verification::EmailVerificationPlugin, two_factor};
+use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::{SessionIssueError, issue_user_session_with_lifetime};
 
+mod callbacks;
 mod request;
 mod signup;
 use super::username::request::SignInUsernameRequest;
+pub use callbacks::EmailPasswordCallbacks;
 use signup::sign_up_core;
 pub use signup::{CustomSyntheticUser, OnExistingUserSignUp, SyntheticUserInput};
 
@@ -108,16 +110,8 @@ pub(crate) struct SignInResponse<U: Serialize> {
     user: U,
 }
 
-/// Result of sign-in: either a successful session or a 2FA redirect.
-pub(crate) enum SignInCoreResult<U: Serialize> {
-    Success {
-        response: SignInResponse<U>,
-        set_cookie_headers: Vec<String>,
-    },
-    TwoFactorRedirect {
-        response: two_factor::TwoFactorRedirectResponse,
-        set_cookie_headers: Vec<String>,
-    },
+pub(crate) struct SignInCoreResult<U: Serialize> {
+    pub response: SignInResponse<U>,
 }
 
 impl EmailPasswordPlugin {
@@ -224,7 +218,7 @@ impl EmailPasswordPlugin {
         }
 
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        match sign_in_core(
+        let result = sign_in_core(
             req,
             &signin_req,
             &self.config,
@@ -232,29 +226,8 @@ impl EmailPasswordPlugin {
             &meta,
             ctx,
         )
-        .await?
-        {
-            SignInCoreResult::Success {
-                response,
-                set_cookie_headers,
-            } => {
-                let mut auth_response = AuthResponse::json(200, &response)?;
-                for cookie in set_cookie_headers {
-                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
-                }
-                Ok(auth_response)
-            }
-            SignInCoreResult::TwoFactorRedirect {
-                response,
-                set_cookie_headers,
-            } => {
-                let mut auth_response = AuthResponse::json(200, &response)?;
-                for cookie in set_cookie_headers {
-                    auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
-                }
-                Ok(auth_response)
-            }
-        }
+        .await?;
+        Ok(AuthResponse::json(200, &result.response)?)
     }
 
     async fn handle_sign_in_username(
@@ -311,23 +284,6 @@ async fn finalize_sign_in_with_user_core(
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<UserView>> {
-    let mut set_cookie_headers = Vec::new();
-    if two_factor::is_enabled(ctx) && user.two_factor_enabled() {
-        let trusted_device = two_factor::inspect_trusted_device(req, &user, ctx).await?;
-        if trusted_device.trusted {
-            set_cookie_headers.extend(trusted_device.set_cookie_headers);
-        } else {
-            let redirect =
-                two_factor::begin_sign_in_challenge(&user, remember_me, req, ctx).await?;
-            let mut redirect_headers = trusted_device.set_cookie_headers;
-            redirect_headers.extend(redirect.set_cookie_headers);
-            return Ok(SignInCoreResult::TwoFactorRedirect {
-                response: redirect.response,
-                set_cookie_headers: redirect_headers,
-            });
-        }
-    }
-
     // Send verification email on sign-in if configured
     if let Some(ev) = email_verification
         && let Err(e) = ev
@@ -373,10 +329,7 @@ async fn finalize_sign_in_with_user_core(
         url: callback_url.map(str::to_owned),
         user: ctx.user_view(&issued.user)?,
     };
-    Ok(SignInCoreResult::Success {
-        response,
-        set_cookie_headers,
-    })
+    Ok(SignInCoreResult { response })
 }
 
 /// Core sign-in by email.

@@ -298,6 +298,13 @@ impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
     ) -> AuthResult<ApiKey> {
         self.inner.update_api_key(id, update).await
     }
+    async fn update_api_key_optional(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdateApiKey,
+    ) -> AuthResult<Option<ApiKey>> {
+        self.inner.update_api_key_optional(id, update).await
+    }
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.inner.delete_api_key(id).await
     }

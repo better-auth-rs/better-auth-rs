@@ -1,4 +1,5 @@
 mod body;
+mod oauth;
 use body::{BodyBefore, BodyTrace};
 use std::{
     any::Any,
@@ -17,10 +18,10 @@ use better_auth::{
     integrations::axum::AxumIntegration,
     plugins::{
         AccountManagementPlugin, AdminPlugin, ApiKeyPlugin, DeviceAuthorizationPlugin,
-        EmailPasswordPlugin, EmailVerificationPlugin, MagicLinkPlugin, MultiSessionPlugin,
-        OAuthPlugin, OneTapPlugin, OneTimeTokenPlugin, OrganizationPlugin, PasskeyPlugin,
-        PasswordManagementPlugin, SessionManagementPlugin, SiwePlugin, TwoFactorPlugin,
-        UserManagementPlugin, UsernamePlugin,
+        EmailOtpPlugin, EmailPasswordPlugin, EmailVerificationPlugin, MagicLinkPlugin,
+        MultiSessionPlugin, OneTapPlugin, OneTimeTokenPlugin, OrganizationPlugin, PasskeyPlugin,
+        PasswordManagementPlugin, PhoneNumberPlugin, SessionManagementPlugin, SiwePlugin,
+        TwoFactorPlugin, UserManagementPlugin, UsernamePlugin,
     },
 };
 use better_auth_core::{
@@ -179,6 +180,27 @@ fn configure<S: AuthSchema>(
     } else {
         builder
     };
+    let builder = if profile.starts_with("request-otp-") {
+        let sender = body.clone();
+        let reset = body.clone();
+        builder
+            .plugin(EmailOtpPlugin::new().change_email(true).generate_otp(Arc::new(|_, _| Some("123456".into()))).sender(Arc::new(body.clone())))
+            .plugin(PhoneNumberPlugin::new()
+                .sign_up_on_verification(|phone| format!("{phone}@phone.test"))
+                .callbacks::<S>(better_auth::plugins::phone_number::PhoneNumberCallbacks::default()
+                .send_otp(move |message, _| {
+                    sender.current("phone.otp.sender", None);
+                    sender.1.lock().unwrap().push(json!({"kind":"phone-otp","phoneNumber":message.phone_number,"code":message.code}));
+                    Ok(Some(Box::pin(async { Ok(()) })))
+                })
+                .send_password_reset_otp(move |message, _| {
+                    reset.current("phone.reset.sender", None);
+                    reset.1.lock().unwrap().push(json!({"kind":"phone-reset","phoneNumber":message.phone_number,"code":message.code}));
+                    Ok(Some(Box::pin(async { Ok(()) })))
+                })))
+    } else {
+        builder
+    };
     let builder = if profile.starts_with("request-two-factor-") {
         let nested = profile
             .contains("nested")
@@ -253,7 +275,7 @@ fn configure<S: AuthSchema>(
         .plugin(PasskeyPlugin::new())
         .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(body.clone())))
         .plugin(management)
-        .plugin(OAuthPlugin::new())
+        .plugin(oauth::plugin(profile, body.clone()))
         .plugin(Trace(events, body))
 }
 fn wire(response: AuthResult<AuthResponse>) -> Response {
@@ -317,6 +339,20 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                             .map_err(Into::into),
                             Err(error) => error.into_response(),
                         })
+                    }
+                }
+            }),
+        )
+        .route(
+            "/__test/oauth-account",
+            post({
+                let auth=auth.clone();
+                move |Json(input):Json<Value>| {
+                    let auth=auth.clone();
+                    async move {
+                        wire(auth.store().get_account("google",input["accountId"].as_str().unwrap()).await.and_then(|account| {
+                            AuthResponse::json(200,&account.map(|account|json!({"accessToken":account.access_token,"refreshToken":account.refresh_token,"idToken":account.id_token,"scope":account.scope,"expiresAt":account.access_token_expires_at}))).map_err(Into::into)
+                        }))
                     }
                 }
             }),

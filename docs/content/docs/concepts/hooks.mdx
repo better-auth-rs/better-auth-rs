@@ -216,3 +216,11 @@ Plugins register shared `DatabaseHooks<S>` through `AuthInitContext::register_da
 `AuthInitContext::runtime` returns a weak binding to the final `AuthContext<S>`. Read this binding from callbacks after initialization. The binding includes the final secondary-storage facade and avoids retaining the authentication runtime through its own store hooks. The provided adapters isolate hook registries and field policies when multiple authentication instances share underlying records.
 
 Plugins can declare user fields through `register_user_fields`. Adapter policies merge plugin fields before application fields. Endpoint validation and public filtering merge application fields before plugin fields. Cached users retain the adapter projection and only reapply public filtering.
+
+## Server-only endpoint dispatch
+
+The typed `EmailOtpApi`, `JwtApi`, and `TwoFactorApi` facades run actual server-only endpoints through the same endpoint dispatcher as HTTP routes. Global before hooks run before plugin before hooks. Context patches apply after the before hooks. Validation projects handler input once. Endpoint API errors continue through after hooks; ordinary errors stop the pipeline. Before responses skip the handler and after hooks. The typed facade decodes the final hook-replaced response into its documented return type.
+
+Server-only endpoints have no HTTP route. Their explicit hook request uses `/`, while `current_request_hook_context().path` is `None`. The handler context uses `Some("virtual:")`; handler completion restores the outer context. Instrumentation uses `/:virtual` and the actual operation ID. A supplied native Request remains available independently of supplied headers. Typed facade return values correspond to upstream native calls with `asResponse: false`.
+
+The shared dispatcher retains immutable plugin and hook data, not an authentication context. Transaction-bound Email OTP and JWT calls retain the caller's borrowed transaction. `JwtApi::create_key_pair` and direct plugin helpers remain helper calls and do not run endpoint hooks.

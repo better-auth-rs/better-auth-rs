@@ -49,10 +49,12 @@ impl<S: AuthSchema> UsernameHooks<S> {
 }
 
 fn endpoint_validated<S: AuthSchema>(context: &DatabaseHookContext<'_, S>) -> bool {
-    context
-        .request
-        .as_ref()
-        .is_some_and(|request| matches!(request.path.as_str(), "/sign-up/email" | "/update-user"))
+    context.request.as_ref().is_some_and(|request| {
+        matches!(
+            request.path.as_deref(),
+            Some("/sign-up/email" | "/update-user")
+        )
+    })
 }
 
 #[better_auth_core::database_hooks("plugin:username")]

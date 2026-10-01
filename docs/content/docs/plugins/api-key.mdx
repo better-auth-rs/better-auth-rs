@@ -91,6 +91,10 @@ Without database fallback, the backend stores the full key under `api-key:<hash>
 
 Database fallback invalidates the reference list on writes and rebuilds the list from database rows. Sharing one backend between configurations with and without fallback also shares these indexes, including this upstream invalidation behavior. Listing groups configurations by storage backend, removes duplicate IDs, and applies configuration and ownership filters before pagination.
 
+Legacy double-stringified metadata is decoded for get, list, update and native verification responses. Get, update and verification await database repair. Lists pass the returned page's repairs to `advanced.background_tasks`, including an empty page when any registered configuration uses the database or database fallback. Without an application handler, the list waits for these repairs. Pure-secondary configurations decode responses without rewriting cache entries; a separate database configuration still enables the list's database repair attempt.
+
+Metadata repair writes only to the database. A missing database row is a successful no-op. Each failed repair logs a warning and leaves the endpoint result unchanged, matching the upstream migration policy. Cache entries retain their original metadata until another operation replaces them. This exception does not suppress other database or cache errors. Custom stores should implement `ApiKeyStore::update_api_key_optional` to return `None` for a missing row; `update_api_key` retains its strict return contract.
+
 `defer_updates` returns secondary-only usage results before writing the updated snapshot. It also defers expiration and exhausted-key deletion. Background failures are logged, matching the upstream policy for these operations. Database quota consumption remains synchronous. Installing the shared backend also enables [secondary session and verification storage](/docs/concepts/secondary-storage). Use the global session and verification configuration to retain database persistence. A configuration-specific `custom_storage` does not install a global backend.
 
 ### Named Configurations and Organization-Owned Keys

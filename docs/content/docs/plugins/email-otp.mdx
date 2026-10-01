@@ -36,6 +36,8 @@ Replace `send_mail` with your mail provider. Add `plugin` to the auth builder. N
 | POST | `/email-otp/request-email-change` | Authenticate the user and send a code to the new email. |
 | POST | `/email-otp/change-email` | Consume the address-bound code and update the user's email. |
 
+Public body schemas run after endpoint before hooks and before authentication. Before and after hooks retain raw input and original Request bytes. Handlers and database callbacks receive the validated projection. Sign-in preserves additional fields; the other public routes remove unknown fields.
+
 The upstream `createVerificationOTP` and `getVerificationOTP` helpers are server-only APIs. The plugin does not expose corresponding HTTP routes.
 
 Codes contain six digits and expire after five minutes by default. Three wrong attempts are allowed; the next check returns `TOO_MANY_ATTEMPTS` and removes the code. Verification, sign-in, password reset, and email changes consume valid codes atomically. A code cannot authenticate two concurrent requests.
@@ -87,7 +89,7 @@ The default-email override keeps the original request and active transaction but
 
 `auth.email_otp()?.get(email, kind).await?` implements upstream `getVerificationOTP` as `Option<String>`. Missing or expired records return `None`. A live hash returns a 400 error without calling the application hash function. Plaintext and encrypted records return the recovered code without consuming the record or resetting its failed attempts. These operations are available only through the Rust server API; no HTTP routes expose the codes.
 
-Inside an application callback, use `endpoint.email_otp()?` or `EmailOtpApi::from_endpoint(endpoint)?`. Both operations use the callback's active database transaction. A native read sees codes created earlier in that transaction, and a rejected admission rolls back database OTP writes. The configured verification identifier policy applies to these operations. `auth.email_otp()` remains available for independent server calls.
+Inside an application callback, use `endpoint.email_otp()?` or `EmailOtpApi::from_endpoint(endpoint)?`. Both operations use the callback's active database transaction. A native read sees codes created earlier in that transaction, and a rejected admission rolls back database OTP writes. The configured verification identifier policy applies to these operations. `auth.email_otp()` remains available for independent server calls. Both native endpoints run shared endpoint hooks, validation and instrumentation. Before patches can change the stored or queried address; callbacks receive validated input and after hooks retain raw patched input. `.with_request(NativeRequest { request, headers })` preserves an explicit native Request and header presence.
 
 A dynamic base URL requires a configured fallback for independent server calls. Endpoint-bound calls retain the resolved URL and transaction without running URL resolvers again.
 

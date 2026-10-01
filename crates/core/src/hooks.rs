@@ -9,8 +9,8 @@ pub struct RequestHookContext {
     /// Native calls can carry headers and still preserve their original errors.
     pub is_http: bool,
     pub method: HttpMethod,
-    /// Matched endpoint template, with upstream `:parameter` segments.
-    pub path: String,
+    /// Matched endpoint template; native-only outer hooks have no endpoint path.
+    pub path: Option<String>,
     /// Effective endpoint identifier for instrumentation.
     pub operation_id: Option<String>,
     /// Values captured from the matched endpoint path.
@@ -29,7 +29,7 @@ impl RequestHookContext {
             request: request.clone(),
             is_http: false,
             method: request.method().clone(),
-            path: request.path().to_string(),
+            path: Some(request.path().to_string()),
             operation_id: None,
             params: Default::default(),
             headers: request.headers.clone(),
@@ -95,7 +95,7 @@ pub fn set_request_hook_route(path: &str, route: Option<&crate::AuthRoute>) {
     );
     let _ = REQUEST_HOOK_CONTEXT.try_with(|context| {
         let mut context = context.borrow_mut();
-        context.path = path;
+        context.path = Some(path);
         context.operation_id = route.map(|route| {
             route
                 .openapi

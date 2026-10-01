@@ -447,7 +447,7 @@ pub fn get_with_auth_and_query(path: &str, token: &str, query: Vec<(&str, &str)>
             .query
             .get_or_insert_with(|| serde_json::json!({}))
             .as_object_mut()
-            .unwrap()
+            .expect("query initialized as an object")
             .insert(k.to_string(), serde_json::Value::from(v.to_string()));
     }
     req
@@ -498,26 +498,26 @@ fn decode_html_entities(text: &str) -> String {
     let mut i = 0;
 
     while i < bytes.len() {
-        if bytes[i] == b'&' {
-            if let Some(offset) = text[i + 1..].find(';') {
-                let end = i + 1 + offset;
-                let entity = &text[i + 1..end];
+        if bytes[i] == b'&'
+            && let Some(offset) = text[i + 1..].find(';')
+        {
+            let end = i + 1 + offset;
+            let entity = &text[i + 1..end];
 
-                let replacement = match entity {
-                    "nbsp" => Some(" ".to_string()),
-                    "amp" => Some("&".to_string()),
-                    "lt" => Some("<".to_string()),
-                    "gt" => Some(">".to_string()),
-                    "quot" => Some("\"".to_string()),
-                    "apos" => Some("'".to_string()),
-                    _ => decode_numeric_html_entity(entity),
-                };
+            let replacement = match entity {
+                "nbsp" => Some(" ".to_string()),
+                "amp" => Some("&".to_string()),
+                "lt" => Some("<".to_string()),
+                "gt" => Some(">".to_string()),
+                "quot" => Some("\"".to_string()),
+                "apos" => Some("'".to_string()),
+                _ => decode_numeric_html_entity(entity),
+            };
 
-                if let Some(replacement) = replacement {
-                    decoded.push_str(&replacement);
-                    i = end + 1;
-                    continue;
-                }
+            if let Some(replacement) = replacement {
+                decoded.push_str(&replacement);
+                i = end + 1;
+                continue;
             }
         }
 
@@ -538,10 +538,8 @@ fn decode_numeric_html_entity(entity: &str) -> Option<String> {
         .or_else(|| entity.strip_prefix("#X"))
     {
         u32::from_str_radix(hex, 16).ok()?
-    } else if let Some(decimal) = entity.strip_prefix('#') {
-        decimal.parse::<u32>().ok()?
     } else {
-        return None;
+        entity.strip_prefix('#')?.parse::<u32>().ok()?
     };
 
     char::from_u32(codepoint).map(|ch| ch.to_string())
@@ -595,23 +593,6 @@ pub fn html_text_content(html: &str) -> String {
     }
 
     normalize_whitespace(&decode_html_entities(&text))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::html_text_content;
-
-    #[test]
-    fn html_text_content_decodes_entities_and_normalizes_whitespace() {
-        assert_eq!(
-            html_text_content("<div><span>CODE&#58;</span>&nbsp;<span>UNKNOWN</span></div>"),
-            "CODE: UNKNOWN"
-        );
-        assert_eq!(
-            html_text_content("<p>A&amp;B &lt;ok&gt; &#x26; &#38;</p>"),
-            "A&B <ok> & &"
-        );
-    }
 }
 
 pub async fn signup_user(
@@ -844,5 +825,22 @@ impl TestHarness {
             .unwrap_or_else(|| panic!("missing user id"))
             .to_string();
         (user_id, token)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::html_text_content;
+
+    #[test]
+    fn html_text_content_decodes_entities_and_normalizes_whitespace() {
+        assert_eq!(
+            html_text_content("<div><span>CODE&#58;</span>&nbsp;<span>UNKNOWN</span></div>"),
+            "CODE: UNKNOWN"
+        );
+        assert_eq!(
+            html_text_content("<p>A&amp;B &lt;ok&gt; &#x26; &#38;</p>"),
+            "A&B <ok> & &"
+        );
     }
 }

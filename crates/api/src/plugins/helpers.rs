@@ -367,6 +367,7 @@ pub fn delete_session_cookie_headers(
     req: &AuthRequest,
     config: &better_auth_core::AuthConfig,
     skip_dont_remember: bool,
+    mut response_headers: Option<&mut better_auth_core::Headers>,
 ) -> AuthResult<Vec<String>> {
     use better_auth_core::utils::cookie_utils::{
         create_clear_chunked_cookies, create_clear_cookie, create_clear_session_cookie,
@@ -418,7 +419,7 @@ pub fn delete_session_cookie_headers(
         }
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(
             req,
-            None,
+            response_headers.as_deref_mut(),
             &config.auth_cookie(suffix, Default::default()).name,
         )?;
     }

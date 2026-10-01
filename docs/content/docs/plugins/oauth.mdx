@@ -168,6 +168,10 @@ The OAuth plugin exposes the following endpoints. For full request/response deta
 
 `errorCallbackURL` may be an absolute URL or a root-relative path. OAuth errors preserve existing query parameters and append `error` and `error_description` with URL form encoding. Root-relative error callbacks remain relative. Redirect targets must pass the configured origin check.
 
+`/sign-in/social` and `/link-social` validate JSON bodies before endpoint authentication. Hooks retain raw input; provider callbacks receive the schema projection. Unknown object fields are removed. `additionalData` preserves record fields except `__proto__`; `additionalParams` requires string values and rejects reserved OAuth parameters. Native `/link-social` calls must supply headers, including an explicit empty header map when no session exists.
+
+Direct ID-token sign-in accepts the optional `idToken.user` name and email payload and forwards that payload to `get_user_info`. The accepted numeric `idToken.expiresAt` is not forwarded or stored. Sign-in stores the access token and ID token; the refresh token is available to the provider callback only. Direct linking stores the supplied refresh token and ignores `idToken.user`, `idToken.expiresAt`, and nested scopes, matching Better Auth 1.7.6.
+
 ## Provider Account Info
 
 Use `GET /account-info` to fetch provider-specific user info for a linked account. The response preserves the provider user ID and mapped additional fields. Generic OAuth includes an ID only when the profile mapper supplies one.

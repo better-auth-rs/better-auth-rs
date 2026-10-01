@@ -1781,3 +1781,6 @@ async fn memory_api_key_list_traces_default_limited_find_many_and_unlimited_coun
     )
     .await
 }
+
+#[path = "observability/native_endpoints.rs"]
+mod native_endpoints;

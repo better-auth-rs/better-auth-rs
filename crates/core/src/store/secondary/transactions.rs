@@ -157,6 +157,14 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.inner.delete_expired_verifications().await
     }
+    async fn consume_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
+        self.runtime
+            .consume_verification_in_transaction(identifier, Some(self.inner.as_ref()))
+            .await
+    }
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
         self.runtime
             .delete_verification_in_transaction(identifier, Some(self.inner.as_ref()))

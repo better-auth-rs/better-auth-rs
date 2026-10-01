@@ -42,7 +42,7 @@ where
         let mut revoked = None;
         let result = async {
             let Some(user) = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "findOne", async { <S::User as SeaOrmUserModel>::Entity::find()
-                .filter(S::User::id_column().eq(S::User::parse_id(user_id)?))
+                .filter(S::User::id_column().eq(self.parse_id(user_id, S::User::parse_id)?))
                 .lock_exclusive()
                 .one(&tx)
                 .await
@@ -55,7 +55,7 @@ where
             }
             let hook_context = self.hook_context(Some((&tx, &hook_transaction)));
             let accounts = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "findMany", async { <S::Account as SeaOrmAccountModel>::Entity::find()
-                .filter(S::Account::user_id_column().eq(S::Account::parse_user_id(user_id)?))
+                .filter(S::Account::user_id_column().eq(self.parse_id(user_id, S::Account::parse_user_id)?))
                 .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
                 .all(&tx)
                 .await
@@ -65,7 +65,7 @@ where
                 .collect::<AuthResult<Vec<_>>>()?;
             let sessions = if database_sessions {
                 database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "findMany", async { <S::Session as SeaOrmSessionModel>::Entity::find()
-                    .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
+                    .filter(S::Session::user_id_column().eq(self.parse_id(user_id, S::Session::parse_user_id)?))
                     .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
                     .all(&tx)
                     .await
@@ -114,13 +114,13 @@ where
                 }
             }
             let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "deleteMany", async { <S::Account as SeaOrmAccountModel>::Entity::delete_many()
-                .filter(S::Account::user_id_column().eq(S::Account::parse_user_id(user_id)?))
+                .filter(S::Account::user_id_column().eq(self.parse_id(user_id, S::Account::parse_user_id)?))
                 .exec(&tx)
                 .await
                 .map_err(map_db_err) }).await?;
             if database_sessions {
                 let _ = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "deleteMany", async { <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-                    .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))
+                    .filter(S::Session::user_id_column().eq(self.parse_id(user_id, S::Session::parse_user_id)?))
                     .exec(&tx)
                     .await
                     .map_err(map_db_err) }).await?;

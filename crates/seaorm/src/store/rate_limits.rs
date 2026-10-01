@@ -105,18 +105,25 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
                 if result.rows_affected == 0 {
                     continue;
                 }
-                // The upstream adapter logs pruning failures after a successful reset.
-                // Counter reads and writes still propagate their original errors.
-                if let Err(error) = Entity::<P::RateLimit>::delete_many()
-                    .filter(
-                        P::RateLimit::column("last_request")?
-                            .lt(now as f64 - cleanup_window * 1000.0),
-                    )
-                    .exec(self.connection())
-                    .await
-                {
-                    tracing::error!(%error, "Error pruning rate limit rows");
-                }
+                let connection = self.connection().clone();
+                // Only pruning failures use this catch. Counter writes already committed.
+                better_auth_core::background::run_or_await_with_error_message(
+                    Some(Box::pin(async move {
+                        let _ = Entity::<P::RateLimit>::delete_many()
+                            .filter(
+                                P::RateLimit::column("last_request")?
+                                    .lt(now as f64 - cleanup_window * 1000.0),
+                            )
+                            .exec(&connection)
+                            .await
+                            .map_err(map_db_err)?;
+                        Ok(())
+                    })),
+                    self.config.advanced.background_tasks.as_ref(),
+                    &self.config.logger,
+                    "Error pruning rate limit rows",
+                )
+                .await;
                 return Ok(RateLimitDecision {
                     allowed: true,
                     retry_after: None,

@@ -74,6 +74,11 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
         super::email_otp::EmailOtpApi::from_endpoint(self)
     }
 
+    /// Consume a phone OTP within this endpoint's active transaction.
+    pub fn phone_number(&self) -> AuthResult<super::phone_number::PhoneNumberApi<'a, S>> {
+        super::phone_number::PhoneNumberApi::from_endpoint(self)
+    }
+
     /// Use the registered JWT key adapter within this endpoint's active transaction.
     pub fn jwt(&self) -> AuthResult<super::jwt::JwtApi<'a, S>> {
         super::jwt::JwtApi::from_endpoint(self)

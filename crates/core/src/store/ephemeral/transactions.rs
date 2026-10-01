@@ -89,6 +89,14 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.store.delete_expired_verifications().await
     }
+    async fn consume_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<VerificationView>> {
+        self.store
+            .consume_verification_including_expired(identifier)
+            .await
+    }
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
         self.store
             .delete_verification_by_identifier(identifier)

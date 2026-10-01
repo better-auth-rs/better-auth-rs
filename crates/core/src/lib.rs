@@ -130,5 +130,6 @@ pub use wire::{
 #[doc(hidden)]
 pub use crate as __private_core;
 
+pub mod endpoint_dispatch;
 pub mod endpoint_input;
 mod http_body;

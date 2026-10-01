@@ -173,6 +173,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self.config
     }
 
+    fn parse_id<T>(&self, value: &str, parse: impl FnOnce(&str) -> AuthResult<T>) -> AuthResult<T> {
+        parse(&self.config.advanced.database.generate_id.coerce_id(value)?)
+    }
+
     fn generated_id(&self, model: &str, supplied: Option<String>) -> AuthResult<Option<String>> {
         self.config.advanced.database.generate_id.adapter_id(
             model,
@@ -340,6 +344,19 @@ where
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
         self.delete_expired_transaction_verifications().await
     }
+    async fn consume_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
+        let consumed = self
+            .store
+            .consume_verification_with_transaction(self, identifier, None)
+            .await?;
+        if let Some(record) = &consumed {
+            self.queue(transaction_hooks::Effect::Deleted(Box::new(record.clone())))?;
+        }
+        Ok(consumed)
+    }
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
         use crate::schema::SeaOrmVerificationModel;
         use sea_orm::ColumnTrait;
@@ -356,7 +373,7 @@ where
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-        let id = S::User::parse_id(id)?;
+        let id = self.store.parse_id(id, S::User::parse_id)?;
         <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
             .one(&self.tx)

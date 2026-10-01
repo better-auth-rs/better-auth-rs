@@ -5,103 +5,47 @@
     reason = "test harness code must fail on orchestration errors or invalid checked-in fixture fields"
 )]
 
-use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-struct ManagedChild {
-    label: &'static str,
-    child: Child,
-}
-
-impl ManagedChild {
-    fn new(label: &'static str, child: Child) -> Self {
-        Self { label, child }
-    }
-
-    fn try_wait(&mut self) -> Option<ExitStatus> {
-        self.child
-            .try_wait()
-            .unwrap_or_else(|error| panic!("failed to inspect {} process: {error}", self.label))
-    }
-}
-
-impl Drop for ManagedChild {
-    fn drop(&mut self) {
-        if let Ok(None) = self.child.try_wait() {
-            let _ = self.child.kill();
-        }
-        let _ = self.child.wait();
-    }
-}
+#[path = "support/compat_server.rs"]
+mod compat_server;
+use compat_server::ManagedChild;
 
 fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn allocate_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap_or_else(|error| panic!("failed to allocate local port: {error}"))
-        .local_addr()
-        .unwrap_or_else(|error| panic!("failed to read allocated port: {error}"))
-        .port()
+async fn wait_for_health(child: &mut ManagedChild, timeout: Duration) -> u16 {
+    compat_server::wait_for_health(child, timeout)
+        .await
+        .unwrap_or_else(|error| panic!("{error}"))
 }
 
-async fn wait_for_health(port: u16, child: &mut ManagedChild, timeout: Duration) {
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap_or_else(|error| panic!("failed to build reqwest client: {error}"));
-
-    let start = std::time::Instant::now();
-    while start.elapsed() < timeout {
-        if let Some(status) = child.try_wait() {
-            panic!("{} exited before becoming healthy: {}", child.label, status);
-        }
-
-        if client
-            .get(format!("http://127.0.0.1:{port}/__health"))
-            .send()
-            .await
-            .map(|response| response.status().is_success())
-            .unwrap_or(false)
-        {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(250)).await;
-    }
-
-    panic!(
-        "{} server did not become healthy on port {} within {:?}",
-        child.label, port, timeout
-    );
-}
-
-fn start_oidc_server(port: u16) -> ManagedChild {
+fn start_oidc_server() -> ManagedChild {
     let child = Command::new("bun")
         .args(["run", "oidc-server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
-        .env("PORT", port.to_string())
-        .stdout(Stdio::inherit())
+        .env("PORT", "0")
+        .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .unwrap_or_else(|error| panic!("failed to start OIDC issuer: {error}"));
     ManagedChild::new("oidc-issuer", child)
 }
 
-fn start_reference_server(port: u16, profile: &str, oidc_url: &str) -> ManagedChild {
-    let child = proxy_environment(&mut Command::new("bun"), profile, port)
+fn start_reference_server(profile: &str, oidc_url: &str) -> ManagedChild {
+    let child = proxy_environment(&mut Command::new("bun"), profile)
         .args(["run", "server.ts"])
         .current_dir(project_root().join("compat-tests/reference-server"))
-        .env("PORT", port.to_string())
+        .env("PORT", "0")
         .env("COMPAT_PROFILE", profile)
         .env("COMPAT_OIDC_URL", oidc_url)
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
-        .stdout(Stdio::inherit())
+        .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .unwrap_or_else(|error| panic!("failed to start Bun reference server: {error}"));
@@ -155,20 +99,15 @@ fn rust_compat_binary() -> &'static Path {
         .as_path()
 }
 
-fn start_rust_compat_server(
-    binary: &Path,
-    port: u16,
-    profile: &str,
-    oidc_url: &str,
-) -> ManagedChild {
-    let child = proxy_environment(&mut Command::new(binary), profile, port)
+fn start_rust_compat_server(binary: &Path, profile: &str, oidc_url: &str) -> ManagedChild {
+    let child = proxy_environment(&mut Command::new(binary), profile)
         .current_dir(project_root())
-        .env("PORT", port.to_string())
+        .env("PORT", "0")
         .env("COMPAT_PROFILE", profile)
         .env("COMPAT_OIDC_URL", oidc_url)
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
-        .stdout(Stdio::inherit())
+        .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .unwrap_or_else(|error| panic!("failed to start Rust compat server: {error}"));
@@ -202,7 +141,7 @@ fn dynamic_environment_case(profile: &str) -> Option<serde_json::Value> {
     Some(cases.get(index).expect("dynamic environment case").clone())
 }
 
-fn proxy_environment<'a>(command: &'a mut Command, profile: &str, port: u16) -> &'a mut Command {
+fn proxy_environment<'a>(command: &'a mut Command, profile: &str) -> &'a mut Command {
     if matches!(profile, "api-error" | "api-error-production") {
         let _ = command.env(
             "NODE_ENV",
@@ -228,20 +167,9 @@ fn proxy_environment<'a>(command: &'a mut Command, profile: &str, port: u16) -> 
     if let Some(case) = proxy_case(profile) {
         let _ = command.env("COMPAT_PROXY_CASE", case.to_string());
         for (key, value) in case["env"].as_object().expect("case environment") {
-            let _ = command.env(
-                key,
-                value
-                    .as_str()
-                    .expect("environment string")
-                    .replace("{base}", &format!("http://localhost:{port}")),
-            );
+            let _ = command.env(key, value.as_str().expect("environment string"));
         }
-        let _ = command.env(
-            "COMPAT_PROXY_OPTIONS",
-            case["options"]
-                .to_string()
-                .replace("{base}", &format!("http://localhost:{port}")),
-        );
+        let _ = command.env("COMPAT_PROXY_OPTIONS", case["options"].to_string());
     }
     if let Some(case) = dynamic_environment_case(profile) {
         for key in [
@@ -314,19 +242,72 @@ async fn run_client_compat(paths: &[&str]) {
 async fn run_client_compat_profile(paths: &[&str], profile: &str) {
     println!("Client compatibility profile: {profile}");
     let binary = rust_compat_binary();
-    let oidc_port = allocate_port();
+    let mut oidc_server = start_oidc_server();
+    let oidc_port = wait_for_health(&mut oidc_server, Duration::from_secs(20)).await;
     let oidc_url = format!("http://127.0.0.1:{oidc_port}");
-
-    let mut oidc_server = start_oidc_server(oidc_port);
-    wait_for_health(oidc_port, &mut oidc_server, Duration::from_secs(20)).await;
-    let ts_port = allocate_port();
-    let mut ts_server = start_reference_server(ts_port, profile, &oidc_url);
-    wait_for_health(ts_port, &mut ts_server, Duration::from_secs(20)).await;
-    let rust_port = allocate_port();
-    let mut rust_server = start_rust_compat_server(binary, rust_port, profile, &oidc_url);
-    wait_for_health(rust_port, &mut rust_server, Duration::from_secs(90)).await;
+    let mut ts_server = start_reference_server(profile, &oidc_url);
+    let ts_port = wait_for_health(&mut ts_server, Duration::from_secs(20)).await;
+    let mut rust_server = start_rust_compat_server(binary, profile, &oidc_url);
+    let rust_port = wait_for_health(&mut rust_server, Duration::from_secs(90)).await;
 
     run_bun_phase_suite(paths, ts_port, rust_port, profile, &oidc_url);
+}
+
+#[tokio::test]
+#[ignore = "starts external TS and Rust servers"]
+async fn parallel_server_startup() {
+    let binary = rust_compat_binary();
+    let mut first_oidc = start_oidc_server();
+    let mut second_oidc = start_oidc_server();
+    let (first_port, second_port) = tokio::join!(
+        wait_for_health(&mut first_oidc, Duration::from_secs(20)),
+        wait_for_health(&mut second_oidc, Duration::from_secs(20)),
+    );
+    let first_url = format!("http://127.0.0.1:{first_port}");
+    let second_url = format!("http://127.0.0.1:{second_port}");
+    let mut first_ts = start_reference_server("default", &first_url);
+    let mut second_ts = start_reference_server("default", &second_url);
+    let mut first_rust = start_rust_compat_server(binary, "default", &first_url);
+    let mut second_rust = start_rust_compat_server(binary, "default", &second_url);
+    let (first_ts_port, second_ts_port, first_rust_port, second_rust_port) = tokio::join!(
+        wait_for_health(&mut first_ts, Duration::from_secs(20)),
+        wait_for_health(&mut second_ts, Duration::from_secs(20)),
+        wait_for_health(&mut first_rust, Duration::from_secs(90)),
+        wait_for_health(&mut second_rust, Duration::from_secs(90)),
+    );
+    let ports = [
+        first_port,
+        second_port,
+        first_ts_port,
+        second_ts_port,
+        first_rust_port,
+        second_rust_port,
+    ];
+    assert_eq!(
+        ports
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        ports.len()
+    );
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .build()
+        .expect("HTTP client");
+    for base in [first_url, second_url] {
+        let discovery: serde_json::Value = client
+            .get(format!("{base}/discovery/standard"))
+            .send()
+            .await
+            .expect("OIDC discovery")
+            .error_for_status()
+            .expect("discovery status")
+            .json()
+            .await
+            .expect("discovery document");
+        assert_eq!(discovery["issuer"], base);
+        assert_eq!(discovery["token_endpoint"], format!("{base}/token"));
+    }
 }
 
 #[tokio::test]
@@ -448,6 +429,16 @@ async fn configuration_client_compat() {
         "api-error-production",
         "request-security-memory",
         "request-security-sqlite",
+        "native-dispatch",
+        "two-factor-after-memory",
+        "two-factor-after-sqlite",
+        "phone-native-memory",
+        "phone-native-sqlite",
+        "phone-native-custom",
+        "request-otp-memory",
+        "request-otp-sqlite",
+        "request-oauth-memory",
+        "request-oauth-sqlite",
         "request-two-factor-memory",
         "request-two-factor-sqlite",
         "request-two-factor-passwordless-memory",
@@ -644,7 +635,11 @@ async fn configuration_client_compat() {
             continue;
         }
         matched = true;
-        if profile == "dynamic-environment" {
+        if profile.starts_with("two-factor-after-") {
+            run_client_compat_profile(&["./tests/config/two-factor-after/"], profile).await;
+        } else if profile.starts_with("phone-native-") {
+            run_client_compat_profile(&["./tests/config/phone-native/"], profile).await;
+        } else if profile == "dynamic-environment" {
             let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
                 "../compat-tests/client-tests/tests/config/dynamic-environment/cases.json"
             ))
@@ -685,6 +680,12 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/request-security/"], profile).await;
         } else if profile.starts_with("request-api-key-") {
             run_client_compat_profile(&["./tests/config/request-api-key/"], profile).await;
+        } else if profile == "native-dispatch" {
+            run_client_compat_profile(&["./tests/config/native-dispatch/"], profile).await;
+        } else if profile.starts_with("request-otp-") {
+            run_client_compat_profile(&["./tests/config/request-otp/"], profile).await;
+        } else if profile.starts_with("request-oauth-") {
+            run_client_compat_profile(&["./tests/config/request-oauth/"], profile).await;
         } else if profile.starts_with("request-two-factor-") {
             run_client_compat_profile(&["./tests/config/request-two-factor/"], profile).await;
         } else if profile.starts_with("request-admin-") {

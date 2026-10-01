@@ -306,6 +306,13 @@ impl<S: AuthSchema> ApiKeyApi<'_, S> {
 }
 
 impl<S: AuthSchema> BetterAuth<S> {
+    /// Consume phone OTPs through the registered server-only endpoint.
+    pub fn phone_number(
+        &self,
+    ) -> AuthResult<better_auth_api::plugins::phone_number::PhoneNumberApi<'_, S>> {
+        better_auth_api::plugins::phone_number::PhoneNumberApi::from_context(self.context())
+    }
+
     /// Access server-only Email OTP creation and retrieval using the registered plugin.
     pub fn email_otp(&self) -> AuthResult<better_auth_api::plugins::email_otp::EmailOtpApi<'_, S>> {
         better_auth_api::plugins::email_otp::EmailOtpApi::from_context(self.context())

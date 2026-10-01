@@ -86,32 +86,51 @@ fn test_signed_cookie_round_trip_and_tamper_rejection() {
 }
 
 #[tokio::test]
-async fn test_begin_sign_in_challenge_sets_pending_cookie_and_remember_choice() {
-    let (ctx, user, _session) =
+async fn test_sign_in_after_hook_sets_pending_cookie_and_preserves_remember_choice() {
+    let (ctx, user, session) =
         create_test_context_with_credential_user("challenge@example.com", true).await;
 
-    let challenge = begin_sign_in_challenge(
-        &user,
-        Some(false),
-        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
-        &ctx,
-    )
-    .await
-    .unwrap();
-    assert!(challenge.response.two_factor_redirect);
-
-    let two_factor_cookie = challenge
-        .set_cookie_headers
-        .iter()
+    let req = AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email");
+    let manager = ctx.session_manager();
+    manager
+        .set_session_cookie(
+            &req,
+            manager.internal_data(&user, &session).await.unwrap(),
+            Some(true),
+        )
+        .await
+        .unwrap();
+    let mut response = AuthResponse::new(200);
+    manager.finish_response(&req, &mut response).unwrap();
+    TwoFactorPlugin::new()
+        .after_request(&req, &mut response, &ctx)
+        .await
+        .unwrap();
+    manager.finish_response(&req, &mut response).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap()["twoFactorRedirect"],
+        true
+    );
+    assert!(req.new_session().unwrap().is_none());
+    assert!(
+        ctx.database
+            .get_session(&session.token)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let two_factor_cookie = response
+        .headers
+        .get_all("set-cookie")
         .find(|header| header.starts_with("better-auth.two_factor="))
         .cloned()
-        .expect("challenge should set the two-factor cookie");
-    let dont_remember_cookie = challenge
-        .set_cookie_headers
-        .iter()
+        .unwrap();
+    let dont_remember_cookie = response
+        .headers
+        .get_all("set-cookie")
         .find(|header| header.starts_with("better-auth.dont_remember="))
         .cloned()
-        .expect("challenge should set the remember-choice cookie");
+        .unwrap();
 
     let two_factor_req = test_helpers::create_auth_request_no_query(
         better_auth_core::HttpMethod::Post,

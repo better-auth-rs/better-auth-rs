@@ -170,11 +170,11 @@ mod tests {
             let mut request = AuthRequest::new(HttpMethod::Post, path);
             request.body = Some(br#"{"provider":"provider","additionalParams":{"request_z":"z","request_a":"a","configured_z":"override","zeta":"request"}}"#.to_vec());
             let params = if path == "/sign-in/social" {
-                better_auth_core::validate_request_body::<SocialSignInRequest>(&request)
+                crate::plugins::oauth::request::read::<SocialSignInRequest>(&request)
                     .unwrap()
                     .additional_params
             } else {
-                better_auth_core::validate_request_body::<LinkSocialRequest>(&request)
+                crate::plugins::oauth::request::read::<LinkSocialRequest>(&request)
                     .unwrap()
                     .additional_params
             };

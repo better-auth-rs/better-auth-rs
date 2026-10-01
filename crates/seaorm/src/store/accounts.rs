@@ -57,11 +57,20 @@ where
             }
         }
         let fields = self.config().account.field_schema();
-        let input = fields.record_storage_fields_for_adapter(
+        let input = fields.record_storage_fields_with_binding(
             create_account.fields()?,
             true,
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-            S::Account::native_json_field,
+            |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    &self.config().advanced.database.generate_id,
+                    S::Account::field_column,
+                    S::Account::native_json_field,
+                    db.get_database_backend(),
+                )
+            },
         )?;
         let id = self.generated_id(
             "account",
@@ -173,7 +182,7 @@ where
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
-        let user_id = <S::Account as SeaOrmAccountModel>::parse_user_id(user_id)?;
+        let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -206,7 +215,7 @@ where
         id: &str,
         mut update: UpdateAccount,
     ) -> AuthResult<Option<AccountView>> {
-        let account_id = <S::Account as SeaOrmAccountModel>::parse_id(id)?;
+        let account_id = self.parse_id(id, <S::Account as SeaOrmAccountModel>::parse_id)?;
         let hook_context = self.hook_context(None);
         let original = update.clone();
         for hook in self.hooks() {
@@ -225,11 +234,20 @@ where
         }
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
-        let input = fields.record_storage_fields_for_adapter(
+        let input = fields.record_storage_fields_with_binding(
             update.fields()?,
             false,
-            backend == sea_orm::DbBackend::Postgres,
-            S::Account::native_json_field,
+            |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    &self.config().advanced.database.generate_id,
+                    S::Account::field_column,
+                    S::Account::native_json_field,
+                    backend,
+                )
+            },
         )?;
         let mut active = <S::Account as SeaOrmAccountModel>::ActiveModel::default();
         S::Account::apply_fields(&mut active, input)?;
@@ -276,7 +294,7 @@ where
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        let account_id = <S::Account as SeaOrmAccountModel>::parse_id(id)?;
+        let account_id = self.parse_id(id, <S::Account as SeaOrmAccountModel>::parse_id)?;
         // The upstream single-delete snapshot catch also covers adapter output failures.
         let snapshot: AuthResult<Option<AccountView>> = async {
             database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(

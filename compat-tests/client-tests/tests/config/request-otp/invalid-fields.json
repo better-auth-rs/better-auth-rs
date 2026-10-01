@@ -1,0 +1,58 @@
+[
+  {
+    "path": "/email-otp/send-verification-otp",
+    "message": "[body.email] Invalid input: expected string, received number; [body.type] Invalid option: expected one of \"email-verification\"|\"sign-in\"|\"forget-password\"|\"change-email\""
+  },
+  {
+    "path": "/email-otp/check-verification-otp",
+    "message": "[body.email] Invalid input: expected string, received number; [body.type] Invalid option: expected one of \"email-verification\"|\"sign-in\"|\"forget-password\"|\"change-email\"; [body.otp] Invalid input: expected string, received array"
+  },
+  {
+    "path": "/email-otp/verify-email",
+    "message": "[body.email] Invalid input: expected string, received number; [body.otp] Invalid input: expected string, received array"
+  },
+  {
+    "path": "/sign-in/email-otp",
+    "message": "[body.email] Invalid input: expected string, received number; [body.otp] Invalid input: expected string, received array; [body.name] Invalid input: expected string, received boolean; [body.image] Invalid input: expected string, received null"
+  },
+  {
+    "path": "/email-otp/request-password-reset",
+    "message": "[body.email] Invalid input: expected string, received number"
+  },
+  {
+    "path": "/forget-password/email-otp",
+    "message": "[body.email] Invalid input: expected string, received number"
+  },
+  {
+    "path": "/email-otp/reset-password",
+    "message": "[body.email] Invalid input: expected string, received number; [body.otp] Invalid input: expected string, received array; [body.password] Invalid input: expected string, received number"
+  },
+  {
+    "path": "/email-otp/request-email-change",
+    "message": "[body.newEmail] Invalid input: expected string, received number; [body.otp] Invalid input: expected string, received array"
+  },
+  {
+    "path": "/email-otp/change-email",
+    "message": "[body.newEmail] Invalid input: expected string, received number; [body.otp] Invalid input: expected string, received array"
+  },
+  {
+    "path": "/sign-in/phone-number",
+    "message": "[body.phoneNumber] Invalid input: expected string, received boolean; [body.password] Invalid input: expected string, received number; [body.rememberMe] Invalid input: expected boolean, received number"
+  },
+  {
+    "path": "/phone-number/send-otp",
+    "message": "[body.phoneNumber] Invalid input: expected string, received boolean"
+  },
+  {
+    "path": "/phone-number/verify",
+    "message": "[body.phoneNumber] Invalid input: expected string, received boolean; [body.code] Invalid input: expected string, received null; [body.disableSession] Invalid input: expected boolean, received null; [body.updatePhoneNumber] Invalid input: expected boolean, received string"
+  },
+  {
+    "path": "/phone-number/request-password-reset",
+    "message": "[body.phoneNumber] Invalid input: expected string, received boolean"
+  },
+  {
+    "path": "/phone-number/reset-password",
+    "message": "[body.otp] Invalid input: expected string, received array; [body.phoneNumber] Invalid input: expected string, received boolean; [body.newPassword] Invalid input: expected string, received number"
+  }
+]

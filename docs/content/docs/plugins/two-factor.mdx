@@ -92,12 +92,14 @@ A pending TOTP enrollment can be restarted. Once verified, another enable reques
 ### Sign-In Flow with 2FA
 
 1. User signs in with email/password as normal
-2. If 2FA is enabled, instead of creating a session, a pending verification is created and the response is `{ "twoFactorRedirect": true, "twoFactorMethods": [...] }`, where `twoFactorMethods` lists the factors this user can complete: `"totp"` once a secret is enrolled, `"otp"` when `send_otp` is configured
+2. Credential sign-in creates a session and runs the user after hook. The Two Factor plugin then checks the issued session. For an untrusted device with 2FA enabled, the plugin clears credential cookies, deletes that session, clears the issued-session snapshot, and creates pending verification records. The response is `{ "twoFactorRedirect": true, "twoFactorMethods": [...] }`, where `twoFactorMethods` lists the factors this user can complete: `"totp"` once a secret is enrolled, `"otp"` when `send_otp` is configured
 3. User must verify with one of:
    - **TOTP**: Code from authenticator app
    - **OTP**: Code sent via email
    - **Backup code**: One-time recovery code
 4. After successful verification, a session is created
+
+A valid trusted-device proof retains the issued session and rotates the proof. Response replacement by a user after hook does not change the issued-session snapshot. An ordinary after-hook error or a session-deletion error stops challenge creation. Later plugin after hooks observe the final challenge response and no issued session.
 
 When sign-in sets `rememberMe: false`, the completed two-factor session expires after 24 hours and uses a session cookie. Remembered sessions use the configured session lifetime.
 
@@ -158,6 +160,6 @@ For TS compatibility, Rust keeps backup-code retrieval as a server-only capabili
 
 Two Factor validates each body before session middleware. Endpoint before/after hooks retain raw input. Handler callbacks receive only schema fields, including `method: "totp"` when enrollment omits `method`. `send-otp` permits an omitted body; explicit `null` is invalid. Global `allow_passwordless`, `totp_allow_passwordless`, and `backup_code_options.allow_passwordless` determine their own password schemas when routes are built.
 
-`auth.two_factor()` binds server-only operations to the registered plugin configuration. `generate_totp(Some(json!({"secret": secret})))` validates the supplied secret and returns a code. `view_backup_codes(Some(json!({"userId": user_id})))` applies upstream ID coercion and reads the stored codes. Pass `None` to preserve an omitted native body. `with_request(NativeRequest { request, headers })` supplies the original native request and headers for dynamic runtime resolution. Neither helper creates an HTTP route. Existing typed `TwoFactorPlugin::generate_totp` and `view_backup_codes` methods remain available.
+`auth.two_factor()` binds server-only operations to the registered plugin configuration. `generate_totp(Some(json!({"secret": secret})))` validates the supplied secret and returns a code. `view_backup_codes(Some(json!({"userId": user_id})))` applies upstream ID coercion and reads the stored codes. Pass `None` to preserve an omitted native body. `with_request(NativeRequest { request, headers })` supplies the original native request and headers for dynamic runtime resolution. Both facade methods run shared endpoint hooks, validation and instrumentation. Before responses skip execution, and after responses replace the typed result. Neither helper creates an HTTP route. Existing typed `TwoFactorPlugin::generate_totp` and `view_backup_codes` methods remain available.
 
 The server-only facade currently validates input and calls the registered operation directly. Shared endpoint before/after hooks and endpoint spans remain tracked in the alignment backlog.

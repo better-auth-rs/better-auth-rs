@@ -101,9 +101,13 @@ pub async fn with_endpoint_hook<T>(
     operation: impl Future<Output = AuthResult<T>>,
 ) -> AuthResult<T> {
     let context = crate::hooks::current_request_hook_context();
-    let route = context
-        .as_ref()
-        .map_or(request.path(), |context| context.path.as_str());
+    let route = if request.is_server_only() {
+        "/:virtual"
+    } else {
+        context.as_ref().map_or(request.path(), |context| {
+            context.path.as_deref().unwrap_or("/:virtual")
+        })
+    };
     let operation_id = context
         .as_ref()
         .and_then(|context| context.operation_id.as_deref())

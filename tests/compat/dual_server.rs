@@ -20,8 +20,23 @@ use super::helpers::{
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 type TestAuth = BetterAuth<TestSchema>;
 
-pub const REFERENCE_PORT: u16 = 3100;
-pub const REFERENCE_BASE: &str = "http://localhost:3100/api/auth";
+#[path = "../support/compat_server.rs"]
+mod compat_server;
+use compat_server::{ManagedChild, wait_for_health};
+
+struct ReferenceServer {
+    _child: ManagedChild,
+    port: u16,
+}
+
+fn reference_url(path: &str) -> String {
+    let slot = REF_SERVER.lock().expect("reference server mutex");
+    let port = slot
+        .as_ref()
+        .expect("reference server initialized before requests")
+        .port;
+    format!("http://localhost:{port}{path}")
+}
 
 fn env_flag_set(name: &str) -> bool {
     std::env::var(name)
@@ -33,17 +48,7 @@ fn reference_server_required() -> bool {
     env_flag_set("CI") || env_flag_set("BETTER_AUTH_REQUIRE_REFERENCE_SERVER")
 }
 
-async fn reference_server_available() -> bool {
-    let client = localhost_client();
-    client
-        .get(format!("http://127.0.0.1:{REFERENCE_PORT}/__health"))
-        .send()
-        .await
-        .map(|response| response.status().is_success())
-        .unwrap_or(false)
-}
-
-fn try_start_reference_server() -> Result<std::process::Child, String> {
+fn try_start_reference_server() -> Result<ManagedChild, String> {
     let server_dir = std::path::Path::new("compat-tests/reference-server");
     if !server_dir.join("node_modules").exists() {
         return Err(format!(
@@ -56,10 +61,11 @@ fn try_start_reference_server() -> Result<std::process::Child, String> {
     std::process::Command::new("bun")
         .args(["run", "server.ts"])
         .current_dir(server_dir)
-        .env("PORT", REFERENCE_PORT.to_string())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .env("PORT", "0")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
         .spawn()
+        .map(|child| ManagedChild::new("wire-reference", child))
         .map_err(|error| {
             format!(
                 "failed to start reference server in {}: {error}",
@@ -69,32 +75,37 @@ fn try_start_reference_server() -> Result<std::process::Child, String> {
 }
 
 static SERIAL: TokioMutex<()> = TokioMutex::const_new(());
-static REF_SERVER: Mutex<Option<std::process::Child>> = Mutex::new(None);
+static REF_SERVER: Mutex<Option<ReferenceServer>> = Mutex::new(None);
 
-pub async fn serial_lock() -> tokio::sync::MutexGuard<'static, ()> {
-    SERIAL.lock().await
+pub struct ReferenceGuard {
+    _lock: tokio::sync::MutexGuard<'static, ()>,
+}
+
+impl Drop for ReferenceGuard {
+    fn drop(&mut self) {
+        // Stop the child before another test acquires the fixture lock.
+        let server = REF_SERVER.lock().expect("reference server mutex").take();
+        drop(server);
+    }
+}
+
+pub async fn serial_lock() -> ReferenceGuard {
+    ReferenceGuard {
+        _lock: SERIAL.lock().await,
+    }
 }
 
 async fn ensure_reference_server() -> Result<(), String> {
-    if reference_server_available().await {
+    if REF_SERVER.lock().expect("reference server mutex").is_some() {
         return Ok(());
     }
-
-    {
-        let mut slot = REF_SERVER.lock().unwrap_or_else(|e| e.into_inner());
-        if slot.is_none() {
-            *slot = Some(try_start_reference_server()?);
-        }
-    }
-
-    for _ in 0..30 {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        if reference_server_available().await {
-            return Ok(());
-        }
-    }
-
-    Err("reference server did not become ready within 15 seconds".to_string())
+    let mut child = try_start_reference_server()?;
+    let port = wait_for_health(&mut child, Duration::from_secs(15)).await?;
+    *REF_SERVER.lock().expect("reference server mutex") = Some(ReferenceServer {
+        _child: child,
+        port,
+    });
+    Ok(())
 }
 
 pub async fn ensure_reference_server_or_skip() -> bool {
@@ -184,7 +195,7 @@ impl RefClient {
     }
 
     fn apply_headers(&self, mut req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        req = req.header("origin", format!("http://localhost:{}", REFERENCE_PORT));
+        req = req.header("origin", reference_url(""));
         if let Some(ref cookie) = self.session_cookie {
             req = req.header("cookie", format!("better-auth.session_token={cookie}"));
         }
@@ -225,7 +236,7 @@ impl RefClient {
     }
 
     pub async fn post_full(&mut self, path: &str, body: &Value) -> Result<FullResponse, String> {
-        let url = format!("{}{}", REFERENCE_BASE, path);
+        let url = reference_url(&format!("/api/auth{path}"));
         let req = self.apply_headers(
             self.client
                 .post(&url)
@@ -254,7 +265,7 @@ impl RefClient {
     }
 
     pub async fn get_full(&mut self, path: &str) -> Result<FullResponse, String> {
-        let url = format!("{}{}", REFERENCE_BASE, path);
+        let url = reference_url(&format!("/api/auth{path}"));
         let req = self.apply_headers(self.client.get(&url));
         let resp = req
             .send()
@@ -351,7 +362,7 @@ impl OAuthSeed {
 
 pub async fn reset_reference_state() -> Result<(), String> {
     post_control_json(
-        "http://127.0.0.1:3100/__test/reset-state",
+        &reference_url("/__test/reset-state"),
         &serde_json::json!({}),
     )
     .await
@@ -359,7 +370,7 @@ pub async fn reset_reference_state() -> Result<(), String> {
 
 pub async fn set_reference_reset_password_mode(mode: ControlMode) -> Result<(), String> {
     post_control_json(
-        "http://127.0.0.1:3100/__test/set-reset-password-mode",
+        &reference_url("/__test/set-reset-password-mode"),
         &serde_json::json!({ "mode": mode.as_str() }),
     )
     .await
@@ -371,7 +382,7 @@ pub async fn seed_reference_reset_password_token(
     expires_at: DateTime<Utc>,
 ) -> Result<(), String> {
     post_control_json(
-        "http://127.0.0.1:3100/__test/seed-reset-password-token",
+        &reference_url("/__test/seed-reset-password-token"),
         &serde_json::json!({
             "email": email,
             "token": token,
@@ -383,7 +394,7 @@ pub async fn seed_reference_reset_password_token(
 
 pub async fn set_reference_oauth_refresh_mode(mode: ControlMode) -> Result<(), String> {
     post_control_json(
-        "http://127.0.0.1:3100/__test/set-oauth-refresh-mode",
+        &reference_url("/__test/set-oauth-refresh-mode"),
         &serde_json::json!({ "mode": mode.as_str() }),
     )
     .await
@@ -392,9 +403,7 @@ pub async fn set_reference_oauth_refresh_mode(mode: ControlMode) -> Result<(), S
 pub async fn ref_reset_password_token(email: &str) -> Result<String, String> {
     let client = localhost_client();
     let response = client
-        .get(format!(
-            "http://127.0.0.1:{REFERENCE_PORT}/__test/reset-password-token"
-        ))
+        .get(reference_url("/__test/reset-password-token"))
         .query(&[("email", email)])
         .send()
         .await
@@ -416,7 +425,7 @@ pub async fn ref_reset_password_token(email: &str) -> Result<String, String> {
 
 pub async fn ref_seed_oauth_account(seed: &OAuthSeed) -> Result<(), String> {
     post_control_json(
-        "http://127.0.0.1:3100/__test/seed-oauth-account",
+        &reference_url("/__test/seed-oauth-account"),
         &serde_json::to_value(seed).unwrap_or_else(|error| {
             panic!("oauth seed should serialize: {error}");
         }),
@@ -466,7 +475,7 @@ pub async fn seed_rust_reset_password_token(
         .unwrap_or_else(|| panic!("expected user for email {email}"))
         .id
         .typed()
-        .unwrap()
+        .expect("fixture user ID is a string")
         .clone();
 
     let _ = auth

@@ -174,7 +174,7 @@ impl SeaOrmHooks<TestSchema> for AdminOptionsFixture {
             return Ok(());
         };
         if !ctx.request.as_ref().is_some_and(|request| {
-            request.path == "/admin/update-user"
+            request.path.as_deref() == Some("/admin/update-user")
                 && request
                     .body
                     .as_ref()

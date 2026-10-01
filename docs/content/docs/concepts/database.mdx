@@ -97,11 +97,21 @@ let mut config = better_auth::AuthConfig::new("your-very-secure-secret-key-at-le
 config.advanced.database.generate_id = IdGeneration::Uuid;
 ```
 
-An explicit `CreateUser.id`, `CreateOrganization.id`, `CreateInvitation.id`, or `CreateTeam.id` is a force-allowed ID. In UUID mode, invalid explicit UUIDs are omitted and the database applies its default or constraint. `CreateOrganization::new` leaves generation to the store. `WalletStore::create_wallet_address` takes `CreateWalletAddress` without a caller-generated ID.
+An explicit `CreateUser.id`, `CreateOrganization.id`, `CreateInvitation.id`, or `CreateTeam.id` is a force-allowed ID. UUID mode accepts canonical hyphenated RFC 4122 version 1–5 IDs, including uppercase hexadecimal characters. Simple, braced, URN, and version 7 forms are omitted; the database then applies its default or constraint. `CreateOrganization::new` leaves generation to the store. `WalletStore::create_wallet_address` takes `CreateWalletAddress` without a caller-generated ID.
+
+In `Serial` mode, the SQL adapter applies JavaScript number conversion before core ID lookups and reference writes. For example, `"1.6e1"`, `" 16 "`, and `"0x10"` address integer ID `16`. The adapter applies reference conversion after application input transforms and before the persistence model parses the value. Invalid or fractional values still encounter the model or database's numeric constraints. `Database` mode does not enable this conversion.
 
 Pure-secondary sessions and API keys use the context generator. The legacy `advanced.generate_id` callback overrides that context operation only. `IdGenerator` returns `Option<String>`: `None` represents upstream `false`, and `Some(value)` represents a string. Pure-secondary sessions use a random ID for `None`; an explicit empty string omits the session ID. Pure-secondary API keys use the upstream truthy fallback for both cases. Pure-secondary verification records have no generated ID. Session tokens and other authentication credentials use separate random generators.
 
 Runtime records use `SchemaValue<String>` for IDs so `Undefined` remains distinct from an empty string. JSON omits absent IDs. Store and database-hook methods return `UserView` and `SessionView`; `AuthSchema::User` and `AuthSchema::Session` remain typed database mappings. Use `id.typed()?` only when the operation requires a present string ID. Use `id.is_undefined()` to inspect omission. Query application entity models directly when an application needs columns outside its configured auth fields.
+
+The opt-in PostgreSQL identity regressions use application-owned integer models. They check `Serial` and `Database` modes, session/account foreign keys, public string IDs, transaction commit and rollback, numeric aliases, and reference conversion after an input transform. A separate text-ID table checks forced UUID omission against a `gen_random_uuid()::text` default. Set `BETTER_AUTH_TEST_POSTGRES_URL` to a test database whose role can create schemas, then run:
+
+```sh
+devenv shell -- cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests live_postgres -- --ignored
+```
+
+The tests create and remove isolated schemas. They do not establish upstream driver parity or cover MySQL, native UUID column models, or additional reference columns outside the core account/session mappings.
 
 ## Map plugin tables and columns
 

@@ -93,7 +93,11 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
-        vec![AuthRoute::get("/get-session", "getSession")]
+        vec![
+            AuthRoute::get("/get-session", "getSession")
+                .require_headers(true)
+                .query_validator(better_auth_core::query::session_query),
+        ]
     }
 
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {

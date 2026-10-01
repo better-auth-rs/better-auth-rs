@@ -306,23 +306,29 @@ pub(crate) async fn invite_member_core(
             .await?
     };
     let invitation_view = InvitationView::from(&invitation);
-    if let Some(sender) = &config.send_invitation_email
-        && let Err(error) = sender
-            .send(&InvitationEmail {
-                invitation: invitation_view.clone(),
-                organization: organization_view.clone(),
-                member,
-                inviter: user_view.clone(),
-                request: request.cloned(),
-            })
-            .await
-    {
-        // Upstream runInBackgroundOrAwait logs delivery failures and preserves success.
-        better_auth_core::observability::logger::current().error(
-            "Failed to send organization invitation email",
-            &[better_auth_core::observability::LogArgument::Error(&error)],
-        );
-    }
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        request,
+        serde_json::to_value(body)?,
+        ctx,
+    );
+    endpoint.session = Some((user_view.clone(), session_view));
+    let task = crate::plugins::organization::callbacks::delivery(
+        config,
+        InvitationEmail {
+            invitation: invitation_view.clone(),
+            organization: organization_view.clone(),
+            member,
+            inviter: user_view.clone(),
+            request: endpoint.request.cloned(),
+        },
+        &endpoint,
+    )?;
+    better_auth_core::background::run_or_await(
+        task,
+        ctx.config.advanced.background_tasks.as_ref(),
+        &ctx.config.logger,
+    )
+    .await;
     if !is_resend && let Some(hooks) = &config.hooks {
         hooks
             .after_create_invitation(OrganizationInvitationEvent {

@@ -213,8 +213,15 @@ impl ApiKeyPlugin {
                 ApiKeyValidationError::invalid_constant(ApiKeyErrorCode::KeyNotFound),
             ));
         }
-        self.validate_api_key(input, ctx, endpoint, input.config_id.is_none())
+        let key = self
+            .validate_api_key(input, ctx, endpoint, input.config_id.is_none())
+            .await?;
+        let config = self
+            .resolve_configuration(Some(&key.config_id))
+            .map_err(ApiKeyVerificationError::Endpoint)?;
+        super::metadata::single(key, config, ctx)
             .await
+            .map_err(ApiKeyVerificationError::Endpoint)
     }
 
     async fn validate_api_key(
@@ -382,7 +389,7 @@ impl ApiKeyPlugin {
         let context = better_auth_core::hooks::current_request_hook_context();
         let route = context
             .as_ref()
-            .map(|context| context.path.as_str())
+            .map(|context| context.path.as_deref().unwrap_or("/:virtual"))
             .or(endpoint.path)
             .unwrap_or("/");
         let operation_id = context

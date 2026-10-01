@@ -1,0 +1,337 @@
+[
+  {
+    "path": "/sign-in/social",
+    "omitted": true,
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received undefined",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": null,
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received null",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": [],
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received array",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": 7,
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received number",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {},
+    "status": 400,
+    "result": {
+      "message": "[body.provider] Invalid input",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": 7
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.provider] Invalid input",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "callbackURL": 7,
+      "newUserCallbackURL": null,
+      "errorCallbackURL": [],
+      "disableRedirect": 0,
+      "idToken": false,
+      "scopes": [
+        7,
+        null
+      ],
+      "requestSignUp": "yes",
+      "loginHint": {},
+      "additionalParams": {
+        "x": 7,
+        "scope": 8
+      },
+      "additionalData": false
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.callbackURL] Invalid input: expected string, received number; [body.newUserCallbackURL] Invalid input: expected string, received null; [body.errorCallbackURL] Invalid input: expected string, received array; [body.disableRedirect] Invalid input: expected boolean, received number; [body.idToken] Invalid input: expected object, received boolean; [body.scopes.0] Invalid input: expected string, received number; [body.scopes.1] Invalid input: expected string, received null; [body.requestSignUp] Invalid input: expected boolean, received string; [body.loginHint] Invalid input: expected string, received object; [body.additionalParams.x] Invalid input: expected string, received number; [body.additionalParams.scope] Invalid input: expected string, received number; [body.additionalData] Invalid input: expected record, received boolean",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "idToken": {}
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.idToken.token] Invalid input: expected string, received undefined",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": 7,
+        "nonce": false,
+        "accessToken": [],
+        "refreshToken": {},
+        "expiresAt": null,
+        "user": false
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.idToken.token] Invalid input: expected string, received number; [body.idToken.nonce] Invalid input: expected string, received boolean; [body.idToken.accessToken] Invalid input: expected string, received array; [body.idToken.refreshToken] Invalid input: expected string, received object; [body.idToken.expiresAt] Invalid input: expected number, received null; [body.idToken.user] Invalid input: expected object, received boolean",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": "",
+        "user": {
+          "name": {
+            "firstName": 7,
+            "lastName": null
+          },
+          "email": false
+        }
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.idToken.user.name.firstName] Invalid input: expected string, received number; [body.idToken.user.name.lastName] Invalid input: expected string, received null; [body.idToken.user.email] Invalid input: expected string, received boolean",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "additionalParams": {
+        "state": "forged",
+        "scope": "forged"
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.additionalParams] additionalParams cannot include reserved OAuth parameters: state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, nonce, scope",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "additionalParams": {
+        "state": 7
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.additionalParams.state] Invalid input: expected string, received number",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/sign-in/social",
+    "body": {
+      "provider": "google",
+      "additionalParams": null,
+      "additionalData": [],
+      "scopes": null
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.scopes] Invalid input: expected array, received null; [body.additionalParams] Invalid input: expected record, received null; [body.additionalData] Invalid input: expected record, received array",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "omitted": true,
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received undefined",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": null,
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received null",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": [],
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received array",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": 7,
+    "status": 400,
+    "result": {
+      "message": "[body] Invalid input: expected object, received number",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {},
+    "status": 400,
+    "result": {
+      "message": "[body.provider] Invalid input",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": 7
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.provider] Invalid input",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": "google",
+      "callbackURL": 7,
+      "newUserCallbackURL": null,
+      "errorCallbackURL": [],
+      "disableRedirect": 0,
+      "idToken": false,
+      "scopes": [
+        7,
+        null
+      ],
+      "requestSignUp": "yes",
+      "loginHint": {},
+      "additionalParams": {
+        "x": 7,
+        "scope": 8
+      },
+      "additionalData": false
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.callbackURL] Invalid input: expected string, received number; [body.idToken] Invalid input: expected object, received boolean; [body.requestSignUp] Invalid input: expected boolean, received string; [body.scopes.0] Invalid input: expected string, received number; [body.scopes.1] Invalid input: expected string, received null; [body.errorCallbackURL] Invalid input: expected string, received array; [body.disableRedirect] Invalid input: expected boolean, received number; [body.loginHint] Invalid input: expected string, received object; [body.additionalParams.x] Invalid input: expected string, received number; [body.additionalParams.scope] Invalid input: expected string, received number; [body.additionalData] Invalid input: expected record, received boolean",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": "google",
+      "idToken": {}
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.idToken.token] Invalid input: expected string, received undefined",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": "google",
+      "idToken": {
+        "token": 7,
+        "nonce": false,
+        "accessToken": [],
+        "refreshToken": {},
+        "expiresAt": null,
+        "user": false
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.idToken.token] Invalid input: expected string, received number; [body.idToken.nonce] Invalid input: expected string, received boolean; [body.idToken.accessToken] Invalid input: expected string, received array; [body.idToken.refreshToken] Invalid input: expected string, received object",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": "google",
+      "additionalParams": {
+        "state": "forged",
+        "scope": "forged"
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.additionalParams] additionalParams cannot include reserved OAuth parameters: state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, nonce, scope",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": "google",
+      "additionalParams": {
+        "state": 7
+      }
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.additionalParams.state] Invalid input: expected string, received number",
+      "code": "VALIDATION_ERROR"
+    }
+  },
+  {
+    "path": "/link-social",
+    "body": {
+      "provider": "google",
+      "additionalParams": null,
+      "additionalData": [],
+      "scopes": null
+    },
+    "status": 400,
+    "result": {
+      "message": "[body.scopes] Invalid input: expected array, received null; [body.additionalParams] Invalid input: expected record, received null; [body.additionalData] Invalid input: expected record, received array",
+      "code": "VALIDATION_ERROR"
+    }
+  }
+]

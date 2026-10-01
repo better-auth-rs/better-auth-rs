@@ -235,6 +235,16 @@ where
         id: &better_auth_core::SchemaValue<String>,
         update: UpdateApiKey,
     ) -> AuthResult<ApiKey> {
+        self.update_api_key_optional(id, update)
+            .await?
+            .ok_or_else(|| AuthError::not_found("API Key not found"))
+    }
+
+    async fn update_api_key_optional(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+        update: UpdateApiKey,
+    ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
         let active = apply_update_fields::<P::ApiKey>(Default::default(), update)?;
         let filter = P::ApiKey::column("id")?.eq(id);
@@ -248,8 +258,8 @@ where
             .await
         })
         .await?
-        .ok_or_else(|| AuthError::not_found("API Key not found"))?
-        .record()
+        .map(|model| model.record())
+        .transpose()
     }
 
     async fn write_api_key_usage(

@@ -372,7 +372,7 @@ pub(crate) async fn get_key_core(
     let config = plugin.resolve_configuration(config_id)?;
     let api_key = helpers::get_owned_api_key(ctx, config, id, user_id.as_ref(), "read").await?;
     plugin.maybe_delete_expired(ctx).await;
-    Ok(ApiKeyView::from(&api_key))
+    super::metadata::single(ApiKeyView::from(&api_key), config, ctx).await
 }
 
 pub(crate) async fn list_keys_core(
@@ -445,6 +445,7 @@ pub(crate) async fn list_keys_core(
         views.truncate(limit.min(views.len() as u64) as usize);
     }
     plugin.maybe_delete_expired(ctx).await;
+    super::metadata::batch(&mut views, &plugin.configurations, ctx).await;
     Ok(ListKeysResponse {
         api_keys: views,
         total,
@@ -551,7 +552,7 @@ pub(super) async fn update_key_for_user(
     };
     let updated = super::storage::update(config, ctx, api_key, update).await?;
     plugin.maybe_delete_expired(ctx).await;
-    Ok(ApiKeyView::from(&updated))
+    super::metadata::single(ApiKeyView::from(&updated), config, ctx).await
 }
 
 pub(crate) async fn delete_key_core(

@@ -81,7 +81,7 @@ pub struct AdminConfig {
 better_auth_core::impl_auth_plugin! {
     AdminPlugin, "admin";
     routes {
-        post "/admin/set-role" => handle_set_role, "setUserRole", body = request::validate;
+        post "/admin/set-role" => handle_set_role, "setUserRole", body = request::validate, require_headers = true;
         get  "/admin/get-user" => handle_get_user, "getUser", query = crate::plugins::query_input::get_user;
         post "/admin/create-user" => handle_create_user, "createUser", body = request::validate;
         post "/admin/update-user" => handle_update_user, "adminUpdateUser", body = request::validate;
@@ -90,7 +90,7 @@ better_auth_core::impl_auth_plugin! {
         post "/admin/ban-user" => handle_ban_user, "banUser", body = request::validate;
         post "/admin/unban-user" => handle_unban_user, "unbanUser", body = request::validate;
         post "/admin/impersonate-user" => handle_impersonate_user, "impersonateUser", body = request::validate;
-        post "/admin/stop-impersonating" => handle_stop_impersonating, "stopImpersonating";
+        post "/admin/stop-impersonating" => handle_stop_impersonating, "stopImpersonating", require_headers = true;
         post "/admin/revoke-user-session" => handle_revoke_user_session, "revokeUserSession", body = request::validate;
         post "/admin/revoke-user-sessions" => handle_revoke_user_sessions, "revokeUserSessions", body = request::validate;
         post "/admin/remove-user" => handle_remove_user, "removeUser", body = request::validate;
@@ -179,13 +179,6 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        if req.endpoint_headers().is_none() {
-            return Err(AuthError::Upstream {
-                status: 400,
-                code: "VALIDATION_ERROR",
-                message: "Headers is required",
-            });
-        }
         let (user, _session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "set-role", MESSAGE_CHANGE_ROLE)?;
         let body: SetRoleRequest = request::read(req)?;
@@ -320,7 +313,7 @@ impl AdminPlugin {
         )?;
         let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
 
-        for cookie in delete_session_cookie_headers(req, &ctx.config, false)? {
+        for cookie in delete_session_cookie_headers(req, &ctx.config, false, None)? {
             req.append_response_header("Set-Cookie", cookie)?;
         }
         req.append_response_header(
@@ -344,13 +337,6 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        if req.endpoint_headers().is_none() {
-            return Err(AuthError::Upstream {
-                status: 400,
-                code: "VALIDATION_ERROR",
-                message: "Headers is required",
-            });
-        }
         let session_manager = ctx.session_manager();
         let session = session_manager
             .resolve(req, better_auth_core::session::SessionRead::Authoritative)

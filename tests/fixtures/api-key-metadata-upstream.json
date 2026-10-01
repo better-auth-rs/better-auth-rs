@@ -1,0 +1,2019 @@
+[
+  {
+    "endpoint": "get",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "database",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "fallback",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "get",
+    "backend": "cache",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        {
+          "legacy": "two"
+        }
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 2,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        {
+          "legacy": "two"
+        }
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [
+      "fulfilled"
+    ],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [
+      "fulfilled"
+    ],
+    "migrationWarnings": 2,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "database",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [
+      "fulfilled"
+    ],
+    "migrationWarnings": 2,
+    "handlerWarnings": 1
+  },
+  {
+    "endpoint": "list",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        {
+          "legacy": "two"
+        }
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 2,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        {
+          "legacy": "two"
+        }
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [
+      "fulfilled"
+    ],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [
+      "fulfilled"
+    ],
+    "migrationWarnings": 2,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "fallback",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [
+      "fulfilled"
+    ],
+    "migrationWarnings": 2,
+    "handlerWarnings": 1
+  },
+  {
+    "endpoint": "list",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "list",
+    "backend": "cache",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      },
+      {
+        "legacy": "two"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "database",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "fallback",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "update",
+    "backend": "cache",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "database",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "database",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "database",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        null,
+        null
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "fallback",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        {
+          "legacy": "one"
+        },
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "fallback",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "fallback",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 1,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "cache",
+    "scheduling": "default",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "resolve",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "cache",
+    "scheduling": "handler",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  },
+  {
+    "endpoint": "verify",
+    "backend": "cache",
+    "scheduling": "handler-throw",
+    "result": "reject",
+    "metadata": [
+      {
+        "legacy": "one"
+      }
+    ],
+    "before": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "after": {
+      "database": [],
+      "cache": [
+        "{\"legacy\":\"one\"}",
+        "{\"legacy\":\"two\"}"
+      ]
+    },
+    "taskStates": [],
+    "migrationWarnings": 0,
+    "handlerWarnings": 0
+  }
+]

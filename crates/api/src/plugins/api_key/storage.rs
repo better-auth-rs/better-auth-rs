@@ -100,7 +100,7 @@ fn deserialize(value: Option<Value>) -> Option<ApiKey> {
         serde_json::from_str(&value).ok()?;
     if let Some(metadata) = object.get_mut("metadata") {
         let decoded: Value = serde_json::from_str(metadata.get()).ok()?;
-        if !decoded.is_null() && !decoded.is_string() {
+        if !decoded.is_null() {
             *metadata = serde_json::value::to_raw_value(&decoded.to_string()).ok()?;
         }
     }

@@ -82,7 +82,7 @@ pub(crate) async fn send_verification_override(
     let owned = endpoint.to_owned();
     let request_context =
         better_auth_core::hooks::current_request_hook_context().map(|mut context| {
-            context.path = "/email-otp/send-verification-otp".into();
+            context.path = Some("/email-otp/send-verification-otp".into());
             context.body = Some(serde_json::json!({"email":email,"type":"email-verification"}));
             context.params.clear();
             context
@@ -92,6 +92,10 @@ pub(crate) async fn send_verification_override(
             let mut endpoint = owned.as_endpoint();
             endpoint.body = serde_json::json!({"email":email,"type":"email-verification"});
             endpoint.path = Some("/email-otp/send-verification-otp");
+            // The upstream override starts from its captured init context, not the caller's resolved session or response.
+            endpoint.session = None;
+            endpoint.response = None;
+            endpoint.params.clear();
             let otp = plugin.resolve_otp(&endpoint, &email, kind).await?;
             let user = match endpoint.transaction {
                 Some(transaction) => transaction.get_user_by_email(&email).await?,

@@ -53,6 +53,7 @@ pub struct AuthRequest {
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
     /// Cookie updates from session middleware, shared by normalized request clones.
     response_headers: std::sync::Arc<std::sync::Mutex<Headers>>,
+    server_only: bool,
     server_context: std::sync::Arc<std::sync::Mutex<serde_json::Map<String, serde_json::Value>>>,
     headers_present: bool,
     new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
@@ -427,6 +428,7 @@ impl AuthRequest {
             endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
+            server_only: false,
             server_context: Default::default(),
             headers_present: true,
             new_session: Default::default(),
@@ -457,6 +459,7 @@ impl AuthRequest {
             endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
+            server_only: false,
             server_context: Default::default(),
             headers_present: true,
             new_session: Default::default(),
@@ -517,6 +520,15 @@ impl AuthRequest {
             .lock()
             .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?
             .clone())
+    }
+
+    /// Clear the issuance snapshot after a session is removed during an endpoint hook.
+    pub fn clear_new_session(&self) -> crate::AuthResult<()> {
+        *self
+            .new_session
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))? = None;
+        Ok(())
     }
 
     pub(crate) fn set_new_session(
@@ -593,6 +605,15 @@ impl AuthRequest {
     /// `BeforeRequestAction::InjectSession`. Never populate the session from client input.
     pub fn set_virtual_session(&mut self, session: crate::wire::SessionView) {
         self.virtual_session = Some(session);
+    }
+
+    pub(crate) fn set_server_only(&mut self) {
+        self.server_only = true;
+    }
+
+    /// Whether this invocation belongs to a native-only endpoint.
+    pub fn is_server_only(&self) -> bool {
+        self.server_only
     }
 
     /// Attach trusted server state for request hooks. Never populate this state from request body fields.
@@ -971,6 +992,7 @@ mod tests {
             endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
+            server_only: false,
             server_context: Default::default(),
             headers_present: true,
             new_session: Default::default(),

@@ -20,7 +20,7 @@ where
         tx: Option<HookTransaction<'_, S>>,
         user_id: &str,
     ) -> AuthResult<Option<usize>> {
-        let user_id = S::Account::parse_user_id(user_id)?;
+        let user_id = self.parse_id(user_id, S::Account::parse_user_id)?;
         let condition = S::Account::user_id_column().eq(user_id);
         let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
             database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
@@ -101,7 +101,7 @@ where
         delete_database_sessions: bool,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         if delete_database_sessions {
-            let owner = S::Session::parse_user_id(id)?;
+            let owner = self.parse_id(id, S::Session::parse_user_id)?;
             let condition = Condition::all().add(S::Session::user_id_column().eq(owner));
             // A child batch cancellation does not cancel the later user deletion.
             let _ = self
@@ -111,7 +111,7 @@ where
         let _ = self
             .delete_user_accounts_with_connection(db, tx, id)
             .await?;
-        let user_id = S::User::parse_id(id)?;
+        let user_id = self.parse_id(id, S::User::parse_id)?;
         let snapshot = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",

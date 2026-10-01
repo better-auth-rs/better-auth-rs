@@ -7,7 +7,9 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
+mod callbacks;
 pub(super) mod handlers;
+pub use callbacks::{ChangeEmailConfirmation, UserManagementCallbacks};
 mod request;
 pub(super) mod types;
 

@@ -15,7 +15,15 @@ let plugin = PhoneNumberPlugin::new()
     .sign_up_on_verification(|phone| format!("{}@phone.example.com", phone.trim_start_matches('+')));
 ```
 
-The plugin exposes `/phone-number/send-otp`, `/phone-number/verify`, `/sign-in/phone-number`, `/phone-number/request-password-reset`, and `/phone-number/reset-password`. The `consume_otp` server method verifies a code without creating a session or changing a user.
+The plugin exposes `/phone-number/send-otp`, `/phone-number/verify`, `/sign-in/phone-number`, `/phone-number/request-password-reset`, and `/phone-number/reset-password`.
+
+Call `auth.phone_number()?.consume(Some(serde_json::json!({"phoneNumber": "+15551234567", "code": "123456"}))).await?` for the server-only `consumePhoneNumberOTP` endpoint. This call runs endpoint hooks, validates input, and consumes the proof without creating a user or session. It does not call the phone-number validator or verification-completion callback. A configured `verify_otp` callback replaces stored-code verification; success still deletes the stored proof. No HTTP consume route is registered.
+
+Use `endpoint.phone_number()?` inside a callback to retain its active transaction. Database consumption and incorrect-attempt updates use that transaction. Delete after hooks run after commit; rollback discards them. With database-backed verification and secondary storage, cache deletion occurs during consumption. Database rollback does not restore an already deleted cache entry. Cache deletion errors propagate and can roll back the database transaction; an after-hook error propagates after the deletion commits.
+
+Pass a `NativeRequest` to `.with_request(source)` to supply an original Request or independent headers. Without an original Request, typed callbacks receive `endpoint.request = None`. The lower-level `PhoneNumberPlugin::consume_otp` helper accepts an explicit request and runs verification directly, without the endpoint hook pipeline.
+
+Public body schemas run before authentication and OTP consumption. Before and after hooks retain raw input. Handlers and database callbacks receive the validated projection. Verification preserves additional signup fields; the other routes remove unknown fields.
 
 Codes expire after 300 seconds and permit three incorrect attempts by default. Verification consumes the database record atomically. A failed attempt recreates the code with its original expiry and an incremented attempt count. `allowed_attempts`, `otp_length`, and `expires_in` configure these limits.
 

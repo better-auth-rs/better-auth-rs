@@ -136,11 +136,12 @@ impl OAuthLinkIdTokenFixture {
         *self.state.lock().unwrap() = State::default();
     }
     fn hook(&self, name: &str, ctx: &SeaOrmHookContext<'_, TestSchema>) -> AuthResult<()> {
-        if !ctx
-            .request
-            .as_ref()
-            .is_some_and(|request| request.path.ends_with("/link-social"))
-        {
+        if !ctx.request.as_ref().is_some_and(|request| {
+            request
+                .path
+                .as_deref()
+                .is_some_and(|path| path.ends_with("/link-social"))
+        }) {
             return Ok(());
         }
         let mut state = self.state.lock().unwrap();
@@ -215,10 +216,12 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
         self.hook("account.create.before", ctx)?;
         let nested = self.state.lock().unwrap().failure == "account.create.nested";
         if nested
-            && ctx
-                .request
-                .as_ref()
-                .is_some_and(|request| request.path.ends_with("/link-social"))
+            && ctx.request.as_ref().is_some_and(|request| {
+                request
+                    .path
+                    .as_deref()
+                    .is_some_and(|path| path.ends_with("/link-social"))
+            })
         {
             let mut input = account.clone();
             input.provider_id = "nested-cancel".into();
@@ -265,11 +268,12 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
         update: &UpdateUser,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateUser>> {
-        if ctx
-            .request
-            .as_ref()
-            .is_some_and(|request| request.path.ends_with("/link-social"))
-        {
+        if ctx.request.as_ref().is_some_and(|request| {
+            request
+                .path
+                .as_deref()
+                .is_some_and(|path| path.ends_with("/link-social"))
+        }) {
             self.state
                 .lock()
                 .unwrap()

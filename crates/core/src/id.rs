@@ -2,7 +2,7 @@
 
 use crate::AuthResult;
 use rand::distributions::{Alphanumeric, DistString};
-use std::{fmt, sync::Arc};
+use std::{borrow::Cow, fmt, sync::Arc};
 
 /// The canonical model name is independent of the physical table name.
 #[derive(Debug, Clone, Copy)]
@@ -50,6 +50,17 @@ pub enum IdGeneration {
 }
 
 impl IdGeneration {
+    /// Apply the serial adapter's Number conversion before a model parses an ID or reference.
+    /// Other generation modes retain the caller's identifier exactly.
+    pub fn coerce_id<'a>(&self, value: &'a str) -> AuthResult<Cow<'a, str>> {
+        if matches!(self, Self::Serial) {
+            let number = crate::query::number(&serde_json::Value::String(value.to_owned()))?;
+            Ok(Cow::Owned(crate::schema_value::number_string(number)))
+        } else {
+            Ok(Cow::Borrowed(value))
+        }
+    }
+
     pub fn generate(&self, request: IdGenerationRequest<'_>) -> AuthResult<Option<String>> {
         match self {
             Self::Random => Ok(Some(random_id(request.size))),
@@ -71,28 +82,18 @@ impl IdGeneration {
                 return Ok(None);
             }
             if matches!(self, Self::Uuid)
-                && !uuid::Uuid::parse_str(&id).is_ok_and(|id| {
-                    (1..=5).contains(&id.get_version_num())
-                        && id.get_variant() == uuid::Variant::RFC4122
-                })
+                && !(id.len() == 36
+                    && uuid::Uuid::parse_str(&id).is_ok_and(|id| {
+                        (1..=5).contains(&id.get_version_num())
+                            && id.get_variant() == uuid::Variant::RFC4122
+                    }))
             {
                 tracing::warn!("Invalid forced UUID; the adapter omits the ID");
                 return Ok(None);
             }
             if matches!(self, Self::Serial) {
-                return Ok(
-                    if id
-                        .trim_matches(|ch: char| {
-                            (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}'
-                        })
-                        .is_empty()
-                    {
-                        Some("0".into())
-                    } else {
-                        crate::organization_fields::numeric_filter(&id)
-                            .map(crate::schema_value::number_string)
-                    },
-                );
+                let number = crate::query::number(&serde_json::Value::String(id))?;
+                return Ok((!number.is_nan()).then(|| crate::schema_value::number_string(number)));
             }
             return Ok(Some(id));
         }

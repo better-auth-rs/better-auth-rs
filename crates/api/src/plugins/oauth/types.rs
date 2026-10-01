@@ -1,11 +1,9 @@
 use better_auth_core::wire::UserView;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SocialSignInRequest {
-    #[validate(length(min = 1, message = "Provider is required"))]
     pub provider: String,
     #[serde(rename = "callbackURL")]
     pub callback_url: Option<String>,
@@ -28,9 +26,8 @@ pub(crate) struct SocialSignInRequest {
     pub additional_params: Option<IndexMap<String, String>>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct LinkSocialRequest {
-    #[validate(length(min = 1, message = "Provider is required"))]
     pub provider: String,
     #[serde(rename = "callbackURL")]
     pub callback_url: Option<String>,
@@ -51,18 +48,15 @@ pub(crate) struct LinkSocialRequest {
     pub additional_params: Option<IndexMap<String, String>>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct OAuthIdTokenRequest {
-    #[validate(length(min = 1, message = "Token is required"))]
     pub token: String,
     pub nonce: Option<String>,
     #[serde(rename = "accessToken")]
     pub access_token: Option<String>,
     #[serde(rename = "refreshToken")]
     pub refresh_token: Option<String>,
-    #[serde(rename = "expiresAt")]
-    pub expires_at: Option<i64>,
-    pub scopes: Option<Vec<String>>,
+    pub user: Option<super::providers::OAuthCallbackUserPayload>,
 }
 
 #[derive(Debug, Serialize)]

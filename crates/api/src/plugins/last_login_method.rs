@@ -151,7 +151,7 @@ fn database_endpoint<'a, S: AuthSchema>(
         request.body.clone().unwrap_or(serde_json::Value::Null),
         auth,
     );
-    endpoint.path = Some(&request.path);
+    endpoint.path = request.path.as_deref();
     endpoint.params.clone_from(&request.params);
     endpoint.transaction = context.transaction;
     Some(endpoint)
@@ -292,7 +292,7 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
         endpoint.path = Some(
             hook_context
                 .as_ref()
-                .map_or(request.path(), |context| context.path.as_str()),
+                .map_or(request.path(), |context| context.path.as_deref().unwrap_or(request.path())),
         );
         endpoint.response = Some(response);
         let Some(method) = self.resolve(&endpoint)?.filter(|value| !value.is_empty()) else {

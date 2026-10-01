@@ -1,0 +1,56 @@
+[
+  {
+    "outcome": "commit",
+    "error": null,
+    "count": 0,
+    "cached": false,
+    "events": [
+      "before",
+      "cache-delete",
+      "consumed",
+      "after"
+    ]
+  },
+  {
+    "outcome": "rollback",
+    "error": "rollback requested",
+    "count": 1,
+    "cached": false,
+    "events": [
+      "before",
+      "cache-delete",
+      "consumed"
+    ]
+  },
+  {
+    "outcome": "cancel",
+    "error": "INVALID_OTP",
+    "count": 1,
+    "cached": true,
+    "events": [
+      "before"
+    ]
+  },
+  {
+    "outcome": "cache-error",
+    "error": "cache rejected",
+    "count": 1,
+    "cached": true,
+    "events": [
+      "before",
+      "cache-delete"
+    ]
+  },
+  {
+    "outcome": "after-error",
+    "error": "after rejected",
+    "count": 0,
+    "cached": false,
+    "events": [
+      "before",
+      "cache-delete",
+      "consumed",
+      "after"
+    ]
+  }
+]

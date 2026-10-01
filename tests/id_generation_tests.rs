@@ -150,7 +150,10 @@ async fn pure_secondary_sessions_use_context_ids_and_independent_tokens() {
     ] {
         let store = database().await;
         let user = store
-            .create_user(CreateUser::new().with_email("cache@example.com"))
+            .create_user(CreateUser {
+                id: Some("16".into()),
+                ..CreateUser::new().with_email("cache@example.com")
+            })
             .await
             .unwrap();
         let mut config = config();
@@ -380,7 +383,14 @@ async fn omitted_ids_reach_database_defaults_and_invalid_forced_ids_are_not_repl
         .build()
         .await
         .unwrap();
-    for id in ["invalid-uuid", ""] {
+    for id in [
+        "invalid-uuid",
+        "",
+        "63747488417541a0a68e153881808aec",
+        "{63747488-4175-41a0-a68e-153881808aec}",
+        "urn:uuid:63747488-4175-41a0-a68e-153881808aec",
+        "63747488-4175-71a0-a68e-153881808aec",
+    ] {
         let input = CreateUser {
             id: Some(id.into()),
             ..CreateUser::new().with_email(format!("{id}@example.com"))

@@ -197,6 +197,8 @@ Use `CustomRateLimitRule::Dynamic(Arc<dyn RateLimitRuleResolver>)` for asynchron
 
 Memory and database denials preserve the counter and return the remaining window. Secondary storage counts denied requests and returns the full window. A custom storage implementation must make the decision and counter update atomic. Storage and resolver errors propagate from the HTTP request phase. See [Database rate limits](/docs/concepts/database#database-rate-limits) for schema generation.
 
+Database cleanup runs only after a successful counter reset. It uses `advanced.background_tasks` when configured and otherwise completes before the request continues. Cleanup errors are logged as `Error pruning rate limit rows`; the completed counter reset remains valid. Counter read and write failures still propagate. A background handler failure uses the separate shared background-task log message.
+
 ## AdvancedConfig
 
 `generate_id: Option<IdGenerator>` is the legacy context-only override. Database inserts use `advanced.database.generate_id`.

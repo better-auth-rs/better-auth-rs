@@ -162,17 +162,19 @@ pub(super) fn read_signed_cookie<S: better_auth_core::AuthSchema>(
 }
 
 pub(super) fn sign_cookie_value(secret: &str, value: &str) -> AuthResult<String> {
-    Ok(format!("{}.{}", value, sign_value(secret, value)?))
+    Ok(better_auth_core::utils::cookie_utils::sign_cookie_value(
+        value, secret,
+    ))
 }
 
 pub(super) fn verify_signed_cookie_value(
     secret: &str,
     signed_value: &str,
 ) -> AuthResult<Option<String>> {
-    let Some((value, signature)) = signed_value.rsplit_once('.') else {
-        return Ok(None);
-    };
-    Ok(verify_signature(secret, value, signature)?.then(|| value.to_string()))
+    Ok(better_auth_core::utils::cookie_utils::verify_cookie_value(
+        signed_value,
+        secret,
+    ))
 }
 
 pub(super) fn sign_value(secret: &str, value: &str) -> AuthResult<String> {
@@ -180,17 +182,6 @@ pub(super) fn sign_value(secret: &str, value: &str) -> AuthResult<String> {
         .map_err(|error| AuthError::internal(format!("Failed to initialize HMAC: {}", error)))?;
     mac.update(value.as_bytes());
     Ok(URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))
-}
-
-pub(super) fn verify_signature(secret: &str, value: &str, signature: &str) -> AuthResult<bool> {
-    let decoded = match URL_SAFE_NO_PAD.decode(signature) {
-        Ok(decoded) => decoded,
-        Err(_) => return Ok(false),
-    };
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(secret.as_bytes())
-        .map_err(|error| AuthError::internal(format!("Failed to initialize HMAC: {}", error)))?;
-    mac.update(value.as_bytes());
-    Ok(mac.verify_slice(&decoded).is_ok())
 }
 
 pub(super) fn encrypt_value<'a>(

@@ -33,9 +33,9 @@ pub struct MultiSessionPlugin {
 better_auth_core::impl_auth_plugin! {
     MultiSessionPlugin, "multi-session";
     routes {
-        get "/multi-session/list-device-sessions" => handle_list, "listDeviceSessions";
-        post "/multi-session/set-active" => handle_set_active, "setActiveSession", body = session_token_body;
-        post "/multi-session/revoke" => handle_revoke, "revokeDeviceSession", body = session_token_body;
+        get "/multi-session/list-device-sessions" => handle_list, "listDeviceSessions", require_headers = true;
+        post "/multi-session/set-active" => handle_set_active, "setActiveSession", body = session_token_body, require_headers = true;
+        post "/multi-session/revoke" => handle_revoke, "revokeDeviceSession", body = session_token_body, require_headers = true;
     }
     extra {
         async fn after_request(&self, req: &AuthRequest, response: &mut AuthResponse, ctx: &AuthContext<S>) -> AuthResult<()> {
@@ -134,7 +134,7 @@ impl MultiSessionPlugin {
                 )
                 .await?;
         } else {
-            for cookie in delete_session_cookie_headers(req, &ctx.config, false)? {
+            for cookie in delete_session_cookie_headers(req, &ctx.config, false, None)? {
                 response.headers.append("Set-Cookie", cookie);
             }
         }

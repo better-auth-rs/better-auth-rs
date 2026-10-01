@@ -14,9 +14,12 @@ use serde_json::{Value, json};
 use super::helpers::{SessionIssueError, get_credential_account, issue_user_session_with_lifetime};
 
 mod callbacks;
+mod native;
+mod request;
 use crate::plugins::endpoint_context::EndpointContext;
 use callbacks::Delivery;
 pub use callbacks::{PhoneCallbackFuture, PhoneNumberCallbacks};
+pub use native::PhoneNumberApi;
 
 type CallbackFuture<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
 type OtpSender = dyn Fn(PhoneOtp, AuthRequest) -> CallbackFuture<()> + Send + Sync;
@@ -26,7 +29,8 @@ type VerifiedCallback = dyn Fn(PhoneVerification, AuthRequest) -> CallbackFuture
 type TempField = dyn Fn(&str) -> String + Send + Sync;
 
 /// A phone number and its verification or password reset code.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PhoneOtp {
     /// Destination number accepted by the configured validator.
     pub phone_number: String,
@@ -194,32 +198,45 @@ impl PhoneNumberPlugin {
     }
     async fn verify_stored_otp(
         &self,
-        ctx: &AuthContext<impl AuthSchema>,
+        endpoint: &EndpointContext<'_, impl AuthSchema>,
         identifier: &str,
         code: &str,
     ) -> AuthResult<()> {
-        let existing = ctx
-            .database
-            .get_verification_including_expired(identifier)
-            .await?
-            .ok_or_else(|| error(400, "OTP_NOT_FOUND", "OTP not found"))?;
+        let ctx = endpoint.auth;
+        let existing = match endpoint.transaction {
+            Some(transaction) => {
+                transaction
+                    .get_verification_including_expired(identifier)
+                    .await?
+            }
+            None => {
+                ctx.database
+                    .get_verification_including_expired(identifier)
+                    .await?
+            }
+        }
+        .ok_or_else(|| error(400, "OTP_NOT_FOUND", "OTP not found"))?;
         if existing.expires_at.is_before(Utc::now()) {
-            ctx.database
-                .delete_verification_by_identifier(identifier)
-                .await?;
+            native::delete_verification(endpoint, identifier).await?;
             return Err(error(400, "OTP_EXPIRED", "OTP expired"));
         }
         if attempts(existing.value.typed()?) >= self.allowed_attempts {
-            ctx.database
-                .delete_verification_by_identifier(identifier)
-                .await?;
+            native::delete_verification(endpoint, identifier).await?;
             return Err(error(403, "TOO_MANY_ATTEMPTS", "Too many attempts"));
         }
-        let consumed = ctx
-            .database
-            .consume_verification_by_identifier(identifier)
-            .await?
-            .ok_or_else(|| error(400, "INVALID_OTP", "Invalid OTP"))?;
+        let consumed = match endpoint.transaction {
+            Some(transaction) => {
+                transaction
+                    .consume_verification_by_identifier(identifier)
+                    .await?
+            }
+            None => {
+                ctx.database
+                    .consume_verification_by_identifier(identifier)
+                    .await?
+            }
+        }
+        .ok_or_else(|| error(400, "INVALID_OTP", "Invalid OTP"))?;
         let count = attempts(consumed.value.typed()?);
         if count >= self.allowed_attempts {
             return Err(error(403, "TOO_MANY_ATTEMPTS", "Too many attempts"));
@@ -231,15 +248,16 @@ impl PhoneNumberPlugin {
             .next()
             .unwrap_or_default();
         if expected != code {
-            let _ = ctx
-                .database
-                .create_verification(CreateVerification {
-                    identifier: (identifier.to_owned()).into(),
-                    value: (format!("{expected}:{}", count + 1)).into(),
-                    expires_at: consumed.expires_at.clone(),
-                    ..Default::default()
-                })
-                .await?;
+            let input = CreateVerification {
+                identifier: (identifier.to_owned()).into(),
+                value: (format!("{expected}:{}", count + 1)).into(),
+                expires_at: consumed.expires_at.clone(),
+                ..Default::default()
+            };
+            let _ = match endpoint.transaction {
+                Some(transaction) => transaction.create_verification(input).await?,
+                None => ctx.database.create_verification(input).await?,
+            };
             return Err(error(400, "INVALID_OTP", "Invalid OTP"));
         }
         Ok(())
@@ -280,13 +298,9 @@ impl PhoneNumberPlugin {
         };
         match verified {
             Some(false) => Err(error(400, "INVALID_OTP", "Invalid OTP")),
-            Some(true) => {
-                ctx.database
-                    .delete_verification_by_identifier(&otp.phone_number)
-                    .await
-            }
+            Some(true) => native::delete_verification(endpoint, &otp.phone_number).await,
             None => {
-                self.verify_stored_otp(ctx, &otp.phone_number, &otp.code)
+                self.verify_stored_otp(endpoint, &otp.phone_number, &otp.code)
                     .await
             }
         }
@@ -296,7 +310,7 @@ impl PhoneNumberPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = match body(req, &["phoneNumber"], &[]) {
+        let body = match request::read(req) {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
@@ -308,7 +322,7 @@ impl PhoneNumberPlugin {
                 "sendOTP not implemented",
             ));
         }
-        let endpoint = EndpointContext::new(Some(req), parsed_body(&body, &["phoneNumber"]), ctx);
+        let endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
         self.validate(phone).await?;
         let code = self.save_otp(ctx, phone.to_owned(), true).await?;
         let task = self.delivery(
@@ -337,11 +351,7 @@ impl PhoneNumberPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = match body(
-            req,
-            &["phoneNumber", "code"],
-            &["disableSession", "updatePhoneNumber"],
-        ) {
+        let body = match request::read(req) {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
@@ -448,7 +458,7 @@ impl PhoneNumberPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = match body(req, &["phoneNumber", "password"], &["rememberMe"]) {
+        let body = match request::read(req) {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
@@ -464,11 +474,7 @@ impl PhoneNumberPlugin {
         if self.require_verification && user.phone_number_verified() != Some(true) {
             let code = self.save_otp(ctx, phone.to_owned(), false).await?;
             if self.has_sender(ctx, Delivery::Verification) {
-                let endpoint = EndpointContext::new(
-                    Some(req),
-                    parsed_body(&body, &["phoneNumber", "password", "rememberMe"]),
-                    ctx,
-                );
+                let endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
                 let task = self.delivery(
                     PhoneOtp {
                         phone_number: phone.to_owned(),
@@ -559,7 +565,7 @@ impl PhoneNumberPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = match body(req, &["phoneNumber"], &[]) {
+        let body = match request::read(req) {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
@@ -569,8 +575,7 @@ impl PhoneNumberPlugin {
             .save_otp(ctx, format!("{phone}-request-password-reset"), true)
             .await?;
         if user.is_some() && self.has_sender(ctx, Delivery::PasswordReset) {
-            let endpoint =
-                EndpointContext::new(Some(req), parsed_body(&body, &["phoneNumber"]), ctx);
+            let endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
             let task = self.delivery(
                 PhoneOtp {
                     phone_number: phone.to_owned(),
@@ -593,14 +598,14 @@ impl PhoneNumberPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = match body(req, &["otp", "phoneNumber", "newPassword"], &[]) {
+        let body = match request::read(req) {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
         let phone = string(&body, "phoneNumber");
         let password = string(&body, "newPassword");
         self.verify_stored_otp(
-            ctx,
+            &EndpointContext::new(Some(req), body.clone(), ctx),
             &format!("{phone}-request-password-reset"),
             string(&body, "otp"),
         )
@@ -696,63 +701,17 @@ fn error(status: u16, code: &'static str, message: &'static str) -> AuthError {
         message,
     }
 }
-fn body(req: &AuthRequest, strings: &[&str], booleans: &[&str]) -> Result<Value, AuthResponse> {
-    let value = super::json_body::parse(req)?;
-    if !value.as_ref().is_some_and(Value::is_object) {
-        return Err(super::json_body::validation_error(
-            &super::json_body::invalid_type("body", "object", value.as_ref()),
-        ));
-    }
-    let body = value.unwrap_or_default();
-    let mut errors = Vec::new();
-    for key in strings {
-        if !body.get(*key).is_some_and(Value::is_string) {
-            errors.push(super::json_body::invalid_type(
-                &format!("body.{key}"),
-                "string",
-                body.get(*key),
-            ));
-        }
-    }
-    for key in booleans {
-        if body.get(*key).is_some_and(|value| !value.is_boolean()) {
-            errors.push(super::json_body::invalid_type(
-                &format!("body.{key}"),
-                "boolean",
-                body.get(*key),
-            ));
-        }
-    }
-    if errors.is_empty() {
-        Ok(body)
-    } else {
-        Err(super::json_body::validation_error(&errors.join("; ")))
-    }
-}
-
-fn parsed_body(body: &Value, fields: &[&str]) -> Value {
-    Value::Object(
-        fields
-            .iter()
-            .filter_map(|field| {
-                body.get(*field)
-                    .map(|value| ((*field).to_owned(), value.clone()))
-            })
-            .collect(),
-    )
-}
-
 fn string<'a>(body: &'a Value, key: &str) -> &'a str {
     body.get(key).and_then(Value::as_str).unwrap_or_default()
 }
 
 better_auth_core::impl_auth_plugin!(PhoneNumberPlugin, "phone-number";
     routes {
-        post "/sign-in/phone-number" => sign_in, "signInPhoneNumber";
-        post "/phone-number/send-otp" => send, "sendPhoneNumberOTP";
-        post "/phone-number/verify" => verify, "verifyPhoneNumber";
-        post "/phone-number/request-password-reset" => request_reset, "requestPasswordResetPhoneNumber";
-        post "/phone-number/reset-password" => reset, "resetPasswordPhoneNumber";
+        post "/sign-in/phone-number" => sign_in, "signInPhoneNumber", body = request::validate;
+        post "/phone-number/send-otp" => send, "sendPhoneNumberOTP", body = request::validate;
+        post "/phone-number/verify" => verify, "verifyPhoneNumber", body = request::validate;
+        post "/phone-number/request-password-reset" => request_reset, "requestPasswordResetPhoneNumber", body = request::validate;
+        post "/phone-number/reset-password" => reset, "resetPasswordPhoneNumber", body = request::validate;
     }
     extra {
         async fn on_init(
@@ -764,6 +723,7 @@ better_auth_core::impl_auth_plugin!(PhoneNumberPlugin, "phone-number";
                 &["phone_number", "phone_number_verified"],
             )?;
             ctx.set_metadata("phone-number.enabled", json!(true));
+            ctx.extensions.insert(self.clone());
             Ok(())
         }
         fn rate_limits(

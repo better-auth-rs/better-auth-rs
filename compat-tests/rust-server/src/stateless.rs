@@ -64,7 +64,7 @@ impl Hooks {
         email: Option<&str>,
         context: &DatabaseHookContext<'_, StatelessSchema>,
     ) {
-        self.0.lock().unwrap().events.push(json!({ "kind":kind, "email":email, "path": context.request.as_ref().map(|request| request.path.as_str()), "http":context.request.as_ref().is_some_and(|request|request.is_http) }));
+        self.0.lock().unwrap().events.push(json!({ "kind":kind, "email":email, "path": context.request.as_ref().and_then(|request| request.path.as_deref()), "http":context.request.as_ref().is_some_and(|request|request.is_http) }));
     }
 }
 #[better_auth::database_hooks()]

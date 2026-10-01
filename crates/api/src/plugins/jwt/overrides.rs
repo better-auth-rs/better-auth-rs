@@ -1,19 +1,25 @@
 use super::*;
 
 /// Token defaults that replace the entire upstream `jwt` option group for one native signing call.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JwtTokenOptions {
     pub issuer: Option<String>,
     pub audience: Option<JwtAudience>,
+    #[serde(default, deserialize_with = "input::expiration")]
     pub expiration_time: Option<JwtExpiration>,
+    #[serde(skip)]
     pub custom_sign: Option<JwtCustomSign>,
 }
 
 /// Key defaults that replace the entire upstream `jwks` option group for one native signing call.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JwtKeyOptions {
+    #[serde(rename = "keyPairConfig")]
     pub key_pair: Option<JwtKeyPairConfig>,
     pub key_pair_configs: Option<Vec<JwtKeyPairConfig>>,
+    #[serde(default, deserialize_with = "input::duration")]
     pub rotation_interval: Option<Duration>,
     pub disable_private_key_encryption: Option<bool>,
 }
@@ -108,4 +114,34 @@ fn key_pair(parameters: JwtKeyPairConfig) -> Value {
 
 fn duration_seconds(duration: Duration) -> f64 {
     duration.num_seconds() as f64 + f64::from(duration.subsec_nanos()) / 1e9
+}
+
+#[path = "override_input.rs"]
+mod input;
+
+pub(super) fn from_input<S: AuthSchema>(
+    value: &Value,
+    original: &JwtPluginConfig,
+    original_input: Option<&Value>,
+) -> AuthResult<JwtCallOverrides<S>> {
+    let object = |value: &Value| value.as_object().cloned().unwrap_or_default().into();
+    let mut jwt = value
+        .get("jwt")
+        .map(|value| serde_json::from_value::<JwtTokenOptions>(object(value)))
+        .transpose()?;
+    if let Some(jwt) = &mut jwt
+        && value.get("jwt").is_some_and(Value::is_object)
+        && original_input.and_then(|value| value.get("jwt")).is_some()
+    {
+        jwt.custom_sign = original.custom_sign.clone();
+    }
+    let jwks = value
+        .get("jwks")
+        .map(|value| serde_json::from_value::<JwtKeyOptions>(object(value)))
+        .transpose()?;
+    Ok(JwtCallOverrides {
+        jwt,
+        jwks,
+        adapter: None,
+    })
 }

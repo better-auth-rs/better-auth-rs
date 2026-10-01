@@ -10,7 +10,7 @@ use better_auth_core::{
     CreateVerification, UpdateAccount, UpdateUser,
 };
 
-use super::authorization::{AuthorizationRequest, RESERVED_PARAMS, build_authorization_url};
+use super::authorization::{AuthorizationRequest, build_authorization_url};
 use super::encryption::encrypt_token_set;
 pub(super) use super::provider_tokens::refresh_tokens_via_provider;
 use super::providers::{
@@ -430,13 +430,6 @@ pub(super) async fn complete_link_social(
     Ok(())
 }
 
-fn invalid_additional_params(params: Option<&IndexMap<String, String>>) -> Option<AuthResponse> {
-    params.filter(|params| params.keys().any(|key| RESERVED_PARAMS.contains(&key.as_str())))
-        .map(|_| crate::plugins::json_body::validation_error(&format!(
-            "[body.additionalParams] additionalParams cannot include reserved OAuth parameters: {}", RESERVED_PARAMS.join(", ")
-        )))
-}
-
 async fn verify_id_token(
     provider: &ResolvedProvider,
     request: &OAuthIdTokenRequest,
@@ -489,10 +482,7 @@ async fn sign_in_with_id_token_core(
         OAuthUserInfoRequest {
             access_token: id_token.access_token.clone(),
             refresh_token: id_token.refresh_token.clone(),
-            access_token_expires_at: id_token
-                .expires_at
-                .and_then(|timestamp| chrono::DateTime::<Utc>::from_timestamp(timestamp, 0)),
-            scopes: id_token.scopes.clone().unwrap_or_default(),
+            user: id_token.user.clone(),
             id_token: Some(id_token.token.clone()),
             ..Default::default()
         },
@@ -518,8 +508,6 @@ async fn sign_in_with_id_token_core(
         &user_info.user,
         &OAuthTokenSet {
             access_token: id_token.access_token.clone(),
-            refresh_token: id_token.refresh_token.clone(),
-            scopes: id_token.scopes.clone().unwrap_or_default(),
             id_token: Some(id_token.token.clone()),
             ..Default::default()
         },
@@ -966,13 +954,7 @@ pub(crate) async fn handle_social_sign_in(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let body: SocialSignInRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
-    if let Some(response) = invalid_additional_params(body.additional_params.as_ref()) {
-        return Ok(response);
-    }
+    let body: SocialSignInRequest = super::request::read(req)?;
     let meta = better_auth_core::RequestMeta::from_request_with_config(
         req,
         &ctx.config.advanced.ip_address,
@@ -1021,14 +1003,8 @@ pub(crate) async fn handle_link_social(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
+    let body: LinkSocialRequest = super::request::read(req)?;
     let (user, session) = ctx.require_session(req).await?;
-    let body: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
-        Ok(v) => v,
-        Err(resp) => return Ok(resp),
-    };
-    if let Some(response) = invalid_additional_params(body.additional_params.as_ref()) {
-        return Ok(response);
-    }
     if let Some(id_token) = &body.id_token {
         let provider = config
             .providers

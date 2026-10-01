@@ -43,18 +43,23 @@ where
         &self,
         active: &mut <S::Session as SeaOrmSessionModel>::ActiveModel,
     ) -> AuthResult<()> {
-        S::Session::apply_fields(
-            active,
-            self.config()
-                .session
-                .field_schema()
-                .storage_fields_for_adapter(
-                    Default::default(),
-                    false,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+        let schema = self.config().session.field_schema();
+        let fields = schema.storage_fields_with_binding(
+            Default::default(),
+            false,
+            |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    &self.config().advanced.database.generate_id,
+                    S::Session::field_column,
                     S::Session::native_json_field,
-                )?,
+                    self.connection().get_database_backend(),
+                )
+            },
         )?;
+        S::Session::apply_fields(active, fields)?;
         crate::reference_id::apply_bindings(
             active,
             &self.config().session.field_schema(),
@@ -133,6 +138,17 @@ where
         {
             return Ok(None);
         }
+        if let Some(id) = create_session.user_id.as_str() {
+            let id = self
+                .config()
+                .advanced
+                .database
+                .generate_id
+                .coerce_id(id)?
+                .into_owned();
+            let _ = S::Session::parse_user_id(&id)?;
+            create_session.user_id = id.into();
+        }
         let now = Utc::now();
         create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
         create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
@@ -155,18 +171,19 @@ where
         if id.is_none() {
             active.not_set(S::Session::id_column());
         }
-        S::Session::apply_fields(
-            &mut active,
-            self.config()
-                .session
-                .field_schema()
-                .storage_fields_for_adapter(
-                    fields,
-                    true,
-                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                    S::Session::native_json_field,
-                )?,
-        )?;
+        let schema = self.config().session.field_schema();
+        let fields = schema.storage_fields_with_binding(fields, true, |name, field, value| {
+            crate::reference_id::input_binding(
+                name,
+                field,
+                value,
+                &self.config().advanced.database.generate_id,
+                S::Session::field_column,
+                S::Session::native_json_field,
+                db.get_database_backend(),
+            )
+        })?;
+        S::Session::apply_fields(&mut active, fields)?;
         S::Session::apply_fields(&mut active, plugin_fields)?;
         crate::reference_id::apply_bindings(
             &mut active,
@@ -276,7 +293,7 @@ where
         mut update: SessionUpdate,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let reselect = match update.id.as_deref() {
-            Some(id) => S::Session::id_column().eq(S::Session::parse_id(id)?),
+            Some(id) => S::Session::id_column().eq(self.parse_id(id, S::Session::parse_id)?),
             None => S::Session::token_column().eq(update.token.as_deref().unwrap_or(token)),
         };
         let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
@@ -284,11 +301,20 @@ where
             .config()
             .session
             .field_schema()
-            .storage_fields_for_adapter(
+            .storage_fields_with_binding(
                 std::mem::take(&mut update.additional_fields),
                 false,
-                db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                S::Session::native_json_field,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        &self.config().advanced.database.generate_id,
+                        S::Session::field_column,
+                        S::Session::native_json_field,
+                        db.get_database_backend(),
+                    )
+                },
             )?;
         let _ = update.updated_at.get_or_insert_with(Utc::now);
         S::Session::apply_update(&mut active, update)?;
@@ -448,7 +474,7 @@ where
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
-        let user_id = <S::Session as SeaOrmSessionModel>::parse_user_id(user_id)?;
+        let user_id = self.parse_id(user_id, <S::Session as SeaOrmSessionModel>::parse_user_id)?;
         database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -593,7 +619,7 @@ where
         user_id: &str,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        let user_id = S::Session::parse_user_id(user_id)?;
+        let user_id = self.parse_id(user_id, S::Session::parse_user_id)?;
         let condition = Condition::all().add(S::Session::user_id_column().eq(user_id));
         self.delete_sessions_with_connection(self.connection(), None, condition, preserve)
             .await

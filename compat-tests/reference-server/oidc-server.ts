@@ -2,7 +2,12 @@
 
 // Both auth servers use this issuer so the tests exercise the same signed tokens and JWKS.
 const encoder = new TextEncoder();
-const baseURL = `http://127.0.0.1:${Number(process.env.PORT)}`;
+const server = Bun.serve({
+  port: Number(process.env.PORT),
+  fetch: () => new Response("Initializing", { status: 503 }),
+});
+const baseURL = `http://127.0.0.1:${server.port}`;
+console.log(`COMPAT_SERVER_PORT=${server.port}`);
 const keys = await Promise.all(
   ["primary", "rotated", "forged"].map(async (kid) => {
     const pair = await crypto.subtle.generateKey(
@@ -112,8 +117,7 @@ function validClient(
   );
 }
 
-Bun.serve({
-  port: Number(process.env.PORT),
+server.reload({
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === "/__health") return Response.json({ ok: true });

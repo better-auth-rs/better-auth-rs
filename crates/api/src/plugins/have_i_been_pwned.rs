@@ -196,21 +196,21 @@ impl PasswordHasher for CheckedHasher {
         if self.config.enabled {
             let request = better_auth_core::hooks::current_request_hook_context()
                 .ok_or_else(|| AuthError::internal("No auth context found"))?;
-            let path = if self.base_path.is_empty() || self.base_path == "/" {
-                request.path.as_str()
-            } else {
-                request
-                    .path
-                    .strip_prefix(&self.base_path)
-                    .unwrap_or(&request.path)
-            };
-            if !path.is_empty()
-                && self
-                    .config
-                    .paths
-                    .iter()
-                    .any(|configured| configured == path)
-                && self.client.is_password_compromised(password).await?
+            let path = request.path.as_deref().map(|path| {
+                if self.base_path.is_empty() || self.base_path == "/" {
+                    path
+                } else {
+                    path.strip_prefix(&self.base_path).unwrap_or(path)
+                }
+            });
+            if path.is_some_and(|path| {
+                !path.is_empty()
+                    && self
+                        .config
+                        .paths
+                        .iter()
+                        .any(|configured| configured == path)
+            }) && self.client.is_password_compromised(password).await?
             {
                 return Err(AuthResponse::json(
                     400,

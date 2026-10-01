@@ -1,6 +1,5 @@
 use chrono::{Duration, Utc};
 
-use better_auth_core::entity::AuthSession;
 use better_auth_core::utils::password as password_utils;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
@@ -12,13 +11,13 @@ use super::types::{ChangeEmailRequest, DeleteUserRequest};
 use crate::plugins::email_verification::token::create_email_verification_token;
 use better_auth_core::SuccessMessageResponse;
 
-pub(crate) async fn change_email_core(
+pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
     body: &ChangeEmailRequest,
     user: &UserView,
     session: &better_auth_core::wire::SessionView,
     req: &AuthRequest,
     config: &UserManagementConfig,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ctx: &AuthContext<S>,
 ) -> AuthResult<StatusResponse> {
     if !config.change_email.enabled {
         return Err(AuthError::Upstream {
@@ -34,13 +33,10 @@ pub(crate) async fn change_email_core(
     let verification = ctx
         .extensions
         .get::<crate::plugins::email_verification::EmailVerificationConfig>();
-    let sender = verification
-        .and_then(|options| options.send_verification_email.as_ref())
-        .or(ctx.email_verification_policy.override_sender.as_ref());
-    let provider = verification
-        .filter(|options| options.send_email_notifications)
-        .and(ctx.email_provider.as_ref());
-    let can_send = sender.is_some() || provider.is_some();
+    let can_send = crate::plugins::email_verification::delivery::available(verification, ctx);
+    let callbacks = ctx
+        .extensions
+        .get::<std::sync::Arc<super::UserManagementCallbacks<S>>>();
     let update_now = !user.email_verified && config.change_email.update_without_verification;
     if !update_now && !can_send {
         return Err(better_auth_core::AuthResponse::json(
@@ -63,11 +59,10 @@ pub(crate) async fn change_email_core(
         )?;
         return Ok(StatusResponse { status: true });
     }
-    let confirmation = config
-        .change_email
-        .send_change_email_confirmation
-        .as_ref()
-        .filter(|_| user.email_verified && can_send);
+    let confirmation = user.email_verified
+        && can_send
+        && (callbacks.is_some_and(|callbacks| callbacks.confirmation.is_some())
+            || config.change_email.send_change_email_confirmation.is_some());
     let mut recipient = user.clone();
     if update_now {
         let _ = ctx
@@ -97,7 +92,7 @@ pub(crate) async fn change_email_core(
     }
     let (email, update_to, request_type) = if update_now {
         (new_email.as_str(), None, None)
-    } else if confirmation.is_some() {
+    } else if confirmation {
         (
             old_email,
             Some(new_email.as_str()),
@@ -129,38 +124,65 @@ pub(crate) async fn change_email_core(
         token,
         urlencoding::encode(callback)
     );
-    let delivered = if let Some(confirmation) = confirmation {
-        confirmation.send(user, &new_email, &url, &token).await
-    } else if let Some(sender) = sender {
-        sender.send(&recipient, &url, &token).await
-    } else if let Some(provider) = provider {
-        let html = format!("<p><a href=\"{url}\">Verify Email</a></p>");
-        let text = format!("Verify your email address: {url}");
-        provider
-            .send(&new_email, "Verify your email address", &html, &text)
-            .await
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        serde_json::to_value(body)?,
+        ctx,
+    );
+    endpoint.session = Some((user.clone(), session.clone()));
+    let task = if confirmation {
+        let message = super::ChangeEmailConfirmation {
+            user: user.clone(),
+            new_email,
+            url,
+            token,
+        };
+        if let Some(sender) = callbacks.and_then(|callbacks| callbacks.confirmation.as_ref()) {
+            sender(&message, &endpoint)?
+        } else if let Some(sender) = config.change_email.send_change_email_confirmation.clone() {
+            Some(Box::pin(async move {
+                sender
+                    .send(
+                        &message.user,
+                        &message.new_email,
+                        &message.url,
+                        &message.token,
+                    )
+                    .await
+            })
+                as better_auth_core::background::BackgroundFuture)
+        } else {
+            return Err(AuthError::config(
+                "Change email confirmation sender became unavailable",
+            ));
+        }
     } else {
-        return Err(AuthError::config(
-            "Email verification sender became unavailable",
-        ));
+        crate::plugins::email_verification::delivery::delivery(
+            verification,
+            crate::plugins::email_verification::VerificationEmail {
+                user: recipient,
+                url,
+                token,
+            },
+            &endpoint,
+        )?
     };
-    // Upstream runInBackgroundOrAwait logs asynchronous delivery errors after the write and cookie.
-    if let Err(error) = delivered {
-        better_auth_core::observability::logger::current().error(
-            "Failed to run background task",
-            &[better_auth_core::observability::LogArgument::Error(&error)],
-        );
-    }
+    better_auth_core::background::run_or_await(
+        task,
+        ctx.config.advanced.background_tasks.as_ref(),
+        &ctx.config.logger,
+    )
+    .await;
     Ok(StatusResponse { status: true })
 }
 
-pub(crate) async fn delete_user_core(
+pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
     body: &DeleteUserRequest,
     user: &UserView,
-    session: &impl AuthSession,
+    session: &better_auth_core::wire::SessionView,
     req: &AuthRequest,
     config: &UserManagementConfig,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ctx: &AuthContext<S>,
 ) -> AuthResult<SuccessMessageResponse> {
     if let Some(password) = body
         .password
@@ -189,7 +211,15 @@ pub(crate) async fn delete_user_core(
         });
     }
 
-    if let Some(sender) = &config.delete_user.send_delete_account_verification {
+    let callbacks = ctx
+        .extensions
+        .get::<std::sync::Arc<super::UserManagementCallbacks<S>>>();
+    if config
+        .delete_user
+        .send_delete_account_verification
+        .is_some()
+        || callbacks.is_some_and(|callbacks| callbacks.deletion.is_some())
+    {
         let token = uuid::Uuid::new_v4().simple().to_string();
         let expires_in = if config.delete_user.delete_token_expires_in.is_zero() {
             Duration::hours(24)
@@ -214,13 +244,44 @@ pub(crate) async fn delete_user_core(
             token,
             urlencoding::encode(body.callback_url.as_deref().unwrap_or("/")),
         );
-        // Upstream runInBackgroundOrAwait logs notification failures after storing the token.
-        if let Err(error) = sender.send(user, &url, &token, Some(req)).await {
-            better_auth_core::observability::logger::current().error(
-                "Delete account verification sender failed",
-                &[better_auth_core::observability::LogArgument::Error(&error)],
-            );
-        }
+        let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+            Some(req),
+            serde_json::to_value(body)?,
+            ctx,
+        );
+        endpoint.session = Some((user.clone(), session.clone()));
+        let message = crate::plugins::email_verification::VerificationEmail {
+            user: user.clone(),
+            url,
+            token,
+        };
+        let task = if let Some(sender) = callbacks.and_then(|callbacks| callbacks.deletion.as_ref())
+        {
+            sender(&message, &endpoint)?
+        } else if let Some(sender) = config.delete_user.send_delete_account_verification.clone() {
+            let request = endpoint.request.cloned();
+            Some(Box::pin(async move {
+                sender
+                    .send(
+                        &message.user,
+                        &message.url,
+                        &message.token,
+                        request.as_ref(),
+                    )
+                    .await
+            })
+                as better_auth_core::background::BackgroundFuture)
+        } else {
+            return Err(AuthError::config(
+                "Delete account verification sender became unavailable",
+            ));
+        };
+        better_auth_core::background::run_or_await(
+            task,
+            ctx.config.advanced.background_tasks.as_ref(),
+            &ctx.config.logger,
+        )
+        .await;
         return Ok(SuccessMessageResponse {
             success: true,
             message: "Verification email sent".into(),

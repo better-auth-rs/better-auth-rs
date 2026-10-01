@@ -6,7 +6,7 @@ use serde_json::json;
 use super::config::error;
 use super::{UsernamePlugin, UsernameValidationOrder, request};
 use crate::plugins::email_password::{
-    EmailPasswordConfig, SignInCoreResult, SignInUsernameFailure, sign_in_username_core,
+    EmailPasswordConfig, SignInUsernameFailure, sign_in_username_core,
 };
 
 impl UsernamePlugin {
@@ -83,26 +83,10 @@ impl UsernamePlugin {
         )
         .await;
         match result {
-            Ok(SignInCoreResult::Success {
-                response,
-                set_cookie_headers,
-            }) => {
-                let mut response = AuthResponse::json(200, &response)?;
-                for value in set_cookie_headers {
-                    response.headers.append("Set-Cookie", value);
-                }
+            Ok(result) => {
+                let mut response = AuthResponse::json(200, &result.response)?;
                 if let Some(callback) = body.callback_url.filter(|value| !value.is_empty()) {
                     let _ = response.headers.insert("Location", callback);
-                }
-                Ok(response)
-            }
-            Ok(SignInCoreResult::TwoFactorRedirect {
-                response,
-                set_cookie_headers,
-            }) => {
-                let mut response = AuthResponse::json(200, &response)?;
-                for value in set_cookie_headers {
-                    response.headers.append("Set-Cookie", value);
                 }
                 Ok(response)
             }

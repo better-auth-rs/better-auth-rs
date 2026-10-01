@@ -16,8 +16,11 @@ use better_auth_core::{
 use serde_json::json;
 
 macro_rules! body {
-    ($req:expr, [$($required:expr),*], [$($optional:expr),*]) => {
-        match Body::parse($req, &[$($required),*], &[$($optional),*]) { Ok(body) => body, Err(response) => return Ok(response) }
+    ($req:expr) => {
+        match Body::parse($req) {
+            Ok(body) => body,
+            Err(response) => return Ok(response),
+        }
     };
 }
 
@@ -38,8 +41,8 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["email", "type"], []);
-        let endpoint = EndpointContext::new(Some(req), body.callback_body(&["email", "type"]), ctx);
+        let body = body!(req);
+        let endpoint = EndpointContext::new(Some(req), body.value(), ctx);
         if !self.has_sender(ctx) {
             return Err(AuthError::bad_request(
                 "send email verification is not implemented",
@@ -69,7 +72,7 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["email", "type", "otp"], []);
+        let body = body!(req);
         let email = body.get("email").to_lowercase();
         validate_email(&email)?;
         self.verify_otp(ctx, &body.kind().identifier(&email), body.get("otp"), false)
@@ -87,7 +90,7 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["email", "otp"], []);
+        let body = body!(req);
         let email = body.get("email").to_lowercase();
         validate_email(&email)?;
         self.verify_otp(
@@ -134,7 +137,7 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["email", "otp"], ["name", "image"]);
+        let body = body!(req);
         let email = body.get("email").to_lowercase();
         self.verify_otp(
             ctx,
@@ -178,8 +181,8 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["email"], []);
-        let endpoint = EndpointContext::new(Some(req), body.callback_body(&["email"]), ctx);
+        let body = body!(req);
+        let endpoint = EndpointContext::new(Some(req), body.value(), ctx);
         let email = body.get("email").to_lowercase();
         let kind = EmailOtpType::ForgetPassword;
         let otp = self.resolve_otp(&endpoint, &email, kind).await?;
@@ -198,7 +201,7 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["email", "otp", "password"], []);
+        let body = body!(req);
         let email = body.get("email").to_lowercase();
         password::validate_password(
             body.get("password"),
@@ -286,9 +289,8 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["newEmail"], ["otp"]);
-        let mut endpoint =
-            EndpointContext::new(Some(req), body.callback_body(&["newEmail", "otp"]), ctx);
+        let body = body!(req);
+        let mut endpoint = EndpointContext::new(Some(req), body.value(), ctx);
         let (user, session) = ctx
             .require_authoritative_session(req)
             .await
@@ -328,7 +330,7 @@ impl EmailOtpPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = body!(req, ["newEmail", "otp"], []);
+        let body = body!(req);
         let (user, session) = ctx
             .require_authoritative_session(req)
             .await

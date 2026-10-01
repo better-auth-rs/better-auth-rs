@@ -11,15 +11,23 @@ impl UserConfig {
         supports_native_json: bool,
         native_json_field: impl Fn(&str) -> bool,
     ) -> AuthResult<Map<String, Value>> {
+        self.storage_fields_with_binding(input, create, |name, field, value| {
+            Ok(field.adapter_input(value, supports_native_json, native_json_field(name)))
+        })
+    }
+
+    /// Bind transformed fields to an adapter without repeating defaults or application transforms.
+    pub fn storage_fields_with_binding(
+        &self,
+        input: Map<String, Value>,
+        create: bool,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<Map<String, Value>> {
         let mut fields = self.storage_fields(input, create)?;
         for (name, field) in &self.additional_fields {
             let storage_name = field.field_name.as_ref().unwrap_or(name);
             if let Some(value) = fields.get_mut(storage_name) {
-                *value = field.adapter_input(
-                    value.take(),
-                    supports_native_json,
-                    native_json_field(storage_name),
-                );
+                *value = bind(storage_name, field, value.take())?;
             }
         }
         Ok(fields)

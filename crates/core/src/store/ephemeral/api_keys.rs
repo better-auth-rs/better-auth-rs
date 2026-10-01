@@ -128,6 +128,16 @@ impl ApiKeyStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: UpdateApiKey,
     ) -> AuthResult<ApiKey> {
+        self.update_api_key_optional(id, update)
+            .await?
+            .ok_or_else(|| AuthError::not_found("API Key not found"))
+    }
+
+    async fn update_api_key_optional(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdateApiKey,
+    ) -> AuthResult<Option<ApiKey>> {
         self.raw("apikey", "update", |state| {
             let Some(mut key) = state.api_keys.get_mut(id)? else {
                 return Ok(None);
@@ -166,8 +176,7 @@ impl ApiKeyStore for EphemeralStore {
             key.updated_at = now();
             Ok(Some(key.clone()))
         })
-        .await?
-        .ok_or_else(|| AuthError::not_found("API Key not found"))
+        .await
     }
 
     async fn write_api_key_usage(

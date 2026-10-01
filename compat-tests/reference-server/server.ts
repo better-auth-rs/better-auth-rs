@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import {createTwoFactorAfterFixture} from "./two-factor-after";
+import {createPhoneNativeFixture} from "./phone-native";
+import {createNativeDispatchFixture} from "./native-dispatch";
 import { routeAccountHttpOutput } from "./account-http-output";
 import { routeAccountVerificationFields } from "./account-verification-fields";
 import { routeVerificationDateOutput } from "./verification-date-output";
@@ -92,7 +95,20 @@ function hasOwn(obj: unknown, key: string) {
   return !!obj && typeof obj === "object" && Object.prototype.hasOwnProperty.call(obj, key);
 }
 
-const PORT = getPort();
+// Keep this socket bound while fixtures initialize URLs from the assigned port.
+const server = Bun.serve({
+  port: getPort(),
+  fetch: () => new Response("Initializing", { status: 503 }),
+});
+const PORT = server.port;
+console.log(`COMPAT_SERVER_PORT=${PORT}`);
+if (process.env.COMPAT_PROXY_CASE) {
+  const fixture = JSON.parse(process.env.COMPAT_PROXY_CASE);
+  for (const [key, value] of Object.entries(fixture.env) as [string, string][]) {
+    process.env[key] = value.replaceAll("{base}", `http://localhost:${PORT}`);
+  }
+  process.env.COMPAT_PROXY_OPTIONS = JSON.stringify(fixture.options).replaceAll("{base}", `http://localhost:${PORT}`);
+}
 const identityContextFixture = process.env.COMPAT_PROFILE === "identity-context" ? createIdentityContextFixture(`http://localhost:${PORT}`) : undefined;
 const dynamicContextFixture = (["dynamic-context", "dynamic-native", "dynamic-oauth", "id-policy", "organization-metadata"].includes(process.env.COMPAT_PROFILE ?? "") || process.env.COMPAT_PROFILE?.startsWith("dynamic-environment:")) ? createDynamicContextFixture() : undefined;
 const dispatchErrorsFixture = process.env.COMPAT_PROFILE === "dispatch-errors" ? createDispatchErrorsFixture(`http://localhost:${PORT}`) : undefined;
@@ -131,7 +147,10 @@ const lastLoginFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("last-log
   : undefined;
 const apiErrorFixture = ["api-error", "api-error-production"].includes(process.env.COMPAT_PROFILE ?? "")
   ? createApiErrorFixture(`http://localhost:${PORT}`) : null;
-const requestQueryFixture = ["request-api-key-", "request-two-factor-", "request-admin-", "request-security-", "request-organization-", "request-query-", "request-plugin-", "request-change-email"].some(prefix => (process.env.COMPAT_PROFILE ?? "").startsWith(prefix))
+const twoFactorAfterFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("two-factor-after-") ? await createTwoFactorAfterFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`) : undefined;
+const phoneNativeFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("phone-native-") ? await createPhoneNativeFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`) : undefined;
+const nativeDispatchFixture = process.env.COMPAT_PROFILE === "native-dispatch" ? createNativeDispatchFixture(`http://localhost:${PORT}`) : undefined;
+const requestQueryFixture = ["request-oauth-", "request-otp-", "request-api-key-", "request-two-factor-", "request-admin-", "request-security-", "request-organization-", "request-query-", "request-plugin-", "request-change-email"].some(prefix => (process.env.COMPAT_PROFILE ?? "").startsWith(prefix))
   ? await createRequestQueryFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`)
   : undefined;
 const trailingSlashesFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("trailing-slashes-")
@@ -662,8 +681,7 @@ async function resetDatabaseState() {
   }
 }
 
-const server = Bun.serve({
-  port: PORT,
+server.reload({
   async fetch(request) {
     if (process.env.COMPAT_PROFILE === "account-verification-fields") {
       const handled = await routeVerificationDateOutput(request) ?? await routeAccountVerificationFields(request) ?? await routeAccountHttpOutput(request);
@@ -674,6 +692,9 @@ const server = Bun.serve({
       return new Response(null, {status: 404});
     }
     if (apiErrorFixture) return apiErrorFixture.handle(request);
+    if (twoFactorAfterFixture) return twoFactorAfterFixture.handle(request);
+    if (phoneNativeFixture) return phoneNativeFixture.handle(request);
+    if (nativeDispatchFixture) return nativeDispatchFixture.handle(request);
     if (requestQueryFixture) return requestQueryFixture.handle(request);
     if (trailingSlashesFixture) return trailingSlashesFixture.handle(request);
     if (usernameFixture) return usernameFixture.handle(request);

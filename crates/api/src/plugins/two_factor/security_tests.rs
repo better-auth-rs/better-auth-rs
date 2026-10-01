@@ -96,10 +96,20 @@ impl SendTwoFactorOtp for OtpOutbox {
     }
 }
 
-fn challenge_request(challenge: &SignInTwoFactorRedirect) -> AuthRequest {
+async fn make_challenge(
+    user: &impl AuthUser,
+    ctx: &AuthContext<TestSchema>,
+) -> AuthResult<AuthResponse> {
+    let mut response = AuthResponse::new(200);
+    let body = begin_sign_in_challenge(user, ctx, &mut response.headers).await?;
+    response.replace_returned(AuthResponse::json(200, &body)?);
+    Ok(response)
+}
+
+fn challenge_request(challenge: &AuthResponse) -> AuthRequest {
     let header = challenge
-        .set_cookie_headers
-        .iter()
+        .headers
+        .get_all("Set-Cookie")
         .find(|header| header.starts_with("better-auth.two_factor="))
         .unwrap();
     let mut req = test_helpers::create_auth_request_no_query(
@@ -222,15 +232,11 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .unwrap();
     assert_eq!(first_record.id, second_record.id);
     assert_ne!(first.totp_uri, second.totp_uri);
-    let pending = begin_sign_in_challenge(
-        &user,
-        None,
-        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
-        &ctx,
-    )
-    .await
-    .unwrap();
-    assert!(pending.response.two_factor_methods.is_empty());
+    let pending = make_challenge(&user, &ctx).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&pending.body).unwrap()["twoFactorMethods"],
+        serde_json::json!([])
+    );
     let unverified = verify_totp_core(
         &challenge_request(&pending),
         &VerifyTotpRequest {
@@ -325,14 +331,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         trust_device: None,
     };
     for round in 0..2 {
-        let challenge = begin_sign_in_challenge(
-            &user,
-            None,
-            &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
-            &ctx,
-        )
-        .await
-        .unwrap();
+        let challenge = make_challenge(&user, &ctx).await.unwrap();
         let req = challenge_request(&challenge);
         for _ in 0..5 {
             assert_eq!(
@@ -351,14 +350,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
             assert!(!req.take_response_headers().unwrap().is_empty());
         }
     }
-    let challenge = begin_sign_in_challenge(
-        &user,
-        None,
-        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
-        &ctx,
-    )
-    .await
-    .unwrap();
+    let challenge = make_challenge(&user, &ctx).await.unwrap();
     let req = challenge_request(&challenge);
     let valid = VerifyBackupCodeRequest {
         code: enrollment.backup_codes.unwrap()[0].clone(),
@@ -407,14 +399,7 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
         send_otp: Some(outbox.clone()),
         ..Default::default()
     };
-    let challenge = begin_sign_in_challenge(
-        &user,
-        None,
-        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
-        &ctx,
-    )
-    .await
-    .unwrap();
+    let challenge = make_challenge(&user, &ctx).await.unwrap();
     let req = challenge_request(&challenge);
     let mut send_request = req.clone();
     send_request.path = "/two-factor/send-otp".into();
@@ -468,25 +453,25 @@ async fn challenge_expiration_removes_pending_credentials_and_preserves_remember
     let (ctx, user, session) =
         create_test_context_with_credential_user("cookie-challenge@example.com", true).await;
     let req = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
-    for cookie in better_auth_core::utils::cookie_utils::create_session_cookies(
-        &session.token,
-        true,
-        &ctx.config,
-    ) {
-        req.append_response_header("Set-Cookie", cookie).unwrap();
-    }
+    let manager = ctx.session_manager();
+    manager
+        .set_session_cookie(
+            &req,
+            manager.internal_data(&user, &session).await.unwrap(),
+            Some(true),
+        )
+        .await
+        .unwrap();
     req.append_response_header(
         "Set-Cookie",
         "better-auth.session_data.0=pre-challenge; Path=/".into(),
     )
     .unwrap();
-    let challenge = begin_sign_in_challenge(&user, None, &req, &ctx)
+    let mut response = AuthResponse::new(200);
+    manager.finish_response(&req, &mut response).unwrap();
+    better_auth_core::AuthPlugin::after_request(&TwoFactorPlugin::new(), &req, &mut response, &ctx)
         .await
         .unwrap();
-    let mut response = AuthResponse::json(200, &challenge.response).unwrap();
-    for cookie in challenge.set_cookie_headers {
-        response.headers.append("Set-Cookie", cookie);
-    }
     ctx.session_manager()
         .finish_response(&req, &mut response)
         .unwrap();
@@ -504,4 +489,55 @@ async fn challenge_expiration_removes_pending_credentials_and_preserves_remember
         .collect::<Vec<_>>();
     assert_eq!(markers.len(), 1);
     assert!(!markers[0].contains("Max-Age=0"));
+}
+
+#[tokio::test]
+async fn factor_lookup_failure_preserves_the_created_challenge_and_cookie() {
+    use better_auth_seaorm::sea_orm::ConnectionTrait;
+    let connection = better_auth_seaorm::Database::connect("sqlite::memory:")
+        .await
+        .unwrap();
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&connection)
+        .await
+        .unwrap();
+    let config = Arc::new(test_helpers::create_test_config());
+    let database =
+        better_auth_seaorm::SeaOrmStore::<TestSchema>::new(config.clone(), connection.clone());
+    let ctx = AuthContext::new(config, Arc::new(database));
+    let user = test_helpers::create_user(
+        &ctx,
+        better_auth_core::CreateUser::new().with_email("factor-query@example.com"),
+    )
+    .await;
+    connection
+        .execute_unprepared("DROP TABLE two_factor")
+        .await
+        .unwrap();
+    let mut headers = better_auth_core::Headers::new();
+    let error = begin_sign_in_challenge(&user, &ctx, &mut headers)
+        .await
+        .err()
+        .unwrap();
+    assert!(matches!(error, AuthError::Database(_)));
+    let cookie = headers
+        .get_all("set-cookie")
+        .find(|cookie| cookie.starts_with("better-auth.two_factor="))
+        .unwrap();
+    let identifier = verify_signed_cookie_value(ctx.config.signing_secret(), &cookie_value(cookie))
+        .unwrap()
+        .unwrap();
+    let proof = ctx
+        .database
+        .get_verification_by_identifier(&identifier)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(proof.value, user.id);
+    let attempts = ctx
+        .database
+        .get_verification_by_identifier(&format!("2fa-attempts-{identifier}"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(attempts.value.typed().unwrap(), "0");
 }

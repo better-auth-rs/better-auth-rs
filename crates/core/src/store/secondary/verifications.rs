@@ -8,6 +8,56 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 impl<S: AuthSchema> SecondaryStore<S> {
+    pub(super) async fn consume_verification_in_transaction(
+        &self,
+        identifier: &str,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<Option<VerificationView>> {
+        let identifiers = self.verification_identifiers(identifier).await?;
+        if self.database_verifications() {
+            for identifier in &identifiers {
+                let consumed = match transaction {
+                    Some(transaction) => {
+                        transaction
+                            .consume_verification_including_expired(identifier)
+                            .await?
+                    }
+                    None => {
+                        self.inner
+                            .consume_verification_including_expired(identifier)
+                            .await?
+                    }
+                };
+                if let Some(consumed) = consumed {
+                    self.delete_cached_verifications(&identifiers).await?;
+                    return Ok(Some(consumed));
+                }
+            }
+            return Ok(None);
+        }
+        for identifier in &identifiers {
+            let Some(value) = decode(
+                self.secondary()?
+                    .get_and_delete(&format!("verification:{identifier}"))
+                    .await?,
+            ) else {
+                continue;
+            };
+            let mut record = VerificationView::from_fields(object(value)?)?;
+            record.expires_at = record.expires_at.converted_date();
+            if matches!(record.expires_at, crate::SchemaValue::InvalidDate) {
+                continue;
+            }
+            for other in identifiers.iter().filter(|other| *other != identifier) {
+                self.secondary()?
+                    .delete(&format!("verification:{other}"))
+                    .await?;
+            }
+            return Ok(Some(record));
+        }
+        Ok(None)
+    }
+
     pub(super) async fn delete_verification_in_transaction(
         &self,
         identifier: &str,
@@ -386,41 +436,8 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        let identifiers = self.verification_identifiers(identifier).await?;
-        if self.database_verifications() {
-            for identifier in &identifiers {
-                if let Some(consumed) = self
-                    .inner
-                    .consume_verification_including_expired(identifier)
-                    .await?
-                {
-                    self.delete_cached_verifications(&identifiers).await?;
-                    return Ok(Some(consumed));
-                }
-            }
-            return Ok(None);
-        }
-        for identifier in &identifiers {
-            let Some(value) = decode(
-                self.secondary()?
-                    .get_and_delete(&format!("verification:{identifier}"))
-                    .await?,
-            ) else {
-                continue;
-            };
-            let mut record = VerificationView::from_fields(object(value)?)?;
-            record.expires_at = record.expires_at.converted_date();
-            if matches!(record.expires_at, crate::SchemaValue::InvalidDate) {
-                continue;
-            }
-            for other in identifiers.iter().filter(|other| *other != identifier) {
-                self.secondary()?
-                    .delete(&format!("verification:{other}"))
-                    .await?;
-            }
-            return Ok(Some(record));
-        }
-        Ok(None)
+        self.consume_verification_in_transaction(identifier, None)
+            .await
     }
 
     async fn consume_verification_by_identifier(

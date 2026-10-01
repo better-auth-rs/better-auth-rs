@@ -125,19 +125,34 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                 "User already exists. Use another email.".into(),
             ));
         }
-        let _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
-            .await?;
-        if let Some(callback) = &config.on_existing_user_sign_up {
-            let user = ctx.internal_user_view(&user)?;
-            if let Err(error) = callback.on_existing_user_sign_up(&user, Some(req)).await {
-                // Upstream runs this notification through runInBackgroundOrAwait, which logs failures.
-                better_auth_core::observability::logger::current().error(
-                    "Existing-user signup notification failed",
-                    &[better_auth_core::observability::LogArgument::Error(&error)],
+        let body = body.clone();
+        let config = config.clone();
+        let request = req.clone();
+        let auth = ctx.clone();
+        return better_auth_core::store::transaction(ctx.database.as_ref(), move |tx| {
+            Box::pin(async move {
+                let _ = password_utils::hash_password(
+                    auth.password_policy.hasher.as_ref(),
+                    &body.password,
+                )
+                .await?;
+                let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+                    Some(&request),
+                    endpoint_body,
+                    &auth,
                 );
-            }
-        }
-        return synthetic_response(body, &create_user, config, ctx);
+                endpoint.transaction = Some(tx);
+                let task = super::callbacks::delivery(&config, &user, &endpoint)?;
+                better_auth_core::background::run_or_await(
+                    task,
+                    auth.config.advanced.background_tasks.as_ref(),
+                    &auth.config.logger,
+                )
+                .await;
+                synthetic_response(&body, &create_user, &config, &auth)
+            })
+        })
+        .await;
     }
     let password_hash =
         password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password).await?;

@@ -602,8 +602,8 @@ better_auth_core::impl_auth_plugin! {
         post "/device/code" => handle_device_code, "deviceCode", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"], body = request::code;
         post "/device/token" => handle_device_token, "deviceToken", body = request::token;
         get "/device" => handle_device_verify, "deviceVerify", query = crate::plugins::query_input::device;
-        post "/device/approve" => handle_device_approve, "deviceApprove", body = request::action;
-        post "/device/deny" => handle_device_deny, "deviceDeny", body = request::action;
+        post "/device/approve" => handle_device_approve, "deviceApprove", body = request::action, require_headers = true;
+        post "/device/deny" => handle_device_deny, "deviceDeny", body = request::action, require_headers = true;
     }
     extra {
         async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {

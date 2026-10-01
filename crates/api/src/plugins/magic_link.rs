@@ -81,8 +81,8 @@ pub struct MagicLinkPlugin {
 better_auth_core::impl_auth_plugin! {
     MagicLinkPlugin, "magic-link";
     routes {
-        post "/sign-in/magic-link" => handle_send, "signInWithMagicLink", body = send_body;
-        get "/magic-link/verify" => handle_verify, "verifyMagicLink", query = crate::plugins::query_input::magic_link;
+        post "/sign-in/magic-link" => handle_send, "signInWithMagicLink", body = send_body, require_headers = true;
+        get "/magic-link/verify" => handle_verify, "verifyMagicLink", query = crate::plugins::query_input::magic_link, require_headers = true;
     }
     extra {
         fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
@@ -137,9 +137,6 @@ impl MagicLinkPlugin {
             Ok(body) => body,
             Err(response) => return Ok(response),
         };
-        if req.endpoint_headers().is_none() {
-            return Err(super::json_body::validation_error("Headers is required").into());
-        }
         let endpoint = super::endpoint_context::EndpointContext::new(
             Some(req),
             serde_json::to_value(&body)?,
@@ -233,9 +230,6 @@ impl MagicLinkPlugin {
                 "[query.token] Invalid input: expected string, received undefined",
             ));
         };
-        if req.endpoint_headers().is_none() {
-            return Err(super::json_body::validation_error("Headers is required").into());
-        }
         let base = Url::parse(ctx.base_url())
             .map_err(|error| AuthError::config(format!("Invalid base URL: {error}")))?;
         let callback = callback_url(req, ctx, &base, "callbackURL", "/")?;

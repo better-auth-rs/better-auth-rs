@@ -173,7 +173,8 @@ impl<T: Serialize> SchemaValue<T> {
     }
 }
 
-pub(crate) fn number_string(number: f64) -> String {
+/// Format a number with ECMAScript's string conversion, including exponent thresholds.
+pub fn number_string(number: f64) -> String {
     if number == 0.0 {
         "0".to_owned()
     } else if number.is_infinite() {

@@ -1,4 +1,6 @@
+mod callbacks;
 mod fields;
+pub use callbacks::OrganizationCallbacks;
 pub mod handlers;
 pub mod hooks;
 mod input;
@@ -21,6 +23,7 @@ use better_auth_core::plugin::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
 
 /// Data supplied when an invitation is created or resent.
+#[derive(Clone)]
 pub struct InvitationEmail {
     /// The persisted invitation, including its current expiration.
     pub invitation: better_auth_core::wire::InvitationView,
@@ -311,46 +314,59 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         let mut routes = vec![
             // Organization CRUD
             AuthRoute::post("/organization/create", "createOrganization"),
-            AuthRoute::post("/organization/update", "updateOrganization"),
-            AuthRoute::post("/organization/delete", "deleteOrganization"),
-            AuthRoute::get("/organization/list", "listOrganizations"),
+            AuthRoute::post("/organization/update", "updateOrganization").require_headers(true),
+            AuthRoute::post("/organization/delete", "deleteOrganization").require_headers(true),
+            AuthRoute::get("/organization/list", "listOrganizations").require_headers(true),
             AuthRoute::get("/organization/get-organization", "getOrganization")
+                .require_headers(true)
                 .query_validator(crate::plugins::query_input::organization),
             AuthRoute::get("/organization/get-full-organization", "getFullOrganization")
+                .require_headers(true)
                 .query_validator(crate::plugins::query_input::full_organization),
             AuthRoute::post("/organization/check-slug", "checkOrganizationSlug"),
-            AuthRoute::post("/organization/set-active", "setActiveOrganization"),
-            AuthRoute::post("/organization/leave", "leaveOrganization"),
+            AuthRoute::post("/organization/set-active", "setActiveOrganization")
+                .require_headers(true),
+            AuthRoute::post("/organization/leave", "leaveOrganization").require_headers(true),
             // Member management
-            AuthRoute::get("/organization/get-active-member", "getActiveMember"),
+            AuthRoute::get("/organization/get-active-member", "getActiveMember")
+                .require_headers(true),
             AuthRoute::get(
                 "/organization/get-active-member-role",
                 "getActiveMemberRole",
             )
+            .require_headers(true)
             .query_validator(crate::plugins::query_input::active_member_role),
             AuthRoute::get("/organization/list-members", "listMembers")
+                .require_headers(true)
                 .query_validator(crate::plugins::query_input::list_members),
-            AuthRoute::post("/organization/remove-member", "removeMember"),
+            AuthRoute::post("/organization/remove-member", "removeMember").require_headers(true),
             AuthRoute::post(
                 "/organization/update-member-role",
                 "updateOrganizationMemberRole",
-            ),
+            )
+            .require_headers(true),
             // Invitations
             AuthRoute::post(
                 "/organization/invite-member",
                 "createOrganizationInvitation",
-            ),
+            )
+            .require_headers(true),
             AuthRoute::get("/organization/get-invitation", "getInvitation")
+                .require_headers(true)
                 .query_validator(crate::plugins::query_input::invitation),
             AuthRoute::get("/organization/list-invitations", "listInvitations")
+                .require_headers(true)
                 .query_validator(crate::plugins::query_input::organization_id),
             AuthRoute::get("/organization/list-user-invitations", "listUserInvitations")
                 .query_validator(crate::plugins::query_input::user_invitations),
-            AuthRoute::post("/organization/accept-invitation", "acceptInvitation"),
-            AuthRoute::post("/organization/reject-invitation", "rejectInvitation"),
-            AuthRoute::post("/organization/cancel-invitation", "cancelInvitation"),
+            AuthRoute::post("/organization/accept-invitation", "acceptInvitation")
+                .require_headers(true),
+            AuthRoute::post("/organization/reject-invitation", "rejectInvitation")
+                .require_headers(true),
+            AuthRoute::post("/organization/cancel-invitation", "cancelInvitation")
+                .require_headers(true),
             // Permission check
-            AuthRoute::post("/organization/has-permission", "hasPermission"),
+            AuthRoute::post("/organization/has-permission", "hasPermission").require_headers(true),
         ];
         if self.config.teams.enabled {
             routes.extend(handlers::team::routes());
@@ -363,15 +379,18 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 ("update-role", HttpMethod::Post),
                 ("delete-role", HttpMethod::Post),
             ] {
-                routes.push(match method {
-                    HttpMethod::Get => AuthRoute::get(format!("/organization/{path}"), path)
-                        .query_validator(if path == "get-role" {
-                            crate::plugins::query_input::organization_role
-                        } else {
-                            crate::plugins::query_input::organization_id
-                        }),
-                    _ => AuthRoute::post(format!("/organization/{path}"), path),
-                });
+                routes.push(
+                    match method {
+                        HttpMethod::Get => AuthRoute::get(format!("/organization/{path}"), path)
+                            .query_validator(if path == "get-role" {
+                                crate::plugins::query_input::organization_role
+                            } else {
+                                crate::plugins::query_input::organization_id
+                            }),
+                        _ => AuthRoute::post(format!("/organization/{path}"), path),
+                    }
+                    .require_headers(true),
+                );
             }
         }
         routes

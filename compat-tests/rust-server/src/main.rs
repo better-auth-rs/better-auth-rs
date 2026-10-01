@@ -79,6 +79,7 @@ mod jwt_adapter;
 mod jwt_fixture;
 mod jwt_session;
 mod last_login;
+mod native_dispatch;
 mod oauth_link_id_token;
 mod oauth_popup;
 mod oidc;
@@ -89,6 +90,7 @@ mod otp_callbacks;
 mod passkey_options;
 mod password_policy;
 mod password_security;
+mod phone_native;
 mod plugin_schema;
 mod rate_limit_options;
 mod request_query;
@@ -98,6 +100,7 @@ mod signup_enumeration;
 mod stateless;
 mod token_routes;
 mod trailing_slashes;
+mod two_factor_after;
 mod two_factor_context;
 mod two_factor_options;
 mod user_admission;
@@ -649,17 +652,41 @@ fn mock_oauth_plugin(
         )
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(3200);
-    // Claim the selected port before discovery opens outbound connections.
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
+    let listener = std::net::TcpListener::bind(("0.0.0.0", port))?;
+    let port = listener.local_addr()?.port();
+    println!("COMPAT_SERVER_PORT={port}");
+    if let Ok(case) = std::env::var("COMPAT_PROXY_CASE") {
+        let case: serde_json::Value = serde_json::from_str(&case)?;
+        let mut environment = case["env"].as_object().expect("case environment").clone();
+        environment.insert(
+            "COMPAT_PROXY_OPTIONS".into(),
+            case["options"].to_string().into(),
+        );
+        for (key, value) in environment {
+            let value = value
+                .as_str()
+                .expect("environment string")
+                .replace("{base}", &format!("http://localhost:{port}"));
+            // SAFETY: startup is single-threaded; the Tokio runtime is created below.
+            unsafe { std::env::set_var(key, value) };
+        }
+    }
+    listener.set_nonblocking(true)?;
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async move {
+            tracing_subscriber::fmt::init();
+            run(TcpListener::from_std(listener)?, port).await
+        })
+}
 
+async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error::Error>> {
     let secret = "compat-test-only-key-not-real-minimum-32chars";
     let device_profile = std::env::var("COMPAT_PROFILE").unwrap_or_default();
     if device_profile == "account-verification-fields" {
@@ -681,7 +708,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
-    if device_profile.starts_with("request-two-factor-")
+    if device_profile.starts_with("two-factor-after-") {
+        let app =
+            two_factor_after::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile.starts_with("phone-native-") {
+        let app =
+            phone_native::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile == "native-dispatch" {
+        let app = native_dispatch::router(&format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile.starts_with("request-oauth-")
+        || device_profile.starts_with("request-otp-")
+        || device_profile.starts_with("request-two-factor-")
         || device_profile.starts_with("request-security-")
         || device_profile.starts_with("request-admin-")
         || device_profile.starts_with("request-api-key-")

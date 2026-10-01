@@ -161,6 +161,7 @@ macro_rules! impl_auth_plugin {
                 $(, allowed_media_types = [$($media_type:literal),* $(,)?])?
                 $(, body = $body:path)?
                 $(, query = $query:path)?
+                $(, require_headers = $require_headers:literal)?
             );* $(;)?
         }
         $( extra { $($extra:tt)* } )?
@@ -174,7 +175,8 @@ macro_rules! impl_auth_plugin {
                     $( $crate::AuthRoute::new($crate::impl_auth_plugin!(@pat $method), $path, $op_id)
                         $(.allowed_media_types(&[$($media_type),*]))?
                         $(.body_validator($body))?
-                        $(.query_validator($query))?, )*
+                        $(.query_validator($query))?
+                        $(.require_headers($require_headers))?, )*
                 ]
             }
 
@@ -208,6 +210,8 @@ pub type BodyValidator =
 /// Route definition for plugins
 #[derive(Clone)]
 pub struct AuthRoute {
+    /// Native-only endpoints cannot match HTTP routing.
+    pub server_only: bool,
     pub path: String,
     pub method: HttpMethod,
     /// Identifier used as the OpenAPI `operationId` for this route.
@@ -221,6 +225,8 @@ pub struct AuthRoute {
     /// Query validation runs after before hooks and before endpoint middleware.
     pub query_validator: Option<QueryValidator>,
     pub body_validator: Option<BodyValidator>,
+    /// Header presence is validated after body and query, before endpoint middleware.
+    pub require_headers: bool,
 }
 
 /// Initialization context passed to plugin setup.
@@ -278,6 +284,7 @@ impl std::fmt::Debug for AuthRoute {
             .field("endpoint_key", &self.endpoint_key)
             .field("allowed_media_types", &self.allowed_media_types)
             .field("query_validator", &self.query_validator)
+            .field("require_headers", &self.require_headers)
             .field(
                 "body_validator",
                 &self.body_validator.as_ref().map(|_| "configured"),
@@ -287,9 +294,16 @@ impl std::fmt::Debug for AuthRoute {
 }
 
 impl AuthRoute {
+    /// Define an endpoint that is available only through trusted native facades.
+    pub fn server_only(method: HttpMethod, operation_id: impl Into<String>) -> Self {
+        let mut route = Self::new(method, "/", operation_id);
+        route.server_only = true;
+        route
+    }
+
     /// Match the method and slash-separated path, including named `{parameter}` segments.
     pub fn matches(&self, method: &HttpMethod, path: &str) -> bool {
-        if self.method != *method {
+        if self.server_only || self.method != *method {
             return false;
         }
         let mut actual = path.split('/');
@@ -334,6 +348,11 @@ impl AuthRoute {
         self
     }
 
+    pub fn require_headers(mut self, required: bool) -> Self {
+        self.require_headers = required;
+        self
+    }
+
     pub fn allowed_media_types(mut self, types: &[&str]) -> Self {
         self.allowed_media_types = types.iter().map(|value| (*value).to_owned()).collect();
         self
@@ -345,6 +364,7 @@ impl AuthRoute {
         operation_id: impl Into<String>,
     ) -> Self {
         Self {
+            server_only: false,
             path: path.into(),
             method,
             operation_id: operation_id.into(),
@@ -353,6 +373,7 @@ impl AuthRoute {
             allowed_media_types: Vec::new(),
             query_validator: None,
             body_validator: None,
+            require_headers: false,
         }
     }
 

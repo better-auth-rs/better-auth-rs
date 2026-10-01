@@ -91,11 +91,20 @@ where
         let now = Utc::now();
         let generated_id = self.generated_id("user", create_user.id.take())?;
         let user_id = generated_id.as_deref().map(S::User::parse_id).transpose()?;
-        let fields = self.config().user.storage_fields_for_adapter(
+        let fields = self.config().user.storage_fields_with_binding(
             create_user.take_user_field_input(&self.config().user),
             true,
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-            S::User::native_json_field,
+            |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    &self.config().advanced.database.generate_id,
+                    S::User::field_column,
+                    S::User::native_json_field,
+                    db.get_database_backend(),
+                )
+            },
         )?;
         let created_at = create_user.created_at;
         let updated_at = create_user.updated_at;
@@ -166,7 +175,7 @@ where
         if update.phone_number == Some(None) {
             update.phone_number_verified = Some(false);
         }
-        let user_id = S::User::parse_id(id)?;
+        let user_id = self.parse_id(id, S::User::parse_id)?;
         let hook_context = self.hook_context(tx);
         let original = update.clone();
         for hook in self.hooks() {
@@ -186,11 +195,20 @@ where
                 }
             }
         }
-        let fields = self.config().user.storage_fields_for_adapter(
+        let fields = self.config().user.storage_fields_with_binding(
             update.take_user_field_input(&self.config().user),
             false,
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-            S::User::native_json_field,
+            |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    &self.config().advanced.database.generate_id,
+                    S::User::field_column,
+                    S::User::native_json_field,
+                    db.get_database_backend(),
+                )
+            },
         )?;
         let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -320,7 +338,7 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        let user_id = S::User::parse_id(id)?;
+        let user_id = self.parse_id(id, S::User::parse_id)?;
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -372,7 +390,7 @@ where
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
         let user_ids = ids
             .iter()
-            .map(|id| S::User::parse_id(id))
+            .map(|id| self.parse_id(id, S::User::parse_id))
             .collect::<AuthResult<Vec<_>>>()?;
 
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(

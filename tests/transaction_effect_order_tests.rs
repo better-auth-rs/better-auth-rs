@@ -135,10 +135,12 @@ async fn check_order<S: AuthSchema>(
                 let captured_events = events.clone();
                 with_request_hook_context(&request, async {
                     tx.queue_after_commit(Box::pin(async move {
-                        captured_events
-                            .lock()
-                            .unwrap()
-                            .push(current_request_hook_context().unwrap().path);
+                        captured_events.lock().unwrap().push(
+                            current_request_hook_context()
+                                .unwrap()
+                                .path
+                                .expect("HTTP endpoint path"),
+                        );
                         Ok(())
                     }))
                 })

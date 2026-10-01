@@ -45,7 +45,7 @@ pub use better_auth_api::plugins::{OneTapConfig, OneTapPlugin, one_tap};
 
 pub use anonymous::AnonymousPlugin;
 pub use better_auth_api::plugins::{anonymous, phone_number, siwe};
-pub use phone_number::PhoneNumberPlugin;
+pub use phone_number::{PhoneNumberApi, PhoneNumberPlugin};
 pub use siwe::SiwePlugin;
 
 pub use better_auth_api::plugins::last_login_method::{

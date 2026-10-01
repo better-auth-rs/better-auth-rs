@@ -27,6 +27,7 @@ use crate::plugins::helpers::{
 use super::StatusResponse;
 mod actions;
 mod callbacks;
+mod challenge;
 pub use callbacks::TwoFactorCallbacks;
 mod helpers;
 mod native;
@@ -278,20 +279,9 @@ enum ResolvedTwoFactorState {
     Pending(PendingTwoFactorState),
 }
 
-pub(crate) struct SignInTwoFactorRedirect {
-    pub response: TwoFactorRedirectResponse,
-    pub set_cookie_headers: Vec<String>,
-}
-
 pub(crate) struct TrustedDeviceCheck {
     pub trusted: bool,
     pub set_cookie_headers: Vec<String>,
-}
-
-pub(crate) fn is_enabled(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> bool {
-    ctx.get_metadata(METADATA_ENABLED)
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
 }
 
 pub(crate) async fn inspect_trusted_device(
@@ -308,14 +298,11 @@ pub(crate) async fn inspect_trusted_device(
     };
 
     let Some(signed_value) = verify_signed_cookie_value(ctx.config.signing_secret(), &raw_cookie)?
+        .filter(|value| !value.is_empty())
     else {
         return Ok(TrustedDeviceCheck {
             trusted: false,
-            set_cookie_headers: vec![clear_cookie_header(
-                req,
-                &ctx.config,
-                TRUST_DEVICE_COOKIE_SUFFIX,
-            )?],
+            set_cookie_headers: Vec::new(),
         });
     };
 
@@ -386,10 +373,9 @@ pub(crate) async fn inspect_trusted_device(
 
 pub(crate) async fn begin_sign_in_challenge(
     user: &impl AuthUser,
-    remember_me: Option<bool>,
-    req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<SignInTwoFactorRedirect> {
+    headers: &mut better_auth_core::Headers,
+) -> AuthResult<TwoFactorRedirectResponse> {
     let identifier = format!("2fa-{}", uuid::Uuid::new_v4());
     _ = ctx
         .database
@@ -411,24 +397,16 @@ pub(crate) async fn begin_sign_in_challenge(
         })
         .await?;
 
-    let mut headers = delete_session_cookie_headers(req, &ctx.config, true)?;
-    headers.push(create_signed_cookie_header(
-        ctx.config.signing_secret(),
-        &ctx.config,
-        TWO_FACTOR_COOKIE_SUFFIX,
-        &identifier,
-        Some(two_factor_cookie_max_age(ctx)),
-    )?);
-
-    if remember_me == Some(false) {
-        headers.push(create_signed_cookie_header(
+    headers.append(
+        "Set-Cookie",
+        create_signed_cookie_header(
             ctx.config.signing_secret(),
             &ctx.config,
-            DONT_REMEMBER_COOKIE_SUFFIX,
-            "true",
-            None,
-        )?);
-    }
+            TWO_FACTOR_COOKIE_SUFFIX,
+            &identifier,
+            Some(two_factor_cookie_max_age(ctx)),
+        )?,
+    );
 
     // TOTP is per-user: only offered once the user has a stored secret. OTP is
     // server-level: offered whenever a sender is configured.
@@ -453,12 +431,9 @@ pub(crate) async fn begin_sign_in_challenge(
         two_factor_methods.push("otp");
     }
 
-    Ok(SignInTwoFactorRedirect {
-        response: TwoFactorRedirectResponse {
-            two_factor_redirect: true,
-            two_factor_methods,
-        },
-        set_cookie_headers: headers,
+    Ok(TwoFactorRedirectResponse {
+        two_factor_redirect: true,
+        two_factor_methods,
     })
 }
 
@@ -511,6 +486,14 @@ impl TwoFactorPlugin {
 impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S> for TwoFactorPlugin {
     fn name(&self) -> &'static str {
         "two-factor"
+    }
+    async fn after_request(
+        &self,
+        req: &AuthRequest,
+        response: &mut AuthResponse,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<()> {
+        self.after_sign_in(req, response, ctx).await
     }
     fn routes(&self) -> Vec<better_auth_core::AuthRoute> {
         let passwordless = self.config.allow_passwordless;

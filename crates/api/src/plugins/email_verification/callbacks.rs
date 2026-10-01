@@ -5,14 +5,14 @@ use better_auth_core::{
 };
 use std::sync::Arc;
 
-/// Default email verification delivery data.
+/// Email verification delivery data.
 #[derive(Clone)]
 pub struct VerificationEmail {
     /// User snapshot supplied by the verification lifecycle.
     pub user: UserView,
-    /// Complete verification link, including the signed token.
+    /// Complete verification link, including the token.
     pub url: String,
-    /// Signed verification token for application-specific delivery.
+    /// Verification token for application-specific delivery.
     pub token: String,
 }
 type Sender<S> = dyn Fn(&VerificationEmail, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>

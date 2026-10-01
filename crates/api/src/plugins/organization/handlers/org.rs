@@ -658,7 +658,15 @@ pub async fn handle_update_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let (user, session) = match ctx.require_session(req).await {
+        Ok(session) => session,
+        Err(AuthError::Unauthenticated) => {
+            return Err(
+                AuthResponse::json(401, &serde_json::json!({"message":"User not found"}))?.into(),
+            );
+        }
+        Err(error) => return Err(error),
+    };
     let body: UpdateOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let updated = update_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &updated)?)
@@ -670,7 +678,13 @@ pub async fn handle_delete_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let (user, session) = ctx
+        .require_session(req)
+        .await
+        .map_err(|error| match error {
+            AuthError::Unauthenticated => AuthResponse::new(401).into(),
+            error => error,
+        })?;
     let body: DeleteOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let response = delete_organization_core(&body, &user, &session, Some(req), config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)

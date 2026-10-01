@@ -27,18 +27,23 @@ pub use options::*;
 pub use overrides::{JwtCallOverrides, JwtKeyOptions, JwtTokenOptions};
 
 /// Supported asymmetric signing algorithms.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 pub enum JwtAlgorithm {
     /// Ed25519, the upstream default.
     #[default]
+    #[serde(rename = "EdDSA")]
     EdDsa,
     /// RSA PKCS#1 v1.5 with SHA-256 and a 2048-bit key.
+    #[serde(rename = "RS256")]
     Rs256,
     /// ECDSA P-256 with SHA-256.
+    #[serde(rename = "ES256")]
     Es256,
     /// ECDSA P-521 with SHA-512.
+    #[serde(rename = "ES512")]
     Es512,
     /// RSA PSS with SHA-256.
+    #[serde(rename = "PS256")]
     Ps256,
 }
 
@@ -145,7 +150,7 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
             AuthRoute::get(&self.config.jwks_path, "getJSONWebKeySet"),
-            AuthRoute::get("/token", "getJSONWebToken"),
+            AuthRoute::get("/token", "getJSONWebToken").require_headers(true),
         ]
     }
     async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
@@ -198,13 +203,6 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             || (req.path() != self.config.jwks_path && req.path() != "/token")
         {
             return Ok(None);
-        }
-        if req.path() == "/token" && req.endpoint_headers().is_none() {
-            return Err(AuthError::Upstream {
-                status: 400,
-                code: "VALIDATION_ERROR",
-                message: "Headers is required",
-            });
         }
         let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
         if req.path() == self.config.jwks_path {

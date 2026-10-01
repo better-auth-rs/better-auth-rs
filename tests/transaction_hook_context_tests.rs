@@ -25,7 +25,7 @@ use better_auth_seaorm::{
 };
 use chrono::{Duration, Utc};
 
-type Trace = Arc<Mutex<Vec<(&'static str, String, String)>>>;
+type Trace = Arc<Mutex<Vec<(&'static str, Option<String>, Option<String>)>>>;
 struct Hooks(Trace);
 impl Hooks {
     fn capture(&self, phase: &'static str, supplied: Option<&RequestHookContext>) {
@@ -263,8 +263,8 @@ async fn check<S: AuthSchema>(
             .into_iter()
             .map(|phase| (
                 phase,
-                "/captured-operation".to_owned(),
-                "/flush-operation".to_owned()
+                Some("/captured-operation".to_owned()),
+                Some("/flush-operation".to_owned())
             ))
             .collect::<Vec<_>>()
     );

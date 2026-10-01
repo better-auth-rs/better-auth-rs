@@ -1,6 +1,7 @@
 use super::{TwoFactorConfig, TwoFactorPlugin, request};
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, HttpMethod, NativeRequest,
+    AuthContext, AuthError, AuthResponse, AuthResult, AuthRoute, AuthSchema, HttpMethod,
+    NativeRequest,
 };
 use serde_json::Value;
 
@@ -29,33 +30,60 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
         self.source = source;
         self
     }
-    fn request(&self, path: &str, body: Option<Value>) -> AuthResult<AuthRequest> {
-        let mut request = AuthRequest::new(HttpMethod::Post, path)
-            .with_optional_headers(self.source.headers.cloned());
-        if let Some(original) = self.source.request {
-            request = request.with_original_request(original.clone());
-        }
-        request.body = body.map(|body| serde_json::to_vec(&body)).transpose()?;
-        Ok(request)
-    }
     /// Validate a native body and generate a TOTP using the registered digit and period options.
     pub async fn generate_totp(&self, body: Option<Value>) -> AuthResult<String> {
-        self.context
-            .with_native_context(self.source, |_| async move {
-                let request = self.request("generateTOTP", body)?;
-                let body: request::GenerateTotpRequest = request::read(&request, false)?;
-                self.plugin.generate_totp(&body.secret)
+        let route = AuthRoute::server_only(HttpMethod::Post, "generateTOTP")
+            .body_validator(|request| request::validate_native(request, "generateTOTP"));
+        let response = self
+            .context
+            .dispatch_native(self.source, route, body, None, |request, _| async move {
+                let body = request
+                    .validated_body::<request::GenerateTotpRequest>()
+                    .ok_or_else(|| AuthError::internal("Missing validated TOTP input"))?;
+                AuthResponse::json(
+                    200,
+                    &serde_json::json!({"code":self.plugin.generate_totp(&body.secret)?}),
+                )
+                .map_err(Into::into)
             })
-            .await
+            .await?;
+        #[derive(serde::Deserialize)]
+        struct Result {
+            code: String,
+        }
+        Ok(serde_json::from_slice::<Result>(&response.body)?.code)
     }
     /// Validate and coerce the supplied user ID, then read the stored backup codes.
     pub async fn view_backup_codes(&self, body: Option<Value>) -> AuthResult<Vec<String>> {
-        self.context
-            .with_native_context(self.source, |context| async move {
-                let request = self.request("viewBackupCodes", body)?;
-                let body: request::ViewBackupCodesRequest = request::read(&request, false)?;
-                self.plugin.view_backup_codes(&body.user_id, &context).await
-            })
-            .await
+        let route = AuthRoute::server_only(HttpMethod::Post, "viewBackupCodes")
+            .body_validator(|request| request::validate_native(request, "viewBackupCodes"));
+        let response = self
+            .context
+            .dispatch_native(
+                self.source,
+                route,
+                body,
+                None,
+                |request, context| async move {
+                    let body = request
+                        .validated_body::<request::ViewBackupCodesRequest>()
+                        .ok_or_else(|| {
+                            AuthError::internal("Missing validated backup code input")
+                        })?;
+                    let codes = self
+                        .plugin
+                        .view_backup_codes(&body.user_id, &context)
+                        .await?;
+                    AuthResponse::json(200, &serde_json::json!({"status":true,"backupCodes":codes}))
+                        .map_err(Into::into)
+                },
+            )
+            .await?;
+        #[derive(serde::Deserialize)]
+        struct Result {
+            #[serde(rename = "backupCodes")]
+            backup_codes: Vec<String>,
+        }
+        Ok(serde_json::from_slice::<Result>(&response.body)?.backup_codes)
     }
 }

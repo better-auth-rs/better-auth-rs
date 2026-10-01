@@ -36,7 +36,7 @@ where
         id: &str,
         verification: CreateVerification,
     ) -> AuthResult<bool> {
-        let reservation_id = S::Verification::parse_id(id)?;
+        let reservation_id = self.parse_id(id, S::Verification::parse_id)?;
         let result: AuthResult<()> = async {
             let active = self.new_verification_active(
                 self.connection(),
@@ -297,7 +297,7 @@ where
         self.delete_single_verification(
             self.connection(),
             None,
-            S::Verification::id_column().eq(S::Verification::parse_id(id)?),
+            S::Verification::id_column().eq(self.parse_id(id, S::Verification::parse_id)?),
         )
         .await
     }
@@ -658,6 +658,92 @@ where
         .transpose()
     }
 
+    pub(super) async fn consume_verification_with_transaction(
+        &self,
+        hook_transaction: &super::SeaOrmTransaction<S, O, P>,
+        identifier: &str,
+        expected_value: Option<&str>,
+    ) -> AuthResult<Option<VerificationView>> {
+        let transaction = &hook_transaction.tx;
+        let Some(model) = database_operation::<
+            <S::Verification as SeaOrmVerificationModel>::Entity,
+            _,
+        >(self.config(), "findMany", async {
+            <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                .filter(
+                    <S::Verification as SeaOrmVerificationModel>::identifier_column()
+                        .eq(identifier),
+                )
+                .order_by_desc(<S::Verification as SeaOrmVerificationModel>::created_at_column())
+                .lock_exclusive()
+                .one(transaction)
+                .await
+                .map_err(map_db_err)
+        })
+        .await?
+        else {
+            return Ok(None);
+        };
+        let snapshot = self.output_verification(&model, transaction)?;
+        if let Some(expected) = expected_value
+            && snapshot.value.typed()? != expected
+        {
+            return Ok(None);
+        }
+        let hook_context = self.hook_context(Some((transaction, hook_transaction)));
+        for hook in self.hooks() {
+            if better_auth_core::observability::database::with_database_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeDeleteVerification,
+                hook.before_delete_verification(&snapshot, &hook_context),
+            )
+            .await?
+            .is_cancelled()
+            {
+                return Ok(None);
+            }
+        }
+        let id = self.parse_id(
+            snapshot.id.typed()?,
+            <S::Verification as SeaOrmVerificationModel>::parse_id,
+        )?;
+        let deleted =
+            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+                self.config(),
+                "consumeOne",
+                async {
+                    <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+                        .filter(<S::Verification as SeaOrmVerificationModel>::id_column().eq(id))
+                        .exec(transaction)
+                        .await
+                        .map_err(map_db_err)
+                },
+            )
+            .await?;
+        if deleted.rows_affected == 0 {
+            return Ok(None);
+        }
+        // consumeOne output runs before removing older rows, inside the same transaction.
+        let consumed = self.output_verification(&model, transaction)?;
+        let _ = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "deleteMany",
+            async {
+                <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+                    .filter(
+                        <S::Verification as SeaOrmVerificationModel>::identifier_column()
+                            .eq(identifier),
+                    )
+                    .exec(transaction)
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
+        Ok(Some(consumed))
+    }
+
     async fn consume_latest_verification(
         &self,
         identifier: &str,
@@ -678,57 +764,9 @@ where
             tx: transaction.clone(),
             effects: std::sync::Arc::downgrade(&effects),
         };
-        let result: AuthResult<Option<VerificationView>> = async {
-            let Some(model) = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "findMany", async { <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                .filter(
-                    <S::Verification as SeaOrmVerificationModel>::identifier_column()
-                        .eq(identifier),
-                )
-                .order_by_desc(<S::Verification as SeaOrmVerificationModel>::created_at_column())
-                .lock_exclusive()
-                .one(&transaction)
-                .await
-                .map_err(map_db_err) }).await?
-            else {
-                return Ok(None);
-            };
-            let snapshot = self.output_verification(&model, &transaction)?;
-            if let Some(expected) = expected_value
-                && snapshot.value.typed()? != expected
-            {
-                return Ok(None);
-            }
-            let hook_context = self.hook_context(Some((&transaction, &hook_transaction)));
-            for hook in self.hooks() {
-                if better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeDeleteVerification, hook
-                    .before_delete_verification(&snapshot, &hook_context)).await?
-                    .is_cancelled()
-                {
-                    return Ok(None);
-                }
-            }
-            let id = <S::Verification as SeaOrmVerificationModel>::parse_id(snapshot.id.typed()?)?;
-            let deleted = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "consumeOne", async { <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                .filter(<S::Verification as SeaOrmVerificationModel>::id_column().eq(id))
-                .exec(&transaction)
-                .await
-                .map_err(map_db_err) }).await?;
-            if deleted.rows_affected == 0 {
-                return Ok(None);
-            }
-            // consumeOne output runs before removing older rows, inside the same transaction.
-            let consumed = self.output_verification(&model, &transaction)?;
-            let _ = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(self.config(), "deleteMany", async { <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                .filter(
-                    <S::Verification as SeaOrmVerificationModel>::identifier_column()
-                        .eq(identifier),
-                )
-                .exec(&transaction)
-                .await
-                .map_err(map_db_err) }).await?;
-            Ok(Some(consumed))
-        }
-        .await;
+        let result = self
+            .consume_verification_with_transaction(&hook_transaction, identifier, expected_value)
+            .await;
         if result.is_ok() {
             transaction.commit().await.map_err(map_db_err)?;
             self.finish_queued_transaction_effects(&effects).await?;

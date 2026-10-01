@@ -2,7 +2,7 @@ use super::*;
 use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Expected token recipients, preserving the string or array claim representation.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum JwtAudience {
     /// One recipient encoded as a string.
@@ -109,11 +109,14 @@ pub struct JwtSigningOptions {
 }
 
 /// Parameters for primary or lazily provisioned additional signing keys.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JwtKeyPairConfig {
     /// Signing algorithm.
+    #[serde(rename = "alg")]
     pub algorithm: JwtAlgorithm,
     /// RSA modulus length for RS256 and PS256. Defaults to 2048 bits.
+    #[serde(default = "default_modulus_length")]
     pub modulus_length: u32,
 }
 
@@ -125,4 +128,8 @@ impl JwtKeyPairConfig {
             modulus_length: 2048,
         }
     }
+}
+
+fn default_modulus_length() -> u32 {
+    2048
 }

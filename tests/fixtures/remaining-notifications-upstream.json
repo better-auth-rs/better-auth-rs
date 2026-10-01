@@ -1,0 +1,2524 @@
+[
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "organization:after",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "organization:after",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "organization:after",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "organization:after",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "organization:after",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "organization:after",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "organization:after",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "organization:after",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "organization:after",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "organization:after",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync"
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "organization:after",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "invite",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "organization:after",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": false
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": true,
+        "requestPath": "/api/auth/organization/invite-member",
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync"
+    },
+    "events": [
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "sender:void",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "resend",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 1
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 1
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      },
+      {
+        "phase": "released",
+        "path": "/organization/invite-member",
+        "body": {
+          "email": "TARGET@example.com",
+          "role": "member",
+          "organizationId": "<organization>",
+          "resend": true
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "target@example.com",
+        "role": "member",
+        "inviter": "owner@example.com"
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "synthetic",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "synthetic",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "handler:received",
+      "synthetic",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "handler:received",
+      "synthetic",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 500,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "sender:void",
+      "synthetic",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "http",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "synthetic",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": true,
+        "requestPath": "/api/auth/sign-up/email",
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "resolve",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "synthetic",
+      "response"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "default",
+    "sender": "reject",
+    "respondedBeforeRelease": false,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "gate:release",
+      "sender:released",
+      "log:sender-async",
+      "synthetic",
+      "response"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "resolve",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "handler:received",
+      "synthetic",
+      "response",
+      "gate:release",
+      "sender:released"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "handler:received",
+      "synthetic",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "sync-throw",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": null,
+      "thrown": "sender-sync"
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "handler",
+    "sender": "void",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "sender:void",
+      "synthetic",
+      "response",
+      "gate:release"
+    ],
+    "logs": [],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": []
+  },
+  {
+    "endpoint": "signup",
+    "transport": "native",
+    "scheduling": "handler-throw",
+    "sender": "reject",
+    "respondedBeforeRelease": true,
+    "storedBeforeRelease": {
+      "users": 1,
+      "invitations": 0
+    },
+    "storedAfterResponse": {
+      "users": 1,
+      "invitations": 0
+    },
+    "outcome": {
+      "status": 200,
+      "thrown": null
+    },
+    "events": [
+      "hash",
+      "sender:start",
+      "handler:received",
+      "log:handler-sync",
+      "synthetic",
+      "response",
+      "gate:release",
+      "sender:released",
+      "log:sender-async"
+    ],
+    "logs": [
+      {
+        "message": "Failed to run background task:",
+        "error": "handler-sync"
+      },
+      {
+        "message": "Failed to run background task:",
+        "error": "sender-async"
+      }
+    ],
+    "contexts": [
+      {
+        "phase": "start",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      },
+      {
+        "phase": "released",
+        "path": "/sign-up/email",
+        "body": {
+          "name": "Other",
+          "email": "owner@example.com",
+          "password": "fixture-password",
+          "unknown": "drop"
+        },
+        "request": false,
+        "requestPath": null,
+        "email": "owner@example.com",
+        "role": null,
+        "inviter": null
+      }
+    ],
+    "taskStates": [
+      "fulfilled"
+    ]
+  }
+]
