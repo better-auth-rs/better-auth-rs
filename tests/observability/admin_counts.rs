@@ -71,7 +71,7 @@ async fn check<S: AuthSchema>(
             "{}@count.example",
             name.replace(' ', "-").to_lowercase()
         ));
-        user.name = Some(name.into());
+        user.name = Some(name.into()).into();
         let _ = user.additional_fields.insert("note".into(), json!(note));
         let _ = store.create_user(user).await?;
     }
@@ -91,7 +91,9 @@ async fn check<S: AuthSchema>(
         .await?;
     assert_eq!(users.len(), 1);
     assert_eq!(
-        users.first().and_then(|user| user.name.as_deref()),
+        users
+            .first()
+            .and_then(|user| user.name.typed().unwrap().as_deref()),
         Some("Included B")
     );
     assert_eq!(total, 2);

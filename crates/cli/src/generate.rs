@@ -1,5 +1,5 @@
 use crate::schema_config::{
-    AdditionalField, Entity, FieldType, OnDelete, SchemaConfig, model_name,
+    AdditionalField, Database, Entity, FieldType, IdGeneration, OnDelete, SchemaConfig, model_name,
 };
 use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema};
 use proc_macro2::TokenStream;
@@ -13,6 +13,8 @@ pub(crate) fn generate_schema(
     plugins: &[String],
     config: &SchemaConfig,
     rate_limit_database: bool,
+    generation: IdGeneration,
+    database: Database,
 ) -> Result<String, String> {
     config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
@@ -66,7 +68,9 @@ pub(crate) fn generate_schema(
             None => entity.fields,
         };
         let configured = config.0.get(&model_name(entity.mod_name));
-        definitions.push(Entity::resolve(entity, fields, configured)?);
+        let mut entity = Entity::resolve(entity, fields, configured)?;
+        entity.resolve_ids(generation, database)?;
+        definitions.push(entity);
     }
     for name in config.0.keys() {
         if !definitions
@@ -84,10 +88,12 @@ pub(crate) fn generate_schema(
             return Err(format!("duplicate database table `{}`", entity.table));
         }
     }
-    let entities = definitions.iter().map(gen_entity);
+    let entities = definitions
+        .iter()
+        .map(|entity| gen_entity(entity, generation));
     let tables = definitions
         .iter()
-        .map(|entity| gen_table(entity, &definitions))
+        .map(|entity| gen_table(entity, &definitions, generation))
         .collect::<Result<Vec<_>, _>>()?;
     let indexes = definitions.iter().flat_map(gen_indexes);
     let organization_schema = definitions
@@ -187,7 +193,7 @@ pub(crate) fn generate_schema(
     Ok(prettyplease::unparse(&file))
 }
 
-fn gen_entity(entity: &Entity) -> TokenStream {
+fn gen_entity(entity: &Entity, generation: IdGeneration) -> TokenStream {
     let mod_ident = &entity.module;
     let table_name = &entity.table;
     let field_tokens = entity.fields.iter().map(|field| {
@@ -200,16 +206,22 @@ fn gen_entity(entity: &Entity) -> TokenStream {
             .serialized
             .as_ref()
             .map(|name| quote! { #[serde(rename = #name)] });
+        let auto_increment = generation == IdGeneration::Serial;
         let primary_key = field
             .primary_key
-            .then(|| quote! { #[sea_orm(primary_key, auto_increment = false)] });
+            .then(|| quote! { #[sea_orm(primary_key, auto_increment = #auto_increment)] });
         let number_storage = (entity.role == Some(EntityRole::RateLimit) && name == "count")
             .then(|| quote!(#[sea_orm(column_type = "Integer")]));
+        let reference = (entity.role.is_some()
+            && field.attributes.is_some()
+            && field.references_id(entity.registry_table))
+        .then(|| quote!(#[auth(reference)]));
         quote! {
             #column_attr
             #serialized
             #primary_key
             #number_storage
+            #reference
             pub #name: #ty,
         }
     });
@@ -235,7 +247,11 @@ fn gen_entity(entity: &Entity) -> TokenStream {
     }
 }
 
-fn gen_table(entity: &Entity, entities: &[Entity]) -> Result<TokenStream, String> {
+fn gen_table(
+    entity: &Entity,
+    entities: &[Entity],
+    generation: IdGeneration,
+) -> Result<TokenStream, String> {
     let module = &entity.module;
     let table = &entity.table;
     let mut foreign_keys = registry::entity_foreign_keys(entity.registry_table)
@@ -306,8 +322,44 @@ fn gen_table(entity: &Entity, entities: &[Entity]) -> Result<TokenStream, String
         .fields
         .iter()
         .filter_map(|field| {
-            let attributes = field.attributes.as_ref()?;
             let name = &field.column;
+            let reference = field.references_id(entity.registry_table);
+            if field.primary_key || reference {
+                let data_type = match generation {
+                    IdGeneration::Serial => quote!(column.integer();),
+                    IdGeneration::Uuid => quote! {
+                        if database.get_database_backend() == sea_orm::DbBackend::Postgres { column.uuid(); }
+                        else if database.get_database_backend() == sea_orm::DbBackend::MySql { column.string_len(36); }
+                        else { column.text(); }
+                    },
+                    _ => quote! {
+                        if database.get_database_backend() == sea_orm::DbBackend::MySql { column.string_len(36); }
+                        else { column.text(); }
+                    },
+                };
+                let primary = field.primary_key.then(|| match generation {
+                    IdGeneration::Serial => quote! {
+                        column = sea_orm::sea_query::ColumnDef::new(Alias::new(#name)).integer().not_null().primary_key().to_owned();
+                        if database.get_database_backend() == sea_orm::DbBackend::Postgres {
+                            column.custom(Alias::new("integer GENERATED BY DEFAULT AS IDENTITY"));
+                        } else if database.get_database_backend() == sea_orm::DbBackend::MySql { column.auto_increment(); }
+                    },
+                    IdGeneration::Uuid => quote! {
+                        if database.get_database_backend() == sea_orm::DbBackend::Postgres {
+                            column.default(sea_orm::sea_query::Expr::cust("pg_catalog.gen_random_uuid()"));
+                        }
+                    },
+                    _ => quote!(),
+                });
+                let unique = field.attributes.as_ref().is_some_and(|attributes| attributes.unique)
+                    .then(|| quote!(column.unique_key();));
+                return Some(quote! {
+                    if column.get_column_name().as_str() == #name {
+                        #data_type #primary #unique
+                    }
+                });
+            }
+            let attributes = field.attributes.as_ref()?;
             let data_type = gen_column_type(attributes);
             let nullability = if attributes.required != Some(false)
                 && entity.role != Some(EntityRole::OrganizationRole)
@@ -348,19 +400,6 @@ fn gen_table(entity: &Entity, entities: &[Entity]) -> Result<TokenStream, String
 }
 
 fn gen_column_type(field: &AdditionalField) -> TokenStream {
-    if field
-        .references
-        .as_ref()
-        .is_some_and(|reference| reference.field == "id")
-    {
-        return quote! {
-            if database.get_database_backend() == sea_orm::DbBackend::MySql {
-                column.string_len(36);
-            } else {
-                column.text();
-            }
-        };
-    }
     let FieldType::Name(name) = &field.field_type else {
         return quote!(column.text(););
     };

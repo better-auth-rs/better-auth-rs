@@ -57,7 +57,7 @@ pub fn encrypt_token_set(
     refresh_token: Option<String>,
     id_token: Option<String>,
 ) -> AuthResult<EncryptedTokenSet> {
-    let encrypt = ctx.config.account.encrypt_oauth_tokens;
+    let encrypt = ctx.config.account.encrypt_oauth_tokens();
     let secret = ctx.config.encryption_secret();
     Ok(EncryptedTokenSet {
         access_token: maybe_encrypt(access_token, encrypt, secret)?,

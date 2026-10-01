@@ -10,6 +10,43 @@ async function call(ctx:any,transport:string,path:string,body:any,headers:Record
 async function clear(ctx:any) {await post(ctx,"/__test/body-events",{});}
 async function trace(ctx:any) {return(await(await fetch(`${ctx.baseURL}/__test/body-events`)).json()).events;}
 
+compatScenario("raw user name and image retain supported adapter values and constraints",async(ctx:any)=>{
+  const sqlite=process.env.COMPAT_PROFILE==="request-record-sqlite";
+  const fields=(user:any)=>Object.fromEntries(["name","image"].filter(key=>Object.hasOwn(user,key)).map(key=>[key,user[key]]));
+  const results=[];
+  const patches=sqlite
+    ? [{name:7,image:false},{name:null,image:"null-name"},{image:null}]
+    : [{name:7,image:false},{name:null,image:"null-name"},{name:{}},{name:[]},{name:["x"]},{image:{}},{image:[]},{image:null},{name:{nested:[1,false,null]}},{image:{nested:[1,false,null]}}];
+  for(const transport of ["http","native"]){
+    for(const [index,patch] of patches.entries()){
+      const signup=await post(ctx,"/api/auth/sign-up/email",{name:"Initial",image:"https://image.test/initial",email:`raw-${transport}-${index}@example.test`,password:"fixture-password"});
+      expect(signup.status).toBe(200);
+      const initial=fields((await signup.json()).user);
+      const headers={cookie:signup.headers.getSetCookie().map(value=>value.split(";",1)[0]).join("; ")};
+      await clear(ctx);
+      const response=await call(ctx,transport,"/update-user",patch,headers);
+      const failure=sqlite&&index===1;
+      expect(response.status).toBe(failure?500:200);
+      if(!failure)expect(await response.json()).toEqual({status:true});
+      const events=await trace(ctx);
+      expect(events.some((event:any)=>event.phase==="user.update.before")).toBe(true);
+      expect(events.some((event:any)=>event.phase==="user.update.after")).toBe(!failure);
+      const fresh=await(await fetch(`${ctx.baseURL}/api/auth/get-session?disableCookieCache=true`,{headers})).json();
+      const expected=failure?initial:sqlite&&index===0?{name:"7",image:"0"}:{...initial,...patch};
+      expect(fields(fresh.user)).toEqual(expected);
+      let cached=null;
+      if(!failure){
+        const cookie=response.headers.getSetCookie().map(value=>value.split(";",1)[0]).join("; ");
+        expect(cookie.length).toBeGreaterThan(0);
+        cached=fields((await(await fetch(`${ctx.baseURL}/api/auth/get-session`,{headers:{cookie}})).json()).user);
+        expect(cached).toEqual(expected);
+      }
+      results.push({transport,patch,status:response.status,stored:fields(fresh.user),cached,phases:events.map((event:any)=>event.phase)});
+    }
+  }
+  return results;
+});
+
 compatScenario("user and session records validate before authentication through HTTP and native dispatch",async(ctx:any)=>{
   const results=[];
   for(const transport of ["http","native"]){

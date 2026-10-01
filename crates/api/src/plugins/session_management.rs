@@ -321,7 +321,9 @@ mod tests {
     #[tokio::test]
     async fn invalid_sign_out_body_preserves_session_without_oauth_plugin() {
         let (ctx, _, session) = test_helpers::create_test_context_with_user(
-            CreateUser::new().with_email("logout-body@example.com"),
+            CreateUser::new()
+                .with_email("logout-body@example.com")
+                .with_name("Fixture"),
             Duration::hours(24),
         )
         .await;

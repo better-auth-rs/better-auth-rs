@@ -97,7 +97,11 @@ async fn check_projected_snapshots<S: AuthSchema>(
     reject: Arc<AtomicBool>,
 ) {
     let user = store
-        .create_user(CreateUser::new().with_email("snapshot@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("snapshot@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let first = store
@@ -329,7 +333,11 @@ fn session(user_id: &str) -> CreateSession {
 }
 async fn check_batch<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: Hooks) {
     let user = store
-        .create_user(CreateUser::new().with_email("batch@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("batch@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     for _ in 0..2 {
@@ -405,7 +413,11 @@ async fn check_transaction<S: AuthSchema>(
     let store =
         SecondaryStore::new(inner.clone(), cache.clone(), config, Default::default()).unwrap();
     let user = store
-        .create_user(CreateUser::new().with_email("transaction@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("transaction@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let user_id = user.id().into_owned();
@@ -480,7 +492,7 @@ async fn sqlite_user_deletion_keeps_child_user_and_cache_effects_in_commit_order
         (None, true),
     ] {
         let mut config = AuthConfig::default();
-        config.session.store_session_in_database = true;
+        config.session.store_session_in_database = Some(true);
         let config = Arc::new(config);
         let hooks = Hooks {
             fail_after,
@@ -504,7 +516,7 @@ async fn ephemeral_user_deletion_keeps_the_same_commit_effect_order() {
         (None, true),
     ] {
         let mut config = AuthConfig::default();
-        config.session.store_session_in_database = true;
+        config.session.store_session_in_database = Some(true);
         let config = Arc::new(config);
         let hooks = Hooks {
             fail_after,
@@ -572,7 +584,11 @@ async fn check_token_batch<S: AuthSchema>(
     preserve: bool,
 ) {
     let user = store
-        .create_user(CreateUser::new().with_email("token-batch@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("token-batch@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let first = store

@@ -27,6 +27,11 @@ pub struct EndpointInput {
 }
 
 impl<S: AuthSchema> BetterAuth<S> {
+    /// Access the registered server-only organization endpoints.
+    pub fn organization(&self) -> AuthResult<crate::plugins::organization::OrganizationApi<'_, S>> {
+        crate::plugins::organization::OrganizationApi::from_context(self.context())
+    }
+
     /// Access the registered native test helpers. Do not enable this plugin in production.
     pub fn test(&self) -> AuthResult<crate::plugins::test_utils::TestUtilsApi<'_, S>> {
         crate::plugins::test_utils::TestUtilsApi::from_context(self.context())

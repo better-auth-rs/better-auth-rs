@@ -244,7 +244,7 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                     .update_user(
                         created.id.typed().unwrap(),
                         better_auth_core::UpdateUser {
-                            name: Some(name.into()),
+                            name: Some(name.into()).into(),
                             ..Default::default()
                         },
                     )

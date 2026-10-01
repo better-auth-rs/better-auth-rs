@@ -199,7 +199,7 @@ async fn check<S: AuthSchema>(
                             tx.update_user_optional(
                                 "absent",
                                 UpdateUser {
-                                    name: Some("unused".into()),
+                                    name: Some("unused".into()).into(),
                                     ..Default::default()
                                 }
                             )
@@ -286,7 +286,7 @@ async fn sqlite_captures_explicit_context_without_replacing_commit_scope() {
     for pure in [false, true] {
         for outcome in ["commit", "rollback", "after-error"] {
             let mut config = AuthConfig::default();
-            config.session.store_session_in_database = !pure;
+            config.session.store_session_in_database = Some(!pure);
             config.verification.store_in_database = !pure;
             let config = Arc::new(config);
             let db = Database::connect("sqlite::memory:").await.unwrap();
@@ -302,7 +302,7 @@ async fn ephemeral_captures_explicit_context_without_replacing_commit_scope() {
     for pure in [false, true] {
         for outcome in ["commit", "rollback", "after-error"] {
             let mut config = AuthConfig::default();
-            config.session.store_session_in_database = !pure;
+            config.session.store_session_in_database = Some(!pure);
             config.verification.store_in_database = !pure;
             let config = Arc::new(config);
             let store = EphemeralStore::new(config.clone());

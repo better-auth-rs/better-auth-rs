@@ -69,28 +69,51 @@ impl UserConfig {
         self.output_fields_inner(storage, false)
     }
 
+    /// Project a database result while retaining row order and per-row field order.
+    pub fn output_fields_many(
+        &self,
+        storage: &[Map<String, Value>],
+    ) -> AuthResult<Vec<Map<String, Value>>> {
+        self.output_fields_batch(storage.iter(), false)
+    }
+
     fn output_fields_inner(
         &self,
         storage: &Map<String, Value>,
         preserve_id: bool,
     ) -> AuthResult<Map<String, Value>> {
-        let mut output = Map::new();
-        for (name, field) in &self.additional_fields {
-            if preserve_id && name == "id" {
-                continue;
-            }
-            let mut value = storage
-                .get(field.field_name.as_ref().unwrap_or(name))
-                .cloned();
-            value = field.adapter_output(value, true)?;
-            if let Some(mut value) = value {
-                if !field.references_id() {
-                    field.normalize_date(&mut value)?;
+        // Projection preserves the one input row.
+        Ok(self
+            .output_fields_batch(std::iter::once(storage), preserve_id)?
+            .remove(0))
+    }
+
+    fn output_fields_batch<'a>(
+        &self,
+        storage: impl Iterator<Item = &'a Map<String, Value>>,
+        preserve_id: bool,
+    ) -> AuthResult<Vec<Map<String, Value>>> {
+        let mut rows: Vec<_> = storage.map(|storage| (storage, Map::new())).collect();
+        super::batch::project_fields(
+            &mut rows,
+            &self.additional_fields,
+            |(storage, output), name, field| {
+                if preserve_id && name == "id" {
+                    return Ok(());
                 }
-                let _ = output.insert(name.clone(), value);
-            }
-        }
-        Ok(output)
+                let value = storage
+                    .get(field.field_name.as_deref().unwrap_or(name))
+                    .cloned();
+                if let Some(mut value) = field.adapter_output(value, true)? {
+                    if !field.references_id() {
+                        field.normalize_date(&mut value)?;
+                    }
+                    let _ = output.insert(name.to_owned(), value);
+                }
+                Ok(())
+            },
+        )?;
+        Ok(rows.into_iter().map(|(_, output)| output).collect())
     }
 
     /// Apply only `returned` flags to fields already projected by the adapter.

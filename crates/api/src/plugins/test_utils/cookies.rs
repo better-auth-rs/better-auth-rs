@@ -34,7 +34,7 @@ fn signed<S: AuthSchema>(
         auth.config.auth_cookie(
             "session_token",
             CookieAttributes {
-                max_age: Some(auth.config.session.expires_in.num_seconds()),
+                max_age: Some(auth.config.session.expires_in().num_seconds()),
                 ..Default::default()
             },
         ),

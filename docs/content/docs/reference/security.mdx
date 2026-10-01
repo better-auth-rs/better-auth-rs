@@ -133,7 +133,7 @@ OAuth state is validated on every callback to prevent CSRF attacks. State tokens
 
 ### Token Storage
 
-Set `account.encrypt_oauth_tokens = true` to encrypt stored OAuth access and refresh tokens. Authenticated account token endpoints can return those tokens. ID tokens remain unencrypted, matching upstream. The optional account cookie uses authenticated JWE encryption.
+Set `account.encrypt_oauth_tokens = Some(true)` to encrypt stored OAuth access and refresh tokens. Authenticated account token endpoints can return those tokens. ID tokens remain unencrypted, matching upstream. The optional account cookie uses authenticated JWE encryption.
 
 ## Two-Factor Authentication
 

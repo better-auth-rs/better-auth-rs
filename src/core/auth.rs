@@ -3,7 +3,7 @@ use std::sync::Arc;
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
     AuthResult, AuthSchema, AuthStore, EmailProvider, HttpMethod, OkResponse, OpenApiRegistry,
-    OpenApiSpec, SessionManager, UpdateUser, UpdateUserRequest, core_paths,
+    OpenApiSpec, SessionManager, UpdateUser, core_paths,
     entity::AuthUser,
     hooks::{RequestHookContext, set_request_hook_route, with_request_hook_context_value},
     middleware::{
@@ -177,6 +177,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
             database: self.store.is_some(),
             secondary: self.secondary_storage.is_some(),
         };
+        let telemetry_config = self.config.clone();
         self.config.resolve_storage_defaults(capabilities);
         let config = Arc::new(self.config);
         let store = self
@@ -191,6 +192,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
             .extensions
             .insert(self.csrf_config.clone().unwrap_or_default());
         init_context.secondary_storage = self.secondary_storage;
+        let has_api_error_handler = self.api_error_handler.is_some();
         if let Some(callback) = self.api_error_handler {
             init_context.extensions.insert(callback);
         }
@@ -207,16 +209,17 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let telemetry = better_auth_api::observability::initialize_telemetry(&init_context.config);
         if telemetry.enabled() {
             let payload = super::telemetry::init_payload(
-                &init_context.config,
-                &self
-                    .plugins
-                    .iter()
-                    .map(|plugin| plugin.name())
-                    .collect::<Vec<_>>(),
-                self.hooks.before.is_some(),
-                self.hooks.after.is_some(),
-                init_context.secondary_storage.is_some(),
-            );
+                &telemetry_config,
+                &self.plugins,
+                super::telemetry::InitOptions {
+                    before: self.hooks.before.is_some(),
+                    after: self.hooks.after.is_some(),
+                    secondary: init_context.secondary_storage.is_some(),
+                    on_error: has_api_error_handler,
+                    rate_limit: self.rate_limit_config.as_ref(),
+                    database_hooks: store.database_hook_metadata(),
+                },
+            )?;
             super::telemetry::start_init(telemetry.clone(), payload).await?;
         }
         init_context.extensions.insert(telemetry);
@@ -765,13 +768,13 @@ impl<S: AuthSchema> BetterAuth<S> {
         let clear_phone_number = context.get_metadata("phone-number.enabled")
             == Some(&serde_json::Value::Bool(true))
             && body.get("phoneNumber") == Some(&serde_json::Value::Null);
+        let name = better_auth_core::SchemaValue::from_json(body.remove("name"));
+        let image = better_auth_core::SchemaValue::from_json(body.remove("image"));
         let additional_fields = context.parse_user_input(&body, false)?;
-        let update_req: UpdateUserRequest = serde_json::from_value(serde_json::Value::Object(body))
-            .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
 
         let has_changes = clear_phone_number
-            || update_req.name.is_some()
-            || update_req.image.is_some()
+            || !name.is_undefined()
+            || !image.is_undefined()
             || !additional_fields.is_empty();
         if !has_changes {
             return Err(AuthError::bad_request("No fields to update"));
@@ -780,8 +783,8 @@ impl<S: AuthSchema> BetterAuth<S> {
         let mut update_user = UpdateUser {
             additional_fields: Default::default(),
             email: None,
-            name: update_req.name,
-            image: update_req.image,
+            name,
+            image,
             email_verified: None,
             username: None,
             display_username: None,
@@ -797,10 +800,29 @@ impl<S: AuthSchema> BetterAuth<S> {
         };
 
         update_user.assign_user_fields(additional_fields)?;
+        let mut fallback = current_user.clone();
+        if !update_user.name.is_undefined() {
+            fallback.name = update_user.name.clone();
+        }
+        if !update_user.image.is_undefined() {
+            fallback.image = update_user.image.clone();
+        }
+        if let Some(fields) = &mut fallback.visible_fields {
+            if !update_user.name.is_undefined() {
+                let _ = fields.insert("name".into());
+            }
+            if !update_user.image.is_undefined() {
+                let _ = fields.insert("image".into());
+            }
+        }
+        fallback
+            .additional_fields
+            .extend(update_user.additional_fields.clone());
         let user = self
             .store
-            .update_user(current_user.id().typed()?, update_user)
-            .await?;
+            .update_user_optional(current_user.id().typed()?, update_user)
+            .await?
+            .unwrap_or(fallback);
         context
             .session_manager()
             .set_session_cookie(

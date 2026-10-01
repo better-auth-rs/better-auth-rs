@@ -392,32 +392,30 @@ pub(crate) async fn get_full_organization_core(
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<FullOrganizationResponse<OrganizationResponse, InvitationView>>> {
-    let org_id = if let Some(slug) = query.organization_slug.as_deref() {
+    let (org_id, organization) = if let Some(slug) = query.organization_slug.as_deref() {
         let organization = ctx
             .database
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().typed()?.to_string()
-    } else if let Some(id) = query.organization_id.as_deref() {
-        id.to_string()
-    } else if let Some(active_org_id) = session.active_organization_id() {
-        active_org_id.to_string()
+        (organization.id().typed()?.to_string(), organization)
     } else {
-        return Ok(None);
+        let Some(org_id) = query
+            .organization_id
+            .as_deref()
+            .or_else(|| session.active_organization_id())
+        else {
+            return Ok(None);
+        };
+        let organization = ctx
+            .database
+            .get_organization_by_id(org_id)
+            .await?
+            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+        (org_id.to_string(), organization)
     };
 
-    let _ = ctx
-        .database
-        .get_member(&org_id, user.id().typed()?)
-        .await?
-        .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
-
-    let organization = ctx
-        .database
-        .get_organization_by_id(&org_id)
-        .await?
-        .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+    let invitations = ctx.database.list_organization_invitations(&org_id).await?;
 
     let members_limit = query
         .members_limit
@@ -432,6 +430,15 @@ pub(crate) async fn get_full_organization_core(
         .database
         .query_organization_members(&member_params)
         .await?;
+    let teams = if config.teams.enabled {
+        let mut teams = Vec::new();
+        for team in ctx.database.list_organization_teams(&org_id).await? {
+            teams.push(crate::plugins::organization::types::FullOrganizationTeam { team });
+        }
+        Some(teams)
+    } else {
+        None
+    };
     let user_ids = members_raw
         .iter()
         .map(|member| member.user_id.typed().cloned())
@@ -456,17 +463,12 @@ pub(crate) async fn get_full_organization_core(
         members.push(MemberResponse::from_member_and_user(member, user_info));
     }
 
-    let invitations = ctx.database.list_organization_invitations(&org_id).await?;
+    let _ = ctx
+        .database
+        .get_member(&org_id, user.id().typed()?)
+        .await?
+        .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
 
-    let teams = if config.teams.enabled {
-        let mut teams = Vec::new();
-        for team in ctx.database.list_organization_teams(&org_id).await? {
-            teams.push(crate::plugins::organization::types::FullOrganizationTeam { team });
-        }
-        Some(teams)
-    } else {
-        None
-    };
     Ok(Some(FullOrganizationResponse {
         organization: crate::plugins::organization::fields::organization(&organization, ctx),
         members,
@@ -588,7 +590,7 @@ pub(crate) async fn leave_organization_core(
         }
     }
 
-    let response = MemberResponse::from_member_and_user(&member, user);
+    let response = MemberResponse::from_member_and_user(&member, &ctx.internal_user_view(user)?);
     ctx.database.delete_member(member.id().typed()?).await?;
 
     if session.active_organization_id() == Some(&body.organization_id) {
@@ -818,7 +820,7 @@ mod tests {
     fn test_user(email: &str, name: &str) -> CreateUser {
         CreateUser {
             email: Some(email.to_string()),
-            name: Some(name.to_string()),
+            name: Some(name.to_string()).into(),
             ..CreateUser::default()
         }
     }

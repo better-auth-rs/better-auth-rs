@@ -36,6 +36,10 @@ impl<S: AuthSchema> Default for UserManagementCallbacks<S> {
     }
 }
 impl<S: AuthSchema> UserManagementCallbacks<S> {
+    pub(crate) fn has_confirmation_sender(&self) -> bool {
+        self.confirmation.is_some()
+    }
+
     /// Use the existing configured senders until a factory overrides each delivery path.
     pub fn new() -> Self {
         Self::default()

@@ -226,11 +226,7 @@ pub(crate) async fn create_user_core(
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned);
     create_user.ban_expires = ban_expiry(&data)?;
-    create_user.image = data
-        .get("image")
-        .cloned()
-        .map(serde_json::from_value)
-        .transpose()?;
+    create_user.image = better_auth_core::SchemaValue::from_json(data.get("image").cloned());
     create_user.email_verified = data
         .get("emailVerified")
         .and_then(serde_json::Value::as_bool);
@@ -364,15 +360,8 @@ pub(crate) async fn update_user_core(
         .get_user_by_id(&body.user_id)
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-    if let Some(value) = body.data.get("name").and_then(|value| value.as_str()) {
-        update.name = Some(value.to_string());
-    }
-    update.image = body
-        .data
-        .get("image")
-        .cloned()
-        .map(serde_json::from_value)
-        .transpose()?;
+    update.name = better_auth_core::SchemaValue::from_json(body.data.get("name").cloned());
+    update.image = better_auth_core::SchemaValue::from_json(body.data.get("image").cloned());
     if let Some(value) = body
         .data
         .get("emailVerified")

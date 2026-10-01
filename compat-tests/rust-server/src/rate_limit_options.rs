@@ -226,7 +226,7 @@ async fn build(
     let mut config = AuthConfig::new("rate-limit-fixture-secret-at-least-thirty-two-characters")
         .base_url(base_url)
         .base_path("/api/limits");
-    config.advanced.ip_address.disable_ip_tracking = options.disabled_ip;
+    config.advanced.ip_address.disable_ip_tracking = Some(options.disabled_ip);
     let mut rate = RateLimitConfig::new().enabled(true);
     rate.storage = match options.backend.as_deref().unwrap_or("memory") {
         "auto" => None,

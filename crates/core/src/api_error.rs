@@ -31,7 +31,7 @@ pub async fn handle_http_error<S: AuthSchema>(
     if error.is_found_redirect() {
         return Ok(error.to_auth_response());
     }
-    if context.config.api_error.throw_errors {
+    if context.config.api_error.throw_errors() {
         return rethrow(error);
     }
     if let Some(callback) = context.extensions.get::<Arc<dyn ApiErrorHandler<S>>>() {

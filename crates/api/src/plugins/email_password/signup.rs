@@ -113,8 +113,12 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
         .with_email(body.email.to_lowercase())
         .with_name(&body.name);
     apply_user_create_fields(ctx, &body.additional_fields, &mut create_user)?;
-    create_user.image = body.image.clone().map(Some);
-    let protect_enumeration = config.require_email_verification || !config.auto_sign_in;
+    create_user.image = body
+        .image
+        .clone()
+        .map(|value| Some(value).into())
+        .unwrap_or_default();
+    let protect_enumeration = config.require_email_verification || !config.auto_sign_in();
     if let Some(user) = ctx
         .database
         .get_user_by_email(&body.email.to_lowercase())
@@ -158,12 +162,12 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
         password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password).await?;
     let synthetic_create = create_user.clone();
     apply_default_role(ctx, &mut create_user);
-    let auto_sign_in = config.auto_sign_in && !config.require_email_verification;
+    let auto_sign_in = config.auto_sign_in() && !config.require_email_verification;
     let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
     let expires_in = if body.remember_me == Some(false) {
         chrono::Duration::days(1)
     } else {
-        ctx.config.session.expires_in
+        ctx.config.session.expires_in()
     };
     let ip_address = meta.ip_address.clone();
     let user_agent = meta.user_agent.clone();

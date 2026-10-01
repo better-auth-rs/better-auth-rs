@@ -122,7 +122,7 @@ async fn check_session_fields(alias: &str, secondary: Option<bool>) {
         .session
         .additional_fields
         .insert("deviceColor".into(), SessionFieldConfig::default());
-    config.session.store_session_in_database = secondary.unwrap_or(true);
+    config.session.store_session_in_database = Some(secondary.unwrap_or(true));
     let cache = Arc::new(MemoryCacheAdapter::new());
     let mut builder = BetterAuth::<AppSchema>::new(config.clone())
         .store(SeaOrmStore::<AppSchema>::new(config, db.clone()));

@@ -1,3 +1,4 @@
+use super::id_filter::IdColumn;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
@@ -66,6 +67,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     params: &ListOrganizationMembersParams,
     config: &better_auth_core::user_fields::UserConfig,
     backend: DatabaseBackend,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<Select<Entity<M>>> {
     use better_auth_core::user_fields::UserFieldType;
     use serde_json::Value;
@@ -76,13 +78,31 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     let Some(column) = member_column::<M>(field, config) else {
         return Ok(query);
     };
+    let id_field = matches!(
+        M::core_field_name(&column),
+        Some("id" | "organizationId" | "userId")
+    ) || config
+        .additional_fields
+        .get(field)
+        .is_some_and(|field| field.references_id());
+    let id_column = (id_field
+        && !matches!(
+            column.def().get_column_type(),
+            sea_orm::ColumnType::String(_)
+                | sea_orm::ColumnType::Text
+                | sea_orm::ColumnType::Char(_)
+        ))
+    .then_some(column);
     let column = member_expression(column, field, config, backend);
     let field_type = config
         .additional_fields
         .get(field)
         .map(|field| &field.field_type);
-    let convert = |value: &Value, number_strings: bool| -> sea_orm::Value {
-        match value {
+    let convert = |value: &Value, number_strings: bool| -> AuthResult<sea_orm::Value> {
+        if let (Value::String(value), Some(column)) = (value, id_column) {
+            return column.id_value(value, policy);
+        }
+        Ok(match value {
             Value::String(value)
                 if number_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
             {
@@ -106,7 +126,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
                 }
             }
             value => sea_orm::Value::Json(Some(Box::new(value.clone()))),
-        }
+        })
     };
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
     if matches!(operator, "in" | "not_in") {
@@ -120,10 +140,10 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
                     .and_then(better_auth_core::organization_fields::numeric_filter)
                     .is_some()
             });
-        let values: Vec<_> = values
+        let values = values
             .iter()
             .map(|value| convert(value, number_strings))
-            .collect();
+            .collect::<AuthResult<Vec<_>>>()?;
         return Ok(query.filter(if operator == "in" {
             column.is_in(values)
         } else {
@@ -136,11 +156,11 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
             .as_str()
             .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
         else {
-            return Ok(query.filter(M::column("id")?.eq("__better_auth_never_matches__")));
+            return Ok(query.filter(Expr::value(false)));
         };
         sea_orm::Value::ChronoDateTimeUtc(Some(parsed.with_timezone(&Utc)))
     } else {
-        convert(value, true)
+        convert(value, true)?
     };
     query = match operator {
         "eq" => query.filter(column.eq(value)),
@@ -227,6 +247,7 @@ where
             &config,
             true,
             self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
         )?
         .insert(self.connection())
         .await
@@ -235,31 +256,20 @@ where
     }
 
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
-        let mut core = self.create_fields(
-            "member",
-            None,
-            values([
-                ("organization_id", json!(member.organization_id)),
-                ("user_id", json!(member.user_id)),
-                ("created_at", json!(Utc::now())),
-            ]),
-        )?;
-        if let Some(role) = member.role.json()? {
-            let _ = core.insert("role".into(), role);
-        }
-        models::insert::<O::Member, _>(
-            self.connection(),
-            core,
-            member.additional_fields,
-            &self.organization_fields()?.member,
-        )
-        .await
+        self.create_member_with_connection(self.connection(), member)
+            .await
     }
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
         Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq(organization_id))
-            .filter(O::Member::column("user_id")?.eq(user_id))
+            .filter(O::Member::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .filter(
+                O::Member::column("user_id")?
+                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
+            )
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -272,25 +282,16 @@ where
         organization_id: &serde_json::Value,
         user_id: &serde_json::Value,
     ) -> AuthResult<Option<Member>> {
-        Entity::<O::Member>::find()
-            .filter(super::value_filter::equals(
-                O::Member::column("organization_id")?,
-                organization_id,
-            ))
-            .filter(super::value_filter::equals(
-                O::Member::column("user_id")?,
-                user_id,
-            ))
-            .one(self.connection())
+        self.get_member_value_with_connection(self.connection(), organization_id, user_id)
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.member))
-            .transpose()
     }
 
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         Entity::<O::Member>::find()
-            .filter(O::Member::column("id")?.eq(id))
+            .filter(
+                O::Member::column("id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -305,64 +306,38 @@ where
             values([("role", json!(role))]),
             Default::default(),
             &self.organization_fields()?.member,
+            self.config().advanced.database.generate_id(),
         )
         .await
     }
 
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
-        use sea_orm::{TransactionTrait, sea_query::Expr};
+        use sea_orm::TransactionTrait;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
-        if let Some(member) = Entity::<O::Member>::find()
-            .filter(O::Member::column("id")?.eq(member_id))
-            .one(&tx)
-            .await
-            .map_err(map_db_err)?
-        {
-            let member = member.record(&self.organization_fields()?.member)?;
-            let teams = Entity::<O::Team>::find()
-                .filter(
-                    O::Team::column("organization_id")?.eq(member.organization_id.typed()?.clone()),
-                )
-                .all(&tx)
-                .await
-                .map_err(map_db_err)?;
-            for team in teams {
-                let team = team.record(&self.organization_fields()?.team)?;
-                let _ = Entity::<O::Team>::update_many()
-                    .col_expr(
-                        O::Team::column("member_count")?,
-                        Expr::col(O::Team::column("member_count")?),
-                    )
-                    .filter(O::Team::column("id")?.eq(team.id.typed()?))
-                    .exec(&tx)
-                    .await
-                    .map_err(map_db_err)?;
-                let deleted = Entity::<O::TeamMember>::delete_many()
-                    .filter(O::TeamMember::column("team_id")?.eq(team.id.typed()?))
-                    .filter(O::TeamMember::column("user_id")?.eq(member.user_id.typed()?.clone()))
-                    .exec(&tx)
-                    .await
-                    .map_err(map_db_err)?;
-                super::team_capacity::release::<O::Team, _>(
-                    &tx,
-                    team.id.typed()?,
-                    deleted.rows_affected,
-                    &self.organization_fields()?.team,
-                )
-                .await?;
-            }
-            let _ = Entity::<O::Member>::delete_many()
-                .filter(O::Member::column("id")?.eq(member_id))
-                .exec(&tx)
-                .await
-                .map_err(map_db_err)?;
-        }
+        let result = self.delete_member_with_connection(&tx, member_id).await?;
+        tx.commit().await.map_err(map_db_err)?;
+        Ok(result)
+    }
+
+    async fn delete_member_for_user(
+        &self,
+        member_id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        use sea_orm::TransactionTrait;
+        let tx = self.connection().begin().await.map_err(map_db_err)?;
+        self.delete_member_for_user_with_connection(&tx, member_id, organization_id, user_id)
+            .await?;
         tx.commit().await.map_err(map_db_err)
     }
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {
         Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq(organization_id))
+            .filter(O::Member::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
             .order_by_asc(O::Member::column("created_at")?)
             .all(self.connection())
             .await
@@ -376,13 +351,17 @@ where
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        let base_query = Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq(&params.organization_id));
+        let base_query =
+            Entity::<O::Member>::find().filter(O::Member::column("organization_id")?.eq_id(
+                &params.organization_id,
+                self.config().advanced.database.generate_id(),
+            )?);
         let filtered_query = apply_member_filter::<O::Member>(
             base_query,
             params,
             &self.organization_fields()?.member,
             self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
         )?;
         let total = filtered_query
             .clone()
@@ -428,17 +407,23 @@ where
     }
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<i64> {
-        Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq(organization_id))
-            .count(self.connection())
+        self.count_organization_members_with_connection(self.connection(), &json!(organization_id))
             .await
-            .map(|count| count as i64)
-            .map_err(map_db_err)
     }
 
+    async fn count_organization_members_value(
+        &self,
+        organization_id: &serde_json::Value,
+    ) -> AuthResult<i64> {
+        self.count_organization_members_with_connection(self.connection(), organization_id)
+            .await
+    }
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<i64> {
         Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq(organization_id))
+            .filter(O::Member::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
             .filter(O::Member::column("role")?.eq("owner"))
             .count(self.connection())
             .await
@@ -493,6 +478,7 @@ mod tests {
             .expect("organization should be created");
         let _owner = store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some("user-owner".to_string()),
                 email: Some("owner@example.com".to_string()),
                 ..CreateUser::default()
@@ -501,6 +487,7 @@ mod tests {
             .expect("owner should be created");
         let _member = store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some("user-member".to_string()),
                 email: Some("member@example.com".to_string()),
                 ..CreateUser::default()
@@ -509,6 +496,7 @@ mod tests {
             .expect("member should be created");
         let _admin = store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some("user-admin".to_string()),
                 email: Some("admin@example.com".to_string()),
                 ..CreateUser::default()
@@ -548,5 +536,173 @@ mod tests {
         assert_eq!(total, 2);
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].role, "member");
+    }
+}
+
+impl<
+    S: better_auth_core::AuthSchema,
+    O: crate::SeaOrmOrganizationSchema,
+    P: crate::SeaOrmPluginSchema,
+> SeaOrmStore<S, O, P>
+{
+    pub(super) async fn create_member_with_connection<C: sea_orm::ConnectionTrait>(
+        &self,
+        db: &C,
+        member: CreateMember,
+    ) -> AuthResult<Member> {
+        let mut core = self.create_fields(
+            "member",
+            None,
+            values([
+                ("organization_id", json!(member.organization_id)),
+                ("user_id", json!(member.user_id)),
+                ("created_at", json!(Utc::now())),
+            ]),
+        )?;
+        if let Some(role) = member.role.json()? {
+            let _ = core.insert("role".into(), role);
+        }
+        models::insert::<O::Member, _>(
+            db,
+            core,
+            member.additional_fields,
+            &self.organization_fields()?.member,
+            self.config().advanced.database.generate_id(),
+        )
+        .await
+    }
+
+    pub(super) async fn get_member_value_with_connection<C: sea_orm::ConnectionTrait>(
+        &self,
+        db: &C,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<Member>> {
+        Entity::<O::Member>::find()
+            .filter(super::value_filter::equals_id(
+                O::Member::column("organization_id")?,
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .filter(super::value_filter::equals_id(
+                O::Member::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .one(db)
+            .await
+            .map_err(map_db_err)?
+            .map(|row| row.record(&self.organization_fields()?.member))
+            .transpose()
+    }
+
+    pub(super) async fn count_organization_members_with_connection<C: sea_orm::ConnectionTrait>(
+        &self,
+        db: &C,
+        organization_id: &serde_json::Value,
+    ) -> AuthResult<i64> {
+        Entity::<O::Member>::find()
+            .filter(super::value_filter::equals_id(
+                O::Member::column("organization_id")?,
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .count(db)
+            .await
+            .map(|count| count as i64)
+            .map_err(map_db_err)
+    }
+
+    pub(super) async fn delete_member_with_connection<C: sea_orm::ConnectionTrait>(
+        &self,
+        db: &C,
+        member_id: &str,
+    ) -> AuthResult<()> {
+        let Some(member) = Entity::<O::Member>::find()
+            .filter(
+                O::Member::column("id")?
+                    .eq_id(member_id, self.config().advanced.database.generate_id())?,
+            )
+            .one(db)
+            .await
+            .map_err(map_db_err)?
+        else {
+            return Ok(());
+        };
+        let member = member.record(&self.organization_fields()?.member)?;
+        self.delete_member_for_user_with_connection(
+            db,
+            member_id,
+            member.organization_id.typed()?,
+            member.user_id.typed()?,
+        )
+        .await
+    }
+
+    pub(super) async fn delete_member_for_user_with_connection<C: sea_orm::ConnectionTrait>(
+        &self,
+        db: &C,
+        member_id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        let _ = Entity::<O::Member>::delete_many()
+            .filter(
+                O::Member::column("id")?
+                    .eq_id(member_id, self.config().advanced.database.generate_id())?,
+            )
+            .exec(db)
+            .await
+            .map_err(map_db_err)?;
+        let teams = Entity::<O::Team>::find()
+            .filter(O::Team::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .limit(super::pagination::default_limit(
+                &self.config,
+                db.get_database_backend(),
+            )?)
+            .all(db)
+            .await
+            .map_err(map_db_err)?
+            .into_iter()
+            .map(|team| team.record(&self.organization_fields()?.team))
+            .collect::<AuthResult<Vec<_>>>()?;
+        for team in teams {
+            let _ = Entity::<O::Team>::update_many()
+                .col_expr(
+                    O::Team::column("member_count")?,
+                    Expr::col(O::Team::column("member_count")?),
+                )
+                .filter(O::Team::column("id")?.eq_id(
+                    team.id.typed()?,
+                    self.config().advanced.database.generate_id(),
+                )?)
+                .exec(db)
+                .await
+                .map_err(map_db_err)?;
+            let deleted = Entity::<O::TeamMember>::delete_many()
+                .filter(O::TeamMember::column("team_id")?.eq_id(
+                    team.id.typed()?,
+                    self.config().advanced.database.generate_id(),
+                )?)
+                .filter(
+                    O::TeamMember::column("user_id")?
+                        .eq_id(user_id, self.config().advanced.database.generate_id())?,
+                )
+                .exec(db)
+                .await
+                .map_err(map_db_err)?;
+            super::team_capacity::release::<O::Team, _>(
+                db,
+                team.id.typed()?,
+                deleted.rows_affected,
+                &self.organization_fields()?.team,
+                self.config().advanced.database.generate_id(),
+            )
+            .await?;
+        }
+        Ok(())
     }
 }

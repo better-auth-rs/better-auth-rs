@@ -70,15 +70,18 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
             let row = self.rate_limit_record(key).await?;
             let now = Utc::now().timestamp_millis();
             let Some(row) = row else {
-                let insert = P::RateLimit::active(self.create_fields(
-                    "rateLimit",
-                    None,
-                    Map::from_iter([
-                        ("key".to_owned(), json!(key)),
-                        ("count".to_owned(), json!(1)),
-                        ("last_request".to_owned(), json!(now)),
-                    ]),
-                )?)?
+                let insert = super::plugin_models::active::<P::RateLimit>(
+                    self.create_fields(
+                        "rateLimit",
+                        None,
+                        Map::from_iter([
+                            ("key".to_owned(), json!(key)),
+                            ("count".to_owned(), json!(1)),
+                            ("last_request".to_owned(), json!(now)),
+                        ]),
+                    )?,
+                    self.config().advanced.database.generate_id(),
+                )?
                 .insert(self.connection())
                 .await;
                 if let Err(error) = insert {

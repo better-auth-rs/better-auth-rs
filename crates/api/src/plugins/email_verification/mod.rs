@@ -31,8 +31,8 @@ pub struct EmailVerificationPlugin {
 #[plugin(name = "EmailVerificationPlugin")]
 pub struct EmailVerificationConfig {
     /// How long a verification token stays valid. Default: one hour.
-    #[config(default = Duration::hours(1))]
-    pub verification_token_expiry: Duration,
+    #[config(default = None)]
+    pub verification_token_expiry: Option<Duration>,
     /// Whether sign-in sends through the default email provider. Default: true.
     /// Custom senders are independent of this setting.
     #[config(default = true)]
@@ -63,6 +63,14 @@ pub struct EmailVerificationConfig {
     pub after_email_verification: Option<EmailVerificationHook>,
 }
 
+impl EmailVerificationConfig {
+    /// Read the verification-token lifetime. Omission uses one hour.
+    pub fn verification_token_expiry(&self) -> Duration {
+        self.verification_token_expiry
+            .unwrap_or_else(|| Duration::hours(1))
+    }
+}
+
 impl EmailVerificationPlugin {
     pub fn custom_send_verification_email(
         mut self,
@@ -80,6 +88,17 @@ better_auth_core::impl_auth_plugin! {
         get "/verify-email" => handle_verify_email, "verifyEmail", query = crate::plugins::query_input::verify_email;
     }
     extra {
+        fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+            let options = &mut options.email_verification;
+            options.expires_in = self.config.verification_token_expiry.map(|age| age.num_seconds());
+            options.send_verification_email = self.config.send_verification_email.is_some();
+            options.send_on_sign_up = self.config.send_on_sign_up == Some(true);
+            options.send_on_sign_in = self.config.send_on_sign_in;
+            options.auto_sign_in_after_verification = self.config.auto_sign_in_after_verification;
+            options.before_email_verification = self.config.before_email_verification.is_some();
+            options.after_email_verification = self.config.after_email_verification.is_some();
+        }
+
         async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
             ctx.extensions.insert(self.config.clone());
             ctx.email_verification_policy.auto_sign_in_after_verification = self.config.auto_sign_in_after_verification;
@@ -243,7 +262,7 @@ impl EmailVerificationPlugin {
             ctx.config.signing_secret(),
             email,
             None,
-            self.config.verification_token_expiry,
+            self.config.verification_token_expiry(),
             None,
         )?;
         let callback_url = callback_url.unwrap_or("/");

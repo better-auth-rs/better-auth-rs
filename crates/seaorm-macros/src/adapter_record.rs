@@ -7,15 +7,13 @@ pub(super) fn generate(
     seaorm: &TokenStream,
     core: &TokenStream,
 ) -> syn::Result<TokenStream> {
-    let (model, view, query_fields) = match role {
+    let (model, query_fields) = match role {
         EntityRole::Account => (
             "SeaOrmAccountModel",
-            "AccountView",
             vec!["id", "account_id", "provider_id", "user_id", "created_at"],
         ),
         EntityRole::Verification => (
             "SeaOrmVerificationModel",
-            "VerificationView",
             vec!["id", "identifier", "value", "expires_at", "created_at"],
         ),
         _ => {
@@ -26,7 +24,6 @@ pub(super) fn generate(
         }
     };
     let model = format_ident!("{model}");
-    let view = format_ident!("{view}");
     let known = registry::core_field_names(role);
     let rename_all = serde_serialized_name(&input.attrs, "rename_all")?
         .map(|rule| {
@@ -55,7 +52,14 @@ pub(super) fn generate(
         aliases.sort();
         aliases.dedup();
         columns.push(quote!(#(#aliases)|* => Ok(Column::#column),));
-        setters.push(quote!(#(#aliases)|* => active.#ident = #seaorm::sea_orm::ActiveValue::Set(#core::serde_json::from_value(value)?),));
+        let decoded = if rust_name == "id" || identity::is_reference(role, field)? {
+            identity::decode(field, core)
+        } else {
+            quote!(#core::serde_json::from_value(value)?)
+        };
+        setters.push(
+            quote!(#(#aliases)|* => active.#ident = #seaorm::sea_orm::ActiveValue::Set(#decoded),),
+        );
         let value = match date_field(&field.ty) {
             Some(false) => {
                 quote!(#core::utils::date::serialize(&self.#ident, #core::serde_json::value::Serializer)?)
@@ -78,22 +82,45 @@ pub(super) fn generate(
         );
         quote!(fn #method() -> Self::Column { Column::#column })
     });
-    let user_id = (role == EntityRole::Account).then(|| {
+    let user_id = if role == EntityRole::Account {
+        let ty = identity::field_type(fields, "user_id")?;
+        let parse = if identity::optional_inner(ty).is_some() {
+            quote!(value.parse().map(Some))
+        } else {
+            quote!(value.parse())
+        };
         quote! {
-            type UserId = String;
-            fn parse_user_id(value: &str) -> #core::AuthResult<String> { Ok(value.to_owned()) }
+            type UserId = #ty;
+            fn parse_user_id(value: &str) -> #core::AuthResult<Self::UserId> {
+                #parse.map_err(|error| #core::AuthError::bad_request(format!("Invalid account user id: {error}")))
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+    let id_type = identity::field_type(fields, "id")?;
+    let reference_output = (role == EntityRole::Account).then(|| {
+        quote! {
+            if !config.additional_fields.contains_key("userId") {
+                if let Some(id) = logical.remove("userId") {
+                    let id = #core::SchemaValue::<String>::from_json(Some(id)).display_string()?;
+                    let _ = logical.insert("userId".into(), #core::serde_json::Value::String(id));
+                }
+            }
         }
     });
     let ident = &input.ident;
     Ok(quote! {
         impl #seaorm::#model for #ident {
-            type Id = String;
+            type Id = #id_type;
             type Entity = Entity;
             type ActiveModel = ActiveModel;
             type Column = Column;
             #user_id
             #(#query_columns)*
-            fn parse_id(value: &str) -> #core::AuthResult<String> { Ok(value.to_owned()) }
+            fn parse_id(value: &str) -> #core::AuthResult<Self::Id> {
+                value.parse().map_err(|error| #core::AuthError::bad_request(format!("Invalid model id: {error}")))
+            }
 
             fn field_column(name: &str) -> #core::AuthResult<Column> {
                 match name {
@@ -109,11 +136,10 @@ pub(super) fn generate(
                 ))
             }
 
-            fn new_active(id: Option<String>, mut fields: #core::serde_json::Map<String, #core::serde_json::Value>) -> #core::AuthResult<ActiveModel> {
+            fn new_active(id: Option<Self::Id>, mut fields: #core::serde_json::Map<String, #core::serde_json::Value>) -> #core::AuthResult<ActiveModel> {
+                let _ = fields.remove("id");
                 if let Some(id) = id {
-                    let _ = fields.insert("id".into(), #core::serde_json::Value::String(id));
-                } else if !fields.contains_key("id") {
-                    let _ = fields.insert("id".into(), #core::serde_json::Value::String(#core::uuid::Uuid::new_v4().to_string()));
+                    let _ = fields.insert("id".into(), #core::serde_json::to_value(id)?);
                 }
                 let mut active = <ActiveModel as Default>::default();
                 Self::apply_fields(&mut active, fields)?;
@@ -130,12 +156,13 @@ pub(super) fn generate(
                 Ok(())
             }
 
-            fn record(&self, config: &#core::user_fields::UserConfig, supports_native_json: bool, supports_native_dates: bool) -> #core::AuthResult<#core::wire::#view> {
+            fn record_fields(&self, config: &#core::user_fields::UserConfig) -> #core::AuthResult<#core::user_fields::AdapterRecord> {
                 let mut logical = #core::serde_json::Map::from_iter([#(#core_values)*]);
                 if let Some(id) = logical.remove("id") {
                     let id = #core::SchemaValue::<String>::from_json(Some(id)).display_string()?;
                     let _ = logical.insert("id".into(), #core::serde_json::Value::String(id));
                 }
+                #reference_output
                 let mut storage = #core::serde_json::Map::new();
                 for (name, field) in &config.additional_fields {
                     if name == "id" { continue; }
@@ -143,7 +170,7 @@ pub(super) fn generate(
                     let value = match Self::field_column(name)? { #(#values)* };
                     let _ = storage.insert(name.to_owned(), value);
                 }
-                Ok(#core::wire::#view::from_adapter_fields(config.record_output_fields(logical, &storage, supports_native_json, supports_native_dates)?))
+                Ok(#core::user_fields::AdapterRecord::new(logical, storage))
             }
         }
     })

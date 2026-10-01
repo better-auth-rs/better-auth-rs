@@ -178,7 +178,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 break;
             }
         }
-        if !self.config.verification.disable_cleanup {
+        if !self.config.verification.disable_cleanup() {
             let _ = match transaction {
                 Some(transaction) => transaction.delete_expired_verifications().await?,
                 None => self.inner.delete_expired_verifications().await?,

@@ -126,6 +126,7 @@ async fn duplicate_in_transaction<S: AuthSchema>(auth: &BetterAuth<S>) {
                     .create_user(
                         CreateUser::new()
                             .with_email("first@example.com")
+                            .with_name("Fixture")
                             .with_username("Mixed_User"),
                     )
                     .await?;
@@ -134,6 +135,7 @@ async fn duplicate_in_transaction<S: AuthSchema>(auth: &BetterAuth<S>) {
                     .create_user(
                         CreateUser::new()
                             .with_email("duplicate@example.com")
+                            .with_name("Fixture")
                             .with_username("MIXED_USER"),
                     )
                     .await
@@ -168,6 +170,7 @@ async fn duplicate_in_transaction<S: AuthSchema>(auth: &BetterAuth<S>) {
         .create_user(
             CreateUser::new()
                 .with_email("after@example.com")
+                .with_name("Fixture")
                 .with_username("Mixed_User"),
         )
         .await

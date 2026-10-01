@@ -5,7 +5,6 @@ use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::types::{AuthRequest, AuthResponse, InvitationStatus};
 use better_auth_core::wire::InvitationView;
-use std::collections::HashMap;
 
 use super::{require_session, resolve_organization_id};
 use crate::plugins::organization::rbac::check_permission;
@@ -93,7 +92,15 @@ pub(crate) async fn invite_member_core(
     let roles = requested_roles(&role_input);
 
     let dynamic_roles = if config.dynamic_access_control {
-        ctx.database.list_organization_roles(&org_id).await?
+        ctx.database
+            .query_organization_roles(
+                &org_id,
+                &roles
+                    .iter()
+                    .map(|role| (*role).to_owned())
+                    .collect::<Vec<_>>(),
+            )
+            .await?
     } else {
         Vec::new()
     };
@@ -250,7 +257,7 @@ pub(crate) async fn invite_member_core(
                     })
                     .await?;
                 if let Some(limit) = limit
-                    && ctx.database.list_team_members(team_id).await?.len() >= limit
+                    && ctx.database.count_team_members(team_id).await? >= limit as u64
                 {
                     return Err(AuthError::forbidden("Team member limit reached"));
                 }
@@ -447,32 +454,17 @@ pub(crate) async fn list_user_invitations_core(
         .ok_or_else(|| AuthError::bad_request("User has no email"))?;
 
     let all_invitations = ctx.database.list_user_invitations(user_email).await?;
-    let organization_ids = all_invitations
-        .iter()
-        .map(|invitation| invitation.organization_id().typed().cloned())
-        .collect::<AuthResult<Vec<_>>>()?;
-    let organizations_by_id = ctx
-        .database
-        .list_organizations_by_ids(&organization_ids)
-        .await?
+    let pending = all_invitations
         .into_iter()
-        .map(|organization| {
-            let organization_id = organization.id.as_str().map(str::to_owned);
-            (organization_id, organization)
+        .filter(|row| row.invitation.status == InvitationStatus::Pending)
+        .map(|row| UserInvitationResponse {
+            invitation: InvitationView::from(&row.invitation),
+            organization_name: row
+                .organization
+                .map(|organization| organization.name)
+                .unwrap_or_default(),
         })
-        .collect::<HashMap<_, _>>();
-    let mut pending = Vec::with_capacity(all_invitations.len());
-
-    for invitation in all_invitations.iter() {
-        let organization = organizations_by_id
-            .get(&Some(invitation.organization_id().typed()?.clone()))
-            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-
-        pending.push(UserInvitationResponse {
-            invitation: InvitationView::from(invitation),
-            organization_name: organization.name().clone(),
-        });
-    }
+        .collect();
 
     Ok(pending)
 }
@@ -837,6 +829,7 @@ mod tests {
         let (user, session) = create_user_and_session(
             &ctx,
             CreateUser {
+                name: Some("Fixture".into()).into(),
                 email: Some("owner@example.com".into()),
                 ..Default::default()
             },

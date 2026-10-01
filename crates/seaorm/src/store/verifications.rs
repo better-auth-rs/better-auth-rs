@@ -348,10 +348,8 @@ where
                         .map_err(map_db_err)
                 },
             )
-            .await?
-            .iter()
-            .map(|row| self.output_verification(row, connection))
-            .collect()
+            .await
+            .and_then(|rows| self.output_verifications(&rows, connection))
         }
         .await;
         let records = snapshot.unwrap_or_default();
@@ -391,6 +389,27 @@ where
     S::Account: crate::schema::SeaOrmAccountModel,
     S::Session: crate::schema::SeaOrmSessionModel,
 {
+    pub(super) fn output_verifications(
+        &self,
+        rows: &[S::Verification],
+        db: &impl ConnectionTrait,
+    ) -> AuthResult<Vec<better_auth_core::wire::VerificationView>> {
+        let fields = self.config().verification.field_schema();
+        let records = rows
+            .iter()
+            .map(|row| row.record_fields(&fields))
+            .collect::<AuthResult<Vec<_>>>()?;
+        Ok(fields
+            .project_adapter_records(
+                records,
+                db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                db.get_database_backend() != sea_orm::DbBackend::Sqlite,
+            )?
+            .into_iter()
+            .map(better_auth_core::wire::VerificationView::from_adapter_fields)
+            .collect())
+    }
+
     pub(super) fn output_verification(
         &self,
         row: &S::Verification,

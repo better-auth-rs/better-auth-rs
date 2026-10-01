@@ -88,7 +88,7 @@ macro_rules! f_col {
 
 static USER_CORE: &[FieldDef] = &[
     pk!("id", "String"),
-    f!("name", "Option<String>"),
+    f!("name", "String"),
     f!("email", "Option<String>"),
     f!("email_verified", "bool"),
     f!("image", "Option<String>"),
@@ -513,7 +513,7 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
             index!("user_id"),
         ],
         "organization_role" => &[index!("organization_id"), index!("role")],
-        "member" => &[unique!("organization_id", "user_id"), index!("user_id")],
+        "member" => &[index!("organization_id"), index!("user_id")],
         "invitation" => &[index!("organization_id"), index!("email"), index!("status")],
         "api_keys" => &[unique!("key"), index!("reference_id"), index!("config_id")],
         "passkeys" => &[unique!("credential_id"), index!("user_id")],

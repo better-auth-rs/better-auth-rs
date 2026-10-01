@@ -35,6 +35,13 @@ fn prepare(
 impl CreateUser {
     /// Bind configured fields from trusted adapter input before database hooks inspect the record.
     pub fn prepare_user_fields(&mut self, config: &UserConfig) -> AuthResult<()> {
+        for (name, target) in [("name", &mut self.name), ("image", &mut self.image)] {
+            if config.additional_fields.contains_key(name)
+                && let Some(value) = self.additional_fields.remove(name)
+            {
+                *target = crate::SchemaValue::from_json(Some(value));
+            }
+        }
         prepare(
             config,
             &mut self.additional_fields,
@@ -51,12 +58,18 @@ impl CreateUser {
         if let Some(value) = take_field(&mut fields, "displayUsername")? {
             self.display_username = Some(value);
         }
+        if let Some(value) = fields.remove("name") {
+            self.name = crate::SchemaValue::from_json(Some(value));
+        }
+        if let Some(value) = fields.remove("image") {
+            self.image = crate::SchemaValue::from_json(Some(value));
+        }
         self.additional_fields = fields;
         Ok(())
     }
 
     /// Move configured typed values into the shared adapter input before applying storage policies.
-    pub fn take_user_field_input(&mut self, config: &UserConfig) -> Map<String, Value> {
+    pub fn take_user_field_input(&mut self, config: &UserConfig) -> AuthResult<Map<String, Value>> {
         let mut fields = std::mem::take(&mut self.additional_fields);
         for (name, value) in [
             ("username", &mut self.username),
@@ -68,13 +81,27 @@ impl CreateUser {
                 let _ = fields.insert(name.into(), value.map(Value::String).unwrap_or(Value::Null));
             }
         }
-        fields
+        for (name, value) in [("name", &mut self.name), ("image", &mut self.image)] {
+            if config.additional_fields.contains_key(name)
+                && let Some(raw) = std::mem::take(value).json()?
+            {
+                let _ = fields.insert(name.into(), raw);
+            }
+        }
+        Ok(fields)
     }
 }
 
 impl UpdateUser {
     /// Bind configured fields from a trusted patch before merging database hook results.
     pub fn prepare_user_fields(&mut self, config: &UserConfig) -> AuthResult<()> {
+        for (name, target) in [("name", &mut self.name), ("image", &mut self.image)] {
+            if config.additional_fields.contains_key(name)
+                && let Some(value) = self.additional_fields.remove(name)
+            {
+                *target = crate::SchemaValue::from_json(Some(value));
+            }
+        }
         prepare(
             config,
             &mut self.additional_fields,
@@ -91,12 +118,18 @@ impl UpdateUser {
         if let Some(value) = take_field(&mut fields, "displayUsername")? {
             self.display_username = Some(value);
         }
+        if let Some(value) = fields.remove("name") {
+            self.name = crate::SchemaValue::from_json(Some(value));
+        }
+        if let Some(value) = fields.remove("image") {
+            self.image = crate::SchemaValue::from_json(Some(value));
+        }
         self.additional_fields = fields;
         Ok(())
     }
 
     /// Move the final hook-adjusted fields into the adapter input once.
-    pub fn take_user_field_input(&mut self, config: &UserConfig) -> Map<String, Value> {
+    pub fn take_user_field_input(&mut self, config: &UserConfig) -> AuthResult<Map<String, Value>> {
         let mut fields = std::mem::take(&mut self.additional_fields);
         for (name, value) in [
             ("username", &mut self.username),
@@ -108,7 +141,14 @@ impl UpdateUser {
                 let _ = fields.insert(name.into(), value.map(Value::String).unwrap_or(Value::Null));
             }
         }
-        fields
+        for (name, value) in [("name", &mut self.name), ("image", &mut self.image)] {
+            if config.additional_fields.contains_key(name)
+                && let Some(raw) = std::mem::take(value).json()?
+            {
+                let _ = fields.insert(name.into(), raw);
+            }
+        }
+        Ok(fields)
     }
 }
 

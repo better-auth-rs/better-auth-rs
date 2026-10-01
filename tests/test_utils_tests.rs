@@ -58,16 +58,16 @@ fn config(calls: Arc<Mutex<Vec<String>>>) -> AuthConfig {
     let mut config = AuthConfig::new("test-utils-secret-that-is-at-least-thirty-two-characters")
         .base_url("https://test-utils.example/auth");
     config.base_path = "/auth".into();
-    config.session.expires_in = Duration::seconds(400);
+    config.session.expires_in = Some(Duration::seconds(400));
     config.advanced.use_secure_cookies = Some(false);
-    config.advanced.database.generate_id = better_auth_core::id::IdGeneration::Custom(
+    config.advanced.database.generate_id = Some(better_auth_core::id::IdGeneration::Custom(
         better_auth_core::id::IdGenerator::new(move |input| {
             let mut calls = calls.lock().unwrap();
             calls.push(input.model.into());
             Ok(Some(format!("{}-{}", input.model, calls.len())))
         }),
-    );
-    let _ = config.advanced.cookies.insert(
+    ));
+    let _ = config.advanced.cookies.get_or_insert_default().insert(
         "session_token".into(),
         better_auth_core::CookieOverride {
             name: Some("fixture.token".into()),
@@ -121,7 +121,7 @@ async fn contract<S: AuthSchema>(
     })?;
     assert_eq!(*generated.lock().unwrap(), ["user"]);
     assert_eq!(input.email.as_deref(), Some("TEST@example.com"));
-    assert_eq!(input.name.as_deref(), Some("Test User"));
+    assert_eq!(input.name.typed().unwrap().as_deref(), Some("Test User"));
     assert_eq!(input.email_verified, Some(true));
     assert!(
         auth.context()
@@ -638,7 +638,7 @@ async fn shared_plugin_instances_keep_capture_isolated_and_secondary_helpers_pub
     );
     assert!(second.test()?.otps().unwrap().get("a")?.is_none());
     let mut c = c;
-    c.session.store_session_in_database = false;
+    c.session.store_session_in_database = Some(false);
     let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
     let auth = BetterAuth::<AppSchema>::new(c.clone())
         .store(SeaOrmStore::<AppSchema>::new(c, database().await?))

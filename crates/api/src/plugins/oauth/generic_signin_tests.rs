@@ -323,7 +323,7 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
         let mut config = test_helpers::create_test_config().base_url("http://localhost:3000");
         config.account.skip_state_cookie_check = true;
         config.account.store_account_cookie = Some(true);
-        config.account.update_account_on_sign_in = update_on_sign_in;
+        config.account.update_account_on_sign_in = Some(update_on_sign_in);
         let ctx = test_helpers::create_test_context_with_config(config).await;
         let tokens = Arc::new(MutableTokens(Mutex::new(OAuthTokenSet {
             access_token: Some("first-token".into()),

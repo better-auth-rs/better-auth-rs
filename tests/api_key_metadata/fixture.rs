@@ -76,8 +76,8 @@ impl Fixture {
         let cache = Arc::new(MemoryCacheAdapter::new());
         let mut config = AuthConfig::new("api-key-metadata-contract-secret-longer-than-thirty-two")
             .base_url("http://localhost:3000");
-        config.session.store_session_in_database = true;
-        config.logger.level = LogLevel::Warn;
+        config.session.store_session_in_database = Some(true);
+        config.logger.level = Some(LogLevel::Warn);
         config.logger.log = Some(state.clone());
         if scheduling != "default" {
             let state = state.clone();
@@ -115,7 +115,7 @@ impl Fixture {
             .store(SeaOrmStore::<BundledSchema>::new(config, db.clone()))
             .secondary_storage(cache.clone())
             .rate_limit(better_auth_core::middleware::RateLimitConfig {
-                enabled: false,
+                enabled: Some(false),
                 ..Default::default()
             })
             .plugin(EmailPasswordPlugin::new().password_hasher(Arc::new(Hasher)))

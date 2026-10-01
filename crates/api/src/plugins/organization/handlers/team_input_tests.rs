@@ -47,7 +47,9 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
     let ctx = create_test_context().await;
     let (user, session) = create_user_and_session(
         &ctx,
-        CreateUser::new().with_email("team-input@example.com"),
+        CreateUser::new()
+            .with_email("team-input@example.com")
+            .with_name("Fixture"),
         chrono::Duration::hours(1),
     )
     .await;

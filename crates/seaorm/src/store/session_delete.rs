@@ -55,12 +55,7 @@ where
         .await;
         // Upstream deleteManyWithHooks ignores snapshot failures only. The batch write still runs.
         let sessions = snapshot
-            .and_then(|sessions| {
-                sessions
-                    .into_iter()
-                    .map(|session| self.session_delete_snapshot(session))
-                    .collect::<AuthResult<Vec<_>>>()
-            })
+            .and_then(|sessions| self.output_sessions(&sessions, db))
             .unwrap_or_default();
         let context = self.hook_context(transaction);
         for session in &sessions {

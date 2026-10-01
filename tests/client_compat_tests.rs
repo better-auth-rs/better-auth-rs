@@ -451,6 +451,8 @@ async fn configuration_client_compat() {
         "request-organization-sqlite",
         "request-query-memory",
         "request-query-sqlite",
+        "request-record-memory",
+        "request-record-sqlite",
         "request-plugin-memory",
         "request-plugin-sqlite",
         "request-change-email",
@@ -698,6 +700,8 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/change-email/"], profile).await;
         } else if profile.starts_with("request-query-") {
             run_client_compat_profile(&["./tests/config/request-query/"], profile).await;
+        } else if profile.starts_with("request-record-") {
+            run_client_compat_profile(&["./tests/config/request-record/"], profile).await;
         } else if profile.starts_with("trailing-slashes-") {
             run_client_compat_profile(&["./tests/config/trailing-slashes/"], profile).await;
         } else if profile.starts_with("username-") {

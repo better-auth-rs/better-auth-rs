@@ -46,7 +46,11 @@ mod user_with_extras {
 }
 
 #[test]
-fn extra_fields_get_not_set_in_new_active() {
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions fail by panic; model setup propagates typed errors"
+)]
+fn extra_fields_get_not_set_in_new_active() -> better_auth::AuthResult<()> {
     use better_auth::prelude::CreateUser;
     use chrono::Utc;
     use sea_orm::ActiveValue;
@@ -55,7 +59,7 @@ fn extra_fields_get_not_set_in_new_active() {
     let create = CreateUser::new()
         .with_email("test@example.com")
         .with_name("Test");
-    let active = user_with_extras::Model::new_active(None, create, now);
+    let active = user_with_extras::Model::new_active(None, create, now)?;
 
     // Core fields should be Set
     assert!(matches!(active.email, ActiveValue::Set(_)));
@@ -65,4 +69,38 @@ fn extra_fields_get_not_set_in_new_active() {
     // Extra fields should be NotSet
     assert!(matches!(active.locale, ActiveValue::NotSet));
     assert!(matches!(active.tenant_id, ActiveValue::NotSet));
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions fail by panic; model setup propagates typed errors"
+)]
+fn typed_user_models_preserve_omission_and_null_and_reject_incompatible_fields()
+-> better_auth::AuthResult<()> {
+    use better_auth::prelude::{CreateUser, UpdateUser};
+    use chrono::Utc;
+    use sea_orm::ActiveValue::{NotSet, Set};
+    use serde_json::json;
+
+    let now = Utc::now();
+    let mut active = user_with_extras::Model::new_active(None, CreateUser::new(), now)?;
+    assert_eq!(active.name, NotSet);
+    assert_eq!(active.image, NotSet);
+    user_with_extras::Model::apply_update(
+        &mut active,
+        serde_json::from_value::<UpdateUser>(json!({"name":"Updated","image":null}))?,
+        now,
+    )?;
+    assert_eq!(active.name, Set(Some("Updated".into())));
+    assert_eq!(active.image, Set(None));
+    user_with_extras::Model::apply_update(&mut active, UpdateUser::default(), now)?;
+    assert_eq!(active.name, Set(Some("Updated".into())));
+    let incompatible = serde_json::from_value::<CreateUser>(json!({"name":{"raw":true}}))?;
+    assert!(matches!(
+        user_with_extras::Model::new_active(None, incompatible, now),
+        Err(better_auth::AuthError::Serialization(_))
+    ));
+    Ok(())
 }

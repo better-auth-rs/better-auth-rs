@@ -6,6 +6,7 @@ mod api_keys;
 mod bundled_schema;
 mod device_codes;
 pub mod entities;
+mod id_filter;
 mod identity_schema;
 mod instrumentation;
 mod invitations;
@@ -21,6 +22,7 @@ mod pagination;
 mod passkeys;
 mod plugin_models;
 mod rate_limits;
+mod record_bindings;
 mod runtime;
 mod schema_preflight;
 mod session_delete;
@@ -33,6 +35,7 @@ mod two_factor;
 mod two_factor_security;
 mod updates;
 mod user_delete;
+mod user_values;
 mod user_verification;
 mod users;
 mod value_filter;
@@ -174,11 +177,18 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     }
 
     fn parse_id<T>(&self, value: &str, parse: impl FnOnce(&str) -> AuthResult<T>) -> AuthResult<T> {
-        parse(&self.config.advanced.database.generate_id.coerce_id(value)?)
+        parse(
+            &self
+                .config
+                .advanced
+                .database
+                .generate_id()
+                .coerce_id(value)?,
+        )
     }
 
     fn generated_id(&self, model: &str, supplied: Option<String>) -> AuthResult<Option<String>> {
-        self.config.advanced.database.generate_id.adapter_id(
+        self.config.advanced.database.generate_id().adapter_id(
             model,
             supplied,
             self.db.get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -241,6 +251,67 @@ where
     S::Session: SeaOrmSessionModel,
     S::Verification: crate::schema::SeaOrmVerificationModel,
 {
+    async fn get_member_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<better_auth_core::Member>> {
+        self.store
+            .get_member_value_with_connection(&self.tx, organization_id, user_id)
+            .await
+    }
+    async fn get_organization_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<better_auth_core::Organization>> {
+        self.store
+            .get_organization_by_id_value_with_connection(&self.tx, id)
+            .await
+    }
+    async fn get_team_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<better_auth_core::Team>> {
+        self.store
+            .get_team_value_with_connection(&self.tx, id)
+            .await
+    }
+    async fn count_organization_members_value(&self, id: &serde_json::Value) -> AuthResult<i64> {
+        self.store
+            .count_organization_members_with_connection(&self.tx, id)
+            .await
+    }
+    async fn create_member(
+        &self,
+        input: better_auth_core::CreateMember,
+    ) -> AuthResult<better_auth_core::Member> {
+        self.store
+            .create_member_with_connection(&self.tx, input)
+            .await
+    }
+    async fn add_team_member(
+        &self,
+        team_id: &better_auth_core::SchemaValue<String>,
+        user_id: &str,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<better_auth_core::TeamMember>> {
+        self.store
+            .add_team_member_with_connection(&self.tx, team_id, user_id, maximum)
+            .await
+    }
+    async fn delete_member(&self, id: &str) -> AuthResult<()> {
+        self.store.delete_member_with_connection(&self.tx, id).await
+    }
+    async fn delete_member_for_user(
+        &self,
+        id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        self.store
+            .delete_member_for_user_with_connection(&self.tx, id, organization_id, user_id)
+            .await
+    }
     fn clone_handle(&self) -> Arc<dyn AuthTransaction<S>> {
         Arc::new(Self {
             store: self.store.clone(),

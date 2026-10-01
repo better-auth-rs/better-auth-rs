@@ -112,7 +112,7 @@ impl CustomSessionCallback<TestSchema> for CustomSessionFixture {
         request.append_response_header("x-customized", "true".into())?;
         self.state.lock().unwrap().events.push(json!({ "path": request.path(), "name": input.data.user.name, "exists": exists, "tag": request.headers.get("x-app-tag"), "needsRefresh": input.needs_refresh }));
         if mode == Some("partial-reject") {
-            if input.data.user.name.as_deref() == Some("First") {
+            if input.data.user.name.typed()?.as_deref() == Some("First") {
                 return Err(AuthError::Upstream {
                     status: 403,
                     code: "CUSTOM_SESSION_REJECTED",

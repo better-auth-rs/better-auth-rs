@@ -733,6 +733,7 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
         || device_profile.starts_with("request-api-key-")
         || device_profile.starts_with("request-organization-")
         || device_profile.starts_with("request-query-")
+        || device_profile.starts_with("request-record-")
         || device_profile.starts_with("request-plugin-")
         || device_profile.starts_with("request-change-email")
     {
@@ -846,7 +847,7 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
     }
     let jwt_fixture = jwt_fixture::JwtFixture::new(&config, &device_profile).await?;
     if device_profile.starts_with("oauth-proxy") {
-        config.account.account_linking.update_user_info_on_link = true;
+        config.account.account_linking.update_user_info_on_link = Some(true);
         if device_profile == "oauth-proxy-cookie" {
             config.account.store_state_strategy =
                 Some(better_auth::config::OAuthStateStrategy::Cookie);
@@ -1171,7 +1172,7 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
     };
     let api_key_plugin = api_key_callbacks.apply(&device_profile, api_key_plugin);
     if device_profile == "api-key-storage" {
-        config.session.store_session_in_database = true;
+        config.session.store_session_in_database = Some(true);
         config.verification.store_in_database = true;
     }
     let builder = AuthBuilder::<TestSchema>::new(config)

@@ -1,9 +1,8 @@
 //! Entity traits for the Better Auth framework.
 //!
 //! These traits define the interface that entity types must implement.
-//! The framework accesses entity fields through these trait methods,
-//! allowing users to define their own entity structs with custom field names
-//! and extra fields.
+//! The framework uses trait methods and model serialization to read entity fields.
+//! Custom models may use their own field names and additional fields.
 //!
 //! Implement these traits manually for any custom types used inside the auth
 //! runtime.
@@ -17,8 +16,10 @@ use crate::{SchemaValue, types::InvitationStatus};
 
 /// Trait representing a user entity.
 ///
-/// The framework reads user fields through these getters. Custom types
-/// must provide all framework fields and may have additional fields.
+/// The framework reads `name` and `image` from model serialization and other core fields through getters.
+/// Custom types must provide all framework fields and may have additional fields.
+/// If serialized keys differ from `name` or `image`, override [`Self::serialized_field_name`].
+/// `AuthEntity` generates the serialized field mapping for derived models.
 pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     /// Field presence for runtime records and signed snapshots. Database models use `None`.
     /// A missing optional core field differs from a present field containing JSON null.
@@ -41,11 +42,14 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
         require_plugin_fields(plugin, "user", Self::PLUGIN_FIELDS, required)
     }
 
+    /// Resolve canonical field names to serialized application model fields.
+    fn serialized_field_name(name: &str) -> &str {
+        name
+    }
+
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn email(&self) -> Option<&str>;
-    fn name(&self) -> Option<&str>;
     fn email_verified(&self) -> bool;
-    fn image(&self) -> Option<&str>;
     fn created_at(&self) -> DateTime<Utc>;
     fn updated_at(&self) -> DateTime<Utc>;
     fn is_anonymous(&self) -> Option<bool> {
@@ -290,21 +294,21 @@ pub struct MemberUserView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     pub email: Option<String>,
-    pub name: Option<String>,
-    pub image: Option<String>,
+    pub name: SchemaValue<Option<String>>,
+    pub image: SchemaValue<Option<String>>,
 }
 
 mod member_user_view;
 
 impl MemberUserView {
-    /// Construct from any type implementing [`AuthUser`].
-    pub fn from_user(user: &impl AuthUser) -> Self {
+    /// Retain the runtime identity fields used in organization member responses.
+    pub fn from_user(user: &crate::UserView) -> Self {
         Self {
             visible_fields: user.field_presence().cloned(),
             id: user.id().into_owned(),
             email: user.email().map(|s| s.to_string()),
-            name: user.name().map(|s| s.to_string()),
-            image: user.image().map(|s| s.to_string()),
+            name: user.name.clone(),
+            image: user.image.clone(),
         }
     }
 }

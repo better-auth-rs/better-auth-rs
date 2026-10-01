@@ -33,17 +33,20 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         .transpose()
     }
     async fn create_wallet_address(&self, value: CreateWalletAddress) -> AuthResult<WalletAddress> {
-        let model = P::WalletAddress::active(self.create_fields(
-            "walletAddress",
-            None,
-            Map::from_iter([
-                ("user_id".to_owned(), json!(value.user_id)),
-                ("address".to_owned(), json!(value.address)),
-                ("chain_id".to_owned(), json!(value.chain_id)),
-                ("is_primary".to_owned(), json!(value.is_primary)),
-                ("created_at".to_owned(), json!(value.created_at)),
-            ]),
-        )?)?;
+        let model = super::plugin_models::active::<P::WalletAddress>(
+            self.create_fields(
+                "walletAddress",
+                None,
+                Map::from_iter([
+                    ("user_id".to_owned(), json!(value.user_id)),
+                    ("address".to_owned(), json!(value.address)),
+                    ("chain_id".to_owned(), json!(value.chain_id)),
+                    ("is_primary".to_owned(), json!(value.is_primary)),
+                    ("created_at".to_owned(), json!(value.created_at)),
+                ]),
+            )?,
+            self.config().advanced.database.generate_id(),
+        )?;
         database_operation::<Entity<P::WalletAddress>, _>(self.config(), "create", async {
             model.insert(self.connection()).await.map_err(map_db_err)
         })

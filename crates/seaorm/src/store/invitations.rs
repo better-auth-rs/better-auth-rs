@@ -1,3 +1,4 @@
+use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
@@ -8,7 +9,7 @@ use crate::{SeaOrmOrganizationModel, SeaOrmOrganizationSchema};
 use async_trait::async_trait;
 use better_auth_core::{AuthResult, store::InvitationStore};
 use chrono::Utc;
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
 use serde_json::json;
 
 #[async_trait]
@@ -57,15 +58,20 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             core,
             input.additional_fields,
             &config,
+            self.config().advanced.database.generate_id(),
         )
         .await
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
-        models::find::<O::Invitation, _>(self.connection(), id)
-            .await?
-            .map(|row| row.record(&config))
-            .transpose()
+        models::find::<O::Invitation, _>(
+            self.connection(),
+            id,
+            self.config().advanced.database.generate_id(),
+        )
+        .await?
+        .map(|row| row.record(&config))
+        .transpose()
     }
     async fn get_pending_invitation(
         &self,
@@ -74,7 +80,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
     ) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
         Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq(organization_id))
+            .filter(O::Invitation::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
             .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
             .filter(O::Invitation::column("status")?.eq("pending"))
             .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
@@ -95,6 +104,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             values([("status", json!(status.to_string()))]),
             Default::default(),
             &self.organization_fields()?.invitation,
+            self.config().advanced.database.generate_id(),
         )
         .await
     }
@@ -109,6 +119,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             values([("expires_at", json!(expires_at))]),
             Default::default(),
             &self.organization_fields()?.invitation,
+            self.config().advanced.database.generate_id(),
         )
         .await
     }
@@ -116,22 +127,29 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<Invitation>> {
-        models::project::<O::Invitation>(
-            Entity::<O::Invitation>::find()
-                .filter(O::Invitation::column("organization_id")?.eq(organization_id))
-                .order_by_asc(O::Invitation::column("created_at")?)
-                .all(self.connection())
-                .await
-                .map_err(map_db_err)?,
-            &self.organization_fields()?.invitation,
-        )
+        let rows = Entity::<O::Invitation>::find()
+            .filter(O::Invitation::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .limit(super::pagination::default_limit(
+                self.config(),
+                self.connection().get_database_backend(),
+            )?)
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        models::project::<O::Invitation>(rows, &self.organization_fields()?.invitation)
     }
     async fn count_pending_organization_invitations(
         &self,
         organization_id: &str,
     ) -> AuthResult<i64> {
         Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq(organization_id))
+            .filter(O::Invitation::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
             .filter(O::Invitation::column("status")?.eq("pending"))
             .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
             .count(self.connection())
@@ -139,18 +157,38 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .map(|count| count as i64)
             .map_err(map_db_err)
     }
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
-        models::project::<O::Invitation>(
-            Entity::<O::Invitation>::find()
-                .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
-                .filter(O::Invitation::column("status")?.eq("pending"))
-                .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
-                .order_by_desc(O::Invitation::column("created_at")?)
-                .all(self.connection())
+    async fn list_user_invitations(
+        &self,
+        email: &str,
+    ) -> AuthResult<Vec<better_auth_core::store::InvitationOrganization>> {
+        let fields = self.organization_fields()?;
+        let rows = Entity::<O::Invitation>::find()
+            .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
+            .limit(super::pagination::default_limit(
+                self.config(),
+                self.connection().get_database_backend(),
+            )?)
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        let invitations = models::project::<O::Invitation>(rows.clone(), &fields.invitation)?;
+        let mut result = Vec::with_capacity(rows.len());
+        for (row, invitation) in rows.into_iter().zip(invitations) {
+            let organization = Entity::<O::Organization>::find()
+                .filter(
+                    O::Organization::column("id")?.eq(models::join_value(&row, "organization_id")?),
+                )
+                .one(self.connection())
                 .await
-                .map_err(map_db_err)?,
-            &self.organization_fields()?.invitation,
-        )
+                .map_err(map_db_err)?
+                .map(|row| row.record(&fields.organization))
+                .transpose()?;
+            result.push(better_auth_core::store::InvitationOrganization {
+                invitation,
+                organization,
+            });
+        }
+        Ok(result)
     }
 }
 
@@ -200,6 +238,7 @@ mod tests {
             .expect("organization should be created");
         let _inviter = store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some("inviter-1".to_string()),
                 email: Some("inviter@example.com".to_string()),
                 ..CreateUser::default()
@@ -267,6 +306,7 @@ mod tests {
             .expect("organization should be created");
         let _inviter = store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some("inviter-1".to_string()),
                 email: Some("inviter@example.com".to_string()),
                 ..CreateUser::default()

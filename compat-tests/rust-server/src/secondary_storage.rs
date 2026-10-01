@@ -171,8 +171,9 @@ impl SecondaryFixture {
             return;
         }
         config.session.store_session_in_database =
-            profile != "secondary-session-only" && profile != "session-fields-cache";
-        config.session.preserve_session_in_database = profile == "secondary-session-preserved";
+            Some(profile != "secondary-session-only" && profile != "session-fields-cache");
+        config.session.preserve_session_in_database =
+            Some(profile == "secondary-session-preserved");
         config.verification.store_in_database = profile != "secondary-verification-only";
         use better_auth::config::{
             VerificationIdentifierConfig, VerificationIdentifierStorage as Strategy,

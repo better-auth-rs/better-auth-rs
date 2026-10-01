@@ -77,16 +77,8 @@ mod user {
             self.email.as_deref()
         }
 
-        fn name(&self) -> Option<&str> {
-            self.name.as_deref()
-        }
-
         fn email_verified(&self) -> bool {
             self.email_verified
-        }
-
-        fn image(&self) -> Option<&str> {
-            self.image.as_deref()
         }
 
         fn created_at(&self) -> DateTime<Utc> {
@@ -192,13 +184,19 @@ mod user {
             id: Option<Self::Id>,
             create_user: CreateUser,
             now: DateTime<Utc>,
-        ) -> Self::ActiveModel {
-            ActiveModel {
+        ) -> AuthResult<Self::ActiveModel> {
+            Ok(ActiveModel {
                 id: id.map_or(NotSet, Set),
-                name: Set(create_user.name),
+                name: match create_user.name.json()? {
+                    Some(value) => Set(serde_json::from_value(value)?),
+                    None => NotSet,
+                },
                 email: Set(create_user.email),
                 email_verified: Set(create_user.email_verified.unwrap_or(false)),
-                image: Set(create_user.image.flatten()),
+                image: match create_user.image.json()? {
+                    Some(value) => Set(serde_json::from_value(value)?),
+                    None => NotSet,
+                },
                 username: Set(create_user.username.flatten()),
                 display_username: Set(create_user.display_username.flatten()),
                 two_factor_enabled: Set(false),
@@ -211,18 +209,22 @@ mod user {
                 updated_at: Set(now),
                 tenant_id: Set(1),
                 locale: Set("en".to_string()),
-            }
+            })
         }
 
-        fn apply_update(active: &mut Self::ActiveModel, update: UpdateUser, now: DateTime<Utc>) {
+        fn apply_update(
+            active: &mut Self::ActiveModel,
+            update: UpdateUser,
+            now: DateTime<Utc>,
+        ) -> AuthResult<()> {
+            if let Some(value) = update.name.json()? {
+                active.name = Set(serde_json::from_value(value)?);
+            }
+            if let Some(value) = update.image.json()? {
+                active.image = Set(serde_json::from_value(value)?);
+            }
             if let Some(email) = update.email {
                 active.email = Set(Some(email));
-            }
-            if let Some(name) = update.name {
-                active.name = Set(Some(name));
-            }
-            if let Some(image) = update.image {
-                active.image = Set(image);
             }
             if let Some(email_verified) = update.email_verified {
                 active.email_verified = Set(email_verified);
@@ -252,6 +254,7 @@ mod user {
                 active.ban_expires = Set(ban_expires);
             }
             active.updated_at = Set(now);
+            Ok(())
         }
     }
 }
@@ -656,12 +659,10 @@ mod account {
             }
             Ok(())
         }
-        fn record(
+        fn record_fields(
             &self,
             fields: &better_auth::config::UserConfig,
-            native_json: bool,
-            native_dates: bool,
-        ) -> AuthResult<better_auth::wire::AccountView> {
+        ) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
             let mut storage = serde_json::Map::new();
             for (logical, field) in &fields.additional_fields {
                 if logical == "id" {
@@ -703,8 +704,8 @@ mod account {
             }
             let mut core = serde_json::Map::new();
             let _ = core.insert("id".into(), serde_json::Value::String(self.id.to_string()));
-            Ok(better_auth::wire::AccountView::from_adapter_fields(
-                fields.record_output_fields(core, &storage, native_json, native_dates)?,
+            Ok(better_auth_core::user_fields::AdapterRecord::new(
+                core, storage,
             ))
         }
     }
@@ -826,12 +827,10 @@ mod verification {
             }
             Ok(())
         }
-        fn record(
+        fn record_fields(
             &self,
             fields: &better_auth::config::UserConfig,
-            native_json: bool,
-            native_dates: bool,
-        ) -> AuthResult<better_auth::wire::VerificationView> {
+        ) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
             let mut storage = serde_json::Map::new();
             for (logical, field) in &fields.additional_fields {
                 if logical == "id" {
@@ -859,8 +858,8 @@ mod verification {
             }
             let mut core = serde_json::Map::new();
             let _ = core.insert("id".into(), serde_json::Value::String(self.id.to_string()));
-            Ok(better_auth::wire::VerificationView::from_adapter_fields(
-                fields.record_output_fields(core, &storage, native_json, native_dates)?,
+            Ok(better_auth_core::user_fields::AdapterRecord::new(
+                core, storage,
             ))
         }
     }
@@ -892,7 +891,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long")
         .base_url("http://localhost:3000")
         .password_min_length(8);
-    config.advanced.database.generate_id = better_auth::config::IdGeneration::Serial;
+    config.advanced.database.generate_id = Some(better_auth::config::IdGeneration::Serial);
     let store = SeaOrmStore::<AppSchema>::new(config.clone(), database.clone());
 
     let auth = BetterAuth::<AppSchema>::new(config)

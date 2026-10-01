@@ -39,6 +39,14 @@ enum Command {
         /// Include the database rate-limit table and its typed store binding.
         #[arg(long)]
         rate_limit_database: bool,
+
+        /// Match advanced.database.generate_id in the application's AuthConfig.
+        #[arg(long, value_enum, default_value_t = schema_config::IdGeneration::Random)]
+        generate_id: schema_config::IdGeneration,
+
+        /// Select the database's ID storage types.
+        #[arg(long, value_enum, default_value_t = schema_config::Database::Sqlite)]
+        database: schema_config::Database,
     },
 }
 
@@ -63,6 +71,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 mut plugins,
                 schema_config,
                 rate_limit_database,
+                generate_id,
+                database,
             },
     } = Cli::parse();
     if plugins.iter().any(|plugin| plugin == "all") {
@@ -89,7 +99,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         schema_config::SchemaConfig::default()
     };
-    let schema = generate::generate_schema(&plugins, &config, rate_limit_database)?;
+    let schema = generate::generate_schema(
+        &plugins,
+        &config,
+        rate_limit_database,
+        generate_id,
+        database,
+    )?;
     if let Some(path) = output {
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()

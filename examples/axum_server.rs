@@ -210,7 +210,7 @@ async fn get_user_profile(session: CurrentSession<AppAuthSchema>) -> impl IntoRe
     AxumJson(serde_json::json!({
         "id": session.user.id(),
         "email": session.user.email(),
-        "name": session.user.name(),
+        "name": session.user.name,
     }))
 }
 

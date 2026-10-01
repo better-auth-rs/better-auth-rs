@@ -277,7 +277,7 @@ async fn matcher_failures_propagate_before_storage_and_disabled_ip_tracking_skip
     );
     limiter
         .plugin_limits
-        .push(PluginRateLimit::new(limiter.config.default, |_| {
+        .push(PluginRateLimit::new(limiter.default_rule, |_| {
             Err(AuthError::internal("matcher failed"))
         }));
     let request = make_request("/matcher-error", "192.0.2.32");
@@ -285,7 +285,7 @@ async fn matcher_failures_propagate_before_storage_and_disabled_ip_tracking_skip
         matches!(limiter.before_request(&request).await, Err(AuthError::Internal(message)) if message == "matcher failed")
     );
     assert!(storage.0.lock().unwrap().is_empty());
-    limiter.ip_address.disable_ip_tracking = true;
+    limiter.ip_address.disable_ip_tracking = Some(true);
     assert!(limiter.before_request(&request).await.unwrap().is_none());
     assert!(storage.0.lock().unwrap().is_empty());
 }

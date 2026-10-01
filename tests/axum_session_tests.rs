@@ -51,7 +51,11 @@ async fn setup_with_config(
     );
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("session@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("session@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let session = auth

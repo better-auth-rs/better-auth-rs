@@ -46,16 +46,16 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
         update: &UpdateUser,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        assert_eq!(update.name.as_deref(), Some("requested"));
-        assert!(update.image.is_none());
+        assert_eq!(update.name.typed().unwrap().as_deref(), Some("requested"));
+        assert!(update.image.is_undefined());
         Ok(DatabaseHookUpdate::Patch(if self.first {
             UpdateUser {
-                image: Some(Some("first-image".into())),
+                image: Some("first-image".into()).into(),
                 ..Default::default()
             }
         } else {
             UpdateUser {
-                name: Some("last-name".into()),
+                name: Some("last-name".into()).into(),
                 ..Default::default()
             }
         }))
@@ -183,7 +183,11 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
 async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_hooks() {
     let store = store().await;
     let user = store
-        .create_user(CreateUser::new().with_email("patch@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("patch@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let account = store
@@ -239,14 +243,17 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
         .update_user(
             user.id().typed().unwrap(),
             UpdateUser {
-                name: Some("requested".into()),
+                name: Some("requested".into()).into(),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(updated.name(), Some("last-name"));
-    assert_eq!(updated.image(), Some("first-image"));
+    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("last-name"));
+    assert_eq!(
+        updated.image.typed().unwrap().as_deref(),
+        Some("first-image")
+    );
     let updated = store
         .update_account(
             account.id.typed().unwrap(),
@@ -293,7 +300,7 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
             .update_user(
                 "missing",
                 UpdateUser {
-                    name: Some("requested".into()),
+                    name: Some("requested".into()).into(),
                     ..Default::default()
                 }
             )
@@ -367,7 +374,10 @@ impl SeaOrmHooks<BundledSchema> for CommitHook {
                 .get_user_by_id(user.id().typed().unwrap())
                 .await?
                 .unwrap()
-                .name(),
+                .name
+                .typed()
+                .unwrap()
+                .as_deref(),
             Some("Updated")
         );
         self.events.lock().unwrap().push("created".into());
@@ -382,7 +392,10 @@ impl SeaOrmHooks<BundledSchema> for CommitHook {
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
-        assert_eq!(user.unwrap().name(), Some("Updated"));
+        assert_eq!(
+            user.unwrap().name.typed().unwrap().as_deref(),
+            Some("Updated")
+        );
         self.events.lock().unwrap().push("updated".into());
         Ok(())
     }
@@ -409,7 +422,7 @@ async fn transaction_hooks_wait_for_commit_skip_rollback_and_preserve_rows_after
                     .update_user(
                         user.id().typed().unwrap(),
                         UpdateUser {
-                            name: Some("Updated".into()),
+                            name: Some("Updated".into()).into(),
                             ..Default::default()
                         },
                     )
@@ -444,7 +457,10 @@ async fn transaction_hooks_wait_for_commit_skip_rollback_and_preserve_rows_after
                 assert!(
                     matches!(result, Err(AuthError::Internal(message)) if message == "after-commit")
                 );
-                assert_eq!(stored.unwrap().name(), Some("Updated"));
+                assert_eq!(
+                    stored.unwrap().name.typed().unwrap().as_deref(),
+                    Some("Updated")
+                );
                 assert_eq!(*hooks.events.lock().unwrap(), ["before", "created"]);
             }
         }

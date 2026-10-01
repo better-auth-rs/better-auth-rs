@@ -201,7 +201,11 @@ async fn proxy_before_api_key_preserves_real_session_emulation() {
     let auth = auth().await;
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("owner@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("owner@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .expect("create user");
     let session = auth

@@ -104,7 +104,7 @@ async fn phone_native_consumption_preserves_transaction_cache_and_hook_failure_o
         let mut config = AuthConfig::new("phone-consume-transaction-secret-longer-than-32")
             .base_url("http://localhost:3000");
         config.verification.store_in_database = true;
-        config.verification.disable_cleanup = true;
+        config.verification.disable_cleanup = Some(true);
         let auth = Arc::new(
             AuthBuilder::new(config.clone())
                 .store(

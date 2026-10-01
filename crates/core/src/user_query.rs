@@ -3,28 +3,31 @@
 use chrono::{DateTime, Utc};
 use std::cmp::Ordering;
 
-use crate::entity::AuthUser;
 use crate::types::ListUsersParams;
+use crate::{UserView, entity::AuthUser};
 
-fn string_field(user: &impl AuthUser, field: &str) -> Option<String> {
+fn string_field(user: &UserView, field: &str) -> Option<String> {
     match field {
         "id" | "_id" => user.id().into_owned().as_str().map(str::to_owned),
         "email" => user.email().map(str::to_owned),
-        "name" => user.name().map(str::to_owned),
+        "name" => match &user.name {
+            crate::SchemaValue::Typed(value) => value.clone(),
+            _ => None,
+        },
         "username" => user.username().map(str::to_owned),
         "role" => user.role().map(str::to_owned),
         _ => None,
     }
 }
 
-fn bool_field(user: &impl AuthUser, field: &str) -> Option<bool> {
+fn bool_field(user: &UserView, field: &str) -> Option<bool> {
     match field {
         "banned" => Some(user.banned()),
         _ => None,
     }
 }
 
-fn date_field(user: &impl AuthUser, field: &str) -> Option<DateTime<Utc>> {
+fn date_field(user: &UserView, field: &str) -> Option<DateTime<Utc>> {
     match field {
         "createdAt" => Some(user.created_at()),
         "updatedAt" => Some(user.updated_at()),
@@ -33,7 +36,7 @@ fn date_field(user: &impl AuthUser, field: &str) -> Option<DateTime<Utc>> {
     }
 }
 
-fn matches_search(user: &impl AuthUser, params: &ListUsersParams) -> bool {
+fn matches_search(user: &UserView, params: &ListUsersParams) -> bool {
     let Some(search_value) = params.search_value.as_deref() else {
         return true;
     };
@@ -102,7 +105,7 @@ fn compare_date(lhs: DateTime<Utc>, rhs: DateTime<Utc>, operator: &str) -> bool 
     }
 }
 
-fn matches_filter(user: &impl AuthUser, params: &ListUsersParams) -> bool {
+fn matches_filter(user: &UserView, params: &ListUsersParams) -> bool {
     let Some(filter_value) = params.filter_value.as_ref() else {
         return true;
     };
@@ -157,21 +160,21 @@ fn compare_option_dates(
 }
 
 /// Count matching rows without sorting, paging, or applying output transforms.
-pub fn count_users<'a, T: AuthUser + 'a>(
-    users: impl IntoIterator<Item = &'a T>,
+pub fn count_users<'a>(
+    users: impl IntoIterator<Item = &'a UserView>,
     params: &ListUsersParams,
 ) -> usize {
     users
         .into_iter()
-        .filter(|user| matches_search(*user, params) && matches_filter(*user, params))
+        .filter(|user| matches_search(user, params) && matches_filter(user, params))
         .count()
 }
 
 /// Apply Better Auth admin list-users semantics to a user collection.
-pub fn apply_list_users<T: AuthUser + Clone>(
-    mut users: Vec<T>,
+pub fn apply_list_users(
+    mut users: Vec<UserView>,
     params: &ListUsersParams,
-) -> (Vec<T>, usize) {
+) -> (Vec<UserView>, usize) {
     users.retain(|user| matches_search(user, params) && matches_filter(user, params));
 
     if let Some(sort_by) = params.sort_by.as_deref().filter(|value| !value.is_empty()) {

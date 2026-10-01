@@ -22,7 +22,11 @@ async fn check<S: AuthSchema>(
 ) -> AuthResult<()> {
     let provider = "provider\"quoted";
     let user = store
-        .create_user(CreateUser::new().with_email("owner@example.test"))
+        .create_user(
+            CreateUser::new()
+                .with_email("owner@example.test")
+                .with_name("Account owner"),
+        )
         .await?;
     assert!(store.get_account(provider, "subject").await?.is_none());
     for (index, token) in ["first", "second", "third"].into_iter().enumerate() {

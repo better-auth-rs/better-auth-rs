@@ -3,6 +3,25 @@ use crate::{AuthResult, SchemaValue};
 use serde_json::{Map, Value};
 use std::sync::Arc;
 
+/// Raw logical fields and mapped storage fields, before adapter output policies run.
+pub struct AdapterRecord {
+    output: indexmap::IndexMap<String, SchemaValue<Value>>,
+    storage: Map<String, Value>,
+}
+
+impl AdapterRecord {
+    /// Preserve unmapped core fields and defer configured policies to the batch boundary.
+    pub fn new(core: Map<String, Value>, storage: Map<String, Value>) -> Self {
+        Self {
+            output: core
+                .into_iter()
+                .map(|(name, value)| (name, SchemaValue::Typed(value)))
+                .collect(),
+            storage,
+        }
+    }
+}
+
 fn field(field_type: UserFieldType, required: bool) -> UserFieldConfig {
     UserFieldConfig {
         field_type,
@@ -131,16 +150,40 @@ impl UserConfig {
         supports_native_json: bool,
         supports_native_dates: bool,
     ) -> AuthResult<indexmap::IndexMap<String, SchemaValue<Value>>> {
-        let mut core = Map::new();
-        if let Some(id) = storage.get("id") {
-            let _ = core.insert(
-                "id".into(),
-                Value::String(
-                    crate::SchemaValue::<String>::from_json(Some(id.clone())).display_string()?,
-                ),
-            );
-        }
-        self.record_output_fields(core, storage, supports_native_json, supports_native_dates)
+        // Projection preserves the one input row.
+        Ok(self
+            .project_records(
+                std::slice::from_ref(storage),
+                supports_native_json,
+                supports_native_dates,
+            )?
+            .remove(0))
+    }
+
+    /// Project raw adapter records together without retaining unmapped storage field names.
+    pub fn project_records(
+        &self,
+        storage: &[Map<String, Value>],
+        supports_native_json: bool,
+        supports_native_dates: bool,
+    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        let records = storage
+            .iter()
+            .map(|storage| {
+                let mut core = Map::new();
+                if let Some(id) = storage.get("id") {
+                    let _ = core.insert(
+                        "id".into(),
+                        Value::String(
+                            crate::SchemaValue::<String>::from_json(Some(id.clone()))
+                                .display_string()?,
+                        ),
+                    );
+                }
+                Ok(AdapterRecord::new(core, storage.clone()))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        self.project_adapter_records(records, supports_native_json, supports_native_dates)
     }
 
     /// Apply adapter input policies once to a complete logical record or update patch.
@@ -190,42 +233,61 @@ impl UserConfig {
         supports_native_json: bool,
         supports_native_dates: bool,
     ) -> AuthResult<indexmap::IndexMap<String, SchemaValue<Value>>> {
-        let mut output = core
-            .into_iter()
-            .map(|(name, value)| (name, SchemaValue::Typed(value)))
-            .collect::<indexmap::IndexMap<_, _>>();
-        for (name, field) in &self.additional_fields {
-            if name == "id" {
-                continue;
-            }
-            let value = storage
-                .get(field.field_name.as_deref().unwrap_or(name))
-                .cloned();
-            let value = field.adapter_output(value, supports_native_json)?;
-            let value = if !supports_native_dates
-                && !field.references_id()
-                && matches!(field.field_type, UserFieldType::Date)
-            {
-                match value {
-                    Some(Value::String(text)) => {
-                        match crate::utils::date::parse_adapter_date(&text) {
-                            Some(date) => SchemaValue::Typed(Value::String(
-                                date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                            )),
-                            None => SchemaValue::InvalidDate,
-                        }
-                    }
-                    value => SchemaValue::from_json(value),
+        // Projection preserves the one input row.
+        Ok(self
+            .project_adapter_records(
+                vec![AdapterRecord::new(core, storage.clone())],
+                supports_native_json,
+                supports_native_dates,
+            )?
+            .remove(0))
+    }
+
+    /// Project extracted records in row order, interleaving synchronous callbacks by field.
+    pub fn project_adapter_records(
+        &self,
+        mut records: Vec<AdapterRecord>,
+        supports_native_json: bool,
+        supports_native_dates: bool,
+    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        super::batch::project_fields(
+            &mut records,
+            &self.additional_fields,
+            |record, name, field| {
+                if name == "id" {
+                    return Ok(());
                 }
-            } else {
-                SchemaValue::from_json(value)
-            };
-            if value.is_undefined() {
-                let _ = output.shift_remove(name);
-            } else {
-                let _ = output.insert(name.clone(), value);
-            }
-        }
-        Ok(output)
+                let value = record
+                    .storage
+                    .get(field.field_name.as_deref().unwrap_or(name))
+                    .cloned();
+                let value = field.adapter_output(value, supports_native_json)?;
+                let value = if !supports_native_dates
+                    && !field.references_id()
+                    && matches!(field.field_type, UserFieldType::Date)
+                {
+                    match value {
+                        Some(Value::String(text)) => {
+                            match crate::utils::date::parse_adapter_date(&text) {
+                                Some(date) => SchemaValue::Typed(Value::String(
+                                    date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                                )),
+                                None => SchemaValue::InvalidDate,
+                            }
+                        }
+                        value => SchemaValue::from_json(value),
+                    }
+                } else {
+                    SchemaValue::from_json(value)
+                };
+                if value.is_undefined() {
+                    let _ = record.output.shift_remove(name);
+                } else {
+                    let _ = record.output.insert(name.to_owned(), value);
+                }
+                Ok(())
+            },
+        )?;
+        Ok(records.into_iter().map(|record| record.output).collect())
     }
 }

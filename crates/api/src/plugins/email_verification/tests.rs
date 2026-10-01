@@ -20,7 +20,7 @@ use better_auth_core::{AuthPlugin, HttpMethod};
 #[test]
 fn test_default_config() {
     let config = EmailVerificationConfig::default();
-    assert_eq!(config.verification_token_expiry, Duration::hours(1));
+    assert_eq!(config.verification_token_expiry(), Duration::hours(1));
     assert!(config.send_email_notifications);
     assert!(!config.require_verification_for_signin);
     assert!(!config.send_on_sign_in);
@@ -36,7 +36,7 @@ fn test_default_config() {
 fn test_builder_verification_token_expiry() {
     let plugin = EmailVerificationPlugin::new().verification_token_expiry(Duration::minutes(30));
     assert_eq!(
-        plugin.config.verification_token_expiry,
+        plugin.config.verification_token_expiry(),
         Duration::minutes(30)
     );
 }
@@ -83,7 +83,10 @@ fn test_builder_chaining() {
         .auto_sign_in_after_verification(true)
         .send_email_notifications(false)
         .require_verification_for_signin(true);
-    assert_eq!(plugin.config.verification_token_expiry, Duration::hours(2));
+    assert_eq!(
+        plugin.config.verification_token_expiry(),
+        Duration::hours(2)
+    );
     assert!(plugin.config.send_on_sign_in);
     assert!(plugin.config.auto_sign_in_after_verification);
     assert!(!plugin.config.send_email_notifications);
@@ -136,10 +139,10 @@ fn make_test_user(email: &str, verified: bool) -> UserView {
         additional_fields: Default::default(),
         visible_fields: None,
         id: "test-id".into(),
-        name: Some("Test".into()),
+        name: Some("Test".into()).into(),
         email: Some(email.into()),
         email_verified: verified,
-        image: None,
+        image: Default::default(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
         is_anonymous: None,
@@ -223,10 +226,10 @@ fn test_to_user_preserves_fields() {
         additional_fields: Default::default(),
         visible_fields: None,
         id: "test-id".into(),
-        name: Some("Test User".into()),
+        name: Some("Test User".into()).into(),
         email: Some("test@example.com".into()),
         email_verified: true,
-        image: Some("https://img.example.com/a.png".into()),
+        image: Some("https://img.example.com/a.png".into()).into(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
         is_anonymous: None,
@@ -243,11 +246,14 @@ fn test_to_user_preserves_fields() {
     };
     let converted = UserView::from(&user);
     assert_eq!(converted.id, "test-id");
-    assert_eq!(converted.name.as_deref(), Some("Test User"));
+    assert_eq!(
+        converted.name.typed().unwrap().as_deref(),
+        Some("Test User")
+    );
     assert_eq!(converted.email.as_deref(), Some("test@example.com"));
     assert!(converted.email_verified);
     assert_eq!(
-        converted.image.as_deref(),
+        converted.image.typed().unwrap().as_deref(),
         Some("https://img.example.com/a.png")
     );
     assert_eq!(converted.username.as_deref(), Some("testuser"));

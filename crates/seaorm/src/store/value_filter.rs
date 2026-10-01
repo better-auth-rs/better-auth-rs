@@ -1,5 +1,18 @@
 use sea_orm::{ColumnTrait, sea_query::SimpleExpr};
 
+use super::id_filter::IdColumn;
+
+pub(super) fn equals_id(
+    column: impl ColumnTrait,
+    value: &serde_json::Value,
+    policy: &better_auth_core::id::IdGeneration,
+) -> better_auth_core::AuthResult<SimpleExpr> {
+    match value {
+        serde_json::Value::String(value) => column.eq_id(value, policy),
+        value => Ok(equals(column, value)),
+    }
+}
+
 pub(super) fn equals(column: impl ColumnTrait, value: &serde_json::Value) -> SimpleExpr {
     match value {
         serde_json::Value::Null => column.is_null(),

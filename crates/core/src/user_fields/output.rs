@@ -144,6 +144,16 @@ impl UserView {
         Self::project(user, config, metadata, false, supports_native_json)
     }
 
+    /// Project a database result in row order, interleaving synchronous callbacks by field.
+    pub fn with_internal_fields_many_for_adapter<T: AuthUser>(
+        users: &[T],
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+        supports_native_json: bool,
+    ) -> AuthResult<Vec<Self>> {
+        Self::project_many(users, config, metadata, false, supports_native_json)
+    }
+
     fn project<T: AuthUser>(
         user: &T,
         config: &super::UserConfig,
@@ -151,43 +161,76 @@ impl UserView {
         public: bool,
         supports_native_json: bool,
     ) -> AuthResult<Self> {
-        let mut view = Self::from(user);
-        view.visible_fields = Some(
-            PLUGIN_FIELDS
-                .iter()
-                .filter(|(plugin, _)| metadata.get(*plugin).and_then(Value::as_bool) == Some(true))
-                .flat_map(|(_, fields)| fields.iter().map(|name| (*name).to_owned()))
-                .filter(|name| {
-                    user.field_presence()
-                        .is_none_or(|fields| fields.contains(name))
-                })
-                .chain(
-                    ["name", "email", "image"]
-                        .into_iter()
+        // Projection preserves the one input row.
+        Ok(Self::project_many(
+            std::slice::from_ref(user),
+            config,
+            metadata,
+            public,
+            supports_native_json,
+        )?
+        .remove(0))
+    }
+
+    fn project_many<T: AuthUser>(
+        users: &[T],
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+        public: bool,
+        supports_native_json: bool,
+    ) -> AuthResult<Vec<Self>> {
+        let mut rows = users
+            .iter()
+            .map(|user| {
+                let mut view = Self::from_model(user)?;
+                view.visible_fields = Some(
+                    PLUGIN_FIELDS
+                        .iter()
+                        .filter(|(plugin, _)| {
+                            metadata.get(*plugin).and_then(Value::as_bool) == Some(true)
+                        })
+                        .flat_map(|(_, fields)| fields.iter().map(|name| (*name).to_owned()))
                         .filter(|name| {
                             user.field_presence()
-                                .is_none_or(|fields| fields.contains(*name))
+                                .is_none_or(|fields| fields.contains(name))
                         })
-                        .map(str::to_owned),
-                )
-                .collect(),
-        );
-        view.additional_fields.clear();
-        if !config.additional_fields.is_empty() {
-            let model = if user.projected_fields().is_none() {
-                Some(serde_json::to_value(user)?)
-            } else {
-                None
-            };
-            for (name, field) in &config.additional_fields {
+                        .chain(
+                            ["name", "email", "image"]
+                                .into_iter()
+                                .filter(|name| {
+                                    user.field_presence()
+                                        .is_none_or(|fields| fields.contains(*name))
+                                })
+                                .map(str::to_owned),
+                        )
+                        .collect(),
+                );
+                view.additional_fields.clear();
+                let model =
+                    if !config.additional_fields.is_empty() && user.projected_fields().is_none() {
+                        Some(serde_json::to_value(user)?)
+                    } else {
+                        None
+                    };
+                Ok((user, view, model))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        super::batch::project_fields(
+            &mut rows,
+            &config.additional_fields,
+            |(user, view, model), name, field| {
                 let value = if let Some(projected) = user.projected_fields() {
-                    projected.get(name).cloned()
+                    match name {
+                        "name" => view.name.json()?,
+                        "image" => view.image.json()?,
+                        _ => projected.get(name).cloned(),
+                    }
                 } else {
                     let value = model
                         .as_ref()
-                        .and_then(|model| model.get(field.field_name.as_ref().unwrap_or(name)))
+                        .and_then(|model| model.get(field.field_name.as_deref().unwrap_or(name)))
                         .cloned()
-                        .or_else(|| match (name.as_str(), &field.field_name) {
+                        .or_else(|| match (name, &field.field_name) {
                             ("username", None) => Some(json!(user.username())),
                             ("displayUsername", None) => Some(json!(user.display_username())),
                             _ => None,
@@ -197,7 +240,7 @@ impl UserView {
                 if name == "username" || name == "displayUsername" {
                     if let Some(fields) = &mut view.visible_fields {
                         if value.is_some() && (!public || field.returned) {
-                            let _ = fields.insert(name.clone());
+                            let _ = fields.insert(name.to_owned());
                         } else {
                             let _ = fields.remove(name);
                         }
@@ -217,17 +260,33 @@ impl UserView {
                         view.display_username = typed;
                     }
                 }
+                if name == "name" || name == "image" {
+                    let target = if name == "name" {
+                        &mut view.name
+                    } else {
+                        &mut view.image
+                    };
+                    *target = crate::SchemaValue::from_json(value);
+                    if public
+                        && !field.returned
+                        && let Some(fields) = &mut view.visible_fields
+                    {
+                        let _ = fields.remove(name);
+                    }
+                    return Ok(());
+                }
                 if let Some(mut value) = value {
                     if !field.references_id() {
                         field.normalize_date(&mut value)?;
                     }
                     if !public || field.returned {
-                        let _ = view.additional_fields.insert(name.clone(), value);
+                        let _ = view.additional_fields.insert(name.to_owned(), value);
                     }
                 }
-            }
-        }
-        Ok(view)
+                Ok(())
+            },
+        )?;
+        Ok(rows.into_iter().map(|(_, view, _)| view).collect())
     }
 }
 
@@ -256,6 +315,12 @@ impl From<UserView> for Map<String, Value> {
         ]);
         if user.id.is_undefined() {
             let _ = result.remove("id");
+        }
+        if user.name.is_undefined() {
+            let _ = result.remove("name");
+        }
+        if user.image.is_undefined() {
+            let _ = result.remove("image");
         }
         for name in ["name", "email", "image"] {
             if user
@@ -335,10 +400,10 @@ impl TryFrom<Map<String, Value>> for UserView {
         );
         Ok(Self {
             id: crate::SchemaValue::from_json(fields.remove("id")),
-            name: take(&mut fields, "name")?,
+            name: crate::SchemaValue::from_json(fields.remove("name")),
             email: take(&mut fields, "email")?,
             email_verified: take(&mut fields, "emailVerified")?,
-            image: take(&mut fields, "image")?,
+            image: crate::SchemaValue::from_json(fields.remove("image")),
             created_at: take(&mut fields, "createdAt")?,
             updated_at: take(&mut fields, "updatedAt")?,
             is_anonymous: take(&mut fields, "isAnonymous")?,

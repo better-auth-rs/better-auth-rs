@@ -372,7 +372,7 @@ impl<S: AuthSchema> Registration<S> {
             let input = CreateSession {
                 additional_fields: Default::default(),
                 user_id: user.id().into_owned(),
-                expires_at: Utc::now() + self.ctx.config.session.expires_in,
+                expires_at: Utc::now() + self.ctx.config.session.expires_in(),
                 ip_address: self.ctx.config.advanced.ip_address.resolve(&self.request),
                 user_agent: self.request.headers.get("user-agent").cloned(),
                 impersonated_by: None,

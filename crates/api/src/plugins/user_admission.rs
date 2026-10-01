@@ -180,10 +180,20 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         return Ok(());
     }
     let mut user = input.additional_fields.clone();
+    for (name, field) in [("name", &input.name), ("image", &input.image)] {
+        let value = match field {
+            better_auth_core::SchemaValue::Typed(value) => {
+                value.clone().map(Value::String).unwrap_or(Value::Null)
+            }
+            better_auth_core::SchemaValue::Dynamic(value) => value.clone(),
+            better_auth_core::SchemaValue::InvalidDate => Value::Null,
+            better_auth_core::SchemaValue::Undefined => continue,
+        };
+        let _ = user.insert(name.into(), value);
+    }
     for (name, value) in [
         ("id", input.id.as_ref()),
         ("email", input.email.as_ref()),
-        ("name", input.name.as_ref()),
         ("phoneNumber", input.phone_number.as_ref()),
         ("role", input.role.as_ref()),
     ] {
@@ -199,7 +209,6 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         }
     }
     for (name, value) in [
-        ("image", &input.image),
         ("username", &input.username),
         ("displayUsername", &input.display_username),
     ] {

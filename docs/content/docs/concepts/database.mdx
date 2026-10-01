@@ -54,6 +54,12 @@ Every auth build passes its final configuration and plugin database hooks to `Ru
 
 `advanced.database.default_find_many_limit` preserves an optional numeric value; omission uses 100. Account and database session lists apply the default before output transforms. Bulk-delete hooks receive a limited snapshot, while the write still deletes every matching row. Verification lookup retains its explicit one-row limit, and secondary session lists remain uncapped. Memory follows JavaScript slice behavior; SQLite accepts negative integer limits as unlimited and rejects fractional or non-finite limits.
 
+Organization lists apply the same default before output projection. User organization and team lists preserve the selected membership page's order. Full organization queries independently limit invitations, members and teams, then load the selected members' users. Received invitations select the email's page and project each associated organization before the endpoint keeps pending records; pending records can be expired.
+
+Custom Organization adapters must return `InvitationOrganization` from `InvitationStore::list_user_invitations`. Resolve the organization with the stored foreign key. Role point lookup, filtered role queries and role count have separate store methods. Team and team-member counts remain independent of list pagination. Rust deliberately retains accurate capacity checks instead of reproducing upstream checks that count a capped team page.
+
+Custom adapters must implement `UserStore::get_user_with_accounts` and `AccountStore::get_account_owner` for password and OAuth sign-in. Capture the canonical stored identity before applying output policies. The first method projects the user, then reads the account page with that stored identity under the default limit. The second method reads up to two accounts, projects each account and its persisted owner, and rejects duplicate account identities. `UserAccounts::new` and `AccountOwner::new` require the captured stored user ID and reject projections that change the relationship. An orphaned account has no joined user. OAuth resolves this join before admission callbacks or token updates, so a failed owner read must not refresh tokens.
+
 ## Generate an initial schema
 
 Run the CLI with every plugin that your application registers:
@@ -87,19 +93,23 @@ Auth responses serialize timestamps as UTC ISO 8601 strings with three fractiona
 
 ## Model IDs
 
-Configure `advanced.database.generate_id` with `IdGeneration::Random`, `Uuid`, `Serial`, `Database`, or `Custom(IdGenerator)`. `Random` uses 32 alphanumeric characters. For SQL stores, `Serial` requires numeric auto-increment columns and `Database` requires application database defaults. The memory adapter uses its current table length plus one for `Serial`; deletion can therefore produce duplicate IDs. `Database` omits IDs in memory. PostgreSQL `Uuid` uses the database UUID default; SQLite generates UUIDs in Rust. These options do not change existing columns or migrations.
+Configure `advanced.database.generate_id` with `Some(IdGeneration::Random)`, `Some(IdGeneration::Uuid)`, `Some(IdGeneration::Serial)`, `Some(IdGeneration::Database)`, or `Some(IdGeneration::Custom(generator))`. Omission uses `Random` through the `generate_id()` getter. Direct policy assignments now require `Some`. `Random` uses 32 alphanumeric characters. For SQL stores, `Serial` requires numeric auto-increment columns and `Database` requires application database defaults. The memory adapter uses its current table length plus one for `Serial`; deletion can therefore produce duplicate IDs. `Database` omits IDs in memory. PostgreSQL `Uuid` uses the database UUID default; SQLite generates UUIDs in Rust. These options do not change existing columns or migrations.
+
+Generate matching entities and an initial migration with `better-auth-rs generate --generate-id serial`, or `--generate-id uuid --database postgres`. The database option accepts `sqlite` (default), `postgres`, and `mysql`. Serial schemas use `i64` IDs and references for SQLite and `i32` for PostgreSQL and MySQL; PostgreSQL uses identity columns, SQLite uses integer primary keys, and MySQL uses auto-increment columns. UUID schemas use native `Uuid` fields and `pg_catalog.gen_random_uuid()` defaults for PostgreSQL; SQLite and MySQL retain text IDs. Use the generated schema with the selected database backend.
+
+`--generate-id database` preserves the upstream text-ID schema without inventing defaults. Add application-owned defaults before using `IdGeneration::Database`, or use an existing numeric or UUID schema with its own defaults. `AuthEntity` derives read the declared ID and user-reference types, parse public string IDs at the model boundary, and leave absent IDs unset. The generator marks additional ID references with `#[auth(reference)]`; use the same attribute on handwritten reference fields.
 
 A custom generator receives the logical model name, such as `user`, `apikey`, or `walletAddress`. Table aliases do not change that name. Return `Ok(None)` to omit the ID, or an error to stop the write. Create-before hooks run before generation. A cancelled hook does not invoke the generator.
 
 ```rust
 use better_auth::config::IdGeneration;
 let mut config = better_auth::AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long");
-config.advanced.database.generate_id = IdGeneration::Uuid;
+config.advanced.database.generate_id = Some(IdGeneration::Uuid);
 ```
 
 An explicit `CreateUser.id`, `CreateOrganization.id`, `CreateInvitation.id`, or `CreateTeam.id` is a force-allowed ID. UUID mode accepts canonical hyphenated RFC 4122 version 1–5 IDs, including uppercase hexadecimal characters. Simple, braced, URN, and version 7 forms are omitted; the database then applies its default or constraint. `CreateOrganization::new` leaves generation to the store. `WalletStore::create_wallet_address` takes `CreateWalletAddress` without a caller-generated ID.
 
-In `Serial` mode, the SQL adapter applies JavaScript number conversion before core ID lookups and reference writes. For example, `"1.6e1"`, `" 16 "`, and `"0x10"` address integer ID `16`. The adapter applies reference conversion after application input transforms and before the persistence model parses the value. Invalid or fractional values still encounter the model or database's numeric constraints. `Database` mode does not enable this conversion.
+In `Serial` mode, the SQL adapter applies JavaScript number conversion before ID lookups and core, plugin, and organization reference writes. For example, `"1.6e1"`, `" 16 "`, and `"0x10"` address integer ID `16`. The adapter applies reference conversion after application input transforms and before the persistence model parses the value. Invalid or fractional values still encounter the model or database's numeric constraints. `Database` mode does not enable this conversion. `AuthEntity` supplies declared reference-column metadata through `SeaOrmPluginModel::is_id_reference` and `SeaOrmOrganizationModel::is_id_reference`; manual implementations must identify their ID reference columns. Explicit field policies override that metadata, and ordinary fields retain their input values.
 
 Pure-secondary sessions and API keys use the context generator. The legacy `advanced.generate_id` callback overrides that context operation only. `IdGenerator` returns `Option<String>`: `None` represents upstream `false`, and `Some(value)` represents a string. Pure-secondary sessions use a random ID for `None`; an explicit empty string omits the session ID. Pure-secondary API keys use the upstream truthy fallback for both cases. Pure-secondary verification records have no generated ID. Session tokens and other authentication credentials use separate random generators.
 
@@ -262,10 +272,18 @@ Run the application database migrations before starting the server. Capability v
 
 ## Existing Databases
 
+User `name` and `image` values use `SchemaValue<Option<String>>` in `CreateUser`, `UpdateUser`, and `UserView`. `Undefined` omits a field; `Typed(None)` clears it; `Dynamic(value)` retains a non-string record value. Use `Some(value).into()` for a string and `view.name.typed()?` when application code requires the default type. Signup and OAuth endpoints retain their own input schemas.
+
+The runtime view is independent of the physical model. `AuthEntity` reads each field through its Serde name and binds writes through its mapped SeaORM column. Explicit JSON columns retain JSON values. Custom nullable columns retain their database constraints. Default generated user schemas require `name`; migrate existing NULL names before adding a NOT NULL constraint.
+
+Manual `AuthUser` implementations no longer define string-only `name()` or `image()` getters. Implement `serialized_field_name` when the model uses a different Serde name. For example, return `"displayName"` for `"name"` and return the input unchanged for other fields. Leave `name` and `image` unset in `SeaOrmUserModel::new_active` and `apply_update`; the shared record binder writes these fields after applying storage policies.
+
+SQLite rejects a nonempty array that Bun would treat as a replacement for the whole SQL parameter list. The upstream overload can replace the authenticated WHERE identity and update another user. Rust rejects that overload before executing SQL; it does not reproduce the authorization defect.
+
 If your application already has a `users` table with extra fields or non-string primary keys, keep the same public integration story:
 
 1. Reuse your app-owned SeaORM entities.
-2. Implement the public `AuthUser` / `SeaOrmUserModel` traits manually instead of relying on `#[derive(AuthEntity)]`.
+2. Use `#[derive(AuthEntity)]` for the supported fields, including integer and UUID IDs. Implement the public model traits manually when the application needs custom construction or projection.
 3. Keep `sessions`, `accounts`, and `verifications` as app-owned SeaORM entities in the same database.
 4. Run your own SeaORM migrations alongside the rest of the application schema.
 
@@ -278,6 +296,14 @@ The canonical worked example is [`examples/postgres_usage.rs`](../../../../examp
 - Better Auth mounted on top of the same `DatabaseConnection`
 
 See [Account and Verification Fields](/docs/concepts/account-verification-fields) for runtime policies, storage projections, and handwritten adapter migration.
+
+### User field values
+
+User `name` and `image` values preserve omission, null, and raw JSON in `SchemaValue`. Memory retains the values; SQL stores apply the declared column type and database constraints. The default SQL user name is required. Applications with custom nullable models can retain that schema. SQLite JSON columns accept JSON values; non-JSON columns reject arrays and objects. Rust keeps each value bound to its declared column and rejects the upstream Bun driver's parameter-overload behavior. This is an intentional compatibility exception that preserves statement identity conditions.
+
+`SeaOrmUserModel::new_active` and `apply_update` return `AuthResult`. Direct model calls decode supplied `name` and `image` values into the declared column types. Omitted values leave columns unset or unchanged. Incompatible values return serialization errors. `AuthEntity` generates this behavior; handwritten models must implement the same conversion.
+
+Memory string predicates retain type-safe handling of replacement values. Query failures caused by unrelated malformed rows in the upstream adapter are not reproduced.
 
 ## Account Hook Cancellation
 

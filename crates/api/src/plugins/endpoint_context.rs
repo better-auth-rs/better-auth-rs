@@ -74,6 +74,11 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
         super::email_otp::EmailOtpApi::from_endpoint(self)
     }
 
+    /// Add organization members within this endpoint's active transaction.
+    pub fn organization(&self) -> AuthResult<super::organization::OrganizationApi<'a, S>> {
+        super::organization::OrganizationApi::from_endpoint(self)
+    }
+
     /// Consume a phone OTP within this endpoint's active transaction.
     pub fn phone_number(&self) -> AuthResult<super::phone_number::PhoneNumberApi<'a, S>> {
         super::phone_number::PhoneNumberApi::from_endpoint(self)
@@ -142,6 +147,21 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     }
     fn password_hasher(&self) -> Option<Arc<dyn better_auth_core::PasswordHasher>> {
         self.plugin.password_hasher()
+    }
+    fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+        self.plugin.telemetry(options);
+        let callbacks = self.callbacks.as_ref() as &dyn std::any::Any;
+        if callbacks.is::<super::email_verification::EmailVerificationCallbacks<S>>() {
+            options.email_verification.send_verification_email = true;
+        }
+        if callbacks.is::<super::password_management::PasswordManagementCallbacks<S>>() {
+            options.email_and_password.send_reset_password = true;
+        }
+        if let Some(callbacks) =
+            callbacks.downcast_ref::<super::user_management::UserManagementCallbacks<S>>()
+        {
+            options.send_change_email_confirmation |= callbacks.has_confirmation_sender();
+        }
     }
     fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
         self.plugin.rate_limits()

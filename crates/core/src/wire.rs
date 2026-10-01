@@ -33,11 +33,11 @@ pub struct UserView {
     #[serde(skip)]
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: SchemaValue<String>,
-    pub name: Option<String>,
+    pub name: SchemaValue<Option<String>>,
     pub email: Option<String>,
     #[serde(rename = "emailVerified")]
     pub email_verified: bool,
-    pub image: Option<String>,
+    pub image: SchemaValue<Option<String>>,
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "crate::utils::date::serialize")]
     pub created_at: DateTime<Utc>,
@@ -122,16 +122,18 @@ pub struct SessionView {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
-impl<T: AuthUser> From<&T> for UserView {
-    fn from(user: &T) -> Self {
-        Self {
+impl UserView {
+    /// Read an application model without applying adapter output transforms.
+    pub fn from_model<T: AuthUser>(user: &T) -> crate::AuthResult<Self> {
+        let model = serde_json::to_value(user)?;
+        Ok(Self {
             additional_fields: user.projected_fields().cloned().unwrap_or_default(),
             visible_fields: user.field_presence().cloned(),
             id: user.id().into_owned(),
-            name: user.name().map(str::to_owned),
+            name: SchemaValue::from_json(model.get(T::serialized_field_name("name")).cloned()),
             email: user.email().map(str::to_owned),
             email_verified: user.email_verified(),
-            image: user.image().map(str::to_owned),
+            image: SchemaValue::from_json(model.get(T::serialized_field_name("image")).cloned()),
             created_at: user.created_at(),
             updated_at: user.updated_at(),
             is_anonymous: user.is_anonymous(),
@@ -145,7 +147,13 @@ impl<T: AuthUser> From<&T> for UserView {
             ban_reason: user.ban_reason().map(str::to_owned),
             ban_expires: user.ban_expires(),
             metadata: user.metadata().clone(),
-        }
+        })
+    }
+}
+
+impl From<&UserView> for UserView {
+    fn from(user: &UserView) -> Self {
+        user.clone()
     }
 }
 
@@ -206,10 +214,43 @@ impl SessionView {
         config: &crate::config::SessionConfig,
         supports_native_json: bool,
     ) -> crate::AuthResult<Self> {
-        let mut view = Self::from(session);
-        if !config.additional_fields.is_empty() {
-            let model = serde_json::to_value(session)?;
-            for (name, field) in &config.additional_fields {
+        // Projection preserves the one input row.
+        Ok(Self::with_internal_fields_many_for_adapter(
+            std::slice::from_ref(session),
+            config,
+            supports_native_json,
+        )?
+        .remove(0))
+    }
+
+    /// Project a database result in row order, interleaving synchronous callbacks by field.
+    pub fn with_internal_fields_many_for_adapter<T: AuthSession>(
+        sessions: &[T],
+        config: &crate::config::SessionConfig,
+        supports_native_json: bool,
+    ) -> crate::AuthResult<Vec<Self>> {
+        let mut rows = sessions
+            .iter()
+            .map(|session| {
+                let view = Self::from(session);
+                // Core getters retain public names when models serialize application field names.
+                let core: serde_json::Map<String, serde_json::Value> = view.clone().into();
+                Ok((
+                    session,
+                    view,
+                    core,
+                    if config.additional_fields.is_empty() {
+                        serde_json::Value::Null
+                    } else {
+                        serde_json::to_value(session)?
+                    },
+                ))
+            })
+            .collect::<crate::AuthResult<Vec<_>>>()?;
+        crate::user_fields::project_fields(
+            &mut rows,
+            &config.additional_fields,
+            |(session, view, core, model), name, field| {
                 let value = if let Some(fields) = session.projected_fields() {
                     fields.get(name).cloned()
                 } else {
@@ -218,6 +259,7 @@ impl SessionView {
                             field.field_name.as_deref().unwrap_or(name),
                         ))
                         .or_else(|| model.get(name))
+                        .or_else(|| core.get(name))
                         .cloned();
                     field.adapter_output(value, supports_native_json)?
                 };
@@ -225,11 +267,12 @@ impl SessionView {
                     if !field.references_id() {
                         field.normalize_date(&mut value)?;
                     }
-                    let _ = view.additional_fields.insert(name.clone(), value);
+                    let _ = view.additional_fields.insert(name.to_owned(), value);
                 }
-            }
-        }
-        Ok(view)
+                Ok(())
+            },
+        )?;
+        Ok(rows.into_iter().map(|(_, view, _, _)| view).collect())
     }
 }
 
@@ -259,14 +302,8 @@ impl AuthUser for UserView {
     fn email(&self) -> Option<&str> {
         self.email.as_deref()
     }
-    fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
     fn email_verified(&self) -> bool {
         self.email_verified
-    }
-    fn image(&self) -> Option<&str> {
-        self.image.as_deref()
     }
     fn created_at(&self) -> DateTime<Utc> {
         self.created_at
@@ -611,10 +648,10 @@ mod tests {
             visible_fields: None,
             additional_fields: Default::default(),
             id: "user-1".to_string().into(),
-            name: Some("Ada".to_string()),
+            name: Some("Ada".to_string()).into(),
             email: Some("ada@example.com".to_string()),
             email_verified: true,
-            image: None,
+            image: Default::default(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             is_anonymous: None,

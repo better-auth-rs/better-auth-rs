@@ -189,7 +189,7 @@ async fn create_users(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                         .not_null()
                         .primary_key(),
                 )
-                .col(ColumnDef::new(user::Column::Name).string())
+                .col(ColumnDef::new(user::Column::Name).string().not_null())
                 .col(ColumnDef::new(user::Column::Email).string().unique_key())
                 .col(
                     ColumnDef::new(user::Column::EmailVerified)
@@ -560,17 +560,6 @@ async fn create_members(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                 .name("idx_member_user_id")
                 .table(member::Entity)
                 .col(member::Column::UserId)
-                .to_owned(),
-        )
-        .await?;
-    manager
-        .create_index(
-            Index::create()
-                .name("idx_member_org_user_unique")
-                .table(member::Entity)
-                .col(member::Column::OrganizationId)
-                .col(member::Column::UserId)
-                .unique()
                 .to_owned(),
         )
         .await?;

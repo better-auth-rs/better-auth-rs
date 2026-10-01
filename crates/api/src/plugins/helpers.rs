@@ -289,7 +289,7 @@ pub async fn issue_user_session<S: better_auth_core::AuthSchema>(
         user_id,
         ip_address,
         user_agent,
-        ctx.config.session.expires_in,
+        ctx.config.session.expires_in(),
     )
     .await
 }

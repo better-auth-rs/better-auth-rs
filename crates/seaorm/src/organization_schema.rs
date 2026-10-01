@@ -29,6 +29,8 @@ pub trait SeaOrmOrganizationModel:
     fn core_field_name(column: &Self::Column) -> Option<&'static str>;
     /// Read built-in fields with their public wire names.
     fn record(&self, fields: &UserConfig) -> AuthResult<Self::Record>;
+    /// Return whether the column references another model ID.
+    fn is_id_reference(column: &Self::Column) -> bool;
     /// Assign typed fields in an insert or update.
     fn apply_fields(active: &mut Self::ActiveModel, fields: Map<String, Value>) -> AuthResult<()>;
 

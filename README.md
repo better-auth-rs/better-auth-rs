@@ -11,7 +11,9 @@ Sessions use signed cookies. Response headers preserve repeated cookie writes in
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 
-Configure application user fields with `AuthConfig.user.additional_fields` and matching application-owned entity columns. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, and public visibility.
+Configure application user fields with `AuthConfig.user.additional_fields` and matching application-owned entity columns. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
+
+User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
 Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page.
 
@@ -44,6 +46,8 @@ Generate the core auth entities:
 cargo install better-auth-cli --git https://github.com/better-auth-rs/better-auth-rs --branch master --locked
 better-auth-rs generate --output src/auth_schema.rs
 ```
+
+Use `--generate-id serial` for integer IDs. Use `--generate-id uuid --database postgres` for native PostgreSQL UUIDs. Match the generated schema to `AuthConfig.advanced.database.generate_id`. Derived plugin and organization bindings expose declared ID references so Serial writes normalize numeric aliases after configured input transforms.
 
 Use this `src/main.rs`:
 
@@ -91,7 +95,7 @@ Plugins include email/password, username, sessions, password management, email v
 
 Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
 
-The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements.
+The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements. Use `auth.organization()?.add_member(Some(body)).await` for server-only member creation through the native hook pipeline.
 
 The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence.
 
@@ -106,6 +110,8 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `axum` | Routes and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
+
+Logger options retain omission: assign `Some(LogLevel::Info)` to `config.logger.level` and `Some(true)` to `config.logger.disabled`. Session, account, plugin, HTTP rate-limit, IP, and cross-subdomain options also preserve omission through `Option`; use `Some(Duration::zero())` for refresh on every authoritative session read. Plugin builders keep their scalar arguments; direct plugin config assignments use `Some(value)` for password lengths, automatic sign-in, token lifetimes, and change-email enablement. ID policy assignments use `config.advanced.database.generate_id = Some(IdGeneration::Uuid)`; omission keeps random IDs. Cookie override maps use `Option<HashMap<...>>`; call `get_or_insert_default()` before inserting an override. See [configuration options](docs/content/docs/reference/configuration-options.mdx) and [observability](docs/content/docs/concepts/observability.mdx) for defaults and the current telemetry projection.
 
 ## Documentation and development
 

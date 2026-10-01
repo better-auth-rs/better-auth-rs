@@ -129,7 +129,8 @@ impl OrganizationHooks for OrganizationRules {
         organization: &mut CreateOrganization,
         user: &UserView,
     ) -> AuthResult<()> {
-        organization.name = format!("{}'s organization", user.name.as_deref().unwrap_or("User"));
+        let name = user.name.typed()?.as_deref().unwrap_or("User");
+        organization.name = format!("{name}'s organization");
         Ok(())
     }
 }
@@ -153,7 +154,13 @@ Optional `OrganizationPolicy` methods return `None` to retain the static setting
 
 Endpoint-aware hooks and policies receive `OrganizationEndpoint`, which exposes the request, global configuration, and organization persistence. A custom default-team callback must persist its team and return that record. Returning `None` uses normal team creation, including the before-hook changes. The returned team's identity controls owner membership and the active team.
 
-`OrganizationPlugin::add_member(input, request, context)` is a trusted server-only API, matching upstream `auth.api.addMember`. There is no public HTTP route. When a dynamic team capacity callback is configured, adding a team member requires an authenticated request. A failure during the team addition removes the newly created organization membership. Dynamic team limits during invitation acceptance execute per team in the same transaction as member creation; a callback error rolls back every reserved seat. The invitation is claimed before that transaction. If the transaction fails, a conditional update restores the invitation to pending and runs its `on_update` callbacks again. Claim-output failures stop before the member transaction, and compensation failures propagate.
+`auth.organization()?.add_member(Some(body)).await` is a trusted server-only API, matching upstream `auth.api.addMember`. There is no public HTTP route. The API uses the installed Organization configuration, global before/after hooks, member input validation, and Organization lifecycle hooks. The JSON result preserves global hook replacements. Use `.with_request(NativeRequest { request, headers })` to supply a Request and headers independently. Inside an endpoint callback, `endpoint.organization()?` retains the resolved runtime and active transaction. The typed `OrganizationPlugin::add_member(input, request, context)` convenience method uses the same dispatcher and requires a member-shaped result.
+
+Membership capacity uses a database count, independent of the default list limit. When a dynamic team capacity callback is configured, adding a team member requires an authenticated request. A failure during team addition removes the newly created organization membership and cleans team memberships for the original user and organization, even when `before_add_member` changes the saved member. Compensation errors propagate. Stores must implement `delete_member_for_user` and the Organization operations on `AuthTransaction` to support these paths.
+
+The member table has separate, non-unique organization and user indexes. The endpoint rejects an existing membership before the creation hook; a hook may override the new member's user. If an existing application database contains the former `idx_member_org_user_unique` index, remove that index through an application migration. For CLI-generated models, remove the corresponding combined unique index using the application's mapped table and index names. This library does not drop indexes in existing databases automatically.
+
+Dynamic team limits during invitation acceptance execute per team in the same transaction as member creation; a callback error rolls back every reserved seat. The invitation is claimed before that transaction. If the transaction fails, a conditional update restores the invitation to pending and runs its `on_update` callbacks again. Claim-output failures stop before the member transaction, and compensation failures propagate.
 Set `cancel_pending_invitations_on_re_invite: true` to cancel the old invitation and create a new invitation. Explicit `resend: true` still renews the existing invitation. Cancellation occurs before the new invitation's capacity and team checks, matching upstream.
 
 Invitation lookup requires a session owned by the recipient, a pending unexpired invitation, and an inviter who still belongs to the organization. Set `require_email_verification_on_invitation: true` to require email verification for lookup, acceptance, and rejection. The default matches upstream's built-in opaque IDs; the bundled stores generate UUIDs. Applications with predictable invitation IDs must enable this option. Listing a user's invitations always requires a verified session email.

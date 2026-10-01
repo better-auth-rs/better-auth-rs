@@ -198,7 +198,11 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                 .await?;
 
             let user = store
-                .create_user(CreateUser::new().with_email("atomic@example.com"))
+                .create_user(
+                    CreateUser::new()
+                        .with_email("atomic@example.com")
+                        .with_name("Fixture"),
+                )
                 .await?;
             let factor = store
                 .create_two_factor(CreateTwoFactor {

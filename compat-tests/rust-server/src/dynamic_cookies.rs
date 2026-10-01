@@ -54,7 +54,7 @@ pub async fn run() -> AuthResult<Value> {
         secure: Some(false),
         ..Default::default()
     };
-    config.advanced.cookies.insert(
+    config.advanced.cookies.get_or_insert_default().insert(
         "session_token".into(),
         CookieOverride {
             name: Some("custom-token".into()),
@@ -66,7 +66,7 @@ pub async fn run() -> AuthResult<Value> {
             },
         },
     );
-    config.advanced.cookies.insert(
+    config.advanced.cookies.get_or_insert_default().insert(
         "session_data".into(),
         CookieOverride {
             name: Some("custom-cache".into()),

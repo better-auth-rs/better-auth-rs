@@ -153,7 +153,7 @@ fn message(error: AuthError) -> String {
 }
 fn attempt(value: AuthResult<Option<UserView>>) -> Value {
     match value {
-        Ok(user) => json!({"found":user.is_some(),"name":user.and_then(|u|u.name),"error":null}),
+        Ok(user) => json!({"found":user.is_some(),"name":user.map(|u|u.name),"error":null}),
         Err(error) => json!({"found":false,"name":null,"error":message(error)}),
     }
 }
@@ -218,7 +218,7 @@ async fn run<S: AuthSchema>(
                         "responseDone":state.response_done.load(Ordering::SeqCst),
                         "currentRead":attempt(tx.get_user_by_id(&user_id).await),
                         "internalRead":attempt(tx.get_user_by_email(EMAIL).await)});
-                    if phase=="released" { let _ = captured.as_object_mut().unwrap().insert("write".into(),attempt(tx.update_user(&user_id,UpdateUser{name:Some("Sender mutation".into()),..Default::default()}).await.map(Some))); }
+                    if phase=="released" { let _ = captured.as_object_mut().unwrap().insert("write".into(),attempt(tx.update_user(&user_id,UpdateUser{name:Some("Sender mutation".into()).into(),..Default::default()}).await.map(Some))); }
                     state.phases.lock().unwrap().push(captured);
                     if phase=="start" { state.entered.notify_one(); }
                 }
@@ -230,7 +230,7 @@ async fn run<S: AuthSchema>(
         AuthBuilder::new(config)
             .store_arc(store)
             .rate_limit(better_auth_core::middleware::RateLimitConfig {
-                enabled: false,
+                enabled: Some(false),
                 ..Default::default()
             })
             .plugin(InstallHooks(hooks))
@@ -378,7 +378,7 @@ fn config() -> AuthConfig {
     let mut config =
         AuthConfig::new("background-transaction-secret-at-least-thirty-two-characters")
             .base_url("http://localhost:3000");
-    config.logger.disabled = true;
+    config.logger.disabled = Some(true);
     config
 }
 #[tokio::test]

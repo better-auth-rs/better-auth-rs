@@ -20,7 +20,7 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
         VersionedSecret::new(2, CURRENT),
         VersionedSecret::new(1, PREVIOUS),
     ]);
-    config.account.encrypt_oauth_tokens = true;
+    config.account.encrypt_oauth_tokens = Some(true);
     config.account.store_account_cookie = Some(true);
     if profile == "crypto-cookie" {
         config.account.store_state_strategy = Some(better_auth::config::OAuthStateStrategy::Cookie);
@@ -51,7 +51,7 @@ expires_at: (Utc::now() + Duration::minutes(10)).into(),
                 let user = store.create_user(CreateUser {
                     id: Some(body["id"].as_str().unwrap().into()),
                     email: Some(body["email"].as_str().unwrap().into()),
-                    name: Some("Cookie transfer".into()),
+                    name: Some("Cookie transfer".into()).into(),
                     email_verified: Some(true),
                     ..Default::default()
                 }).await.unwrap();

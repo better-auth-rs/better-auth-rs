@@ -21,7 +21,7 @@ pub struct SchemaConfiguration {
 
 impl SchemaConfiguration {
     pub fn database_sessions(&self) -> bool {
-        !self.secondary_storage || self.config.session.store_session_in_database
+        !self.secondary_storage || self.config.session.store_session_in_database()
     }
 
     pub fn database_verifications(&self) -> bool {

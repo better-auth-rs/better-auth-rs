@@ -80,8 +80,10 @@ pub trait LogSink: Send + Sync {
 /// Per-auth logger policy. The default sink emits Rust tracing events.
 #[derive(Clone, Default)]
 pub struct LoggerConfig {
-    pub disabled: bool,
-    pub level: LogLevel,
+    /// Omission keeps logging enabled without reporting an explicit telemetry option.
+    pub disabled: Option<bool>,
+    /// Omission uses the warning threshold.
+    pub level: Option<LogLevel>,
     /// Control the default message renderer. Custom sinks receive unformatted messages.
     pub disable_colors: Option<bool>,
     pub log: Option<Arc<dyn LogSink>>,
@@ -100,7 +102,7 @@ impl fmt::Debug for LoggerConfig {
 
 impl LoggerConfig {
     pub fn enabled(&self, level: LogLevel) -> bool {
-        !self.disabled && level >= self.level
+        !self.disabled.unwrap_or(false) && level >= self.level.unwrap_or_default()
     }
 
     pub fn log<'a>(
@@ -210,11 +212,12 @@ mod tests {
         ];
         let structured = serde_json::json!({"value": 1});
         let tail = Value::String("tail".into());
-        for level in levels {
-            for disabled in [false, true] {
+        for configured_level in [None].into_iter().chain(levels.map(Some)) {
+            let level = configured_level.unwrap_or_default();
+            for disabled in [None, Some(false), Some(true)] {
                 let sink = Arc::new(Capture::default());
                 let logger = LoggerConfig {
-                    level,
+                    level: configured_level,
                     disabled,
                     log: Some(sink.clone()),
                     disable_colors: Some(false),
@@ -228,7 +231,7 @@ mod tests {
                 }
                 let expected: Vec<_> = levels
                     .into_iter()
-                    .filter(|event| !disabled && *event >= level)
+                    .filter(|event| !disabled.unwrap_or(false) && *event >= level)
                     .map(|event| {
                         (
                             if event == LogLevel::Success {

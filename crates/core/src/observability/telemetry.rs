@@ -1,3 +1,8 @@
+mod options;
+pub use options::{
+    EmailPasswordTelemetry, EmailVerificationTelemetry, PasswordTelemetry, PluginTelemetry,
+};
+
 use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;

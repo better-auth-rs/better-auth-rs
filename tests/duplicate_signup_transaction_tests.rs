@@ -95,7 +95,7 @@ async fn duplicate_notification_uses_signup_transaction_and_preserves_after_comm
         let mut config =
             AuthConfig::new("duplicate-transaction-contract-secret-longer-than-thirty-two")
                 .base_url("http://localhost:3000");
-        config.logger.level = LogLevel::Error;
+        config.logger.level = Some(LogLevel::Error);
         config.logger.log = Some(events.clone());
         let db = Database::connect("sqlite::memory:").await.unwrap();
         migrator::run_migrations(&db).await.unwrap();

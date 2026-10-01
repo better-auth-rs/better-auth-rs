@@ -30,6 +30,7 @@ pub(super) fn generate(
         })
         .transpose()?;
     let mut columns = Vec::new();
+    let mut references = Vec::new();
     let mut serialized_columns = Vec::new();
     let mut core_columns = Vec::new();
     let mut core_names = Vec::new();
@@ -69,7 +70,14 @@ pub(super) fn generate(
         } else {
             core_names.push(quote!(Column::#column => None,));
         }
-        assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),));
+        let reference = identity::is_reference(role, field)?;
+        references.push(quote!(Column::#column => #reference,));
+        let decoded = if name == "id" || reference {
+            identity::decode(field, core_root)
+        } else {
+            quote!(#core_root::serde_json::from_value(value)?)
+        };
+        assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
         if is_core {
             if name == "member_count" {
                 continue;
@@ -80,7 +88,9 @@ pub(super) fn generate(
             }
             if role == EntityRole::TeamMember {
                 output.push(if matches!(name.as_str(), "id" | "team_id") {
-                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_owned()))
+                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
+                } else if name == "user_id" {
+                    quote!(#ident: self.#ident.to_string())
                 } else {
                     quote!(#ident: self.#ident.to_owned())
                 });
@@ -89,7 +99,7 @@ pub(super) fn generate(
             if name == "id" {
                 output_values.push(quote!(let _ = projected.remove(#public_name);));
                 output.push(if name == "id" {
-                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_owned()))
+                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
                 } else {
                     quote!(#ident: self.#ident.to_owned())
                 });
@@ -134,9 +144,20 @@ pub(super) fn generate(
                     };
                 });
             } else {
-                output_values.push(quote! {
-                    let #ident = #core_root::SchemaValue::from_json(projected.remove(#public_name));
+                let reference = reference.then(|| quote! {
+                    if !fields.additional_fields.contains_key(#public_name) {
+                        if let Some(value) = value.as_mut().filter(|value| !value.is_null()) {
+                            *value = #core_root::serde_json::Value::String(#core_root::SchemaValue::<String>::from_json(Some(value.clone())).display_string()?);
+                        }
+                    }
                 });
+                output_values.push(if reference.is_some() { quote! {
+                    let mut value = projected.remove(#public_name);
+                    #reference
+                    let #ident = #core_root::SchemaValue::from_json(value);
+                }} else { quote! {
+                    let #ident = #core_root::SchemaValue::from_json(projected.remove(#public_name));
+                }});
             }
             output.push(quote!(#ident));
         }
@@ -196,6 +217,9 @@ pub(super) fn generate(
             fn record(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<Self::Record> {
                 #projection
                 Ok(#core_root::#record { #(#output,)* #extras })
+            }
+            fn is_id_reference(column: &Column) -> bool {
+                match column { #(#references)* }
             }
             fn apply_fields(active: &mut ActiveModel, fields: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {

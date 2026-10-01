@@ -5,6 +5,7 @@ use chrono::Duration;
 impl AuthConfig {
     /// Resolve omitted storage-dependent settings before plugin initialization.
     pub fn resolve_storage_defaults(&mut self, capabilities: StoreCapabilities) {
+        let session_expires_in = self.session.expires_in();
         let _ = self
             .account
             .store_account_cookie
@@ -23,7 +24,7 @@ impl AuthConfig {
                 .cookie_cache
                 .get_or_insert_with(Default::default);
             let _ = cache.enabled.get_or_insert(true);
-            let _ = cache.max_age.get_or_insert(self.session.expires_in);
+            let _ = cache.max_age.get_or_insert(session_expires_in);
             let _ = cache.strategy.get_or_insert(CookieCacheStrategy::Jwe);
             let _ = cache.refresh.get_or_insert(CookieCacheRefresh::Enabled);
         }
@@ -54,7 +55,7 @@ mod tests {
     #[test]
     fn stateless_defaults_respect_each_explicit_override() {
         let mut config = AuthConfig::new("test-secret-min-32-chars-123456789");
-        config.session.expires_in = Duration::hours(2);
+        config.session.expires_in = Some(Duration::hours(2));
         config.resolve_storage_defaults(StoreCapabilities {
             database: false,
             secondary: false,
@@ -91,7 +92,7 @@ mod tests {
         let cache = explicit.session.cookie_cache.as_ref().unwrap();
         assert!(!cache.enabled());
         assert_eq!(cache.strategy(), CookieCacheStrategy::Compact);
-        assert_eq!(cache.max_age(), explicit.session.expires_in);
+        assert_eq!(cache.max_age(), explicit.session.expires_in());
         assert_eq!(cache.refresh_age(), None);
     }
 

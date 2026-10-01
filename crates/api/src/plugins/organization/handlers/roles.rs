@@ -182,10 +182,12 @@ async fn unused_name(
     if predefined(name, config)
         || ctx
             .database
-            .list_organization_roles(organization_id)
+            .find_organization_role(
+                organization_id,
+                better_auth_core::store::OrganizationRoleKey::Name(name),
+            )
             .await?
-            .iter()
-            .any(|role| role.role == name)
+            .is_some()
     {
         return Err(AuthError::Upstream {
             status: 400,
@@ -244,27 +246,27 @@ async fn select_role(
     organization_id: &str,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<OrganizationRole> {
-    let role = ctx
-        .database
-        .list_organization_roles(organization_id)
-        .await?
-        .into_iter()
-        .find(|role| {
-            if let Some(name) = selector
-                .role_name
-                .as_deref()
-                .filter(|name| !name.is_empty())
-            {
-                role.role == name
-            } else {
-                selector.role_id.as_ref().is_some_and(|id| role.id == *id)
-            }
-        });
-    role.ok_or(AuthError::Upstream {
+    use better_auth_core::store::OrganizationRoleKey;
+    let missing = || AuthError::Upstream {
         status: 400,
         code: "ROLE_NOT_FOUND",
         message: "Role not found",
-    })
+    };
+    let key = if let Some(name) = selector
+        .role_name
+        .as_deref()
+        .filter(|name| !name.is_empty())
+    {
+        OrganizationRoleKey::Name(name)
+    } else if let Some(id) = selector.role_id.as_deref() {
+        OrganizationRoleKey::Id(id)
+    } else {
+        return Err(missing());
+    };
+    ctx.database
+        .find_organization_role(organization_id, key)
+        .await?
+        .ok_or_else(missing)
 }
 
 async fn validate_permissions(
@@ -372,10 +374,9 @@ pub async fn handle_role_request(
             let maximum = config.role_limit(&organization_id).await?;
             let count = ctx
                 .database
-                .list_organization_roles(&organization_id)
-                .await?
-                .len();
-            if maximum.is_some_and(|limit| count >= limit) {
+                .count_organization_roles(&organization_id)
+                .await?;
+            if maximum.is_some_and(|limit| count >= limit as u64) {
                 return Err(AuthError::Upstream {
                     status: 400,
                     code: "TOO_MANY_ROLES",
@@ -637,6 +638,7 @@ mod tests {
         let (user, session) = create_user_and_session(
             &ctx,
             CreateUser {
+                name: Some("Fixture".into()).into(),
                 email: Some("role-admin@example.com".into()),
                 ..Default::default()
             },

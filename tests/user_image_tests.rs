@@ -95,8 +95,10 @@ async fn check_image<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: ImageHo
     ] {
         hooks.events.lock().unwrap().clear();
         hooks.reject.store(false, Ordering::SeqCst);
-        let mut create = CreateUser::new().with_email(format!("{label}@example.test"));
-        create.image = input.clone();
+        let mut create = CreateUser::new()
+            .with_email(format!("{label}@example.test"))
+            .with_name("Image user");
+        create.image = input.clone().map(Into::into).unwrap_or_default();
         let before = image(&create);
         let initial = if sqlite && input.is_none() {
             json!({"image": null})
@@ -110,7 +112,7 @@ async fn check_image<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: ImageHo
             .update_user(
                 id.typed().unwrap(),
                 UpdateUser {
-                    name: Some("Renamed".into()),
+                    name: Some("Renamed".into()).into(),
                     ..Default::default()
                 },
             )
@@ -130,7 +132,7 @@ async fn check_image<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, hooks: ImageHo
             .update_user(
                 id.typed().unwrap(),
                 UpdateUser {
-                    image: Some(Some(FIRST.into())),
+                    image: Some(FIRST.into()).into(),
                     ..Default::default()
                 },
             )

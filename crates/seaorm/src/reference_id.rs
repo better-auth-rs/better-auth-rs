@@ -1,4 +1,4 @@
-//! Preserve scalar database bindings for fields that reference a text ID.
+//! Bind declared ID references through the configured generation policy and storage type.
 
 use sea_orm::sea_query::{ArrayType, ColumnType, Nullable, Value, ValueType, ValueTypeErr};
 use sea_orm::{ColIdx, QueryResult, TryGetError, TryGetable};
@@ -25,6 +25,40 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
         backend == sea_orm::DbBackend::Postgres,
         native_json_field(name),
     ))
+}
+
+/// Apply Serial conversion after field transforms and before typed model decoding.
+pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
+    fields: &mut serde_json::Map<String, serde_json::Value>,
+    policy: &better_auth_core::id::IdGeneration,
+    config: Option<&better_auth_core::user_fields::UserConfig>,
+    column: impl Fn(&str) -> better_auth_core::AuthResult<C>,
+    is_reference: impl Fn(&C) -> bool,
+) -> better_auth_core::AuthResult<()> {
+    if !matches!(policy, better_auth_core::id::IdGeneration::Serial) {
+        return Ok(());
+    }
+    for (name, value) in fields {
+        let column = column(name)?;
+        let configured = config.and_then(|config| {
+            config
+                .additional_fields
+                .iter()
+                .find_map(|(logical, field)| {
+                    (field.field_name.as_deref().unwrap_or(logical) == name).then_some(field)
+                })
+        });
+        if name == "id"
+            || configured.map_or_else(|| is_reference(&column), |field| field.references_id())
+        {
+            let text = matches!(
+                column.def().get_column_type(),
+                ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
+            );
+            *value = serial_reference(value.take(), text)?;
+        }
+    }
+    Ok(())
 }
 
 fn serial_reference(
@@ -94,6 +128,14 @@ pub enum ReferenceId {
     Real(f64),
     /// A boolean binding for adapters with native boolean support.
     Boolean(bool),
+}
+
+impl std::str::FromStr for ReferenceId {
+    type Err = std::convert::Infallible;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self::Text(value.to_owned()))
+    }
 }
 
 impl<'de> Deserialize<'de> for ReferenceId {

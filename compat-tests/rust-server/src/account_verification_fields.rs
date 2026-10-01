@@ -361,8 +361,8 @@ impl Fixture {
         config.verification.additional_fields =
             policy("verification", &state).into_iter().collect();
         config.verification.store_in_database = mode != "cache";
-        config.verification.disable_cleanup = true;
-        config.session.store_session_in_database = true;
+        config.verification.disable_cleanup = Some(true);
+        config.session.store_session_in_database = Some(true);
         let store =
             SeaOrmStore::<Schema>::new(config.clone(), db.clone()).hook(Hooks(state.clone()));
         let mut builder = AuthBuilder::<Schema>::new(config)

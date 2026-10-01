@@ -13,9 +13,9 @@ async fn builder_binds_distinct_id_policies_to_shared_storage_without_plugins() 
         let mut config = AuthConfig::new("builder-id-policy-secret-at-least-thirty-two-characters")
             .base_url("http://localhost:3000");
         config.advanced.database.generate_id =
-            IdGeneration::Custom(IdGenerator::new(move |request| {
+            Some(IdGeneration::Custom(IdGenerator::new(move |request| {
                 Ok(Some(format!("{prefix}-{}", request.model)))
-            }));
+            })));
         instances.push(
             AuthBuilder::new(config)
                 .store_arc(store.clone())

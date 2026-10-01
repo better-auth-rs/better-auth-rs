@@ -350,10 +350,10 @@ async fn run(input: Input) -> AuthResult<Value> {
     config.advanced.cross_sub_domain_cookies = input
         .cross_subdomain
         .unwrap_or(false)
-        .then_some(better_auth_core::CrossSubDomainConfig { domain: None });
+        .then_some(better_auth_core::CrossSubDomainConfig { enabled: Some(true), ..Default::default() });
     config.advanced.default_cookie_attributes.domain = input.default_cookie_domain;
     if let Some(domain) = input.session_cookie_domain {
-        config.advanced.cookies.insert(
+        config.advanced.cookies.get_or_insert_default().insert(
             "session_token".into(),
             better_auth_core::CookieOverride {
                 name: None,

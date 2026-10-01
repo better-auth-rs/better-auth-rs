@@ -14,7 +14,9 @@ fn verify_request(token: &str) -> AuthRequest {
 #[tokio::test]
 async fn concurrent_redemption_issues_one_cookie_and_expired_proofs_cannot_authenticate() {
     let (ctx, user, session) = create_test_context_with_user(
-        CreateUser::new().with_email("transfer@example.com"),
+        CreateUser::new()
+            .with_email("transfer@example.com")
+            .with_name("Fixture"),
         Duration::hours(1),
     )
     .await;

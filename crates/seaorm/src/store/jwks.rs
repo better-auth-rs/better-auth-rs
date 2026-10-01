@@ -1,12 +1,11 @@
+use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use better_auth_core::{AuthResult, CreateJwk, Jwk, store::JwksStore};
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
-};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 use serde_json::{Map, json};
 
 use super::{SeaOrmStore, entities::jwk, map_db_err};
@@ -87,7 +86,7 @@ async fn get<P: crate::SeaOrmPluginSchema>(
 ) -> AuthResult<Option<Jwk>> {
     database_operation::<Entity<P::Jwk>, _>(config, "findOne", async {
         Entity::<P::Jwk>::find()
-            .filter(P::Jwk::column("id")?.eq(id))
+            .filter(P::Jwk::column("id")?.eq_id(id, config.advanced.database.generate_id())?)
             .one(connection)
             .await
             .map_err(map_db_err)
@@ -129,18 +128,21 @@ impl<
         connection: &impl ConnectionTrait,
         input: CreateJwk,
     ) -> AuthResult<Jwk> {
-        let active = P::Jwk::active(self.create_fields(
-            "jwks",
-            None,
-            Map::from_iter([
-                ("public_key".to_owned(), json!(input.public_key)),
-                ("private_key".to_owned(), json!(input.private_key)),
-                ("created_at".to_owned(), json!(Utc::now())),
-                ("expires_at".to_owned(), json!(input.expires_at)),
-                ("alg".to_owned(), json!(Some(input.alg))),
-                ("crv".to_owned(), json!(input.crv)),
-            ]),
-        )?)?;
+        let active = super::plugin_models::active::<P::Jwk>(
+            self.create_fields(
+                "jwks",
+                None,
+                Map::from_iter([
+                    ("public_key".to_owned(), json!(input.public_key)),
+                    ("private_key".to_owned(), json!(input.private_key)),
+                    ("created_at".to_owned(), json!(Utc::now())),
+                    ("expires_at".to_owned(), json!(input.expires_at)),
+                    ("alg".to_owned(), json!(Some(input.alg))),
+                    ("crv".to_owned(), json!(input.crv)),
+                ]),
+            )?,
+            self.config().advanced.database.generate_id(),
+        )?;
         database_operation::<Entity<P::Jwk>, _>(self.config(), "create", async {
             active.insert(connection).await.map_err(map_db_err)
         })

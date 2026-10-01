@@ -568,7 +568,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                             .update_user(
                                 input["id"].as_str().unwrap(),
                                 better_auth_core::UpdateUser {
-                                    name: Some(input["name"].as_str().unwrap().to_owned()),
+                                    name: Some(input["name"].as_str().unwrap().to_owned()).into(),
                                     ..Default::default()
                                 },
                             )

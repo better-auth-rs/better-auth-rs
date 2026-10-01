@@ -162,10 +162,10 @@ impl IpAddressConfig {
 
     /// Resolve configured headers, with the upstream dev/test localhost fallback.
     pub fn resolve(&self, request: &AuthRequest) -> Option<String> {
-        if self.disable_ip_tracking {
+        if self.disable_ip_tracking() {
             return None;
         }
-        for name in &self.headers {
+        for name in self.headers() {
             if let Some((_, value)) = request
                 .headers
                 .iter()

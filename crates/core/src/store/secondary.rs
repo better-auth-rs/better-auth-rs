@@ -79,7 +79,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
     }
 
     fn database_sessions(&self) -> bool {
-        self.storage.is_none() || self.config.session.store_session_in_database
+        self.storage.is_none() || self.config.session.store_session_in_database()
     }
 
     fn database_verifications(&self) -> bool {

@@ -79,9 +79,9 @@ use chrono::Duration;
 
 let mut config = AuthConfig::new("secret...")
     .base_url("https://auth.example.com");
-config.session.expires_in = Duration::days(7);
+config.session.expires_in = Some(Duration::days(7));
 config.session.update_age = Some(Duration::days(1));
-config.session.disable_session_refresh = false;
+config.session.disable_session_refresh = Some(false);
 config.session.defer_session_refresh = false;
 config.session.fresh_age = Some(Duration::minutes(10));
 config.advanced.cookie_prefix = Some("better-auth".into());
@@ -91,8 +91,8 @@ config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax);
 ```
 
 - `update_age = Some(duration)`: refresh when the remaining lifetime falls below `expires_in - duration`.
-- `update_age = None`: each database read can refresh the session.
-- `disable_session_refresh = true`: never refresh automatically.
+- `update_age = None`: use the one-day default. Use `Some(Duration::zero())` to refresh on every authoritative read.
+- `disable_session_refresh = Some(true)`: never refresh automatically.
 - `defer_session_refresh = true`: `GET /get-session` reports `needsRefresh` without updating the stored expiry. `POST /get-session` performs the refresh.
 - `fresh_age`: optional window for treating a session as "fresh" for sensitive actions.
 
@@ -100,7 +100,7 @@ A `disableRefresh=true` query parameter prevents refresh for the request. Sessio
 
 ## Secondary Storage
 
-`BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = true` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = true` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.
+`BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = Some(true)` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = Some(true)` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.
 
 Session creation publishes its cache snapshot immediately by default. Explicitly deferred transaction creation, used by Passkey registration, publishes after commit; rollback discards that deferred write. User updates through the authentication store refresh cached user snapshots. See [Secondary Storage](/docs/concepts/secondary-storage) for backend methods, atomic verification consumption, and model hydration requirements.
 

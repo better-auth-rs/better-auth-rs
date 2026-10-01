@@ -9,7 +9,7 @@ Install a shared backend with `BetterAuth::secondary_storage`. `MemoryCacheAdapt
 use std::sync::Arc;
 use better_auth::store::MemoryCacheAdapter;
 
-config.session.store_session_in_database = true;
+config.session.store_session_in_database = Some(true);
 config.verification.store_in_database = true;
 
 let auth = BetterAuth::<AppAuthSchema>::new(config)

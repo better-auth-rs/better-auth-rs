@@ -150,9 +150,9 @@ async fn multi_session_query_order_limits_expiration_and_cache_match_upstream() 
         serde_json::from_str(include_str!("fixtures/multi-session-query-upstream.json"))?;
     for case in cases {
         let mut config = AuthConfig::new(SECRET).base_url("http://multi.test");
-        config.logger.disabled = true;
+        config.logger.disabled = Some(true);
         config.advanced.database.default_find_many_limit = case["limit"].as_f64();
-        config.session.store_session_in_database = true;
+        config.session.store_session_in_database = Some(true);
         let actual = if case["backend"] == "sqlite" {
             let database = Database::connect("sqlite::memory:")
                 .await

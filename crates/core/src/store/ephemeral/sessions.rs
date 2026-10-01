@@ -5,19 +5,38 @@ use better_auth_schema_registry::EntityRole;
 use serde_json::{Map, json};
 
 impl EphemeralStore {
-    pub(super) fn output_session(&self, mut session: SessionView) -> AuthResult<SessionView> {
-        let mut output = Map::new();
-        for (name, field) in &self.session_config.additional_fields {
-            let value = session
-                .additional_fields
-                .get(field.field_name.as_ref().unwrap_or(name))
-                .cloned();
-            if let Some(value) = field.adapter_output(value, true)? {
-                let _ = output.insert(name.clone(), value);
-            }
-        }
-        session.additional_fields = output;
-        Ok(session)
+    pub(super) fn output_session(&self, session: SessionView) -> AuthResult<SessionView> {
+        // Projection preserves the one input row.
+        Ok(self.output_sessions(vec![session])?.remove(0))
+    }
+
+    pub(super) fn output_sessions(
+        &self,
+        sessions: Vec<SessionView>,
+    ) -> AuthResult<Vec<SessionView>> {
+        let mut rows: Vec<_> = sessions
+            .into_iter()
+            .map(|mut session| {
+                let storage: Map<String, serde_json::Value> = session.clone().into();
+                session.additional_fields.clear();
+                (session, storage)
+            })
+            .collect();
+        crate::user_fields::project_fields(
+            &mut rows,
+            &self.session_config.additional_fields,
+            |(session, storage), name, field| {
+                let value = storage
+                    .get(field.field_name.as_deref().unwrap_or(name))
+                    .or_else(|| storage.get(name))
+                    .cloned();
+                if let Some(value) = field.adapter_output(value, true)? {
+                    let _ = session.additional_fields.insert(name.to_owned(), value);
+                }
+                Ok(())
+            },
+        )?;
+        Ok(rows.into_iter().map(|(session, _)| session).collect())
     }
 }
 
@@ -418,10 +437,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        sessions
+        Ok(self
+            .output_sessions(sessions)?
             .into_iter()
-            .map(|session| self.output_session(session).map(|session| (session, None)))
-            .collect()
+            .map(|session| (session, None))
+            .collect())
     }
 
     async fn update_session_fields(
@@ -455,10 +475,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        sessions
-            .into_iter()
-            .map(|session| self.output_session(session))
-            .collect()
+        self.output_sessions(sessions)
     }
 
     async fn update_session_expiry(

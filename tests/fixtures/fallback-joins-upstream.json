@@ -1,0 +1,218 @@
+[
+  {
+    "backend": "memory",
+    "limit": null,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice",
+      "account:alice-0",
+      "account:alice-1",
+      "account:alice-2"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [
+      "alice-0",
+      "alice-1",
+      "alice-2"
+    ],
+    "sessions": [
+      "alice",
+      "bob"
+    ],
+    "batchEvents": [
+      "session:alice",
+      "session:bob",
+      "user:alice",
+      "user:bob"
+    ]
+  },
+  {
+    "backend": "memory",
+    "limit": 0,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [],
+    "sessions": [],
+    "batchEvents": []
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice",
+      "account:alice-0"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [
+      "alice-0"
+    ],
+    "sessions": [
+      "alice"
+    ],
+    "batchEvents": [
+      "session:alice",
+      "user:alice"
+    ]
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice",
+      "account:alice-0",
+      "account:alice-1"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [
+      "alice-0",
+      "alice-1"
+    ],
+    "sessions": [
+      "alice",
+      "bob"
+    ],
+    "batchEvents": [
+      "session:alice",
+      "session:bob",
+      "user:alice",
+      "user:bob"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "limit": null,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice",
+      "account:alice-0",
+      "account:alice-1",
+      "account:alice-2"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [
+      "alice-0",
+      "alice-1",
+      "alice-2"
+    ],
+    "sessions": [
+      "alice",
+      "bob"
+    ],
+    "batchEvents": [
+      "session:alice",
+      "session:bob",
+      "user:alice",
+      "user:bob"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "limit": 0,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [],
+    "sessions": [],
+    "batchEvents": []
+  },
+  {
+    "backend": "sqlite",
+    "limit": 1,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice",
+      "account:alice-0"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [
+      "alice-0"
+    ],
+    "sessions": [
+      "alice"
+    ],
+    "batchEvents": [
+      "session:alice",
+      "user:alice"
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "limit": 2,
+    "ownerEvents": [
+      "account:alice-1",
+      "user:alice"
+    ],
+    "userEvents": [
+      "user:alice",
+      "account:alice-0",
+      "account:alice-1"
+    ],
+    "sessionEvents": [
+      "session:alice",
+      "user:alice"
+    ],
+    "accounts": [
+      "alice-0",
+      "alice-1"
+    ],
+    "sessions": [
+      "alice",
+      "bob"
+    ],
+    "batchEvents": [
+      "session:alice",
+      "session:bob",
+      "user:alice",
+      "user:bob"
+    ]
+  }
+]

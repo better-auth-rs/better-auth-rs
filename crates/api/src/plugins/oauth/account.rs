@@ -161,7 +161,7 @@ fn decrypt_value(
     value: &SchemaValue<Option<String>>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SchemaValue<Option<String>>> {
-    if !ctx.config.account.encrypt_oauth_tokens || !value.is_truthy()? {
+    if !ctx.config.account.encrypt_oauth_tokens() || !value.is_truthy()? {
         return Ok(value.clone());
     }
     Ok(maybe_decrypt(

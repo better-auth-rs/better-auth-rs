@@ -90,7 +90,7 @@ impl EphemeralStore {
         row_count: usize,
     ) -> AuthResult<Option<String>> {
         if matches!(
-            self.config.advanced.database.generate_id,
+            self.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
         ) {
             return Ok(Some((row_count + 1).to_string()));
@@ -98,7 +98,7 @@ impl EphemeralStore {
         self.config
             .advanced
             .database
-            .generate_id
+            .generate_id()
             .adapter_id(model, supplied, false)
     }
 

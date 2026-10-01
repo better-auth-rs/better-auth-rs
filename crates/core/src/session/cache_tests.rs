@@ -478,7 +478,7 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
 #[tokio::test]
 async fn large_cache_chunks_are_read_and_cleared_after_revocation() {
     let (manager, mut data) = setup(config(CookieCacheStrategy::Jwe)).await;
-    data.user.name = Some("name".repeat(3000));
+    data.user.name = Some("name".repeat(3000)).into();
     let req = request(&data.session.token, &manager.config);
     manager.write_cache(&req, &data, false).await.unwrap();
     let headers = req.take_response_headers().unwrap();

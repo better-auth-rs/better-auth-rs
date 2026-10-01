@@ -246,13 +246,10 @@ pub struct CreateUser {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub id: Option<String>,
     pub email: Option<String>,
-    pub name: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_nullable_update"
-    )]
-    pub image: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub name: crate::SchemaValue<Option<String>>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub image: crate::SchemaValue<Option<String>>,
     pub email_verified: Option<bool>,
     #[serde(
         default,
@@ -283,13 +280,10 @@ pub struct UpdateUser {
     #[serde(default)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub email: Option<String>,
-    pub name: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_nullable_update"
-    )]
-    pub image: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub name: crate::SchemaValue<Option<String>>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub image: crate::SchemaValue<Option<String>>,
     pub email_verified: Option<bool>,
     #[serde(
         default,
@@ -360,11 +354,11 @@ impl CreateUser {
             additional_fields: Default::default(),
             id: None,
             email: None,
-            name: None,
-            image: None,
+            name: Default::default(),
+            image: Default::default(),
             email_verified: None,
-            username: None,
-            display_username: None,
+            username: Default::default(),
+            display_username: Default::default(),
             is_anonymous: None,
             phone_number: None,
             phone_number_verified: None,
@@ -382,7 +376,7 @@ impl CreateUser {
     }
 
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
-        self.name = Some(name.into());
+        self.name = Some(name.into()).into();
         self
     }
 
@@ -826,15 +820,12 @@ impl AuthResponse {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateUserRequest {
-    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub name: crate::SchemaValue<Option<String>>,
     #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_nullable_update"
-    )]
-    pub image: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    pub image: crate::SchemaValue<Option<String>>,
     pub role: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
@@ -1105,7 +1096,7 @@ mod tests {
         let mut req = AuthRequest::new(HttpMethod::Get, "/test");
         let _ = req.headers.insert("x-real-ip".into(), "5.6.7.8".into());
         let config = crate::config::IpAddressConfig {
-            headers: vec!["x-real-ip".into()],
+            headers: Some(vec!["x-real-ip".into()]),
             ..Default::default()
         };
         let meta = RequestMeta::from_request_with_config(&req, &config);
@@ -1136,7 +1127,7 @@ mod tests {
 
         assert!(cu.id.is_none()); // ID generation is delegated to the model/store path
         assert_eq!(cu.email.as_deref(), Some("test@example.com"));
-        assert_eq!(cu.name.as_deref(), Some("Test"));
+        assert_eq!(cu.name.typed().unwrap().as_deref(), Some("Test"));
         assert_eq!(cu.email_verified, Some(true));
         assert_eq!(
             cu.username.as_ref().and_then(Option::as_deref),

@@ -58,11 +58,7 @@ pub(crate) async fn request_password_reset_core(
     };
 
     let reset_token = Uuid::new_v4().simple().to_string();
-    let expires_in = if config.reset_password_token_expires_in == 0 {
-        3600
-    } else {
-        config.reset_password_token_expires_in
-    };
+    let expires_in = config.reset_password_token_expires_in();
     let expires_at = Utc::now()
         .checked_add_signed(
             Duration::try_seconds(expires_in)

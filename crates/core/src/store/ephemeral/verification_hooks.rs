@@ -86,11 +86,7 @@ impl EphemeralStore {
             )
             .await?;
         // Single and batch delete both catch snapshot output errors; only batch still deletes on an empty snapshot.
-        let rows = rows
-            .iter()
-            .map(|row| self.output_verification(row))
-            .collect::<AuthResult<Vec<_>>>()
-            .unwrap_or_default();
+        let rows = self.output_verifications(&rows).unwrap_or_default();
         if !many && rows.is_empty() {
             return Ok(0);
         }

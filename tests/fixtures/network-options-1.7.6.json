@@ -1,0 +1,145 @@
+{
+  "omitted": {
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "cookie": {
+      "name": "__Secure-better-auth.session_token",
+      "path": "/",
+      "domain": null
+    },
+    "ip": "192.0.2.1"
+  },
+  "empty": {
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": true,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "cookie": {
+      "name": "__Secure-better-auth.session_token",
+      "path": "/",
+      "domain": null
+    },
+    "ip": "192.0.2.1"
+  },
+  "defaults": {
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": true,
+      "crossSubDomainCookies": {
+        "domain": false,
+        "enabled": false,
+        "additionalCookies": []
+      },
+      "database": {},
+      "ipAddress": {
+        "disableIpTracking": false,
+        "ipAddressHeaders": [
+          "x-forwarded-for"
+        ]
+      },
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "cookie": {
+      "name": "__Secure-better-auth.session_token",
+      "path": "/",
+      "domain": null
+    },
+    "ip": "192.0.2.1"
+  },
+  "values": {
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": true,
+      "crossSubDomainCookies": {
+        "domain": true,
+        "enabled": true,
+        "additionalCookies": [
+          "custom"
+        ]
+      },
+      "database": {},
+      "ipAddress": {
+        "disableIpTracking": true,
+        "ipAddressHeaders": []
+      },
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "cookie": {
+      "name": "__Secure-session.custom",
+      "path": "/auth",
+      "domain": "parent.test"
+    },
+    "ip": null
+  },
+  "headerOrder": {
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false,
+        "enabled": true
+      },
+      "database": {},
+      "ipAddress": {
+        "ipAddressHeaders": [
+          "x-real-ip",
+          "x-forwarded-for"
+        ]
+      },
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "cookie": {
+      "name": "__Secure-better-auth.session_token",
+      "path": "/",
+      "domain": "example.test"
+    },
+    "ip": "192.0.2.2"
+  },
+  "emptyHeaders": {
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": true,
+        "enabled": false
+      },
+      "database": {},
+      "ipAddress": {
+        "ipAddressHeaders": []
+      },
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "cookie": {
+      "name": "__Secure-better-auth.session_token",
+      "path": "/",
+      "domain": null
+    },
+    "ip": null
+  }
+}

@@ -8,9 +8,9 @@ impl From<MemberUserView> for Map<String, Value> {
             let _ = fields.insert("id".into(), json!(user.id));
         }
         for (name, value) in [
-            ("email", user.email),
-            ("name", user.name),
-            ("image", user.image),
+            ("email", json!(user.email)),
+            ("name", json!(user.name)),
+            ("image", json!(user.image)),
         ] {
             if user
                 .visible_fields
@@ -33,8 +33,8 @@ impl TryFrom<Map<String, Value>> for MemberUserView {
             visible_fields,
             id: crate::SchemaValue::from_json(fields.remove("id")),
             email: serde_json::from_value(fields.remove("email").unwrap_or(Value::Null))?,
-            name: serde_json::from_value(fields.remove("name").unwrap_or(Value::Null))?,
-            image: serde_json::from_value(fields.remove("image").unwrap_or(Value::Null))?,
+            name: crate::SchemaValue::from_json(fields.remove("name")),
+            image: crate::SchemaValue::from_json(fields.remove("image")),
         })
     }
 }

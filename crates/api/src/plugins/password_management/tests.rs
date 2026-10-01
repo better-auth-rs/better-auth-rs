@@ -169,6 +169,72 @@ async fn test_request_password_reset_success() {
     assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
 }
 
+struct ResetTokenCapture(std::sync::Mutex<Option<String>>);
+#[async_trait::async_trait]
+impl SendResetPassword for ResetTokenCapture {
+    async fn send(&self, _: &serde_json::Value, _: &str, token: &str) -> AuthResult<()> {
+        *self
+            .0
+            .lock()
+            .map_err(|_| AuthError::internal("reset token capture poisoned"))? =
+            Some(token.to_owned());
+        Ok(())
+    }
+}
+
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "the test propagates setup failures and asserts persisted token expiry"
+)]
+async fn request_reset_persists_omitted_zero_and_explicit_lifetimes() -> AuthResult<()> {
+    let (ctx, _, _) = create_test_context_with_user().await;
+    for configured in [None, Some(0), Some(3600), Some(90)] {
+        let sender = Arc::new(ResetTokenCapture(std::sync::Mutex::new(None)));
+        let plugin = PasswordManagementPlugin::with_config(PasswordManagementConfig {
+            reset_password_token_expires_in: configured,
+            send_reset_password: Some(sender.clone()),
+            ..Default::default()
+        });
+        let req = test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            "/request-password-reset",
+            None,
+            Some(
+                serde_json::json!({"email": "test@example.com"})
+                    .to_string()
+                    .into_bytes(),
+            ),
+        );
+        let before = Utc::now();
+        assert_eq!(
+            plugin
+                .handle_request_password_reset(&req, &ctx)
+                .await?
+                .status,
+            200
+        );
+        let after = Utc::now();
+        let token = sender
+            .0
+            .lock()
+            .map_err(|_| AuthError::internal("reset token capture poisoned"))?
+            .clone()
+            .ok_or_else(|| AuthError::internal("reset sender did not receive a token"))?;
+        let stored = ctx
+            .database
+            .get_verification_by_identifier(&format!("reset-password:{token}"))
+            .await?
+            .ok_or_else(|| AuthError::internal("reset token was not persisted"))?;
+        let expected = Duration::seconds(if configured == Some(90) { 90 } else { 3600 });
+        let expires_at = stored.expires_at.typed()?;
+        // Adapter dates retain the upstream millisecond precision.
+        assert!(expires_at.timestamp_millis() >= (before + expected).timestamp_millis());
+        assert!(expires_at.timestamp_millis() <= (after + expected).timestamp_millis());
+    }
+    Ok(())
+}
+
 // Upstream reference: packages/better-auth/src/api/routes/password.test.ts :: describe("forget password") and packages/better-auth/src/api/routes/password.ts; adapted to the Rust password-management plugin.
 #[tokio::test]
 async fn test_request_password_reset_unknown_email() {
@@ -859,14 +925,14 @@ async fn test_plugin_on_request_routing() {
 #[tokio::test]
 async fn test_configuration() {
     let config = PasswordManagementConfig {
-        reset_password_token_expires_in: 172800,
+        reset_password_token_expires_in: Some(172800),
         require_current_password: false,
         send_email_notifications: false,
         ..Default::default()
     };
 
     let plugin = PasswordManagementPlugin::with_config(config);
-    assert_eq!(plugin.config.reset_password_token_expires_in, 172800);
+    assert_eq!(plugin.config.reset_password_token_expires_in(), 172800);
     assert!(!plugin.config.require_current_password);
     assert!(!plugin.config.send_email_notifications);
 }

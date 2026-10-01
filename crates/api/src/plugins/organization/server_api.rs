@@ -1,6 +1,10 @@
 use super::{OrganizationPlugin, hooks::*, types::RoleInput};
+use crate::plugins::endpoint_context::EndpointContext;
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, Member};
+mod native;
+mod store;
+pub use native::OrganizationApi;
 
 #[cfg(test)]
 #[path = "server_api_input_tests.rs"]
@@ -42,29 +46,32 @@ impl OrganizationPlugin {
         request: Option<&AuthRequest>,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Member> {
-        use super::input::BaseField;
-        let raw = serde_json::to_value(&input)?;
-        let validated = super::input::validate(
-            &self.config.schema.member,
-            raw.as_object()
-                .cloned()
-                .ok_or_else(|| AuthError::config("Member input must be an object"))?,
-            &[
-                ("userId", BaseField::CoercedString, true),
-                ("role", BaseField::Roles, true),
-                ("organizationId", BaseField::String, false),
-                ("teamId", BaseField::String, false),
-            ],
-        )?;
-        let input: AddMemberInput = serde_json::from_value(serde_json::Value::Object(validated))?;
+        let response = OrganizationApi::with_plugin(self.clone(), ctx)
+            .with_request(better_auth_core::NativeRequest {
+                request,
+                headers: request.map(|request| &request.headers),
+            })
+            .add_member(Some(serde_json::to_value(input)?))
+            .await?;
+        Ok(serde_json::from_value(response)?)
+    }
+
+    async fn add_member_core<S: AuthSchema>(
+        &self,
+        input: AddMemberInput,
+        request: &AuthRequest,
+        endpoint: &EndpointContext<'_, S>,
+    ) -> AuthResult<Member> {
+        let ctx = endpoint.auth;
+        let store = store::MemberAdapter::new(endpoint);
         let additional_fields = input.additional_fields.clone();
         let user_id = input
             .user_id
             .json()?
             .filter(better_auth_core::user_fields::is_truthy);
         // Upstream permits a supplied user ID even when session lookup fails.
-        let session = match (request, user_id.is_some()) {
-            (Some(request), true) => super::handlers::require_session(request, ctx).await.ok(),
+        let session = match user_id.is_some() {
+            true => super::handlers::require_session(request, ctx).await.ok(),
             _ => None,
         };
         let org_value = input
@@ -77,51 +84,78 @@ impl OrganizationPlugin {
                     .and_then(|(_, session)| session.active_organization_id())
                     .map(|id| serde_json::json!(id))
             })
-            .ok_or_else(|| AuthError::bad_request("No active organization"))?;
+            .ok_or(AuthError::Upstream {
+                status: 400,
+                code: "NO_ACTIVE_ORGANIZATION",
+                message: "No active organization",
+            })?;
         let team_value = input
             .team_id
             .json()?
             .filter(better_auth_core::user_fields::is_truthy);
         if team_value.is_some() && !self.config.teams.enabled {
-            return Err(AuthError::bad_request("Teams are not enabled"));
+            ctx.config.logger.error("Teams are not enabled", &[]);
+            return Err(better_auth_core::AuthResponse::json(
+                400,
+                &serde_json::json!({"message":"Teams are not enabled"}),
+            )?
+            .into());
         }
-        let user = ctx
-            .database
-            .get_user_by_id_value(&user_id.ok_or_else(|| AuthError::bad_request("User not found"))?)
+        let user = store
+            .get_user_by_id_value(&user_id.ok_or(AuthError::Upstream {
+                status: 400,
+                code: "USER_NOT_FOUND",
+                message: "User not found",
+            })?)
             .await?
-            .ok_or_else(|| AuthError::bad_request("User not found"))?;
+            .ok_or(AuthError::Upstream {
+                status: 400,
+                code: "USER_NOT_FOUND",
+                message: "User not found",
+            })?;
         if let Some(email) = user.email()
-            && let Some(existing) = ctx.database.get_user_by_email(email).await?
-            && ctx
-                .database
+            && let Some(existing) = store.get_user_by_email(email).await?
+            && store
                 .get_member_value(&org_value, &serde_json::json!(existing.id()))
                 .await?
                 .is_some()
         {
-            return Err(AuthError::bad_request(
-                "User is already a member of this organization",
-            ));
+            return Err(AuthError::Upstream {
+                status: 400,
+                code: "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION",
+                message: "User is already a member of this organization",
+            });
         }
         let team = if let Some(team_id) = &team_value {
-            let team = ctx
-                .database
+            let team = store
                 .get_team_value(team_id)
                 .await?
-                .ok_or_else(|| AuthError::bad_request("Team not found"))?;
+                .ok_or(AuthError::Upstream {
+                    status: 400,
+                    code: "TEAM_NOT_FOUND",
+                    message: "Team not found",
+                })?;
             if team.organization_id.json()?.as_ref() != Some(&org_value) {
-                return Err(AuthError::bad_request("Team not found"));
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "TEAM_NOT_FOUND",
+                    message: "Team not found",
+                });
             }
             Some(team)
         } else {
             None
         };
-        let organization = ctx
-            .database
+        let count = store.count_organization_members(&org_value).await?;
+        let organization = store
             .get_organization_by_id_value(&org_value)
             .await?
-            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+            .ok_or(AuthError::Upstream {
+                status: 400,
+                code: "ORGANIZATION_NOT_FOUND",
+                message: "Organization not found",
+            })?;
         let org_id = organization.id.typed()?.as_str();
-        let count = ctx.database.list_organization_members(org_id).await?.len();
         let organization_view =
             crate::plugins::organization::fields::organization(&organization, ctx);
         let user_view = ctx.internal_user_view(&user)?;
@@ -129,7 +163,7 @@ impl OrganizationPlugin {
             user: &user_view,
             organization: &organization_view,
         };
-        if count >= self.config.member_limit(event).await? {
+        if count >= self.config.member_limit(event).await? as i64 {
             return Err(AuthError::Upstream {
                 status: 403,
                 code: "ORGANIZATION_MEMBERSHIP_LIMIT_REACHED",
@@ -150,7 +184,7 @@ impl OrganizationPlugin {
         if let Some(hooks) = &self.config.hooks {
             hooks.before_add_member(&mut data, event).await?;
         }
-        let member = ctx.database.create_member(data.into_create()).await?;
+        let member = store.create_member(data.into_create()).await?;
         if let Some(team) = team {
             let team_id = team.id.typed()?.clone();
             let result = async {
@@ -173,20 +207,25 @@ impl OrganizationPlugin {
                     .maximum_members_per_team_callback
                     .is_some()
                 {
-                    return Err(AuthError::Unauthenticated);
+                    return Err(better_auth_core::AuthResponse::new(401).into());
                 } else {
                     self.config.teams.maximum_members_per_team
                 };
-                let _ = ctx
-                    .database
+                let _ = store
                     .add_team_member(&team_id.into(), user.id().typed()?, maximum)
                     .await?
-                    .ok_or_else(|| AuthError::forbidden("Team member limit reached"))?;
+                    .ok_or(AuthError::Upstream {
+                        status: 403,
+                        code: "TEAM_MEMBER_LIMIT_REACHED",
+                        message: "Team member limit reached",
+                    })?;
                 AuthResult::Ok(())
             }
             .await;
             if let Err(error) = result {
-                ctx.database.delete_member(member.id.typed()?).await?;
+                store
+                    .delete_member_for_user(member.id.typed()?, org_id, user.id().typed()?)
+                    .await?;
                 return Err(error);
             }
         }

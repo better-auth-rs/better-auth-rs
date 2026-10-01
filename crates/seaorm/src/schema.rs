@@ -52,8 +52,12 @@ pub trait SeaOrmUserModel:
         id: Option<Self::Id>,
         create_user: CreateUser,
         now: DateTime<Utc>,
-    ) -> Self::ActiveModel;
-    fn apply_update(active: &mut Self::ActiveModel, update: UpdateUser, now: DateTime<Utc>);
+    ) -> AuthResult<Self::ActiveModel>;
+    fn apply_update(
+        active: &mut Self::ActiveModel,
+        update: UpdateUser,
+        now: DateTime<Utc>,
+    ) -> AuthResult<()>;
     /// Persist configured application fields in the same insert or update as core user fields.
     fn apply_fields(
         _active: &mut Self::ActiveModel,
@@ -164,13 +168,27 @@ pub trait SeaOrmAccountModel:
         active: &mut Self::ActiveModel,
         fields: serde_json::Map<String, serde_json::Value>,
     ) -> AuthResult<()>;
+    /// Extract model values before output policies run, preserving mapped storage columns.
+    fn record_fields(
+        &self,
+        fields: &better_auth_core::user_fields::UserConfig,
+    ) -> AuthResult<better_auth_core::user_fields::AdapterRecord>;
+
     /// Apply output policies once without decoding their results back into SQL column types.
     fn record(
         &self,
         fields: &better_auth_core::user_fields::UserConfig,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<better_auth_core::wire::AccountView>;
+    ) -> AuthResult<better_auth_core::wire::AccountView> {
+        let records = vec![self.record_fields(fields)?];
+        // Projection preserves the one input row.
+        Ok(better_auth_core::wire::AccountView::from_adapter_fields(
+            fields
+                .project_adapter_records(records, supports_native_json, supports_native_dates)?
+                .remove(0),
+        ))
+    }
 }
 
 pub trait SeaOrmVerificationModel:
@@ -205,11 +223,27 @@ pub trait SeaOrmVerificationModel:
         active: &mut Self::ActiveModel,
         fields: serde_json::Map<String, serde_json::Value>,
     ) -> AuthResult<()>;
+    /// Extract model values before output policies run, preserving mapped storage columns.
+    fn record_fields(
+        &self,
+        fields: &better_auth_core::user_fields::UserConfig,
+    ) -> AuthResult<better_auth_core::user_fields::AdapterRecord>;
+
     /// Apply output policies once without decoding their results back into SQL column types.
     fn record(
         &self,
         fields: &better_auth_core::user_fields::UserConfig,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<better_auth_core::wire::VerificationView>;
+    ) -> AuthResult<better_auth_core::wire::VerificationView> {
+        let records = vec![self.record_fields(fields)?];
+        // Projection preserves the one input row.
+        Ok(
+            better_auth_core::wire::VerificationView::from_adapter_fields(
+                fields
+                    .project_adapter_records(records, supports_native_json, supports_native_dates)?
+                    .remove(0),
+            ),
+        )
+    }
 }

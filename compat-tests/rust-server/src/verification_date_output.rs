@@ -100,7 +100,7 @@ async fn run(input: Input) -> AuthResult<Value> {
         AuthConfig::new("verification-date-output-fixture-secret-at-least-32-characters");
     config.base_url = "http://localhost:3000".into();
     config.verification.store_in_database = uses_database;
-    config.verification.disable_cleanup = true;
+    config.verification.disable_cleanup = Some(true);
     let output_events = events.clone();
     let _ = config.verification.additional_fields.insert(
         "expiresAt".into(),

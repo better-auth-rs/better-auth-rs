@@ -397,7 +397,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 }),
             )));
         }
-        if !self.database_sessions() || self.config.session.preserve_session_in_database {
+        if !self.database_sessions() || self.config.session.preserve_session_in_database() {
             return Ok(None);
         }
         Ok(self
@@ -555,7 +555,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         if !self.database_sessions() {
             return Ok(());
         }
-        if self.config.session.preserve_session_in_database {
+        if self.config.session.preserve_session_in_database() {
             self.inner.end_session(token).await
         } else {
             self.inner.delete_session(token).await
@@ -570,7 +570,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         if !self.database_sessions() {
             return Ok(());
         }
-        if self.config.session.preserve_session_in_database {
+        if self.config.session.preserve_session_in_database() {
             self.inner.end_sessions(tokens).await
         } else {
             self.inner.delete_sessions(tokens).await
@@ -591,7 +591,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 .inner
                 .delete_user_sessions_optional(
                     user_id,
-                    self.config.session.preserve_session_in_database,
+                    self.config.session.preserve_session_in_database(),
                 )
                 .await?
                 .is_none()
@@ -603,7 +603,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        if self.database_sessions() && !self.config.session.preserve_session_in_database {
+        if self.database_sessions() && !self.config.session.preserve_session_in_database() {
             self.inner.delete_expired_sessions().await
         } else {
             Ok(0)

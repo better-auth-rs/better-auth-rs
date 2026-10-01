@@ -194,7 +194,7 @@ pub(crate) async fn handle_team_request(
                 ctx,
             )
             .await?;
-            let count = ctx.database.list_organization_teams(&org).await?.len();
+            let count = ctx.database.count_organization_teams(&org).await?;
             if let Some(maximum) = config
                 .team_limit(
                     OrganizationTeamLimit {
@@ -205,7 +205,7 @@ pub(crate) async fn handle_team_request(
                 )
                 .await?
                 .filter(|limit| *limit > 0)
-                && count >= maximum
+                && count >= maximum as u64
             {
                 return Err(AuthError::bad_request(
                     "You have reached the maximum number of teams",
@@ -327,7 +327,7 @@ pub(crate) async fn handle_team_request(
             .await?;
             let team = find_team(&body.team_id, &org, ctx).await?;
             if !config.teams.allow_removing_all_teams
-                && ctx.database.list_organization_teams(&org).await?.len() <= 1
+                && ctx.database.count_organization_teams(&org).await? <= 1
             {
                 return Err(AuthError::bad_request("Unable to remove last team"));
             }
@@ -628,6 +628,7 @@ mod tests {
         let (user, session) = create_user_and_session(
             &ctx,
             CreateUser {
+                name: Some("Fixture".into()).into(),
                 email: Some("team-owner@example.com".into()),
                 ..Default::default()
             },

@@ -109,11 +109,12 @@ impl PluginRateLimit {
 }
 
 /// Rules retain insertion order. The first matching rule takes precedence.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RateLimitConfig {
-    pub default: EndpointRateLimit,
+    pub window: Option<f64>,
+    pub max_requests: Option<f64>,
     pub custom_rules: IndexMap<String, CustomRateLimitRule>,
-    pub enabled: bool,
+    pub enabled: Option<bool>,
     /// Omission selects secondary storage when configured, otherwise process memory.
     pub storage: Option<RateLimitStorageKind>,
     /// Custom storage takes precedence over the selected built-in backend.
@@ -124,7 +125,8 @@ impl std::fmt::Debug for RateLimitConfig {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("RateLimitConfig")
-            .field("default", &self.default)
+            .field("window", &self.window)
+            .field("max_requests", &self.max_requests)
             .field("custom_rules", &self.custom_rules)
             .field("enabled", &self.enabled)
             .field("storage", &self.storage)
@@ -136,31 +138,28 @@ impl std::fmt::Debug for RateLimitConfig {
     }
 }
 
-impl Default for RateLimitConfig {
-    fn default() -> Self {
-        Self {
-            default: EndpointRateLimit {
-                window: 10.0,
-                max_requests: 100.0,
-            },
-            custom_rules: IndexMap::new(),
-            enabled: std::env::var("NODE_ENV").is_ok_and(|value| value == "production"),
-            storage: None,
-            custom_storage: None,
-        }
-    }
-}
-
 impl RateLimitConfig {
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Read the default rule. Omission, zero, and NaN use the upstream defaults.
+    pub fn default_rule(&self) -> EndpointRateLimit {
+        EndpointRateLimit {
+            window: self
+                .window
+                .filter(|value| *value != 0.0 && !value.is_nan())
+                .unwrap_or(10.0),
+            max_requests: self
+                .max_requests
+                .filter(|value| *value != 0.0 && !value.is_nan())
+                .unwrap_or(100.0),
+        }
+    }
+
     pub fn default_limit(mut self, window: Duration, max_requests: impl Into<f64>) -> Self {
-        self.default = EndpointRateLimit {
-            window: window.as_secs_f64(),
-            max_requests: max_requests.into(),
-        };
+        self.window = Some(window.as_secs_f64());
+        self.max_requests = Some(max_requests.into());
         self
     }
 
@@ -185,7 +184,7 @@ impl RateLimitConfig {
     }
 
     pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
+        self.enabled = Some(enabled);
         self
     }
 

@@ -25,7 +25,7 @@ async fn missing_ids_match_upstream_signup_signin_and_session_cache_boundaries()
                 AuthConfig::new("runtime-id-probe-secret-at-least-thirty-two-characters")
                     .base_url("http://localhost:3000");
             let calls = Arc::new(AtomicUsize::new(0));
-            config.advanced.database.generate_id = if mode == "database" {
+            config.advanced.database.generate_id = Some(if mode == "database" {
                 IdGeneration::Database
             } else {
                 IdGeneration::Custom(IdGenerator::new(move |request| {
@@ -39,7 +39,7 @@ async fn missing_ids_match_upstream_signup_signin_and_session_cache_boundaries()
                         },
                     ))
                 }))
-            };
+            });
             let cache = Arc::new(MemoryCacheAdapter::new());
             let mut builder = BetterAuth::stateless(config)
                 .plugin(EmailPasswordPlugin::new().password_hasher(Arc::new(Hasher)))

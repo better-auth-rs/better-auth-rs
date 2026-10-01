@@ -1,0 +1,3324 @@
+[
+  {
+    "backend": "memory",
+    "mode": "normal",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "patch",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "admin",
+        "label": "patched:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "admin",
+            "label": "patched"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "admin",
+            "label": "patched:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "admin",
+            "label": "patched",
+            "secret": "forged",
+            "unknown": true,
+            "ignored": "still unknown"
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "admin",
+          "label": "patched:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "stop",
+    "output": {
+      "result": {
+        "stopped": true
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "replace",
+    "output": {
+      "result": {
+        "replaced": true
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "invalid",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "[body.role] Invalid input",
+          "code": "VALIDATION_ERROR"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "override",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "[body.role] Invalid input: expected string, received array",
+          "code": "VALIDATION_ERROR"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "before-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "after-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "member-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "policy-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "limit",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "message": "Organization membership limit reached",
+          "code": "ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "team",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 1
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "team-limit",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "message": "Team member limit reached",
+          "code": "TEAM_MEMBER_LIMIT_REACHED"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "team-disabled",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "Teams are not enabled"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "missing-org",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "Organization not found",
+          "code": "ORGANIZATION_NOT_FOUND"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "missing",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "missing",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "duplicate",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "User is already a member of this organization",
+          "code": "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member",
+          "label": "default:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "tx-commit",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "tx-rollback",
+    "output": {
+      "error": {
+        "message": "rollback requested"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "org-number",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "Organization not found",
+          "code": "ORGANIZATION_NOT_FOUND"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": 42,
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": 42,
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "team-dynamic-limit",
+    "output": {
+      "error": {
+        "status": 401
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "tx-team-commit",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 1
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "tx-team-rollback",
+    "output": {
+      "error": {
+        "message": "rollback requested"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "tx-team-catch",
+    "output": {
+      "result": {
+        "caught": "TEAM_MEMBER_LIMIT_REACHED"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 0
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "team-reassign",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "message": "Team member limit reached",
+          "code": "TEAM_MEMBER_LIMIT_REACHED"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0,
+      "ownerTeams": 1
+    }
+  },
+  {
+    "backend": "memory",
+    "mode": "tx-team-reassign",
+    "output": {
+      "result": {
+        "caught": "TEAM_MEMBER_LIMIT_REACHED"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 0
+        }
+      ],
+      "members": [],
+      "teams": 0,
+      "ownerTeams": 1
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "normal",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "patch",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "admin",
+        "label": "patched:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "admin",
+            "label": "patched"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "admin",
+            "label": "patched:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "admin",
+            "label": "patched",
+            "secret": "forged",
+            "unknown": true,
+            "ignored": "still unknown"
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "admin",
+          "label": "patched:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "stop",
+    "output": {
+      "result": {
+        "stopped": true
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "replace",
+    "output": {
+      "result": {
+        "replaced": true
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "invalid",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "[body.role] Invalid input",
+          "code": "VALIDATION_ERROR"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "override",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "[body.role] Invalid input: expected string, received array",
+          "code": "VALIDATION_ERROR"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "before-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "after-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "member-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "policy-error",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "code": "FIXTURE_REJECTED",
+          "message": "fixture rejected"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "limit",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "message": "Organization membership limit reached",
+          "code": "ORGANIZATION_MEMBERSHIP_LIMIT_REACHED"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "team",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 1
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "team-limit",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "message": "Team member limit reached",
+          "code": "TEAM_MEMBER_LIMIT_REACHED"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "team-disabled",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "Teams are not enabled"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "missing-org",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "Organization not found",
+          "code": "ORGANIZATION_NOT_FOUND"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "missing",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "missing",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "duplicate",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "User is already a member of this organization",
+          "code": "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member",
+          "label": "default:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "tx-commit",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "tx-rollback",
+    "output": {
+      "error": {
+        "message": "rollback requested"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "org-number",
+    "output": {
+      "error": {
+        "status": 400,
+        "body": {
+          "message": "Organization not found",
+          "code": "ORGANIZATION_NOT_FOUND"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": 42,
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": 42,
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "team-dynamic-limit",
+    "output": {
+      "error": {
+        "status": 401
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "tx-team-commit",
+    "output": {
+      "result": {
+        "organizationId": "org",
+        "userId": "target",
+        "role": "member,admin",
+        "label": "sent:hook:in:out",
+        "secret": "hidden"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [
+        {
+          "organizationId": "org",
+          "userId": "target",
+          "role": "member,admin",
+          "label": "sent:hook:in:out",
+          "secret": "hidden"
+        }
+      ],
+      "teams": 1
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "tx-team-rollback",
+    "output": {
+      "error": {
+        "message": "rollback requested"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "member-after",
+          "member": {
+            "organizationId": "org",
+            "userId": "target",
+            "role": "member,admin",
+            "label": "sent:hook:in:out",
+            "secret": "hidden"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 1
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "tx-team-catch",
+    "output": {
+      "result": {
+        "caught": "TEAM_MEMBER_LIMIT_REACHED"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 0
+        }
+      ],
+      "members": [],
+      "teams": 0
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "team-reassign",
+    "output": {
+      "error": {
+        "status": 403,
+        "body": {
+          "message": "Team member limit reached",
+          "code": "TEAM_MEMBER_LIMIT_REACHED"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        }
+      ],
+      "members": [],
+      "teams": 0,
+      "ownerTeams": 1
+    }
+  },
+  {
+    "backend": "sqlite",
+    "mode": "tx-team-reassign",
+    "output": {
+      "result": {
+        "caught": "TEAM_MEMBER_LIMIT_REACHED"
+      },
+      "events": [
+        {
+          "phase": "before",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "limit"
+        },
+        {
+          "phase": "member-before",
+          "member": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": "member,admin",
+            "teamId": "team",
+            "label": "sent"
+          },
+          "ambient": "virtual:"
+        },
+        {
+          "phase": "after",
+          "path": "/",
+          "ambient": {
+            "$undefined": true
+          },
+          "body": {
+            "userId": "target",
+            "organizationId": "org",
+            "role": [
+              "member",
+              "admin"
+            ],
+            "label": "sent",
+            "secret": "forged",
+            "unknown": true,
+            "teamId": "team"
+          }
+        },
+        {
+          "phase": "transaction",
+          "members": 0
+        }
+      ],
+      "members": [],
+      "teams": 0,
+      "ownerTeams": 1
+    }
+  }
+]

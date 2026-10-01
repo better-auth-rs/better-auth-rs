@@ -46,11 +46,12 @@ async fn configured_generator_reaches_every_core_insert_and_preserves_forced_use
     let calls = Arc::new(Mutex::new(Vec::new()));
     let observed = calls.clone();
     let mut config = config();
-    config.advanced.database.generate_id = IdGeneration::Custom(IdGenerator::new(move |request| {
-        let mut calls = observed.lock().unwrap();
-        calls.push((request.model.to_owned(), request.size));
-        Ok(Some(format!("{}_{}", request.model, calls.len())))
-    }));
+    config.advanced.database.generate_id =
+        Some(IdGeneration::Custom(IdGenerator::new(move |request| {
+            let mut calls = observed.lock().unwrap();
+            calls.push((request.model.to_owned(), request.size));
+            Ok(Some(format!("{}_{}", request.model, calls.len())))
+        })));
     let auth = BetterAuth::<BundledSchema>::new(config)
         .store(database().await)
         .build()
@@ -58,7 +59,11 @@ async fn configured_generator_reaches_every_core_insert_and_preserves_forced_use
         .unwrap();
     let store = auth.store();
     let user = store
-        .create_user(CreateUser::new().with_email("generated@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("generated@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let account = store
@@ -99,7 +104,9 @@ async fn configured_generator_reaches_every_core_insert_and_preserves_forced_use
     let forced = store
         .create_user(CreateUser {
             id: Some("forced-user".into()),
-            ..CreateUser::new().with_email("forced@example.com")
+            ..CreateUser::new()
+                .with_email("forced@example.com")
+                .with_name("Fixture")
         })
         .await
         .unwrap();
@@ -115,10 +122,11 @@ async fn generator_failure_prevents_the_write_and_does_not_retry() {
     let calls = Arc::new(Mutex::new(0));
     let observed = calls.clone();
     let mut config = config();
-    config.advanced.database.generate_id = IdGeneration::Custom(IdGenerator::new(move |_| {
-        *observed.lock().unwrap() += 1;
-        Err(AuthError::internal("id-generator-rejected"))
-    }));
+    config.advanced.database.generate_id =
+        Some(IdGeneration::Custom(IdGenerator::new(move |_| {
+            *observed.lock().unwrap() += 1;
+            Err(AuthError::internal("id-generator-rejected"))
+        })));
     let auth = BetterAuth::<BundledSchema>::new(config)
         .store(database().await)
         .build()
@@ -152,12 +160,14 @@ async fn pure_secondary_sessions_use_context_ids_and_independent_tokens() {
         let user = store
             .create_user(CreateUser {
                 id: Some("16".into()),
-                ..CreateUser::new().with_email("cache@example.com")
+                ..CreateUser::new()
+                    .with_email("cache@example.com")
+                    .with_name("Fixture")
             })
             .await
             .unwrap();
         let mut config = config();
-        config.advanced.database.generate_id = policy;
+        config.advanced.database.generate_id = Some(policy);
         let auth = BetterAuth::<BundledSchema>::new(config)
             .store(store)
             .secondary_storage(Arc::new(MemoryCacheAdapter::new()))
@@ -198,8 +208,9 @@ async fn pure_secondary_sessions_use_context_ids_and_independent_tokens() {
             .push((request.model.to_owned(), request.size));
         Ok(Some("legacy-session".into()))
     }));
-    config.advanced.database.generate_id =
-        IdGeneration::Custom(IdGenerator::new(|_| Ok(Some("database-user".into()))));
+    config.advanced.database.generate_id = Some(IdGeneration::Custom(IdGenerator::new(|_| {
+        Ok(Some("database-user".into()))
+    })));
     let auth = BetterAuth::<BundledSchema>::new(config)
         .store(database().await)
         .secondary_storage(Arc::new(MemoryCacheAdapter::new()))
@@ -208,7 +219,11 @@ async fn pure_secondary_sessions_use_context_ids_and_independent_tokens() {
         .unwrap();
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("legacy@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("legacy@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let row = auth
@@ -229,10 +244,11 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let observed = calls.clone();
     let mut config = config();
-    config.advanced.database.generate_id = IdGeneration::Custom(IdGenerator::new(move |request| {
-        observed.lock().unwrap().push(request.model.to_owned());
-        Ok(Some(format!("{}-generated", request.model)))
-    }));
+    config.advanced.database.generate_id =
+        Some(IdGeneration::Custom(IdGenerator::new(move |request| {
+            observed.lock().unwrap().push(request.model.to_owned());
+            Ok(Some(format!("{}-generated", request.model)))
+        })));
     let auth = BetterAuth::<BundledSchema>::new(config)
         .store(database().await)
         .build()
@@ -240,7 +256,11 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
         .unwrap();
     let store = auth.store();
     let user = store
-        .create_user(CreateUser::new().with_email("plugins@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("plugins@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let org = store
@@ -354,7 +374,7 @@ async fn omitted_ids_reach_database_defaults_and_invalid_forced_ids_are_not_repl
         IdGeneration::Custom(IdGenerator::new(|_| Ok(Some(String::new())))),
     ] {
         let mut config = config();
-        config.advanced.database.generate_id = policy;
+        config.advanced.database.generate_id = Some(policy);
         let auth = BetterAuth::<BundledSchema>::new(config)
             .store(database().await)
             .build()
@@ -362,7 +382,11 @@ async fn omitted_ids_reach_database_defaults_and_invalid_forced_ids_are_not_repl
             .unwrap();
         let result = auth
             .store()
-            .create_user(CreateUser::new().with_email("database@example.com"))
+            .create_user(
+                CreateUser::new()
+                    .with_email("database@example.com")
+                    .with_name("Fixture"),
+            )
             .await;
         assert!(
             result.is_err(),
@@ -377,7 +401,7 @@ async fn omitted_ids_reach_database_defaults_and_invalid_forced_ids_are_not_repl
         );
     }
     let mut config = config();
-    config.advanced.database.generate_id = IdGeneration::Uuid;
+    config.advanced.database.generate_id = Some(IdGeneration::Uuid);
     let auth = BetterAuth::<BundledSchema>::new(config)
         .store(database().await)
         .build()
@@ -393,7 +417,9 @@ async fn omitted_ids_reach_database_defaults_and_invalid_forced_ids_are_not_repl
     ] {
         let input = CreateUser {
             id: Some(id.into()),
-            ..CreateUser::new().with_email(format!("{id}@example.com"))
+            ..CreateUser::new()
+                .with_email(format!("{id}@example.com"))
+                .with_name("Fixture")
         };
         assert!(auth.store().create_user(input).await.is_err());
     }
@@ -402,14 +428,20 @@ async fn omitted_ids_reach_database_defaults_and_invalid_forced_ids_are_not_repl
         .store()
         .create_user(CreateUser {
             id: Some(valid.into()),
-            ..CreateUser::new().with_email("valid@example.com")
+            ..CreateUser::new()
+                .with_email("valid@example.com")
+                .with_name("Fixture")
         })
         .await
         .unwrap();
     assert_eq!(row.id, valid);
     let generated = auth
         .store()
-        .create_user(CreateUser::new().with_email("generated@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("generated@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     assert_eq!(

@@ -45,11 +45,11 @@ impl CaptchaFixture {
     pub fn configure(&self, profile: &str, config: &mut AuthConfig) {
         if profile == "captcha-turnstile" {
             config.advanced.ip_address.headers =
-                vec!["x-client-ip".into(), "x-forwarded-for".into()];
+                Some(vec!["x-client-ip".into(), "x-forwarded-for".into()]);
             config.advanced.ip_address.trusted_proxies = vec!["10.0.0.0/8".into()];
             config.advanced.ip_address.ipv6_subnet = 60.9;
         } else if profile == "captcha-hcaptcha" {
-            config.advanced.ip_address.disable_ip_tracking = true;
+            config.advanced.ip_address.disable_ip_tracking = Some(true);
         } else if profile == "captcha-captchafox" {
             config.advanced.ip_address.ipv6_subnet = 128.0;
         }

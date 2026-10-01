@@ -144,44 +144,48 @@ impl TeamStore for EphemeralStore {
         Ok(())
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
-        let teams: Vec<_> = self
+        let rows = self
+            .lock()?
+            .teams
+            .snapshot()?
+            .into_iter()
+            .filter(|row| row.organization_id == organization_id)
+            .collect();
+        crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        )
+        .into_iter()
+        .map(|row| self.output_team(row))
+        .collect()
+    }
+    async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
+        Ok(self
             .lock()?
             .teams
             .snapshot()?
             .iter()
-            .filter(|team| team.organization_id == organization_id)
-            .cloned()
-            .collect();
-        let mut dated = teams
-            .into_iter()
-            .map(|value| {
-                Ok((
-                    value.created_at.json()?.unwrap_or(serde_json::Value::Null),
-                    value,
-                ))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        dated.sort_by(|(left, _), (right, _)| {
-            super::organization::compare_member_values(left, right)
-        });
-        dated
-            .into_iter()
-            .map(|(_, value)| self.output_team(value))
-            .collect()
+            .filter(|row| row.organization_id == organization_id)
+            .count() as u64)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
         let state = self.lock()?;
-        state
+        let rows = state
             .team_members
             .snapshot()?
-            .iter()
-            .filter(|member| member.user_id == user_id)
-            .map(|member| state.teams.get(&member.team_id))
-            .collect::<AuthResult<Vec<_>>>()?
             .into_iter()
-            .flatten()
-            .map(|value| self.output_team(value))
-            .collect()
+            .filter(|row| row.user_id == user_id)
+            .collect();
+        crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        )
+        .iter()
+        .filter_map(|row| state.teams.get(&row.team_id).transpose())
+        .map(|row| self.output_team(row?))
+        .collect()
     }
     async fn get_team_member(
         &self,
@@ -197,14 +201,27 @@ impl TeamStore for EphemeralStore {
             .cloned())
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
+        let rows = self
+            .lock()?
+            .team_members
+            .snapshot()?
+            .into_iter()
+            .filter(|row| row.team_id == team_id)
+            .collect();
+        Ok(crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        ))
+    }
+    async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
         Ok(self
             .lock()?
             .team_members
             .snapshot()?
             .iter()
-            .filter(|member| member.team_id == team_id)
-            .cloned()
-            .collect())
+            .filter(|row| row.team_id == team_id)
+            .count() as u64)
     }
     async fn add_team_member(
         &self,
@@ -397,30 +414,72 @@ impl OrganizationRoleStore for EphemeralStore {
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<OrganizationRole>> {
-        let roles: Vec<_> = self
+        let rows = self
+            .lock()?
+            .organization_roles
+            .snapshot()?
+            .into_iter()
+            .filter(|row| row.organization_id == organization_id)
+            .collect();
+        crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        )
+        .into_iter()
+        .map(|row| self.output_organization_role(row))
+        .collect()
+    }
+    async fn query_organization_roles(
+        &self,
+        organization_id: &str,
+        names: &[String],
+    ) -> AuthResult<Vec<OrganizationRole>> {
+        let rows = self
+            .lock()?
+            .organization_roles
+            .snapshot()?
+            .into_iter()
+            .filter(|row| {
+                row.organization_id == organization_id && names.iter().any(|name| row.role == *name)
+            })
+            .collect();
+        crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        )
+        .into_iter()
+        .map(|row| self.output_organization_role(row))
+        .collect()
+    }
+    async fn find_organization_role(
+        &self,
+        organization_id: &str,
+        key: crate::store::OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<OrganizationRole>> {
+        self.lock()?
+            .organization_roles
+            .snapshot()?
+            .into_iter()
+            .find(|row| {
+                row.organization_id == organization_id
+                    && match key {
+                        crate::store::OrganizationRoleKey::Id(id) => row.id == id,
+                        crate::store::OrganizationRoleKey::Name(name) => row.role == name,
+                    }
+            })
+            .map(|row| self.output_organization_role(row))
+            .transpose()
+    }
+    async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
+        Ok(self
             .lock()?
             .organization_roles
             .snapshot()?
             .iter()
-            .filter(|role| role.organization_id == organization_id)
-            .cloned()
-            .collect();
-        let mut dated = roles
-            .into_iter()
-            .map(|value| {
-                Ok((
-                    value.created_at.json()?.unwrap_or(serde_json::Value::Null),
-                    value,
-                ))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        dated.sort_by(|(left, _), (right, _)| {
-            super::organization::compare_member_values(left, right)
-        });
-        dated
-            .into_iter()
-            .map(|(_, value)| self.output_organization_role(value))
-            .collect()
+            .filter(|row| row.organization_id == organization_id)
+            .count() as u64)
     }
     async fn update_organization_role(
         &self,

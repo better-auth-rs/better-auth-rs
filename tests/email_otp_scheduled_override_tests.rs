@@ -118,7 +118,7 @@ async fn run(rollback: bool) -> Value {
     let auth = AuthBuilder::new(config.clone())
         .store(SeaOrmStore::<BundledSchema>::new(config, db.clone()))
         .rate_limit(better_auth_core::middleware::RateLimitConfig {
-            enabled: false,
+            enabled: Some(false),
             ..Default::default()
         })
         .plugin(InstallHooks(Arc::new(Hooks {
@@ -193,15 +193,29 @@ async fn scheduled_override_retains_all_three_scheduling_boundaries_and_the_acti
     ))
     .unwrap();
     for rollback in [false, true] {
-        let actual = tokio::time::timeout(std::time::Duration::from_secs(30), run(rollback))
+        let mut actual = tokio::time::timeout(std::time::Duration::from_secs(30), run(rollback))
             .await
             .unwrap();
-        assert_eq!(
-            &actual,
-            expected
-                .iter()
-                .find(|row| row["rollback"] == rollback)
-                .unwrap()
-        );
+        let mut expected = expected
+            .iter()
+            .find(|row| row["rollback"] == rollback)
+            .unwrap()
+            .clone();
+        // Awaiting a ready Rust future need not yield; awaiting a Promise does.
+        // Handler registration may interleave with sender startup, but must finish before the response.
+        for trace in [&mut actual, &mut expected] {
+            let events = trace["events"].as_array_mut().unwrap();
+            assert_eq!(events.iter().filter(|event| *event == "handler").count(), 3);
+            assert_eq!(
+                events
+                    .iter()
+                    .take_while(|event| *event != "response")
+                    .filter(|event| *event == "handler")
+                    .count(),
+                3
+            );
+            events.retain(|event| event != "handler");
+        }
+        assert_eq!(actual, expected);
     }
 }

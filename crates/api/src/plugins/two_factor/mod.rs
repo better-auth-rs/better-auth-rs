@@ -851,7 +851,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     let expires_in = if pending.dont_remember {
         Duration::days(1)
     } else {
-        ctx.config.session.expires_in
+        ctx.config.session.expires_in()
     };
     let issued = issue_user_session_with_lifetime(
         ctx,

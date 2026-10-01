@@ -24,7 +24,7 @@ async fn omitted_memory_ids_keep_distinct_accounts_and_verifications() {
         IdGeneration::Custom(IdGenerator::new(|_| Ok(Some(String::new())))),
     ] {
         let mut config = AuthConfig::default();
-        config.advanced.database.generate_id = policy;
+        config.advanced.database.generate_id = Some(policy);
         let store = EphemeralStore::new(Arc::new(config));
         for subject in ["first", "second"] {
             let account = store.create_account(account(subject)).await.unwrap();
@@ -68,7 +68,7 @@ async fn omitted_memory_ids_keep_distinct_accounts_and_verifications() {
 #[tokio::test]
 async fn memory_serial_uses_current_length_and_retains_duplicate_ids() {
     let mut config = AuthConfig::default();
-    config.advanced.database.generate_id = IdGeneration::Serial;
+    config.advanced.database.generate_id = Some(IdGeneration::Serial);
     let store = EphemeralStore::new(Arc::new(config));
     for (subject, expected) in [("first", "1"), ("second", "2"), ("third", "3")] {
         let created = store.create_account(account(subject)).await.unwrap();

@@ -36,7 +36,12 @@ impl CookieSettings {
                     BaseUrl::Static(value) if !value.is_empty() => value.starts_with("https://"),
                     BaseUrl::Auto | BaseUrl::Static(_) | BaseUrl::Dynamic(_) => is_production,
                 });
-        let domain = if config.advanced.cross_sub_domain_cookies.is_some() {
+        let domain = if config
+            .advanced
+            .cross_sub_domain_cookies
+            .as_ref()
+            .is_some_and(|policy| policy.enabled())
+        {
             let explicit = config
                 .advanced
                 .cross_sub_domain_cookies
@@ -65,7 +70,7 @@ impl CookieSettings {
             secure_prefix,
             domain,
             defaults: config.advanced.default_cookie_attributes.clone(),
-            overrides: config.advanced.cookies.clone(),
+            overrides: config.advanced.cookies.clone().unwrap_or_default(),
         }
     }
 

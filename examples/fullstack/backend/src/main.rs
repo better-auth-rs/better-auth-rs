@@ -129,7 +129,7 @@ async fn get_me(session: CurrentSession<auth_schema::AppAuthSchema>) -> impl Int
         "user": {
             "id": session.user.id(),
             "email": session.user.email(),
-            "name": session.user.name(),
+            "name": session.user.name,
             "createdAt": session.user.created_at().to_rfc3339(),
         }
     }))

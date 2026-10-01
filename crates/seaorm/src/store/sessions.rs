@@ -20,6 +20,18 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
+    pub(super) fn output_sessions(
+        &self,
+        rows: &[S::Session],
+        db: &impl ConnectionTrait,
+    ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
+        better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter(
+            rows,
+            &self.config().session,
+            db.get_database_backend() == sea_orm::DbBackend::Postgres,
+        )
+    }
+
     pub(super) fn output_session(
         &self,
         row: &S::Session,
@@ -52,7 +64,7 @@ where
                     name,
                     field,
                     value,
-                    &self.config().advanced.database.generate_id,
+                    self.config().advanced.database.generate_id(),
                     S::Session::field_column,
                     S::Session::native_json_field,
                     self.connection().get_database_backend(),
@@ -143,7 +155,7 @@ where
                 .config()
                 .advanced
                 .database
-                .generate_id
+                .generate_id()
                 .coerce_id(id)?
                 .into_owned();
             let _ = S::Session::parse_user_id(&id)?;
@@ -177,7 +189,7 @@ where
                 name,
                 field,
                 value,
-                &self.config().advanced.database.generate_id,
+                self.config().advanced.database.generate_id(),
                 S::Session::field_column,
                 S::Session::native_json_field,
                 db.get_database_backend(),
@@ -309,7 +321,7 @@ where
                         name,
                         field,
                         value,
-                        &self.config().advanced.database.generate_id,
+                        self.config().advanced.database.generate_id(),
                         S::Session::field_column,
                         S::Session::native_json_field,
                         db.get_database_backend(),
@@ -461,13 +473,14 @@ where
                     .map_err(map_db_err)
             },
         )
-        .await?
-        .iter()
-        .map(|row| {
-            self.output_session(row, self.connection())
+        .await
+        .and_then(|rows| self.output_sessions(&rows, self.connection()))
+        .map(|sessions| {
+            sessions
+                .into_iter()
                 .map(|session| (session, None))
+                .collect()
         })
-        .collect()
     }
 
     async fn get_user_sessions(
@@ -491,10 +504,8 @@ where
                     .map_err(map_db_err)
             },
         )
-        .await?
-        .iter()
-        .map(|row| self.output_session(row, self.connection()))
-        .collect()
+        .await
+        .and_then(|rows| self.output_sessions(&rows, self.connection()))
     }
 
     async fn update_session_fields(

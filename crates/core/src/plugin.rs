@@ -62,6 +62,9 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
         None
     }
 
+    /// Report configured options without invoking callbacks or initializing the plugin.
+    fn telemetry(&self, _options: &mut crate::observability::telemetry::PluginTelemetry) {}
+
     /// Default endpoint limits, overridden by explicit application limits.
     fn rate_limits(&self) -> AuthResult<Vec<crate::middleware::PluginRateLimit>> {
         Ok(Vec::new())

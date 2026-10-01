@@ -1,3 +1,4 @@
+use super::id_filter::IdColumn;
 use crate::SeaOrmOrganizationModel;
 use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
@@ -44,6 +45,7 @@ pub(super) fn active<M: SeaOrmOrganizationModel>(
     config: &UserConfig,
     create: bool,
     backend: sea_orm::DbBackend,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::ActiveModel> {
     let core = core
         .into_iter()
@@ -55,7 +57,15 @@ pub(super) fn active<M: SeaOrmOrganizationModel>(
             ))
         })
         .collect::<AuthResult<Map<_, _>>>()?;
-    let mut active = M::active(config.organization_storage_fields(core, input, create)?)?;
+    let mut fields = config.organization_storage_fields(core, input, create)?;
+    crate::reference_id::prepare_fields(
+        &mut fields,
+        policy,
+        Some(config),
+        M::column,
+        M::is_id_reference,
+    )?;
+    let mut active = M::active(fields)?;
     crate::reference_id::apply_bindings(&mut active, config, backend, M::column)?;
     Ok(active)
 }
@@ -65,20 +75,29 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     core: Map<String, Value>,
     input: Map<String, Value>,
     config: &UserConfig,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::Record> {
-    active::<M>(core, input, config, true, conn.get_database_backend())?
-        .insert(conn)
-        .await
-        .map_err(super::map_db_err)?
-        .record(config)
+    active::<M>(
+        core,
+        input,
+        config,
+        true,
+        conn.get_database_backend(),
+        policy,
+    )?
+    .insert(conn)
+    .await
+    .map_err(super::map_db_err)?
+    .record(config)
 }
 
 pub(super) async fn find<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
     id: &str,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<Option<M>> {
     Entity::<M>::find()
-        .filter(M::column("id")?.eq(id))
+        .filter(M::column("id")?.eq_id(id, policy)?)
         .one(conn)
         .await
         .map_err(super::map_db_err)
@@ -90,15 +109,23 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     core: Map<String, Value>,
     input: Map<String, Value>,
     config: &UserConfig,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::Record> {
-    let active = active::<M>(core, input, config, false, conn.get_database_backend())?;
+    let active = active::<M>(
+        core,
+        input,
+        config,
+        false,
+        conn.get_database_backend(),
+        policy,
+    )?;
     let _ = Entity::<M>::update_many()
         .set(active)
-        .filter(M::column("id")?.eq(id))
+        .filter(M::column("id")?.eq_id(id, policy)?)
         .exec(conn)
         .await
         .map_err(super::map_db_err)?;
-    find::<M, _>(conn, id)
+    find::<M, _>(conn, id, policy)
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Organization record not found"))?
         .record(config)
@@ -135,4 +162,17 @@ pub(super) fn validate_fields<M: SeaOrmOrganizationModel>(
         }
     }
     Ok(())
+}
+
+/// Read a stored join key before output policies can replace its public value.
+pub(super) fn join_value<M: SeaOrmOrganizationModel>(
+    model: &M,
+    name: &str,
+) -> AuthResult<sea_orm::Value> {
+    model
+        .clone()
+        .into_active_model()
+        .get(M::column(name)?)
+        .into_value()
+        .ok_or_else(|| AuthError::internal("Stored organization join key is unavailable"))
 }

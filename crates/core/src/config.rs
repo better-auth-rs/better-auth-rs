@@ -8,6 +8,7 @@ pub use crate::request_runtime::{
     BaseUrl, BaseUrlProtocol, DynamicBaseUrl, TrustedValues, TrustedValuesResolver,
 };
 mod cookie_cache;
+mod scalars;
 mod secrets;
 mod storage;
 mod verification;
@@ -117,16 +118,16 @@ pub struct AuthConfig {
 }
 
 /// Account-level configuration: linking, token encryption, sign-in behavior.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AccountConfig {
     /// Adapter fields, including schema replacements for built-in account fields.
     pub additional_fields: indexmap::IndexMap<String, crate::user_fields::UserFieldConfig>,
     /// Update OAuth tokens on every sign-in (default: true)
-    pub update_account_on_sign_in: bool,
+    pub update_account_on_sign_in: Option<bool>,
     /// Account linking settings
     pub account_linking: AccountLinkingConfig,
     /// Encrypt OAuth tokens at rest (default: false)
-    pub encrypt_oauth_tokens: bool,
+    pub encrypt_oauth_tokens: Option<bool>,
     /// Store account data in an account cookie for OAuth-backed access token flows.
     pub store_account_cookie: Option<bool>,
     /// Where to persist OAuth state during the authorization flow.
@@ -140,21 +141,21 @@ pub struct AccountConfig {
 /// Settings that control how OAuth accounts are linked to existing users.
 #[derive(Debug, Clone)]
 pub struct AccountLinkingConfig {
-    /// Enable account linking (default: true)
-    pub enabled: bool,
+    /// Enable account linking. Omission uses true.
+    pub enabled: Option<bool>,
     /// Trusted providers that can auto-link (default: empty = all trusted)
     pub trusted_providers: TrustedValues,
     /// Allow linking accounts with different emails (default: false) - SECURITY WARNING
     pub allow_different_emails: bool,
     /// Allow unlinking all accounts (default: false)
-    pub allow_unlinking_all: bool,
+    pub allow_unlinking_all: Option<bool>,
     /// Disable implicit linking during sign-in; only explicit link-social may link.
     pub disable_implicit_linking: bool,
     /// Require the *existing local* account's email to be verified before a
     /// social account may be linked to it implicitly (default: true).
     pub require_local_email_verified: bool,
     /// Update user info when a new account is linked (default: false)
-    pub update_user_info_on_link: bool,
+    pub update_user_info_on_link: Option<bool>,
 }
 
 /// Strategy for persisting OAuth state between the sign-in and callback steps.
@@ -177,28 +178,28 @@ pub struct VerificationConfig {
     /// Persist verification records in the database and use database atomic consumption.
     pub store_in_database: bool,
     /// Do not delete expired database verification records during a lookup.
-    pub disable_cleanup: bool,
+    pub disable_cleanup: Option<bool>,
 }
 
 /// Session-specific configuration
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SessionConfig {
     /// Persist sessions in the database as well as secondary storage.
-    pub store_session_in_database: bool,
+    pub store_session_in_database: Option<bool>,
     /// Keep ended database sessions for audit and disable database fallback on cache misses.
-    pub preserve_session_in_database: bool,
+    pub preserve_session_in_database: Option<bool>,
 
-    /// Session expiration duration
-    pub expires_in: Duration,
+    /// Session expiration duration. Omission uses seven days.
+    pub expires_in: Option<Duration>,
 
     /// How often to refresh the session expiry (as a Duration).
     ///
     /// Refresh when the remaining lifetime falls below `expires_in - update_age`.
-    /// When `None`, each authoritative read can refresh the session.
+    /// Omission uses one day. Zero refreshes on every authoritative read.
     pub update_age: Option<Duration>,
 
     /// If `true`, sessions are never automatically refreshed on access.
-    pub disable_session_refresh: bool,
+    pub disable_session_refresh: Option<bool>,
 
     /// Report `needsRefresh` on `GET /get-session` and refresh on `POST /get-session`.
     /// Upstream rejects the POST form with 405 unless this is enabled.
@@ -396,30 +397,16 @@ impl AccountConfig {
     }
 }
 
-impl Default for AccountConfig {
-    fn default() -> Self {
-        Self {
-            additional_fields: Default::default(),
-            update_account_on_sign_in: true,
-            account_linking: AccountLinkingConfig::default(),
-            encrypt_oauth_tokens: false,
-            store_account_cookie: None,
-            store_state_strategy: None,
-            skip_state_cookie_check: false,
-        }
-    }
-}
-
 impl Default for AccountLinkingConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: None,
             trusted_providers: TrustedValues::default(),
             allow_different_emails: false,
-            allow_unlinking_all: false,
+            allow_unlinking_all: None,
             disable_implicit_linking: false,
             require_local_email_verified: true,
-            update_user_info_on_link: false,
+            update_user_info_on_link: None,
         }
     }
 }
@@ -466,7 +453,7 @@ pub struct AdvancedConfig {
     ///
     /// Keys are the *logical* cookie names (e.g. `"session_token"`,
     /// `"csrf_token"`). Values specify the attributes to override.
-    pub cookies: HashMap<String, CookieOverride>,
+    pub cookies: Option<HashMap<String, CookieOverride>>,
 
     /// Default cookie attributes applied to *every* cookie the library sets
     /// (individual overrides in `cookies` take precedence).
@@ -494,7 +481,7 @@ impl AdvancedConfig {
         let request = crate::id::IdGenerationRequest { model, size };
         match &self.generate_id {
             Some(generator) => generator.generate(request),
-            None => self.database.generate_id.generate(request),
+            None => self.database.generate_id().generate(request),
         }
     }
 
@@ -508,10 +495,10 @@ impl AdvancedConfig {
 pub struct IpAddressConfig {
     /// Ordered list of headers to check for the client IP.
     /// Defaults to `["x-forwarded-for"]`.
-    pub headers: Vec<String>,
+    pub headers: Option<Vec<String>>,
 
     /// If `true`, IP tracking is entirely disabled (no IP stored in sessions).
-    pub disable_ip_tracking: bool,
+    pub disable_ip_tracking: Option<bool>,
     /// IPv6 network prefix retained when normalizing addresses. Defaults to 64.
     pub ipv6_subnet: f64,
     /// Trusted proxy addresses or CIDR ranges, removed from the right of forwarded chains.
@@ -519,8 +506,13 @@ pub struct IpAddressConfig {
 }
 
 /// Configuration for sharing cookies across sub-domains.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CrossSubDomainConfig {
+    /// Enable cross-subdomain cookies. Omission disables sharing.
+    pub enabled: Option<bool>,
+    /// Additional cookie names included in the configured-option telemetry.
+    /// Better Auth 1.7.6 declares this option but does not consume it in cookie resolution.
+    pub additional_cookies: Option<Vec<String>>,
     /// The parent domain (e.g. `".example.com"`).
     pub domain: Option<String>,
 }
@@ -558,7 +550,8 @@ pub struct AdvancedDatabaseConfig {
     /// Omission reports unsupported adapters at debug level; explicit true reports a warning.
     pub validate_schema: Option<bool>,
 
-    pub generate_id: crate::id::IdGeneration,
+    /// Configured ID policy. Omission generates random alphanumeric IDs.
+    pub generate_id: Option<crate::id::IdGeneration>,
     /// Default limit for find-many queries. Omission uses 100; adapters preserve numeric semantics.
     pub default_find_many_limit: Option<f64>,
 }
@@ -589,28 +582,11 @@ impl Default for AuthConfig {
     }
 }
 
-impl Default for SessionConfig {
-    fn default() -> Self {
-        Self {
-            store_session_in_database: false,
-            preserve_session_in_database: false,
-            expires_in: Duration::hours(24 * 7),   // 7 days
-            update_age: Some(Duration::hours(24)), // refresh once per day
-            disable_session_refresh: false,
-            defer_session_refresh: false,
-            fresh_age: None,
-            cookie_cache: None,
-            bearer: None,
-            additional_fields: Default::default(),
-        }
-    }
-}
-
 impl Default for IpAddressConfig {
     fn default() -> Self {
         Self {
-            headers: vec!["x-forwarded-for".to_string()],
-            disable_ip_tracking: false,
+            headers: None,
+            disable_ip_tracking: None,
             ipv6_subnet: 64.0,
             trusted_proxies: Vec::new(),
         }
@@ -741,7 +717,7 @@ impl AuthConfig {
 
     /// Set the session expiration duration.
     pub fn session_expires_in(mut self, duration: Duration) -> Self {
-        self.session.expires_in = duration;
+        self.session.expires_in = Some(duration);
         self
     }
 
@@ -751,7 +727,7 @@ impl AuthConfig {
     }
 
     pub fn disable_session_refresh(mut self, disabled: bool) -> Self {
-        self.session.disable_session_refresh = disabled;
+        self.session.disable_session_refresh = Some(disabled);
         self
     }
 
@@ -807,6 +783,8 @@ impl AuthConfig {
     pub fn cross_sub_domain_cookies(mut self, domain: impl Into<String>) -> Self {
         self.advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig {
             domain: Some(domain.into()),
+            enabled: Some(true),
+            ..Default::default()
         });
         self
     }
@@ -1167,9 +1145,11 @@ mod tests {
     #[test]
     fn session_config_defaults() {
         let s = SessionConfig::default();
-        assert_eq!(s.expires_in, Duration::hours(24 * 7));
-        assert_eq!(s.update_age, Some(Duration::hours(24)));
-        assert!(!s.disable_session_refresh);
+        assert_eq!(s.expires_in, None);
+        assert_eq!(s.expires_in(), Duration::hours(24 * 7));
+        assert_eq!(s.update_age, None);
+        assert_eq!(s.update_age(), Duration::hours(24));
+        assert!(!s.disable_session_refresh());
         let cookie = AuthConfig::default().auth_cookie("session_token", Default::default());
         assert_eq!(cookie.name, "better-auth.session_token");
         assert_eq!(cookie.attributes.http_only, Some(true));
@@ -1213,9 +1193,9 @@ mod tests {
     #[test]
     fn account_config_defaults() {
         let a = AccountConfig::default();
-        assert!(a.update_account_on_sign_in);
-        assert!(!a.encrypt_oauth_tokens);
-        assert!(a.account_linking.enabled);
+        assert!(a.update_account_on_sign_in());
+        assert!(!a.encrypt_oauth_tokens());
+        assert!(a.account_linking.enabled());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1253,9 +1233,9 @@ mod tests {
             .disable_session_refresh(true)
             .session_fresh_age(Duration::minutes(5));
 
-        assert_eq!(cfg.session.expires_in, Duration::hours(1));
+        assert_eq!(cfg.session.expires_in(), Duration::hours(1));
         assert_eq!(cfg.session.update_age, Some(Duration::minutes(30)));
-        assert!(cfg.session.disable_session_refresh);
+        assert!(cfg.session.disable_session_refresh());
         assert_eq!(cfg.session.fresh_age, Some(Duration::minutes(5)));
     }
 
@@ -1292,14 +1272,14 @@ mod tests {
     fn advanced_database_defaults() {
         let d = AdvancedDatabaseConfig::default();
         assert_eq!(d.default_find_many_limit, None);
-        assert!(matches!(d.generate_id, crate::id::IdGeneration::Random));
+        assert!(d.generate_id.is_none());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
     fn ip_address_config_defaults() {
         let ip = IpAddressConfig::default();
-        assert_eq!(ip.headers, vec!["x-forwarded-for"]);
-        assert!(!ip.disable_ip_tracking);
+        assert_eq!(ip.headers, None);
+        assert_eq!(ip.disable_ip_tracking, None);
     }
 }

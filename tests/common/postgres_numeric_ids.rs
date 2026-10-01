@@ -85,7 +85,7 @@ async fn verify_mode(database: DatabaseConnection, mode: IdGeneration) -> TestRe
         .await?;
     }
     let mut config = test_config();
-    config.advanced.database.generate_id = mode;
+    config.advanced.database.generate_id = Some(mode);
     let auth = BetterAuth::<LegacySchema>::new(config.clone())
         .store(SeaOrmStore::<LegacySchema>::new(config, database.clone()))
         .plugin(EmailPasswordPlugin::new())
@@ -382,12 +382,12 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
         .update_user(
             "1.6e1",
             UpdateUser {
-                name: Some("Updated".into()),
+                name: Some("Updated".into()).into(),
                 ..Default::default()
             },
         )
         .await?;
-    assert_eq!(updated.name.as_deref(), Some("Updated"));
+    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Updated"));
     let verification = auth
         .store()
         .create_verification(CreateVerification {
@@ -411,7 +411,7 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
     }
     // A database-generated identity does not enable the serial adapter's Number conversion.
     let mut config = test_config();
-    config.advanced.database.generate_id = IdGeneration::Database;
+    config.advanced.database.generate_id = Some(IdGeneration::Database);
     let ordinary = BetterAuth::<LegacySchema>::new(config.clone())
         .store(SeaOrmStore::<LegacySchema>::new(config, database))
         .build()
@@ -437,7 +437,7 @@ async fn verify_uuid_defaults(database: DatabaseConnection) -> TestResult {
     )
     .await?;
     let mut config = test_config();
-    config.advanced.database.generate_id = IdGeneration::Uuid;
+    config.advanced.database.generate_id = Some(IdGeneration::Uuid);
     let auth = BetterAuth::<BundledSchema>::new(config.clone())
         .store(SeaOrmStore::new(config, database.clone()))
         .build()

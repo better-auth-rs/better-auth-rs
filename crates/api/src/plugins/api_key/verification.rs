@@ -482,7 +482,7 @@ impl ApiKeyPlugin {
                     // Upstream passes its session lifetime in seconds to getDate(..., "ms").
                     None => {
                         now + chrono::Duration::milliseconds(
-                            ctx.config.session.expires_in.num_seconds(),
+                            ctx.config.session.expires_in().num_seconds(),
                         )
                     }
                 };

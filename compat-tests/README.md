@@ -7,6 +7,8 @@ runtime.
 Run the commands below inside `devenv shell`, or prefix each command with
 `devenv shell --`. Run `devenv test` from the repository root for the full gate.
 
+The reference contract gate includes `contracts/telemetry-options.test.ts`. The test compares the pinned upstream telemetry projection with `tests/fixtures/telemetry-options-1.7.6.json` and does not write the fixture. Run `bun test compat-tests/reference-server/contracts/telemetry-options.test.ts` from the repository root for this contract alone. To regenerate the fixture explicitly, run `TELEMETRY_REFERENCE_OUTPUT=tests/fixtures/telemetry-options-1.7.6.json node compat-tests/reference-server/contracts/telemetry-options.mjs` inside the project devenv.
+
 ## Model
 
 The compatibility system has two layers:
@@ -223,7 +225,7 @@ The `request-query-memory` and `request-query-sqlite` profiles cover raw HTTP du
 The same request-query profiles verify unknown-key removal, optional account-selection unions, API-key numeric coercion, passkey registration queries, and actual member/user pagination. SQLite rejects fractional SQL pagination; the implicit memory adapter follows JavaScript slice semantics. Body cases inspect real password hashing, verification senders, database hooks, and session deletion. They compare JSON, form, native, and native-with-Request calls, including delayed before-hook changes and body-before-query error order.
 
 
-The request-query profiles each run 33 scenarios. Account and user body cases also verify validation before authentication, strict account selection, empty session-token acceptance, and actual email updates and session revocation. The user/session record cases verify required bodies, prototype-key projection, raw hooks, persisted profile updates and truthy email rejection. HTTP origin checks retain their earlier rejection boundary. Endpoint hooks see raw input; database hooks see the validated projection. The reference fixture captures original request bytes before dispatch because endpoints can consume the Request stream.
+The request-query profiles verify validation before authentication, strict account selection, empty session-token acceptance, and actual email updates and session revocation. Separate `request-record-memory` and `request-record-sqlite` profiles verify required bodies, prototype-key projection, raw hooks, persisted profile updates and truthy email rejection. Raw-value persistence scenarios use separate fixture storage from string-query contracts. HTTP origin checks retain their earlier rejection boundary. Endpoint hooks see raw input; database hooks see the validated projection. The reference fixture captures original request bytes before dispatch because endpoints can consume the Request stream.
 
 
 The `request-plugin-memory` and `request-plugin-sqlite` profiles each run five scenarios. Username, one-time token, multi-session, and email-verification bodies validate at the shared endpoint boundary before authentication and side effects. Tests preserve raw hooks, validated sender/storage input, real credentials and token replay rejection. A null signup body also proves that Username before hooks run before the core schema and retain the upstream ordinary error.
@@ -249,3 +251,5 @@ The three `phone-native-*` profiles exercise `consumePhoneNumberOTP` through Mem
 The `two-factor-after-memory` and `two-factor-after-sqlite` profiles compare credential sign-in through HTTP and native endpoints. The traces retain global and plugin after-hook order, session creation and deletion, proof creation, response replacement, ordinary errors, pending cookie cleanup, and real trusted-device rotation.
 
 `reference-server/required-headers-oracle.ts` reads the pinned endpoint schemas and executes 184 native cases across every registered `requireHeaders` endpoint. `tests/required_headers_tests.rs` compares exact status and body values for omitted headers, an original Request alone, explicit empty headers, invalid bodies, and invalid queries. The regression also checks raw before/after hook input after header validation fails. Regenerate `tests/fixtures/required-headers-upstream.json` with `bun run required-headers-oracle.ts ../../tests/fixtures/required-headers-upstream.json` from `reference-server` inside the project devenv.
+
+The default Bun contract gate also checks `network-options.test.ts`. The contract compares normal IP and cookie resolution plus telemetry presence against `tests/fixtures/network-options-1.7.6.json` in a fresh production process. The test does not rewrite the fixture. To regenerate the fixture explicitly, run `NODE_ENV=production NETWORK_REFERENCE_OUTPUT=/absolute/path/network-options-1.7.6.json node contracts/network-options.mjs` from the reference-server directory.

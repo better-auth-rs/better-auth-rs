@@ -31,7 +31,11 @@ async fn build_auth(
     let auth = builder.build().await?;
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("worker@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("worker@example.com")
+                .with_name("Fixture"),
+        )
         .await?;
     Ok((auth, user.id.typed().unwrap().clone()))
 }

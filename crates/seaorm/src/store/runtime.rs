@@ -25,6 +25,12 @@ where
     S::Session: SeaOrmSessionModel,
     S::Verification: SeaOrmVerificationModel,
 {
+    fn database_hook_metadata(
+        &self,
+    ) -> Vec<better_auth_core::observability::database::DatabaseHookMetadata> {
+        self.hooks.iter().map(|hook| hook.hook_metadata()).collect()
+    }
+
     fn schema_check(
         &self,
         config: &better_auth_core::store::schema::SchemaConfiguration,

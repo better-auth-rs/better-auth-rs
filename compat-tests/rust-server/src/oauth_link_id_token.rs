@@ -87,9 +87,9 @@ impl OAuthLinkIdTokenFixture {
         if !Self::enabled(profile) {
             return;
         }
-        config.account.encrypt_oauth_tokens = true;
-        config.account.account_linking.enabled = profile != "oauth-link-id-token-disabled";
-        config.account.account_linking.update_user_info_on_link = true;
+        config.account.encrypt_oauth_tokens = Some(true);
+        config.account.account_linking.enabled = Some(profile != "oauth-link-id-token-disabled");
+        config.account.account_linking.update_user_info_on_link = Some(true);
         config.account.account_linking.trusted_providers = Default::default();
         config.account.account_linking.allow_different_emails = false;
         config.user.additional_fields.insert(
@@ -194,7 +194,7 @@ password: Default::default(),
                 Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=raw_access),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token.typed()?.as_deref(),"scope":account.scope.typed()?.as_deref(),"accessTokenExpiresAt":*account.access_token_expires_at.typed()?}))
             }).transpose()?;
             let state=fixture.state.lock().unwrap();
-            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.additional_fields.get("department"),"internalCode":user.additional_fields.get("internalCode")})),"account":account})))
+            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name,"email":user.email(),"emailVerified":user.email_verified(),"image":user.image,"department":user.additional_fields.get("department"),"internalCode":user.additional_fields.get("internalCode")})),"account":account})))
         }}))
     }
 }
@@ -278,7 +278,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
                 .lock()
                 .unwrap()
                 .image_updates
-                .push(match &update.image {
+                .push(match update.image.json()? {
                     Some(image) => json!({ "image": image }),
                     None => json!({}),
                 });

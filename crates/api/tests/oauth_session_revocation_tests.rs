@@ -56,6 +56,7 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
         .create_user(
             CreateUser::new()
                 .with_email("operator@example.com")
+                .with_name("Fixture")
                 .with_email_verified(true),
         )
         .await
@@ -378,7 +379,7 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
 async fn sign_out_preserves_stored_id_token_and_revokes_session() {
     for non_jwt_token in [false, true] {
         let mut config = AuthConfig::new("oauth-logout-secret-at-least-32-characters");
-        config.account.encrypt_oauth_tokens = true;
+        config.account.encrypt_oauth_tokens = Some(true);
         let mut fixture = fixture(Arc::new(config)).await;
         let raw_id_token = "header.provider-identity.signature";
         let encrypted = encrypt_token_set(

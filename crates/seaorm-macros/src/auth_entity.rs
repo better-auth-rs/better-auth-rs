@@ -12,6 +12,8 @@ use organization_model::generate as gen_organization_model;
 mod adapter_record;
 #[path = "field_aliases.rs"]
 mod field_aliases;
+#[path = "identity.rs"]
+mod identity;
 #[path = "plugin_model.rs"]
 mod plugin_model;
 
@@ -177,14 +179,17 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 && all_known.iter().any(|known| ident == known)
                 && ident != "username"
                 && ident != "display_username"
+                && ident != "name"
+                && ident != "image"
             {
                 continue;
             }
-            let mut aliases = if matches!(role, EntityRole::Session) {
-                field_aliases::field_aliases(&ident.to_string(), &name)
-            } else {
-                vec![name]
-            };
+            let mut aliases =
+                if matches!(role, EntityRole::Session) || ident == "name" || ident == "image" {
+                    field_aliases::field_aliases(&ident.to_string(), &name)
+                } else {
+                    vec![name]
+                };
             if ident == "username" || ident == "display_username" {
                 let canonical = if ident == "username" {
                     "username"
@@ -195,9 +200,14 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     aliases.push(canonical.to_owned());
                 }
             }
+            let value = if ident == "id" || identity::is_reference(role, field)? {
+                identity::decode(field, &core_root)
+            } else {
+                quote!(#core_root::serde_json::from_value(value)?)
+            };
             updates.push(quote! {
                 #(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(
-                    #core_root::serde_json::from_value(value)?,
+                    #value,
                 ),
             });
             json_columns.push(quote! {
@@ -222,8 +232,16 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         Err(error) => return error.to_compile_error(),
     };
 
-    let aliases = if matches!(role, EntityRole::Session) {
-        match field_aliases::generate(input, fields, &all_known) {
+    let aliases = if matches!(role, EntityRole::Session | EntityRole::User) {
+        match field_aliases::generate(
+            input,
+            fields,
+            &all_known
+                .iter()
+                .copied()
+                .filter(|name| role != EntityRole::User || !["name", "image"].contains(name))
+                .collect::<Vec<_>>(),
+        ) {
             Ok(methods) => methods,
             Err(error) => return error.to_compile_error(),
         }
@@ -233,23 +251,25 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
 
     match role {
         EntityRole::User => gen_user(
-            ident,
-            &has,
-            &extra_not_set,
-            &extra_updates,
-            &field_methods,
-            &seaorm_root,
-            &core_root,
-        ),
-        EntityRole::Session => gen_session(
-            ident,
+            (ident, fields),
             &aliases,
             &has,
             &extra_not_set,
             &extra_updates,
             &field_methods,
             (&seaorm_root, &core_root),
-        ),
+        )
+        .unwrap_or_else(syn::Error::into_compile_error),
+        EntityRole::Session => gen_session(
+            (ident, fields),
+            &aliases,
+            &has,
+            &extra_not_set,
+            &extra_updates,
+            &field_methods,
+            (&seaorm_root, &core_root),
+        )
+        .unwrap_or_else(syn::Error::into_compile_error),
         role @ (EntityRole::Account | EntityRole::Verification) => {
             adapter_record::generate(input, fields, role, &seaorm_root, &core_root)
                 .unwrap_or_else(syn::Error::into_compile_error)
@@ -270,14 +290,17 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
 }
 
 fn gen_user(
-    ident: &Ident,
+    model: (&Ident, &syn::FieldsNamed),
+    aliases: &TokenStream,
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
     field_methods: &TokenStream,
-    seaorm_root: &TokenStream,
-    core_root: &TokenStream,
-) -> TokenStream {
+    (seaorm_root, core_root): (&TokenStream, &TokenStream),
+) -> syn::Result<TokenStream> {
+    let (ident, fields) = model;
+    let id_type = identity::field_type(fields, "id")?;
+    let id_view = identity::string_view(id_type, "id");
     let plugin_fields: Vec<_> = registry::plugin_field_names(EntityRole::User)
         .into_iter()
         .filter(|name| has(name))
@@ -360,14 +383,13 @@ fn gen_user(
         quote! {}
     };
 
-    quote! {
+    Ok(quote! {
         impl #core_root::entity::AuthUser for #ident {
+            #aliases
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
-            fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(::std::borrow::Cow::Borrowed(&self.id)) }
+            fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#id_view) }
             fn email(&self) -> Option<&str> { self.email.as_deref() }
-            fn name(&self) -> Option<&str> { self.name.as_deref() }
             fn email_verified(&self) -> bool { self.email_verified }
-            fn image(&self) -> Option<&str> { self.image.as_deref() }
             fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
             fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
             #(#identity_getters)*
@@ -393,7 +415,7 @@ fn gen_user(
                 }
                 Ok(())
             }
-            type Id = ::std::string::String;
+            type Id = #id_type;
             type Entity = Entity;
             type ActiveModel = ActiveModel;
             type Column = Column;
@@ -405,51 +427,56 @@ fn gen_user(
             fn name_column() -> Self::Column { Column::Name }
             fn created_at_column() -> Self::Column { Column::CreatedAt }
             fn parse_id(id: &str) -> #core_root::AuthResult<Self::Id> {
-                Ok(id.to_string())
+                id.parse().map_err(|error| #core_root::AuthError::bad_request(format!("Invalid user id: {error}")))
             }
 
             fn new_active(
                 id: ::std::option::Option<Self::Id>,
                 create_user: #core_root::types::CreateUser,
                 now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) -> Self::ActiveModel {
-                Self::ActiveModel {
-                    id: #seaorm_root::sea_orm::ActiveValue::Set(
-                        id.unwrap_or_else(|| #core_root::uuid::Uuid::new_v4().to_string())
-                    ),
+            ) -> #core_root::AuthResult<Self::ActiveModel> {
+                Ok(Self::ActiveModel {
+                    id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
                     email: #seaorm_root::sea_orm::ActiveValue::Set(create_user.email),
-                    name: #seaorm_root::sea_orm::ActiveValue::Set(create_user.name),
-                    image: #seaorm_root::sea_orm::ActiveValue::Set(create_user.image.flatten()),
+                    name: match create_user.name.json()? {
+                        Some(value) => #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),
+                        None => #seaorm_root::sea_orm::ActiveValue::NotSet,
+                    },
+                    image: match create_user.image.json()? {
+                        Some(value) => #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),
+                        None => #seaorm_root::sea_orm::ActiveValue::NotSet,
+                    },
                     email_verified: #seaorm_root::sea_orm::ActiveValue::Set(create_user.email_verified.unwrap_or(false)),
                     created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
                     updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
                     #(#plugin_new_active,)*
                     #(#extras,)*
-                }
+                })
             }
 
             fn apply_update(
                 active: &mut Self::ActiveModel,
                 update: #core_root::types::UpdateUser,
                 now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) {
+            ) -> #core_root::AuthResult<()> {
+                if let Some(value) = update.name.json()? {
+                    active.name = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?);
+                }
+                if let Some(value) = update.image.json()? {
+                    active.image = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?);
+                }
                 if let ::std::option::Option::Some(email) = update.email {
                     active.email = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(email));
-                }
-                if let ::std::option::Option::Some(name) = update.name {
-                    active.name = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(name));
-                }
-                if let ::std::option::Option::Some(image) = update.image {
-                    active.image = #seaorm_root::sea_orm::ActiveValue::Set(image);
                 }
                 if let ::std::option::Option::Some(email_verified) = update.email_verified {
                     active.email_verified = #seaorm_root::sea_orm::ActiveValue::Set(email_verified);
                 }
                 #(#plugin_apply_update)*
                 active.updated_at = #seaorm_root::sea_orm::ActiveValue::Set(now);
+                Ok(())
             }
         }
-    }
+    })
 }
 
 /// Generate `new_active` field assignments for present plugin fields on User.
@@ -561,15 +588,20 @@ fn plugin_update_fields_user(
 }
 
 fn gen_session(
-    ident: &Ident,
+    model: (&Ident, &syn::FieldsNamed),
     aliases: &TokenStream,
     has: &dyn Fn(&str) -> bool,
     extras: &[TokenStream],
     extra_updates: &[TokenStream],
     field_methods: &TokenStream,
     (seaorm_root, core_root): (&TokenStream, &TokenStream),
-) -> TokenStream {
-    let updates = ["id", "token", "user_id", "expires_at", "created_at", "updated_at", "ip_address", "user_agent", "impersonated_by", "active_organization_id", "active_team_id"]
+) -> syn::Result<TokenStream> {
+    let (ident, fields) = model;
+    let id_type = identity::field_type(fields, "id")?;
+    let user_id_type = identity::field_type(fields, "user_id")?;
+    let id_view = identity::string_view(id_type, "id");
+    let user_id_view = identity::string_view(user_id_type, "user_id");
+    let updates = ["token", "expires_at", "created_at", "updated_at", "ip_address", "user_agent", "impersonated_by", "active_organization_id", "active_team_id"]
         .into_iter().filter(|name| has(name)).map(|name| {
             let field = format_ident!("{name}");
             quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
@@ -646,18 +678,18 @@ fn gen_session(
         }
     };
 
-    quote! {
+    Ok(quote! {
         impl #core_root::entity::AuthSession for #ident {
             #aliases
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
-            fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(::std::borrow::Cow::Borrowed(&self.id)) }
+            fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#id_view) }
             fn expires_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.expires_at }
             fn token(&self) -> &str { &self.token }
             fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
             fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
             fn ip_address(&self) -> Option<&str> { self.ip_address.as_deref() }
             fn user_agent(&self) -> Option<&str> { self.user_agent.as_deref() }
-            fn user_id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(::std::borrow::Cow::Borrowed(&self.user_id)) }
+            fn user_id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#user_id_view) }
             #impersonated_by_impl
             #active_org_impl
             #active_team_impl
@@ -666,12 +698,14 @@ fn gen_session(
 
         impl #seaorm_root::SeaOrmSessionModel for #ident {
             fn apply_update(active: &mut Self::ActiveModel, update: #seaorm_root::SessionUpdate) -> #core_root::AuthResult<()> {
+                if let Some(id) = update.id { active.id = #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_id(&id)?); }
+                if let Some(id) = update.user_id { active.user_id = #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_user_id(&id)?); }
                 #(#updates)*
                 Ok(())
             }
             #field_methods
-            type Id = ::std::string::String;
-            type UserId = ::std::string::String;
+            type Id = #id_type;
+            type UserId = #user_id_type;
             type Entity = Entity;
             type ActiveModel = ActiveModel;
             type Column = Column;
@@ -698,10 +732,10 @@ fn gen_session(
             fn expires_at_column() -> Self::Column { Column::ExpiresAt }
             fn created_at_column() -> Self::Column { Column::CreatedAt }
             fn parse_id(id: &str) -> #core_root::AuthResult<Self::Id> {
-                Ok(id.to_string())
+                id.parse().map_err(|error| #core_root::AuthError::bad_request(format!("Invalid session id: {error}")))
             }
             fn parse_user_id(user_id: &str) -> #core_root::AuthResult<Self::UserId> {
-                Ok(user_id.to_string())
+                user_id.parse().map_err(|error| #core_root::AuthError::bad_request(format!("Invalid session user id: {error}")))
             }
 
             fn new_active(
@@ -711,10 +745,8 @@ fn gen_session(
                 now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
             ) -> Self::ActiveModel {
                 Self::ActiveModel {
-                    id: #seaorm_root::sea_orm::ActiveValue::Set(
-                        id.unwrap_or_else(|| #core_root::uuid::Uuid::new_v4().to_string())
-                    ),
-                    user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(id), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
+                    id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
+                    user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_user_id(&id).expect("the store validates session user IDs before constructing a model")), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
                     token: #seaorm_root::sea_orm::ActiveValue::Set(token),
                     expires_at: #seaorm_root::sea_orm::ActiveValue::Set(create_session.expires_at),
                     created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
@@ -744,7 +776,7 @@ fn gen_session(
             #set_active_org
             #set_active_team
         }
-    }
+    })
 }
 
 fn parse_role(input: &DeriveInput) -> Result<EntityRole, syn::Error> {

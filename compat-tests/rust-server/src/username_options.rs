@@ -474,7 +474,7 @@ async fn invoke<S: AuthSchema>(
         }
         "create" => {
             let mut user = CreateUser::new().with_email(data["email"].as_str().unwrap());
-            user.name = data.get("name").and_then(Value::as_str).map(str::to_owned);
+            user.name = better_auth::SchemaValue::from_json(data.get("name").cloned());
             user.additional_fields = fields;
             let user = fixture.auth.store().create_user(user).await?;
             Ok(serde_json::to_value(

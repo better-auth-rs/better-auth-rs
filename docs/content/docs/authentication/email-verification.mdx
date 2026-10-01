@@ -40,11 +40,13 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 Configure a `SendVerificationEmail` callback for `/send-verification-email`. Setting only the global `EmailProvider` does not enable that endpoint. The example uses `ConsoleEmailProvider` inside the callback for local development.
 
+Direct `EmailVerificationConfig.verification_token_expiry` assignments use `Some(duration)`. Omission resolves to one hour through `verification_token_expiry()`. The plugin builder still accepts a `Duration`.
+
 ### Plugin Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `verification_token_expiry` | `chrono::Duration` | `Duration::hours(1)` | How long verification tokens stay valid |
+| `verification_token_expiry` | `Option<chrono::Duration>` | `None` (one hour) | How long verification tokens stay valid |
 | `send_email_notifications` | `bool` | `true` | Use the default email provider for sign-in notifications; custom callbacks are independent |
 | `require_verification_for_signin` | `bool` | `false` | Require verification for username sign-in when attached with `with_email_verification` |
 | `send_on_sign_in` | `bool` | `false` | Send to unverified users when attached with `EmailPasswordPlugin::with_email_verification` |

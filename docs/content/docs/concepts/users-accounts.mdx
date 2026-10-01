@@ -52,6 +52,12 @@ Use `validator` for synchronous input validation or normalization. The validator
 
 As in the upstream adapter, public input transforms run at both the route and storage boundaries. A validator replaces the route transform, but the storage transform still runs. Missing optional fields reach the storage input transform during creation. Database reads apply output transforms once; cache reads preserve the transformed values. Date fields use RFC 3339 strings and normalize to millisecond UTC timestamps. The entity column types determine storage representation for strings, numbers, booleans, JSON, arrays, and enums. An enum declaration alone does not validate allowed values; configure a validator when validation is required.
 
+Core User, Account, Session, and Verification database lists preserve the selected row order and advance output transforms by schema field across the batch. Each row retains its field order. If a callback fails, that row stops; other rows finish, then the batch returns the first original error. This preserves callbacks that upstream already started before observing the batch error. Rust completes those rows before returning; JavaScript may reject the caller while other rows continue through microtasks. Rust does not emulate that relative timing. Field transform callbacks remain synchronous; asynchronous field callbacks are a separate unsupported capability.
+
+Handwritten `SeaOrmAccountModel` and `SeaOrmVerificationModel` implementations must implement `record_fields` and return `AdapterRecord::new(core, storage)`. Extract raw model values there. The default `record` method and database list projection apply output policies through the shared boundary. `AuthEntity` generates `record_fields`.
+
+`AuthUser` reads `name` and `image` through `Serialize`. If their serialized keys differ from canonical names, handwritten implementations must override `serialized_field_name`; `AuthEntity` generates that mapping.
+
 Plugin fields are projected from the active plugin schema. Disabling Anonymous, Phone Number, Username, Admin, or Two Factor hides stored plugin fields on database reads. An existing signed session cache preserves its previous plugin fields until expiry or a cache version change, matching upstream. Current `returned: false` restrictions apply even to existing caches. Change `session.cookie_cache.version` when a configuration change must invalidate cached user shapes immediately.
 
 Custom stores must apply `UserConfig::storage_fields` before persistence. Custom endpoints must return `AuthContext::user_view` rather than serialize storage models. `UserView::from` is an unconfigured internal conversion. Generic OAuth and OIDC pass `OAuthProfile.additional_fields` through `UserConfig::parse_provider_input` before persistence. Custom provider integrations must use the same boundary. Raw OAuth provider response data is not mapped user input.
@@ -121,6 +127,8 @@ Content-Type: application/json
   "newEmail": "new@example.com"
 }
 ```
+
+`ChangeEmailConfig.enabled` uses `Option<bool>` to preserve omission. `None` disables email changes; direct assignments use `Some(true)` or `Some(false)`. The `.change_email_enabled(bool)` builder keeps its scalar argument.
 
 The endpoint resolves an authoritative session before checking whether email changes are enabled. Verified users require an email verification sender; a confirmation sender alone does not enable the flow. This configuration check runs before the target-email lookup. An existing target email returns `{status: true}` without changing the user, issuing cookies, or sending a message.
 

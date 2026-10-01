@@ -376,7 +376,10 @@ pub struct GetInvitationResponse<I: Serialize> {
 pub struct UserInvitationResponse<I: Serialize> {
     #[serde(flatten)]
     pub invitation: I,
-    #[serde(rename = "organizationName")]
+    #[serde(
+        rename = "organizationName",
+        skip_serializing_if = "SchemaValue::is_undefined"
+    )]
     pub organization_name: SchemaValue<String>,
 }
 
@@ -494,7 +497,7 @@ impl MemberResponse {
     /// Construct from any type implementing [`AuthMember`] and [`AuthUser`](better_auth_core::entity::AuthUser).
     pub fn from_member_and_user(
         member: &impl better_auth_core::entity::AuthMember,
-        user: &impl better_auth_core::entity::AuthUser,
+        user: &better_auth_core::UserView,
     ) -> Self {
         Self {
             additional_fields: member.projected_fields().cloned().unwrap_or_default(),

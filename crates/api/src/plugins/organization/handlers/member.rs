@@ -42,7 +42,10 @@ pub(crate) async fn get_active_member_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    Ok(MemberResponse::from_member_and_user(&member, user))
+    Ok(MemberResponse::from_member_and_user(
+        &member,
+        &ctx.internal_user_view(user)?,
+    ))
 }
 
 pub(crate) async fn list_members_core(
@@ -343,7 +346,17 @@ pub(crate) async fn update_member_role_core(
     }
 
     let dynamic_roles = if config.dynamic_access_control {
-        ctx.database.list_organization_roles(&org_id).await?
+        ctx.database
+            .query_organization_roles(
+                &org_id,
+                &body
+                    .role
+                    .roles()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>(),
+            )
+            .await?
     } else {
         Vec::new()
     };

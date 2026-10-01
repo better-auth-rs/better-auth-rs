@@ -5,13 +5,13 @@ description: Session cookie configuration and behavior.
 
 Better Auth uses HTTP cookies to persist session tokens in the browser. This page explains how cookies are configured and the security implications of each setting.
 
-Configure names and attributes through `AuthConfig.advanced`; `SessionConfig` controls session lifetime and caching. The former `SessionConfig.cookie_name`, `cookie_secure`, `cookie_http_only`, and `cookie_same_site` fields have been removed. Use `advanced.cookies["session_token"].name`, `advanced.use_secure_cookies`, and global or per-cookie attributes instead.
+Configure names and attributes through `AuthConfig.advanced`; `SessionConfig` controls session lifetime and caching. The former `SessionConfig.cookie_name`, `cookie_secure`, `cookie_http_only`, and `cookie_same_site` fields have been removed. Use a `CookieOverride` entry in `advanced.cookies`, `advanced.use_secure_cookies`, and global or per-cookie attributes instead.
 
-The resolver applies default attributes, `advanced.default_cookie_attributes`, caller attributes, then `advanced.cookies[logical_name].attributes`. `cookie_prefix` changes the default `better-auth` prefix. Per-cookie names replace that default name. Secure policy adds `__Secure-` independently of attribute overrides. The policy comes from `use_secure_cookies`, a fixed dynamic protocol, a static URL scheme, or the production environment. A dynamic incoming HTTPS URL does not change the initial cookie policy unless cross-subdomain cookies trigger per-request resolution.
+The resolver applies default attributes, `advanced.default_cookie_attributes`, caller attributes, then the logical cookie entry’s attributes from `advanced.cookies`. `cookie_prefix` changes the default `better-auth` prefix. Per-cookie names replace that default name. Secure policy adds `__Secure-` independently of attribute overrides. The policy comes from `use_secure_cookies`, a fixed dynamic protocol, a static URL scheme, or the production environment. A dynamic incoming HTTPS URL does not change the initial cookie policy unless cross-subdomain cookies trigger per-request resolution.
 
 Serialization enforces `Secure` for `__Secure-` and `__Host-` names. A `__Host-` name also forces path `/` and removes the domain. Session issuance replaces the configured token-cookie `Max-Age` with the session lifetime, or omits it for a browser-session login. Cache cookies retain their own effective `Max-Age`.
 
-Set `advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig { domain: None })` to derive the domain from each resolved URL. An explicit domain stays fixed. Static initialization without a URL or explicit cross-subdomain domain fails; setting an unrelated cookie attribute domain does not satisfy that requirement. Cache chunks inherit their parent cookie attributes during writing and deletion.
+Set `advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig { enabled: Some(true), ..Default::default() })` to derive the domain from each resolved URL. An explicit domain stays fixed. Omitted or false `enabled` disables sharing, even when a domain is configured. When sharing is enabled, static initialization without a URL or explicit cross-subdomain domain fails; setting an unrelated cookie attribute domain does not satisfy that requirement. Cache chunks inherit their parent cookie attributes during writing and deletion.
 
 Use `config.auth_cookie("session_token", CookieAttributes::default())` to inspect the resolved name and attributes. Application cookies can use `context.create_auth_cookie` with their logical name and caller attributes.
 
@@ -43,11 +43,11 @@ use better_auth::config::SameSite;
 use chrono::Duration;
 
 let mut config = AuthConfig::new("your-secret-key-at-least-32-chars");
-config.advanced.cookies.entry("session_token".into()).or_default().name = Some("my-app.session".into());
+config.advanced.cookies.get_or_insert_default().entry("session_token".into()).or_default().name = Some("my-app.session".into());
 config.advanced.use_secure_cookies = Some(true);
 config.advanced.default_cookie_attributes.http_only = Some(true);
 config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax);
-config.session.expires_in = Duration::hours(24 * 7); // 7 days
+config.session.expires_in = Some(Duration::hours(24 * 7)); // 7 days
 ```
 
 ## Cookie Attributes
@@ -102,7 +102,7 @@ The cookie expiration matches the session expiration time. When a session is cre
 use chrono::Duration;
 
 // Session and cookie expire after 7 days
-config.session.expires_in = Duration::hours(24 * 7);
+config.session.expires_in = Some(Duration::hours(24 * 7));
 ```
 
 ## Cookie Format

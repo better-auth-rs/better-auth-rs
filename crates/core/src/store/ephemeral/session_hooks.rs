@@ -138,11 +138,7 @@ impl EphemeralStore {
             })
             .await?;
         // Upstream deleteManyWithHooks catches snapshot projection failures, then runs the write.
-        let sessions: Vec<_> = sessions
-            .into_iter()
-            .map(|row| self.output_session(row))
-            .collect::<AuthResult<_>>()
-            .unwrap_or_default();
+        let sessions = self.output_sessions(sessions).unwrap_or_default();
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };

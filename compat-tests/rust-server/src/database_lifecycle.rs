@@ -359,8 +359,8 @@ pub async fn router(profile: &str, base_url: &str) -> AuthResult<Router> {
     let mut config =
         AuthConfig::new("database-lifecycle-fixture-secret-at-least-thirty-two-characters")
             .base_url(base_url);
-    config.session.store_session_in_database = stores_sessions;
-    config.session.preserve_session_in_database = preserve;
+    config.session.store_session_in_database = Some(stores_sessions);
+    config.session.preserve_session_in_database = Some(preserve);
     let _ = config.session.additional_fields.insert(
         "label".into(),
         better_auth::config::UserFieldConfig {
@@ -428,7 +428,7 @@ impl Fixture {
                     .with_name("Lifecycle")
             },
             date(CREATED_AT),
-        );
+        )?;
         user.updated_at = Set(date(UPDATED_AT));
         let user = user.insert(db).await.map_err(database_error)?;
         for id in ["a1", "a2"] {

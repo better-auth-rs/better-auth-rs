@@ -10,7 +10,7 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth, server_api::EndpointInput};
 use better_auth_core::{
-    AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthUser, HttpMethod, UpdateUser,
+    AuthContext, AuthPlugin, AuthRequest, AuthResponse, HttpMethod, UpdateUser,
     config::CookieCacheConfig, middleware::RateLimitConfig, store::StatelessSchema,
     utils::password::PasswordHasher,
 };
@@ -109,7 +109,7 @@ impl AuthPlugin<StatelessSchema> for Fixture {
                 .update_user(
                     data.user.id.typed().unwrap(),
                     UpdateUser {
-                        name: Some("Changed after issue".into()),
+                        name: Some("Changed after issue".into()).into(),
                         additional_fields: serde_json::Map::from_iter([(
                             "secretNote".into(),
                             json!("changed-secret"),
@@ -131,7 +131,7 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
     };
     let mut config =
         AuthConfig::new("identity-context-secret-at-least-thirty-two-characters").base_url(base);
-    config.session.expires_in = chrono::Duration::hours(1);
+    config.session.expires_in = Some(chrono::Duration::hours(1));
     config.session.cookie_cache = Some(CookieCacheConfig {
         enabled: Some(false),
         ..Default::default()
@@ -167,7 +167,7 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
             fixture.record(json!({"event":"link","context":context(endpoint),
                 "oldHidden":linked.anonymous_user.additional_fields.get("secretNote"),"oldSessionHidden":linked.anonymous_session.additional_fields.get("secretSession"),
                 "newHidden":linked.new_user.additional_fields.get("secretNote"),"newSessionHidden":linked.new_session.additional_fields.get("secretSession"),
-                "newName":linked.new_user.name,"storedName":stored.name(),"storedHidden":stored.additional_fields.get("secretNote"),
+                "newName":linked.new_user.name,"storedName":stored.name,"storedHidden":stored.additional_fields.get("secretNote"),
                 "sameSnapshot":snapshot.user.id == linked.new_user.id && snapshot.user.name == linked.new_user.name,
                 "oldExists":endpoint.auth.database.get_user_by_id(linked.anonymous_user.id.typed().unwrap()).await?.is_some()}));
             endpoint.set_header("x-callback-observed","anonymous-link")?;

@@ -190,6 +190,22 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         .unwrap()
         .unwrap();
     assert_eq!(member.badge.as_deref(), Some("founder"));
+    let member_count = generated::member::Entity::find()
+        .count(&database)
+        .await
+        .unwrap();
+    database.execute_unprepared("INSERT INTO app_members (id, workspace_id, subject_id, access_role, created_at, badge) SELECT 'duplicate-membership', workspace_id, subject_id, access_role, created_at, badge FROM app_members LIMIT 1").await.unwrap();
+    assert_eq!(
+        generated::member::Entity::find()
+            .count(&database)
+            .await
+            .unwrap(),
+        member_count + 1
+    );
+    database
+        .execute_unprepared("DELETE FROM app_members WHERE id = 'duplicate-membership'")
+        .await
+        .unwrap();
     assert_eq!(
         generated::team_member::Entity::find()
             .count(&database)

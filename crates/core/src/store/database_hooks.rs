@@ -48,8 +48,6 @@ impl UpdateUser {
         }
         fields!(
             email,
-            name,
-            image,
             email_verified,
             username,
             display_username,
@@ -63,6 +61,12 @@ impl UpdateUser {
             two_factor_enabled,
             metadata
         );
+        if !patch.name.is_undefined() {
+            self.name = patch.name;
+        }
+        if !patch.image.is_undefined() {
+            self.image = patch.image;
+        }
         self.additional_fields.extend(patch.additional_fields);
     }
 }

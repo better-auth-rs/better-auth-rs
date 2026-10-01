@@ -4,6 +4,7 @@ use better_auth_core::{
     AuthConfig, CreateAccount, CreateSession, CreateUser,
     store::{AccountStore, SessionStore, UserStore},
 };
+use chrono::Utc;
 use std::sync::Arc;
 use tokio::{sync::Barrier, task::JoinSet};
 
@@ -48,7 +49,7 @@ async fn concurrent_email_proofs_preserve_new_owner_sessions_and_commit_cleanup_
             run_migrations(&database).await?;
             let config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
             let store = Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database.clone()));
-            let user = store.create_user(CreateUser::new().with_email("proof@example.com")).await?;
+            let user = store.create_user(CreateUser::new().with_email("proof@example.com").with_name("Fixture")).await?;
             let user_id = user.id().into_owned();
             let _ = store.create_account(CreateAccount {
 user_id: (user_id.clone()).into(),

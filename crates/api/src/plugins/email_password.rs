@@ -37,18 +37,35 @@ pub struct EmailPasswordConfig {
     /// Enable the upstream username plugin behavior. Requires both username fields.
     pub username: bool,
     pub require_email_verification: bool,
-    pub password_min_length: usize,
+    pub password_min_length: Option<usize>,
     /// Maximum password length (default: 128).
-    pub password_max_length: usize,
+    pub password_max_length: Option<usize>,
     /// Whether to automatically sign in the user after sign-up (default: true).
-    /// When false, sign-up returns the user but doesn't create a session.
-    pub auto_sign_in: bool,
+    /// With `Some(false)`, sign-up returns the user without creating a session.
+    pub auto_sign_in: Option<bool>,
     /// Custom password hasher. When `None`, the default scrypt hasher is used.
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
     /// Notify the application after a protected duplicate signup hashes its password.
     pub on_existing_user_sign_up: Option<Arc<dyn OnExistingUserSignUp>>,
     /// Customize enumeration-safe signup responses without creating an account.
     pub custom_synthetic_user: Option<Arc<CustomSyntheticUser>>,
+}
+
+impl EmailPasswordConfig {
+    /// Read the minimum password length. Omission uses eight characters.
+    pub fn password_min_length(&self) -> usize {
+        self.password_min_length.unwrap_or(8)
+    }
+
+    /// Read the maximum password length. Omission uses 128 characters.
+    pub fn password_max_length(&self) -> usize {
+        self.password_max_length.unwrap_or(128)
+    }
+
+    /// Read the sign-up session policy. Omission creates a session.
+    pub fn auto_sign_in(&self) -> bool {
+        self.auto_sign_in.unwrap_or(true)
+    }
 }
 
 impl std::fmt::Debug for EmailPasswordConfig {
@@ -159,17 +176,17 @@ impl EmailPasswordPlugin {
     }
 
     pub fn password_min_length(mut self, length: usize) -> Self {
-        self.config.password_min_length = length;
+        self.config.password_min_length = Some(length);
         self
     }
 
     pub fn password_max_length(mut self, length: usize) -> Self {
-        self.config.password_max_length = length;
+        self.config.password_max_length = Some(length);
         self
     }
 
     pub fn auto_sign_in(mut self, auto: bool) -> Self {
-        self.config.auto_sign_in = auto;
+        self.config.auto_sign_in = Some(auto);
         self
     }
 
@@ -299,7 +316,7 @@ async fn finalize_sign_in_with_user_core(
     let expires_in = if remember_me == Some(false) {
         chrono::Duration::days(1)
     } else {
-        ctx.config.session.expires_in
+        ctx.config.session.expires_in()
     };
     let issued = issue_user_session_with_lifetime(
         ctx,
@@ -344,13 +361,32 @@ pub(crate) async fn sign_in_core(
     ctx.password_policy.validate_max_length(&body.password)?;
     let verification = EmailVerificationPlugin::from_context(ctx);
     let email_verification = email_verification.or(verification.as_ref());
-    let Some(user) = ctx.database.get_user_by_email(&body.email).await? else {
+    let Some(record) = ctx.database.get_user_with_accounts(&body.email).await? else {
         _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
             .await?;
         return Err(AuthError::InvalidCredentials);
     };
 
-    let stored_hash = match load_credential_password_hash(&user, ctx).await {
+    let user = record.user;
+    let credential = record
+        .accounts
+        .into_iter()
+        .find(|account| account.provider_id == "credential" && account.account_id == user.id);
+    let hash = credential
+        .map(|account| {
+            if account.password.is_truthy()? {
+                account
+                    .password
+                    .typed()
+                    .cloned()
+                    .map(|value| value.unwrap_or_default())
+            } else {
+                Ok(String::new())
+            }
+        })
+        .transpose()?
+        .ok_or(AuthError::InvalidCredentials);
+    let stored_hash = match hash {
         Ok(hash) if !hash.is_empty() => hash,
         Ok(_) | Err(AuthError::InvalidCredentials) => {
             _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
@@ -471,9 +507,9 @@ impl Default for EmailPasswordConfig {
             enable_signup: true,
             username: false,
             require_email_verification: false,
-            password_min_length: 8,
-            password_max_length: 128,
-            auto_sign_in: true,
+            password_min_length: None,
+            password_max_length: None,
+            auto_sign_in: None,
             password_hasher: None,
             on_existing_user_sign_up: None,
             custom_synthetic_user: None,
@@ -483,6 +519,18 @@ impl Default for EmailPasswordConfig {
 
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
+    fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+        let options = &mut options.email_and_password;
+        options.enabled = true;
+        options.disable_sign_up = !self.config.enable_signup;
+        options.require_email_verification = self.config.require_email_verification;
+        options.min_password_length = self.config.password_min_length;
+        options.max_password_length = self.config.password_max_length;
+        options.auto_sign_in = self.config.auto_sign_in == Some(true);
+        options.password.hash |= self.config.password_hasher.is_some();
+        options.password.verify |= self.config.password_hasher.is_some();
+    }
+
     fn name(&self) -> &'static str {
         "email-password"
     }
@@ -503,8 +551,8 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     }
 
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
-        ctx.password_policy.min_length = self.config.password_min_length;
-        ctx.password_policy.max_length = self.config.password_max_length;
+        ctx.password_policy.min_length = self.config.password_min_length();
+        ctx.password_policy.max_length = self.config.password_max_length();
         ctx.extensions.insert(self.config.clone());
         if self.config.username {
             <super::username::UsernamePlugin as AuthPlugin<S>>::on_init(

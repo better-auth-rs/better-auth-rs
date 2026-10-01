@@ -1,10 +1,9 @@
 use super::instrumentation::database_operation;
 use better_auth_core::store::VerificationSessionCleanup;
 use better_auth_core::{AuthResult, AuthUser, UpdateUser};
-use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    QuerySelect, SqliteTransactionMode, TransactionOptions, TransactionTrait,
+    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, SqliteTransactionMode,
+    TransactionOptions, TransactionTrait,
 };
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
@@ -59,18 +58,14 @@ where
                 .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
                 .all(&tx)
                 .await
-                .map_err(map_db_err) }).await?
-                .iter()
-                .map(|row| self.output_account(row, &tx))
-                .collect::<AuthResult<Vec<_>>>()?;
+                .map_err(map_db_err) }).await.and_then(|rows| self.output_accounts(&rows, &tx))?;
             let sessions = if database_sessions {
                 database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "findMany", async { <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(S::Session::user_id_column().eq(self.parse_id(user_id, S::Session::parse_user_id)?))
                     .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
                     .all(&tx)
                     .await
-                    .map_err(map_db_err) }).await?
-                    .iter().map(|row| self.output_session(row, &tx)).collect::<AuthResult<Vec<_>>>()?
+                    .map_err(map_db_err) }).await.and_then(|rows| self.output_sessions(&rows, &tx))?
             } else {
                 Vec::new()
             };
@@ -110,7 +105,10 @@ where
                     crate::hooks::DatabaseHookUpdate::Cancel => {
                         return Err(cancelled_by_hook("email verification"));
                     }
-                    crate::hooks::DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+                    crate::hooks::DatabaseHookUpdate::Patch(mut patch) => {
+                        patch.prepare_user_fields(&self.config().user)?;
+                        update.merge(patch);
+                    }
                 }
             }
             let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "deleteMany", async { <S::Account as SeaOrmAccountModel>::Entity::delete_many()
@@ -125,22 +123,10 @@ where
                     .await
                     .map_err(map_db_err) }).await?;
             }
-            let mut active = user.into_active_model();
-            let fields = self.config().user.storage_fields_for_adapter(
-                std::mem::take(&mut update.additional_fields),
-                false,
-                tx.get_database_backend() == sea_orm::DbBackend::Postgres,
-                S::User::native_json_field,
-            )?;
-            S::User::apply_update(&mut active, update, Utc::now());
-            S::User::apply_fields(&mut active, fields)?;
-            crate::reference_id::apply_bindings(
-                &mut active,
-                &self.config().user,
-                tx.get_database_backend(),
-                S::User::field_column,
-            )?;
-            let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "update", async { active.update(&tx).await.map_err(map_db_err) }).await?;
+            let user = self
+                .update_user_record(&tx, self.parse_id(user_id, S::User::parse_id)?, update)
+                .await?
+                .ok_or(better_auth_core::AuthError::UserNotFound)?;
             let user = self.output_user(&user, &tx)?;
             // External revocation must succeed before the database publishes verified ownership.
             if let Some(cleanup) = session_cleanup {

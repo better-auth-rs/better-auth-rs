@@ -309,7 +309,7 @@ impl AdminPlugin {
                 session_token: session.token.clone(),
                 dont_remember,
             },
-            ctx.config.session.expires_in,
+            ctx.config.session.expires_in(),
         )?;
         let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
 
@@ -321,7 +321,7 @@ impl AdminPlugin {
             create_session_like_cookie(
                 &admin_cookie_name,
                 &admin_cookie,
-                Some(ctx.config.session.expires_in.num_seconds()),
+                Some(ctx.config.session.expires_in().num_seconds()),
                 &ctx.config,
             ),
         )?;

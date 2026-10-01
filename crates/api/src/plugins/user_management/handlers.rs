@@ -8,7 +8,9 @@ use better_auth_core::{
 
 use super::UserManagementConfig;
 use super::types::{ChangeEmailRequest, DeleteUserRequest};
-use crate::plugins::email_verification::token::create_email_verification_token;
+use crate::plugins::email_verification::{
+    EmailVerificationConfig, token::create_email_verification_token,
+};
 use better_auth_core::SuccessMessageResponse;
 
 pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
@@ -19,7 +21,7 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
     config: &UserManagementConfig,
     ctx: &AuthContext<S>,
 ) -> AuthResult<StatusResponse> {
-    if !config.change_email.enabled {
+    if !config.change_email.enabled() {
         return Err(AuthError::Upstream {
             status: 400,
             code: "CHANGE_EMAIL_DISABLED",
@@ -45,9 +47,10 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         )?
         .into());
     }
-    let expires_in = verification.map_or(Duration::hours(1), |options| {
-        options.verification_token_expiry
-    });
+    let expires_in = verification.map_or_else(
+        || EmailVerificationConfig::default().verification_token_expiry(),
+        |options| options.verification_token_expiry(),
+    );
     let old_email = user.email.as_deref().unwrap_or_default();
     if ctx.database.get_user_by_email(&new_email).await?.is_some() {
         let _ = create_email_verification_token(

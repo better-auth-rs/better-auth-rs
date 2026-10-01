@@ -16,6 +16,8 @@ static IP_WARNING_LOGGED: AtomicBool = AtomicBool::new(false);
 
 pub struct RateLimitMiddleware {
     config: RateLimitConfig,
+    default_rule: EndpointRateLimit,
+    enabled: bool,
     ip_address: crate::config::IpAddressConfig,
     base_path: Box<dyn Fn() -> String + Send + Sync>,
     plugin_limits: Vec<PluginRateLimit>,
@@ -23,19 +25,19 @@ pub struct RateLimitMiddleware {
 }
 
 impl RateLimitMiddleware {
-    pub fn new(mut config: RateLimitConfig) -> Self {
-        if config.default.window == 0.0 || config.default.window.is_nan() {
-            config.default.window = 10.0;
-        }
-        if config.default.max_requests == 0.0 || config.default.max_requests.is_nan() {
-            config.default.max_requests = 100.0;
-        }
+    pub fn new(config: RateLimitConfig) -> Self {
+        let default_rule = config.default_rule();
+        let enabled = config
+            .enabled
+            .unwrap_or_else(|| std::env::var("NODE_ENV").is_ok_and(|value| value == "production"));
         let storage = config.custom_storage.clone().or_else(|| {
             matches!(config.storage, None | Some(RateLimitStorageKind::Memory))
                 .then(|| Arc::new(memory::MemoryRateLimitStorage) as Arc<dyn RateLimitStorage>)
         });
         Self {
             config,
+            default_rule,
+            enabled,
             ip_address: Default::default(),
             base_path: Box::new(String::new),
             plugin_limits: Vec::new(),
@@ -87,7 +89,7 @@ impl RateLimitMiddleware {
     }
 
     fn configured_window(&self) -> f64 {
-        std::iter::once(self.config.default.window)
+        std::iter::once(self.default_rule.window)
             .chain(self.plugin_limits.iter().map(|rule| rule.limit.window))
             .chain(
                 self.config
@@ -109,7 +111,7 @@ impl RateLimitMiddleware {
         request: &AuthRequest,
         path: &str,
     ) -> AuthResult<Option<EndpointRateLimit>> {
-        let mut rule = self.config.default;
+        let mut rule = self.default_rule;
         if ["/sign-in", "/sign-up", "/change-password", "/change-email"]
             .iter()
             .any(|prefix| path.starts_with(prefix))
@@ -163,7 +165,7 @@ impl Middleware for RateLimitMiddleware {
     }
 
     async fn before_request(&self, request: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
-        if !self.config.enabled || self.ip_address.disable_ip_tracking {
+        if !self.enabled || self.ip_address.disable_ip_tracking() {
             return Ok(None);
         }
         let path = request.url().map_or(request.path(), |url| url.path());

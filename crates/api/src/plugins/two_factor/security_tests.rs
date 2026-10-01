@@ -39,7 +39,9 @@ async fn challenge_database_failures_preserve_upstream_errors_and_cookie_expiry(
     let ctx = AuthContext::new(config, Arc::new(database));
     let user = test_helpers::create_user(
         &ctx,
-        better_auth_core::CreateUser::new().with_email("factor-failure@example.com"),
+        better_auth_core::CreateUser::new()
+            .with_email("factor-failure@example.com")
+            .with_name("Fixture"),
     )
     .await;
     for (identifier, value) in [
@@ -506,7 +508,9 @@ async fn factor_lookup_failure_preserves_the_created_challenge_and_cookie() {
     let ctx = AuthContext::new(config, Arc::new(database));
     let user = test_helpers::create_user(
         &ctx,
-        better_auth_core::CreateUser::new().with_email("factor-query@example.com"),
+        better_auth_core::CreateUser::new()
+            .with_email("factor-query@example.com")
+            .with_name("Factor query"),
     )
     .await;
     connection

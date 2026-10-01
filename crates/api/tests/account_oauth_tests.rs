@@ -58,7 +58,7 @@ fn test_config_with_encryption() -> AuthConfig {
         .base_url("http://localhost:3000")
         .password_min_length(6)
         .account(AccountConfig {
-            encrypt_oauth_tokens: true,
+            encrypt_oauth_tokens: Some(true),
             ..Default::default()
         })
 }
@@ -68,7 +68,7 @@ fn test_config_with_encryption_skip_state_cookie_check() -> AuthConfig {
         .base_url("http://localhost:3000")
         .password_min_length(6)
         .account(AccountConfig {
-            encrypt_oauth_tokens: true,
+            encrypt_oauth_tokens: Some(true),
             skip_state_cookie_check: true,
             ..Default::default()
         })
@@ -80,7 +80,7 @@ fn test_config_linking_disabled() -> AuthConfig {
         .password_min_length(6)
         .account(AccountConfig {
             account_linking: AccountLinkingConfig {
-                enabled: false,
+                enabled: Some(false),
                 ..Default::default()
             },
             ..Default::default()
@@ -93,7 +93,7 @@ fn test_config_allow_unlinking_all() -> AuthConfig {
         .password_min_length(6)
         .account(AccountConfig {
             account_linking: AccountLinkingConfig {
-                allow_unlinking_all: true,
+                allow_unlinking_all: Some(true),
                 ..Default::default()
             },
             ..Default::default()

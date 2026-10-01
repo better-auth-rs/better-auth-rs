@@ -337,7 +337,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .update_user(
             user.id.typed().unwrap(),
             UpdateUser {
-                image: Some(Some("https://example.test/avatar".into())),
+                image: Some("https://example.test/avatar".into()).into(),
                 ban_reason: Some(Some("temporary".into())),
                 ban_expires: Some(Some(Utc::now())),
                 ..Default::default()
@@ -349,7 +349,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .update_user(
             user.id.typed().unwrap(),
             UpdateUser {
-                image: Some(None),
+                image: None.into(),
                 ban_reason: Some(None),
                 ban_expires: Some(None),
                 ..Default::default()
@@ -361,7 +361,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .update_user(
             user.id.typed().unwrap(),
             UpdateUser {
-                name: Some("renamed".into()),
+                name: Some("renamed".into()).into(),
                 ..Default::default()
             },
         )

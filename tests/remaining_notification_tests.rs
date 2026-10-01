@@ -159,7 +159,7 @@ async fn run(
     migrator::run_migrations(&db).await.unwrap();
     let mut config = AuthConfig::new("remaining-background-contract-secret-longer-than-thirty-two")
         .base_url("http://localhost:3000");
-    config.logger.level = LogLevel::Error;
+    config.logger.level = Some(LogLevel::Error);
     config.logger.log = Some(state.clone());
     if scheduling != "default" {
         let state = state.clone();
@@ -176,7 +176,7 @@ async fn run(
     let invitation = state.clone();
     let synthetic = state.clone();
     let auth=Arc::new(AuthBuilder::new(config.clone()).store(SeaOrmStore::<BundledSchema>::new(config,db.clone()))
-        .rate_limit(better_auth_core::middleware::RateLimitConfig{enabled:false,..Default::default()})
+        .rate_limit(better_auth_core::middleware::RateLimitConfig{enabled:Some(false),..Default::default()})
         .plugin(EmailPasswordPlugin::new().auto_sign_in(endpoint!="signup").password_hasher(Arc::new(Hasher(state.clone())))
             .custom_synthetic_user(Arc::new(move|input|{synthetic.event("synthetic");let mut result=input.core_fields;result.extend(input.additional_fields);let _=result.insert("id".into(),json!(input.id));Ok(result)}))
             .callbacks(EmailPasswordCallbacks::<BundledSchema>::existing_user_sign_up(move|user,ctx|duplicate.sender(sender,json!({"email":user.email}),ctx))))

@@ -157,7 +157,11 @@ impl DatabaseHooks<Schema> for NestedHook {
             let _ = context
                 .transaction
                 .ok_or_else(|| AuthError::internal("Missing real transaction"))?
-                .create_user(CreateUser::new().with_email("child@example.com"))
+                .create_user(
+                    CreateUser::new()
+                        .with_email("child@example.com")
+                        .with_name("Fixture"),
+                )
                 .await?;
         }
         Ok(DatabaseHookControl::Continue)
@@ -250,7 +254,11 @@ async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_applica
         let result = better_auth_core::store::transaction(auth.store().as_ref(), move |tx| {
             Box::pin(async move {
                 let _ = tx
-                    .create_user(CreateUser::new().with_email("parent@example.com"))
+                    .create_user(
+                        CreateUser::new()
+                            .with_email("parent@example.com")
+                            .with_name("Fixture"),
+                    )
                     .await?;
                 if rollback {
                     Err(AuthError::internal("rollback"))

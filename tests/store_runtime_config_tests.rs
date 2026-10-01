@@ -23,7 +23,7 @@ async fn builder_installs_final_adapter_config_without_plugins_and_isolates_shar
     for limit in [1.0, 2.0] {
         let mut config = AuthConfig::new("runtime-config-isolation-secret-at-least-32-characters")
             .base_url("http://runtime.test");
-        config.logger.disabled = true;
+        config.logger.disabled = Some(true);
         config.advanced.database.default_find_many_limit = Some(limit);
         instances.push(
             AuthBuilder::new(config)

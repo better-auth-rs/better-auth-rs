@@ -307,7 +307,7 @@ pub(super) async fn complete_link_social(
         .iter()
         .any(|trusted| trusted == provider_name);
 
-    if !linking.enabled || (!trusted_provider && !user_info.email_verified) {
+    if !linking.enabled() || (!trusted_provider && !user_info.email_verified) {
         return Err("unable_to_link_account".to_string().into());
     }
 
@@ -632,7 +632,7 @@ async fn link_with_id_token_core(
         .iter()
         .any(|trusted| trusted == &body.provider);
 
-    if !linking.enabled || (!trusted_provider && !response.user.email_verified) {
+    if !linking.enabled() || (!trusted_provider && !response.user.email_verified) {
         return Err(AuthError::Upstream {
             status: 401,
             code: "LINKING_NOT_ALLOWED",
@@ -700,7 +700,12 @@ async fn apply_link_user_info(
     user_info: &OAuthUserInfo,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) {
-    if !ctx.config.account.account_linking.update_user_info_on_link {
+    if !ctx
+        .config
+        .account
+        .account_linking
+        .update_user_info_on_link()
+    {
         return;
     }
     let result = async {
@@ -712,8 +717,12 @@ async fn apply_link_user_info(
                         .config
                         .user
                         .parse_provider_input(&user_info.additional_fields, false)?,
-                    name: user_info.name.clone(),
-                    image: user_info.image.clone(),
+                    name: user_info
+                        .name
+                        .clone()
+                        .map(|value| Some(value).into())
+                        .unwrap_or_default(),
+                    image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                     ..Default::default()
                 },
             )

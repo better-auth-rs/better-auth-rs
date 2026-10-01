@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use better_auth::{AuthBuilder, AuthConfig};
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthUser, BaseUrl, CreateUser, DynamicBaseUrl, HttpMethod,
+    BaseUrl, CreateUser, DynamicBaseUrl, HttpMethod,
     plugin_runtime::PluginRuntime,
     store::{
         EphemeralStore, StatelessSchema,
@@ -20,7 +20,7 @@ impl DatabaseHooks<StatelessSchema> for Capture {
         input: &mut CreateUser,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<DatabaseHookControl> {
-        input.name = Some(self.0.get().unwrap().context()?.base_url().to_owned());
+        input.name = Some(self.0.get().unwrap().context()?.base_url().to_owned()).into();
         Ok(DatabaseHookControl::Continue)
     }
 }
@@ -103,7 +103,10 @@ async fn runtime_scopes_isolate_instances_and_restore_nested_errors_while_databa
                         .database
                         .create_user(CreateUser::new().with_email("b@tenant.test"))
                         .await?;
-                    assert_eq!(b.name().as_deref(), Some("https://b.tenant.test/api/auth"));
+                    assert_eq!(
+                        b.name.typed().unwrap().as_deref(),
+                        Some("https://b.tenant.test/api/auth")
+                    );
                     Err::<(), _>(better_auth_core::AuthError::internal("nested failure"))
                 })
                 .await;
@@ -113,7 +116,10 @@ async fn runtime_scopes_isolate_instances_and_restore_nested_errors_while_databa
                 .database
                 .create_user(CreateUser::new().with_email("a@tenant.test"))
                 .await?;
-            assert_eq!(a.name().as_deref(), Some("https://a.tenant.test/api/auth"));
+            assert_eq!(
+                a.name.typed().unwrap().as_deref(),
+                Some("https://a.tenant.test/api/auth")
+            );
             Ok(())
         })
         .await

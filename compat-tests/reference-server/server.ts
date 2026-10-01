@@ -150,7 +150,7 @@ const apiErrorFixture = ["api-error", "api-error-production"].includes(process.e
 const twoFactorAfterFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("two-factor-after-") ? await createTwoFactorAfterFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`) : undefined;
 const phoneNativeFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("phone-native-") ? await createPhoneNativeFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`) : undefined;
 const nativeDispatchFixture = process.env.COMPAT_PROFILE === "native-dispatch" ? createNativeDispatchFixture(`http://localhost:${PORT}`) : undefined;
-const requestQueryFixture = ["request-oauth-", "request-otp-", "request-api-key-", "request-two-factor-", "request-admin-", "request-security-", "request-organization-", "request-query-", "request-plugin-", "request-change-email"].some(prefix => (process.env.COMPAT_PROFILE ?? "").startsWith(prefix))
+const requestQueryFixture = ["request-oauth-", "request-otp-", "request-api-key-", "request-two-factor-", "request-admin-", "request-security-", "request-organization-", "request-query-", "request-record-", "request-plugin-", "request-change-email"].some(prefix => (process.env.COMPAT_PROFILE ?? "").startsWith(prefix))
   ? await createRequestQueryFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`)
   : undefined;
 const trailingSlashesFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("trailing-slashes-")

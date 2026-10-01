@@ -38,10 +38,8 @@ where
                         .map_err(map_db_err)
                 },
             )
-            .await?
-            .iter()
-            .map(|row| self.output_account(row, db))
-            .collect()
+            .await
+            .and_then(|rows| self.output_accounts(&rows, db))
         }
         .await;
         // Match the upstream snapshot-only catch; hook and write errors still propagate.

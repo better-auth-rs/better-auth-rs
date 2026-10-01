@@ -153,7 +153,7 @@ async fn passkey_lists_and_jwt_key_selection_apply_upstream_query_limits() -> Au
         serde_json::from_str(include_str!("fixtures/plugin-list-limits-upstream.json"))?;
     for case in cases {
         let mut config = AuthConfig::new(SECRET).base_url("http://lists.test");
-        config.logger.disabled = true;
+        config.logger.disabled = Some(true);
         config.advanced.database.default_find_many_limit = case["limit"].as_f64();
         let actual = if case["backend"] == "sqlite" {
             let database = Database::connect("sqlite::memory:")

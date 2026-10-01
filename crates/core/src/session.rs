@@ -136,7 +136,7 @@ impl<S: AuthSchema> SessionManager<S> {
         session: &impl AuthSession,
     ) -> AuthResult<SessionView> {
         if self.secondary_storage
-            && !self.config.session.store_session_in_database
+            && !self.config.session.store_session_in_database()
             && let Some((_, Some(data))) =
                 self.database.get_session_snapshot(session.token()).await?
         {
@@ -254,7 +254,7 @@ impl<S: AuthSchema> SessionManager<S> {
             user,
             ip_address,
             user_agent,
-            self.config.session.expires_in,
+            self.config.session.expires_in(),
         )
         .await
     }
@@ -293,7 +293,7 @@ impl<S: AuthSchema> SessionManager<S> {
             return Ok(None);
         }
         if self.needs_refresh(&session) {
-            let new_expires_at = Utc::now() + self.config.session.expires_in;
+            let new_expires_at = Utc::now() + self.config.session.expires_in();
             return self
                 .database
                 .update_session_expiry(token, new_expires_at)
@@ -304,9 +304,9 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 
     fn needs_refresh(&self, session: &impl AuthSession) -> bool {
-        !self.config.session.disable_session_refresh
-            && session.expires_at() - self.config.session.expires_in
-                + self.config.session.update_age.unwrap_or_default()
+        !self.config.session.disable_session_refresh()
+            && session.expires_at() - self.config.session.expires_in()
+                + self.config.session.update_age()
                 <= Utc::now()
     }
 
@@ -412,7 +412,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 {
                     self.write_cache(req, &payload.data, false).await?;
                     let max_age = (!self.dont_remember(req))
-                        .then_some(self.config.session.expires_in.num_seconds());
+                        .then_some(self.config.session.expires_in().num_seconds());
                     req.append_response_header(
                         "Set-Cookie",
                         crate::utils::cookie_utils::create_session_cookie_with_max_age(
@@ -493,7 +493,7 @@ impl<S: AuthSchema> SessionManager<S> {
         if needs_refresh {
             let updated = match self
                 .database
-                .update_session_expiry(&token, Utc::now() + self.config.session.expires_in)
+                .update_session_expiry(&token, Utc::now() + self.config.session.expires_in())
                 .await
             {
                 Err(AuthError::SessionNotFound) => {
@@ -1001,7 +1001,7 @@ mod tests {
         let db = test_database().await;
         let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
         // Refresh on every access so a single `get_session` exercises the path.
-        config.session.update_age = None;
+        config.session.update_age = Some(Duration::zero());
         let mgr = SessionManager::new(Arc::new(config), db.clone());
 
         let user = db

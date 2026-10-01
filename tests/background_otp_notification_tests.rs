@@ -208,7 +208,7 @@ async fn run(
     migrator::run_migrations(&db).await.unwrap();
     let mut config = AuthConfig::new("background-contract-secret-at-least-thirty-two-characters")
         .base_url("http://localhost:3000");
-    config.logger.level = LogLevel::Error;
+    config.logger.level = Some(LogLevel::Error);
     config.logger.log = Some(state.clone());
     if scheduling != "default" {
         let state = state.clone();
@@ -227,7 +227,7 @@ async fn run(
         AuthBuilder::new(config.clone())
             .store(SeaOrmStore::<BundledSchema>::new(config, db.clone()))
             .rate_limit(better_auth_core::middleware::RateLimitConfig {
-                enabled: false,
+                enabled: Some(false),
                 ..Default::default()
             })
             .plugin(EmailPasswordPlugin::new().password_hasher(Arc::new(Hasher)))

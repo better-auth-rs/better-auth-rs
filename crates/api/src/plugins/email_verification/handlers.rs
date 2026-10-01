@@ -50,7 +50,7 @@ pub(super) async fn send_verification_email_core(
                 ctx.config.signing_secret(),
                 &body.email,
                 None,
-                config.verification_token_expiry,
+                config.verification_token_expiry(),
                 None,
             )?;
             let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
@@ -74,7 +74,7 @@ pub(super) async fn send_verification_email_core(
                     ctx.config.signing_secret(),
                     &body.email,
                     None,
-                    config.verification_token_expiry,
+                    config.verification_token_expiry(),
                     None,
                 )?;
                 return Ok(StatusResponse { status: true });
@@ -84,7 +84,7 @@ pub(super) async fn send_verification_email_core(
                 ctx.config.signing_secret(),
                 &body.email,
                 None,
-                config.verification_token_expiry,
+                config.verification_token_expiry(),
                 None,
             )?;
             let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
@@ -187,7 +187,7 @@ where
                     ctx.config.signing_secret(),
                     &claims.email,
                     Some(update_to),
-                    config.verification_token_expiry,
+                    config.verification_token_expiry(),
                     Some("change-email-verification"),
                 )?;
                 let url =
@@ -311,7 +311,7 @@ where
                     ctx.config.signing_secret(),
                     update_to,
                     None,
-                    config.verification_token_expiry,
+                    config.verification_token_expiry(),
                     None,
                 )?;
                 let url =

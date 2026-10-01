@@ -260,18 +260,28 @@ impl OrganizationStore for EphemeralStore {
     }
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
         let state = self.lock()?;
-        let mut organizations = Vec::new();
-        for member in state
+        let rows = state
             .members
             .snapshot()?
+            .into_iter()
+            .filter(|row| row.user_id == user_id)
+            .collect();
+        let rows = crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        );
+        let ids = rows
             .iter()
-            .filter(|member| member.user_id == user_id)
-        {
-            if let Some(organization) = state.organizations.get(&member.organization_id)? {
-                organizations.push(self.output_organization(organization.clone())?);
-            }
+            .map(|row| row.organization_id.clone())
+            .collect::<Vec<_>>();
+        for row in rows {
+            let _ = self.output_member(row)?;
         }
-        Ok(organizations)
+        ids.iter()
+            .filter_map(|id| state.organizations.get(id).transpose())
+            .map(|row| self.output_organization(row?))
+            .collect()
     }
 }
 #[async_trait]
@@ -297,11 +307,6 @@ impl MemberStore for EphemeralStore {
 
     async fn create_member(&self, input: CreateMember) -> AuthResult<Member> {
         let mut state = self.lock()?;
-        if state.members.snapshot()?.iter().any(|member| {
-            member.organization_id == input.organization_id && member.user_id == input.user_id
-        }) {
-            return Err(AuthError::bad_request("User is already a member"));
-        }
         let member = Member {
             additional_fields: Default::default(),
             id: self
@@ -364,35 +369,30 @@ impl MemberStore for EphemeralStore {
         self.output_member(member.clone())
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
-        let mut state = self.lock()?;
-        if let Some(member) = state.members.get(id)? {
-            let mut teams = Vec::new();
-            for team in state
-                .teams
-                .snapshot()?
-                .iter()
-                .filter(|team| team.organization_id == member.organization_id)
-            {
-                let deleted = state
-                    .team_members
-                    .snapshot()?
-                    .iter()
-                    .filter(|team_member| {
-                        member.user_id == team_member.user_id && team.id == team_member.team_id
-                    })
-                    .count();
-                teams.push(self.release_team_seats(team.clone(), deleted)?);
-            }
-            state.team_members.retain(|team_member| {
-                member.user_id != team_member.user_id
-                    || !teams.iter().any(|team| team.id == team_member.team_id)
-            })?;
-            for team in teams {
-                let _ = state.teams.replace(&team.id.clone(), team)?;
-            }
-            let _ = state.members.remove(id)?;
-        }
-        Ok(())
+        let id = id.to_owned();
+        crate::store::transaction(self, move |tx| {
+            Box::pin(async move { tx.delete_member(&id).await })
+        })
+        .await
+    }
+    async fn delete_member_for_user(
+        &self,
+        id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        let (id, organization_id, user_id) = (
+            id.to_owned(),
+            organization_id.to_owned(),
+            user_id.to_owned(),
+        );
+        crate::store::transaction(self, move |tx| {
+            Box::pin(async move {
+                tx.delete_member_for_user(&id, &organization_id, &user_id)
+                    .await
+            })
+        })
+        .await
     }
     async fn list_organization_members(&self, org: &str) -> AuthResult<Vec<Member>> {
         self.lock()?
@@ -566,6 +566,15 @@ impl MemberStore for EphemeralStore {
             .filter(|member| member.organization_id == org)
             .count() as i64)
     }
+    async fn count_organization_members_value(&self, org: &serde_json::Value) -> AuthResult<i64> {
+        self.lock()?
+            .members
+            .snapshot()?
+            .iter()
+            .try_fold(0, |count, member| {
+                Ok(count + i64::from(member.organization_id.json()?.as_ref() == Some(org)))
+            })
+    }
     async fn count_organization_owners(&self, org: &str) -> AuthResult<i64> {
         self.lock()?
             .members
@@ -682,14 +691,21 @@ impl InvitationStore for EphemeralStore {
         self.output_invitation(invitation.clone())
     }
     async fn list_organization_invitations(&self, org: &str) -> AuthResult<Vec<Invitation>> {
-        self.lock()?
+        let rows = self
+            .lock()?
             .invitations
             .snapshot()?
-            .iter()
-            .filter(|invitation| invitation.organization_id == org)
-            .cloned()
-            .map(|value| self.output_invitation(value))
-            .collect()
+            .into_iter()
+            .filter(|row| row.organization_id == org)
+            .collect();
+        crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        )
+        .into_iter()
+        .map(|row| self.output_invitation(row))
+        .collect()
     }
     async fn count_pending_organization_invitations(&self, org: &str) -> AuthResult<i64> {
         self.lock()?
@@ -701,20 +717,46 @@ impl InvitationStore for EphemeralStore {
                 Ok(count + i64::from(!invitation.is_expired()?))
             })
     }
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
-        let mut invitations = Vec::new();
-        for invitation in self
-            .lock()?
+    async fn list_user_invitations(
+        &self,
+        email: &str,
+    ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
+        let state = self.lock()?;
+        let email = email.to_lowercase();
+        let rows = state
             .invitations
             .snapshot()?
+            .into_iter()
+            .filter(|row| row.email == email)
+            .collect();
+        let rows = crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        );
+        let ids = rows
             .iter()
-            .filter(|invitation| invitation.is_pending())
-        {
-            if invitation.email.typed()?.eq_ignore_ascii_case(email) && !invitation.is_expired()? {
-                invitations.push(self.output_invitation(invitation.clone())?);
-            }
-        }
-        Ok(invitations)
+            .map(|row| row.organization_id.clone())
+            .collect::<Vec<_>>();
+        let invitations = rows
+            .into_iter()
+            .map(|row| self.output_invitation(row))
+            .collect::<AuthResult<Vec<_>>>()?;
+        invitations
+            .into_iter()
+            .zip(ids)
+            .map(|(invitation, id)| {
+                let organization = state
+                    .organizations
+                    .get(&id)?
+                    .map(|row| self.output_organization(row))
+                    .transpose()?;
+                Ok(crate::store::InvitationOrganization {
+                    invitation,
+                    organization,
+                })
+            })
+            .collect()
     }
 }
 
@@ -926,6 +968,57 @@ mod query_tests {
         let (members, total) = store.query_organization_members(&params).await?;
         assert_eq!(total, 2);
         assert_eq!(members[0].user_id, "second");
+        Ok(())
+    }
+}
+
+impl EphemeralStore {
+    pub(super) fn delete_member_subject(
+        &self,
+        id: &str,
+        subject: Option<(&str, &str)>,
+    ) -> AuthResult<()> {
+        let mut state = self.lock()?;
+        let (organization_id, user_id) = match subject {
+            Some((organization_id, user_id)) => (organization_id.to_owned(), user_id.to_owned()),
+            None => {
+                let Some(member) = state.members.get(id)? else {
+                    return Ok(());
+                };
+                (
+                    member.organization_id.typed()?.clone(),
+                    member.user_id.typed()?.clone(),
+                )
+            }
+        };
+        let _ = state.members.remove(id)?;
+        let teams = state
+            .teams
+            .snapshot()?
+            .into_iter()
+            .filter(|team| team.organization_id == organization_id)
+            .collect();
+        let teams = crate::query::paginate_memory(
+            teams,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        )
+        .into_iter()
+        .map(|team| self.output_team(team))
+        .collect::<AuthResult<Vec<_>>>()?;
+        for team in teams {
+            let deleted = state
+                .team_members
+                .snapshot()?
+                .iter()
+                .filter(|member| member.user_id == user_id && member.team_id == team.id)
+                .count();
+            state
+                .team_members
+                .retain(|member| member.user_id != user_id || member.team_id != team.id)?;
+            let team = self.release_team_seats(team, deleted)?;
+            let _ = state.teams.replace(&team.id.clone(), team)?;
+        }
         Ok(())
     }
 }

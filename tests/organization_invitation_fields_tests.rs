@@ -43,6 +43,7 @@ async fn store(config: OrganizationConfig) -> Store {
     for id in ["owner", "recipient"] {
         let _ = store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some(id.into()),
                 email: Some(format!("{id}@example.com")),
                 ..Default::default()

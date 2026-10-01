@@ -423,7 +423,7 @@ fn config() -> AuthConfig {
     init_tracing();
     let mut config = AuthConfig::new("observability-reference-secret-more-than-32-characters")
         .base_url("http://observability.test");
-    config.logger.disabled = true;
+    config.logger.disabled = Some(true);
     config
 }
 async fn build(config: AuthConfig) -> AuthResult<BetterAuth<S>> {
@@ -729,13 +729,13 @@ async fn loggers_are_instance_scoped_and_instrumentation_is_independent() -> Aut
     let left = Arc::new(Logs::default());
     let right = Arc::new(Logs::default());
     let mut a = config();
-    a.logger.disabled = false;
-    a.logger.level = LogLevel::Info;
+    a.logger.disabled = Some(false);
+    a.logger.level = Some(LogLevel::Info);
     a.logger.log = Some(left.clone());
     a.experimental.instrumentation.enabled = false;
     let mut b = config();
-    b.logger.disabled = false;
-    b.logger.level = LogLevel::Error;
+    b.logger.disabled = Some(false);
+    b.logger.level = Some(LogLevel::Error);
     b.logger.log = Some(right.clone());
     let a = build(a).await?;
     let b = build(b).await?;
@@ -810,7 +810,7 @@ async fn telemetry_opt_in_controls_sink_and_preserves_auth_when_sink_rejects() -
     options.telemetry.enabled = true;
     options.telemetry.debug = true;
     options.telemetry.track = Some(enabled.clone());
-    options.logger.disabled = false;
+    options.logger.disabled = Some(false);
     options.logger.log = Some(logs.clone());
     let auth = build(options).await?;
     assert_eq!(
@@ -838,7 +838,10 @@ async fn telemetry_opt_in_controls_sink_and_preserves_auth_when_sink_rejects() -
     );
     let json = serde_json::to_string(event)?;
     assert!(!json.contains("observability-reference-secret"));
-    assert!(!json.contains("Password"));
+    assert_eq!(
+        event.pointer("/payload/config/emailAndPassword/password"),
+        Some(&json!({"hash":false,"verify":false}))
+    );
     assert!(
         !logs
             .0
@@ -1152,7 +1155,7 @@ mod sqlite {
                 second.id.typed()?
             };
             let mut update = UpdateUser {
-                name: Some("Changed".into()),
+                name: Some("Changed".into()).into(),
                 ..Default::default()
             };
             if kind == "duplicate" {
@@ -1165,7 +1168,7 @@ mod sqlite {
             }
             let result = store.update_user(id, update).instrument(capture_span).await;
             match kind {
-                "success" => assert_eq!(result?.name.as_deref(), Some("Changed")),
+                "success" => assert_eq!(result?.name.typed().unwrap().as_deref(), Some("Changed")),
                 "missing" => assert!(matches!(result, Err(AuthError::UserNotFound))),
                 _ => assert!(result.is_err()),
             }

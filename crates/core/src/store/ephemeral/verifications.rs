@@ -6,6 +6,20 @@ use crate::store::{
 };
 
 impl EphemeralStore {
+    pub(super) fn output_verifications(
+        &self,
+        records: &[Map<String, Value>],
+    ) -> AuthResult<Vec<VerificationView>> {
+        Ok(self
+            .config
+            .verification
+            .field_schema()
+            .project_records(records, true, true)?
+            .into_iter()
+            .map(VerificationView::from_adapter_fields)
+            .collect())
+    }
+
     pub(super) fn output_verification(
         &self,
         record: &Map<String, Value>,

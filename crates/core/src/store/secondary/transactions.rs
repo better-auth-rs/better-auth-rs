@@ -57,7 +57,7 @@ impl<S: AuthSchema> Transaction<S> {
                 if let Err(error) = runtime.mirror_session(&created).await {
                     // Upstream tolerates a committed mirror failure only with database fallback.
                     if runtime.database_sessions()
-                        && !runtime.config.session.preserve_session_in_database
+                        && !runtime.config.session.preserve_session_in_database()
                     {
                         crate::observability::logger::current().error(
                             "Failed to mirror committed session to secondary storage",
@@ -76,6 +76,49 @@ impl<S: AuthSchema> Transaction<S> {
 
 #[async_trait]
 impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
+    async fn get_member_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::Member>> {
+        self.inner.get_member_value(organization_id, user_id).await
+    }
+    async fn get_organization_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::Organization>> {
+        self.inner.get_organization_by_id_value(id).await
+    }
+    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+        self.inner.get_team_value(id).await
+    }
+    async fn count_organization_members_value(&self, id: &serde_json::Value) -> AuthResult<i64> {
+        self.inner.count_organization_members_value(id).await
+    }
+    async fn create_member(&self, input: crate::CreateMember) -> AuthResult<crate::Member> {
+        self.inner.create_member(input).await
+    }
+    async fn add_team_member(
+        &self,
+        team_id: &crate::SchemaValue<String>,
+        user_id: &str,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        self.inner.add_team_member(team_id, user_id, maximum).await
+    }
+    async fn delete_member(&self, id: &str) -> AuthResult<()> {
+        self.inner.delete_member(id).await
+    }
+    async fn delete_member_for_user(
+        &self,
+        id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        self.inner
+            .delete_member_for_user(id, organization_id, user_id)
+            .await
+    }
     fn clone_handle(&self) -> Arc<dyn AuthTransaction<S>> {
         Arc::new(Self {
             inner: self.inner.clone(),

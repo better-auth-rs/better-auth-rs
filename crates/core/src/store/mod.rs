@@ -59,6 +59,80 @@ pub type VerificationCreateWriter =
 
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
+    /// Query a user ID through this transaction without string coercion.
+    async fn get_user_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::UserView>> {
+        self.get_user_by_id_field(&crate::SchemaValue::from_json(Some(id.clone())))
+            .await
+    }
+    /// Run `get_member_value` through this transaction's organization adapter.
+    async fn get_member_value(
+        &self,
+        _organization_id: &serde_json::Value,
+        _user_id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::Member>> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Run `get_organization_by_id_value` through this transaction's organization adapter.
+    async fn get_organization_by_id_value(
+        &self,
+        _id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::Organization>> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Run `get_team_value` through this transaction's organization adapter.
+    async fn get_team_value(&self, _id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Run `count_organization_members_value` through this transaction's organization adapter.
+    async fn count_organization_members_value(&self, _id: &serde_json::Value) -> AuthResult<i64> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Run `create_member` through this transaction's organization adapter.
+    async fn create_member(&self, _input: crate::CreateMember) -> AuthResult<crate::Member> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Run `add_team_member` through this transaction's organization adapter.
+    async fn add_team_member(
+        &self,
+        _team_id: &crate::SchemaValue<String>,
+        _user_id: &str,
+        _maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Delete a member and its team memberships through this transaction.
+    async fn delete_member(&self, _id: &str) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+    /// Delete a member and the original user's team memberships through this transaction.
+    async fn delete_member_for_user(
+        &self,
+        _id: &str,
+        _organization_id: &str,
+        _user_id: &str,
+    ) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support transactional organization operations",
+        ))
+    }
+
     /// Retain this transaction adapter after the enclosing operation finishes.
     /// Preserve the adapter's own commit, rollback, and pending-hook behavior.
     fn clone_handle(&self) -> std::sync::Arc<dyn AuthTransaction<S>>;
@@ -306,6 +380,12 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         limit: f64,
     ) -> AuthResult<Vec<crate::UserView>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::UserView>>;
+    /// Read the user first, then its account page using the adapter default limit.
+    async fn get_user_with_accounts(&self, _email: &str) -> AuthResult<Option<UserAccounts>> {
+        Err(AuthError::config(
+            "The store must support user account joins",
+        ))
+    }
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<crate::UserView>>;
     async fn get_user_by_phone_number(
         &self,
@@ -528,6 +608,9 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<crate::wire::SessionView>;
 }
 
+mod joins;
+pub use joins::{AccountOwner, InvitationOrganization, UserAccounts};
+
 #[async_trait]
 pub trait AccountStore<S: AuthSchema>: Send + Sync {
     async fn create_account(
@@ -547,6 +630,16 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Option<crate::wire::AccountView>>;
+    /// Read at most two matching accounts and their persisted owners before returning a unique identity.
+    async fn get_account_owner(
+        &self,
+        _provider: &str,
+        _account_id: &str,
+    ) -> AuthResult<Option<AccountOwner>> {
+        Err(AuthError::config(
+            "The store must support account owner joins",
+        ))
+    }
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>>;
     async fn update_account(
         &self,
@@ -807,6 +900,17 @@ pub trait MemberStore: Send + Sync {
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>>;
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member>;
     async fn delete_member(&self, member_id: &str) -> AuthResult<()>;
+    /// Preserve the original membership subject when a creation hook changes the saved member.
+    async fn delete_member_for_user(
+        &self,
+        _member_id: &str,
+        _organization_id: &str,
+        _user_id: &str,
+    ) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support member deletion with an explicit subject",
+        ))
+    }
     async fn list_organization_members(&self, org_id: &str) -> AuthResult<Vec<Member>>;
     /// Query organization members with filter, sort, and pagination applied in
     /// the store when possible.
@@ -815,6 +919,14 @@ pub trait MemberStore: Send + Sync {
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)>;
     async fn count_organization_members(&self, org_id: &str) -> AuthResult<i64>;
+    /// Count using an organization ID accepted by the configured member schema.
+    async fn count_organization_members_value(
+        &self,
+        org_id: &serde_json::Value,
+    ) -> AuthResult<i64> {
+        let id = crate::SchemaValue::<String>::from_json(Some(org_id.clone()));
+        self.count_organization_members(id.typed()?).await
+    }
     async fn count_organization_owners(&self, org_id: &str) -> AuthResult<i64>;
 }
 
@@ -841,7 +953,8 @@ pub trait InvitationStore: Send + Sync {
     async fn list_organization_invitations(&self, org_id: &str) -> AuthResult<Vec<Invitation>>;
     /// Count still-pending, unexpired invitations for an organization.
     async fn count_pending_organization_invitations(&self, org_id: &str) -> AuthResult<i64>;
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>>;
+    /// Read the email's adapter-limited page before status filtering, with its stored organizations.
+    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<InvitationOrganization>>;
 }
 
 #[async_trait]
@@ -1064,6 +1177,8 @@ pub trait TeamStore: Send + Sync {
     async fn update_team(&self, id: &str, update: crate::UpdateTeam) -> AuthResult<crate::Team>;
     async fn delete_team(&self, id: &str) -> AuthResult<()>;
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>>;
+    /// Count all stored teams independently of the read-page limit.
+    async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64>;
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>>;
     async fn get_team_member(
         &self,
@@ -1071,6 +1186,8 @@ pub trait TeamStore: Send + Sync {
         user_id: &str,
     ) -> AuthResult<Option<crate::TeamMember>>;
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<crate::TeamMember>>;
+    /// Count all stored team memberships independently of the read-page limit.
+    async fn count_team_members(&self, team_id: &str) -> AuthResult<u64>;
     /// Atomically return an existing membership or reserve capacity and create one.
     /// Return None when the maximum member count is reached.
     async fn add_team_member(
@@ -1082,6 +1199,15 @@ pub trait TeamStore: Send + Sync {
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()>;
 }
 
+/// A scoped point lookup for an organization role.
+#[derive(Clone, Copy, Debug)]
+pub enum OrganizationRoleKey<'a> {
+    /// Match the stored role ID.
+    Id(&'a str),
+    /// Match the stored role name.
+    Name(&'a str),
+}
+
 /// Persistence for organization-scoped dynamic roles.
 #[async_trait]
 pub trait OrganizationRoleStore: Send + Sync {
@@ -1090,6 +1216,20 @@ pub trait OrganizationRoleStore: Send + Sync {
         input: crate::CreateOrganizationRole,
     ) -> AuthResult<crate::OrganizationRole>;
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<crate::OrganizationRole>>;
+    /// Find one role in its organization without applying the list-page limit.
+    async fn find_organization_role(
+        &self,
+        organization_id: &str,
+        key: OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<crate::OrganizationRole>>;
+    /// Filter stored role names before applying the adapter's default page limit.
+    async fn query_organization_roles(
+        &self,
+        organization_id: &str,
+        names: &[String],
+    ) -> AuthResult<Vec<crate::OrganizationRole>>;
+    /// Count stored roles without projecting or paginating records.
+    async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64>;
     async fn list_organization_roles(
         &self,
         organization_id: &str,

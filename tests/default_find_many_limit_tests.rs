@@ -68,7 +68,11 @@ async fn check_limit<S: AuthSchema>(
     hooks: AccountDeletes,
 ) -> AuthResult<()> {
     let user = store
-        .create_user(CreateUser::new().with_email("limit@example.test"))
+        .create_user(
+            CreateUser::new()
+                .with_email("limit@example.test")
+                .with_name("Fixture"),
+        )
         .await?;
     let user_id = user.id.typed()?.clone();
     let mut tokens = Vec::new();
@@ -200,7 +204,7 @@ async fn secondary_session_lists_do_not_apply_database_find_many_limits() -> Aut
     for persist_sessions in [false, true] {
         let mut config = AuthConfig::default();
         config.advanced.database.default_find_many_limit = Some(0.0);
-        config.session.store_session_in_database = persist_sessions;
+        config.session.store_session_in_database = Some(persist_sessions);
         let config = Arc::new(config);
         let database = Arc::new(EphemeralStore::new(config.clone()));
         let store = SecondaryStore::new(
@@ -210,7 +214,11 @@ async fn secondary_session_lists_do_not_apply_database_find_many_limits() -> Aut
             Default::default(),
         )?;
         let user = store
-            .create_user(CreateUser::new().with_email("cached@example.test"))
+            .create_user(
+                CreateUser::new()
+                    .with_email("cached@example.test")
+                    .with_name("Fixture"),
+            )
             .await?;
         let mut tokens = Vec::new();
         for _ in 0..4 {

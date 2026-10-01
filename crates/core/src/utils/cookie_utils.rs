@@ -119,7 +119,7 @@ pub fn create_cookie(name: &str, value: &str, max_age_seconds: i64, config: &Aut
 pub fn create_session_cookie(token: &str, config: &AuthConfig) -> String {
     create_session_cookie_with_max_age(
         Some(token),
-        Some(config.session.expires_in.num_seconds()),
+        Some(config.session.expires_in().num_seconds()),
         config,
     )
 }
@@ -153,7 +153,7 @@ pub fn create_session_cookies(
 ) -> Vec<String> {
     let mut cookies = vec![create_session_cookie_with_max_age(
         Some(token),
-        (!dont_remember).then_some(config.session.expires_in.num_seconds()),
+        (!dont_remember).then_some(config.session.expires_in().num_seconds()),
         config,
     )];
     if dont_remember {

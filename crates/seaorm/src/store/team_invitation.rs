@@ -1,3 +1,4 @@
+use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
@@ -60,11 +61,15 @@ where
             &config,
             false,
             self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
         )?;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let changed = Entity::<O::Invitation>::update_many()
             .set(active)
-            .filter(O::Invitation::column("id")?.eq(id))
+            .filter(
+                O::Invitation::column("id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .filter(O::Invitation::column("status")?.eq(from))
             .exec(&tx)
             .await
@@ -72,7 +77,8 @@ where
         let row = if changed.rows_affected == 0 {
             None
         } else {
-            models::find::<O::Invitation, _>(&tx, id).await?
+            models::find::<O::Invitation, _>(&tx, id, self.config().advanced.database.generate_id())
+                .await?
         };
         tx.commit().await.map_err(map_db_err)?;
         // Output transforms run after the claim is committed, before the member transaction starts.
@@ -106,11 +112,14 @@ where
                             O::Team::column("member_count")?,
                             Expr::col(O::Team::column("member_count")?),
                         )
-                        .filter(O::Team::column("id")?.eq(*team_id))
                         .filter(
-                            O::Team::column("organization_id")?
-                                .eq(invitation.organization_id.typed()?.clone()),
+                            O::Team::column("id")?
+                                .eq_id(*team_id, self.config().advanced.database.generate_id())?,
                         )
+                        .filter(O::Team::column("organization_id")?.eq_id(
+                            invitation.organization_id.typed()?.clone(),
+                            self.config().advanced.database.generate_id(),
+                        )?)
                         .exec(&tx)
                         .await
                         .map_err(map_db_err)?;
@@ -119,23 +128,34 @@ where
                     }
                     let maximum = maximum.maximum(team_id).await?;
                     let existing = Entity::<O::TeamMember>::find()
-                        .filter(O::TeamMember::column("team_id")?.eq(*team_id))
-                        .filter(O::TeamMember::column("user_id")?.eq(user_id))
+                        .filter(
+                            O::TeamMember::column("team_id")?
+                                .eq_id(*team_id, self.config().advanced.database.generate_id())?,
+                        )
+                        .filter(
+                            O::TeamMember::column("user_id")?
+                                .eq_id(user_id, self.config().advanced.database.generate_id())?,
+                        )
                         .one(&tx)
                         .await
                         .map_err(map_db_err)?;
                     if existing.is_none() {
-                        let count = Entity::<O::TeamMember>::find()
-                            .filter(O::TeamMember::column("team_id")?.eq(*team_id))
-                            .count(&tx)
-                            .await
-                            .map_err(map_db_err)?;
+                        let count =
+                            Entity::<O::TeamMember>::find()
+                                .filter(O::TeamMember::column("team_id")?.eq_id(
+                                    *team_id,
+                                    self.config().advanced.database.generate_id(),
+                                )?)
+                                .count(&tx)
+                                .await
+                                .map_err(map_db_err)?;
                         if !super::team_capacity::reserve::<O::Team, _>(
                             &tx,
                             team_id,
                             count,
                             maximum,
                             &config.team,
+                            self.config().advanced.database.generate_id(),
                         )
                         .await?
                         {
@@ -155,8 +175,7 @@ where
                             ("created_at", json!(Utc::now())),
                         ]))?,
                         Default::default(),
-                        &Default::default(),
-                    )
+                        &Default::default(), self.config().advanced.database.generate_id())
                     .await?;
                     }
                 }
@@ -174,6 +193,7 @@ where
                     )?,
                     Default::default(),
                     &config.member,
+                    self.config().advanced.database.generate_id(),
                 )
                 .await?;
                 let Some(session_token) = session_token else {

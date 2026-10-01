@@ -23,6 +23,8 @@ pub trait SeaOrmPluginModel:
     fn column(name: &str) -> AuthResult<Self::Column>;
     /// Project the stored model into its plugin record.
     fn record(&self) -> AuthResult<Self::Record>;
+    /// Return whether the column references another model ID.
+    fn is_id_reference(column: &Self::Column) -> bool;
     /// Assign fields through the application's typed model.
     fn apply_fields(active: &mut Self::ActiveModel, fields: Map<String, Value>) -> AuthResult<()>;
     /// Construct an insert or partial update.

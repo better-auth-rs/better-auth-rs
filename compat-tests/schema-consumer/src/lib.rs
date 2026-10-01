@@ -3,6 +3,7 @@ mod tests {
     mod account_verification;
     mod dynamic_fields;
     mod field_attributes;
+    mod ids;
     mod organization;
     mod plugins;
     mod rate_limits;

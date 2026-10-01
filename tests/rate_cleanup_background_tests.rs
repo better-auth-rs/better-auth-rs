@@ -34,7 +34,7 @@ impl LogSink for State {
 }
 fn config(state: Arc<State>, fail_handler: bool) -> AuthConfig {
     let mut config = AuthConfig::default();
-    config.logger.level = LogLevel::Error;
+    config.logger.level = Some(LogLevel::Error);
     config.logger.log = Some(state.clone());
     config.advanced.background_tasks = Some(BackgroundTasks::new(move |task| {
         state.events.lock().unwrap().push("handler".into());

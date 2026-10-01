@@ -15,6 +15,8 @@ use syn::{DeriveInput, parse_macro_input};
 /// Organization roles are `organization`, `member`, `invitation`, `team`, `team_member`, and `organization_role`.
 /// Plugin roles are `api_key`, `device_code`, `passkey`, `two_factor`, `jwk`, and `wallet_address`.
 /// Table and column mappings use SeaORM's `table_name` and `column_name` attributes.
+/// IDs use the declared field types. Absent IDs remain unset for database defaults.
+/// Mark additional fields that reference an ID with `#[auth(reference)]` to parse string identifiers into integer or UUID storage.
 ///
 /// ```ignore
 /// #[derive(DeriveEntityModel, AuthEntity)]

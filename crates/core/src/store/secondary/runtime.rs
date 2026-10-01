@@ -2,6 +2,10 @@ use super::*;
 use crate::store::{RuntimeStore, database_hooks::DatabaseHooks};
 
 impl<S: AuthSchema> RuntimeStore<S> for SecondaryStore<S> {
+    fn database_hook_metadata(&self) -> Vec<crate::observability::database::DatabaseHookMetadata> {
+        self.inner.database_hook_metadata()
+    }
+
     fn schema_check(
         &self,
         config: &crate::store::schema::SchemaConfiguration,

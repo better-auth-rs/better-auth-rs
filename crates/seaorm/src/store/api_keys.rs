@@ -1,3 +1,4 @@
+use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
@@ -39,46 +40,59 @@ fn start_for_database(start: ApiKeyStart, backend: DbBackend) -> AuthResult<Stri
 fn apply_update_fields<M: SeaOrmPluginModel>(
     mut active: M::ActiveModel,
     update: UpdateApiKey,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::ActiveModel> {
     if let Some(name) = update.name {
-        set::<M>(&mut active, "name", Some(name))?;
+        set::<M>(&mut active, "name", Some(name), policy)?;
     }
     if let Some(enabled) = update.enabled {
-        set::<M>(&mut active, "enabled", enabled)?;
+        set::<M>(&mut active, "enabled", enabled, policy)?;
     }
     if let Some(remaining) = update.remaining {
-        set::<M>(&mut active, "remaining", Some(remaining))?;
+        set::<M>(&mut active, "remaining", Some(remaining), policy)?;
     }
     if let Some(rate_limit_enabled) = update.rate_limit_enabled {
-        set::<M>(&mut active, "rate_limit_enabled", rate_limit_enabled)?;
+        set::<M>(
+            &mut active,
+            "rate_limit_enabled",
+            rate_limit_enabled,
+            policy,
+        )?;
     }
     if let Some(rate_limit_time_window) = update.rate_limit_time_window {
         set::<M>(
             &mut active,
             "rate_limit_time_window",
             Some(rate_limit_time_window),
+            policy,
         )?;
     }
     if let Some(rate_limit_max) = update.rate_limit_max {
-        set::<M>(&mut active, "rate_limit_max", Some(rate_limit_max))?;
+        set::<M>(&mut active, "rate_limit_max", Some(rate_limit_max), policy)?;
     }
     if let Some(refill_interval) = update.refill_interval {
-        set::<M>(&mut active, "refill_interval", Some(refill_interval))?;
+        set::<M>(
+            &mut active,
+            "refill_interval",
+            Some(refill_interval),
+            policy,
+        )?;
     }
     if let Some(refill_amount) = update.refill_amount {
-        set::<M>(&mut active, "refill_amount", Some(refill_amount))?;
+        set::<M>(&mut active, "refill_amount", Some(refill_amount), policy)?;
     }
     if let Some(permissions) = update.permissions {
-        set::<M>(&mut active, "permissions", Some(permissions))?;
+        set::<M>(&mut active, "permissions", Some(permissions), policy)?;
     }
     if let Some(metadata) = update.metadata {
-        set::<M>(&mut active, "metadata", Some(metadata))?;
+        set::<M>(&mut active, "metadata", Some(metadata), policy)?;
     }
     if let Some(expires_at) = update.expires_at {
         set::<M>(
             &mut active,
             "expires_at",
             parse_optional_rfc3339(expires_at.as_deref(), "expires_at")?,
+            policy,
         )?;
     }
     if let Some(last_request) = update.last_request {
@@ -86,19 +100,21 @@ fn apply_update_fields<M: SeaOrmPluginModel>(
             &mut active,
             "last_request",
             parse_optional_rfc3339(last_request.as_deref(), "last_request")?,
+            policy,
         )?;
     }
     if let Some(request_count) = update.request_count {
-        set::<M>(&mut active, "request_count", Some(request_count))?;
+        set::<M>(&mut active, "request_count", Some(request_count), policy)?;
     }
     if let Some(last_refill_at) = update.last_refill_at {
         set::<M>(
             &mut active,
             "last_refill_at",
             parse_optional_rfc3339(last_refill_at.as_deref(), "last_refill_at")?,
+            policy,
         )?;
     }
-    set::<M>(&mut active, "updated_at", Utc::now())?;
+    set::<M>(&mut active, "updated_at", Utc::now(), policy)?;
     Ok(active)
 }
 
@@ -114,45 +130,48 @@ where
             .start
             .map(|start| start_for_database(start, self.connection().get_database_backend()))
             .transpose()?;
-        let active = P::ApiKey::active(self.create_fields(
-            "apikey",
-            None,
-            Map::from_iter([
-                ("name".to_owned(), json!(input.name)),
-                ("start".to_owned(), json!(start)),
-                ("prefix".to_owned(), json!(input.prefix)),
-                ("key_hash".to_owned(), json!(input.key_hash)),
-                ("reference_id".to_owned(), json!(input.reference_id)),
-                ("config_id".to_owned(), json!(input.config_id)),
-                ("refill_interval".to_owned(), json!(input.refill_interval)),
-                ("refill_amount".to_owned(), json!(input.refill_amount)),
-                ("last_refill_at".to_owned(), serde_json::Value::Null),
-                ("enabled".to_owned(), json!(input.enabled)),
-                (
-                    "rate_limit_enabled".to_owned(),
-                    json!(input.rate_limit_enabled),
-                ),
-                (
-                    "rate_limit_time_window".to_owned(),
-                    json!(input.rate_limit_time_window),
-                ),
-                ("rate_limit_max".to_owned(), json!(input.rate_limit_max)),
-                ("request_count".to_owned(), json!(Some(0.0))),
-                ("remaining".to_owned(), json!(input.remaining)),
-                ("last_request".to_owned(), serde_json::Value::Null),
-                (
-                    "expires_at".to_owned(),
-                    json!(parse_optional_rfc3339(
-                        input.expires_at.as_deref(),
-                        "expires_at",
-                    )?),
-                ),
-                ("created_at".to_owned(), json!(now)),
-                ("updated_at".to_owned(), json!(now)),
-                ("permissions".to_owned(), json!(input.permissions)),
-                ("metadata".to_owned(), json!(input.metadata)),
-            ]),
-        )?)?;
+        let active = super::plugin_models::active::<P::ApiKey>(
+            self.create_fields(
+                "apikey",
+                None,
+                Map::from_iter([
+                    ("name".to_owned(), json!(input.name)),
+                    ("start".to_owned(), json!(start)),
+                    ("prefix".to_owned(), json!(input.prefix)),
+                    ("key_hash".to_owned(), json!(input.key_hash)),
+                    ("reference_id".to_owned(), json!(input.reference_id)),
+                    ("config_id".to_owned(), json!(input.config_id)),
+                    ("refill_interval".to_owned(), json!(input.refill_interval)),
+                    ("refill_amount".to_owned(), json!(input.refill_amount)),
+                    ("last_refill_at".to_owned(), serde_json::Value::Null),
+                    ("enabled".to_owned(), json!(input.enabled)),
+                    (
+                        "rate_limit_enabled".to_owned(),
+                        json!(input.rate_limit_enabled),
+                    ),
+                    (
+                        "rate_limit_time_window".to_owned(),
+                        json!(input.rate_limit_time_window),
+                    ),
+                    ("rate_limit_max".to_owned(), json!(input.rate_limit_max)),
+                    ("request_count".to_owned(), json!(Some(0.0))),
+                    ("remaining".to_owned(), json!(input.remaining)),
+                    ("last_request".to_owned(), serde_json::Value::Null),
+                    (
+                        "expires_at".to_owned(),
+                        json!(parse_optional_rfc3339(
+                            input.expires_at.as_deref(),
+                            "expires_at",
+                        )?),
+                    ),
+                    ("created_at".to_owned(), json!(now)),
+                    ("updated_at".to_owned(), json!(now)),
+                    ("permissions".to_owned(), json!(input.permissions)),
+                    ("metadata".to_owned(), json!(input.metadata)),
+                ]),
+            )?,
+            self.config().advanced.database.generate_id(),
+        )?;
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
             active.insert(self.connection()).await.map_err(map_db_err)
         })
@@ -163,7 +182,10 @@ where
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
             Entity::<P::ApiKey>::find()
-                .filter(P::ApiKey::column("id")?.eq(id))
+                .filter(
+                    P::ApiKey::column("id")?
+                        .eq_id(id, self.config().advanced.database.generate_id())?,
+                )
                 .one(self.connection())
                 .await
                 .map_err(map_db_err)
@@ -246,8 +268,13 @@ where
         update: UpdateApiKey,
     ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
-        let active = apply_update_fields::<P::ApiKey>(Default::default(), update)?;
-        let filter = P::ApiKey::column("id")?.eq(id);
+        let active = apply_update_fields::<P::ApiKey>(
+            Default::default(),
+            update,
+            self.config().advanced.database.generate_id(),
+        )?;
+        let filter =
+            P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
             super::updates::update_returning_one::<Entity<P::ApiKey>, _>(
                 self.connection(),
@@ -269,7 +296,8 @@ where
     ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
         let operation = write.operation();
-        let reselect = P::ApiKey::column("id")?.eq(id);
+        let reselect =
+            P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let mut guard = reselect.clone();
         let mut query = Entity::<P::ApiKey>::update_many();
         match write {
@@ -352,7 +380,10 @@ where
         let id = id.typed()?;
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "delete", async {
             Entity::<P::ApiKey>::delete_many()
-                .filter(P::ApiKey::column("id")?.eq(id))
+                .filter(
+                    P::ApiKey::column("id")?
+                        .eq_id(id, self.config().advanced.database.generate_id())?,
+                )
                 .exec(self.connection())
                 .await
                 .map(|_| ())

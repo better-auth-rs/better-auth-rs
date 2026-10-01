@@ -133,6 +133,31 @@ impl From<SessionIssueError> for OAuthSignInError {
     }
 }
 
+fn account_query_error(
+    error: AuthError,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> OAuthSignInError {
+    ctx.config.logger.error(
+        "Better auth was unable to query your database.\nError: ",
+        &[better_auth_core::observability::logger::LogArgument::Error(
+            &error,
+        )],
+    );
+    let target = ctx
+        .config
+        .api_error
+        .error_url
+        .clone()
+        .filter(|url| !url.is_empty())
+        .unwrap_or_else(|| format!("{}/error", super::handlers::auth_base_url(ctx)));
+    let location =
+        better_auth_core::utils::url::append_query_params(&target, "error=internal_server_error");
+    OAuthSignInError::Auth(match location {
+        Ok(location) => AuthError::redirect(location),
+        Err(error) => error,
+    })
+}
+
 pub(super) async fn process_oauth_sign_in(
     provider_name: &str,
     provider: &ResolvedProvider,
@@ -146,11 +171,11 @@ pub(super) async fn process_oauth_sign_in(
         return Err(OAuthSignInError::Generic("email not found".to_string()));
     }
 
-    let linked_account = ctx
+    let account_owner = ctx
         .database
-        .get_account(provider_name, &user_info.id)
+        .get_account_owner(provider_name, &user_info.id)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| account_query_error(error, ctx))?;
 
     let token_bundle = encrypt_token_set(
         ctx,
@@ -180,7 +205,11 @@ pub(super) async fn process_oauth_sign_in(
             .data
             .map(|data| (data.user, data.session));
     }
-    if let Some(existing_account) = linked_account {
+    if let Some(owner) = account_owner {
+        let Some(mut user) = owner.user else {
+            return Err(OAuthSignInError::Generic("unable to link account".into()));
+        };
+        let existing_account = owner.account;
         validate_provider_user(
             user_info,
             existing_account
@@ -193,7 +222,7 @@ pub(super) async fn process_oauth_sign_in(
             &endpoint,
         )
         .await?;
-        if ctx.config.account.update_account_on_sign_in {
+        if ctx.config.account.update_account_on_sign_in() {
             let _ = ctx
                 .database
                 .update_account(
@@ -223,18 +252,6 @@ pub(super) async fn process_oauth_sign_in(
                 .await
                 .map_err(|error| error.to_string())?;
         }
-
-        let mut user = ctx
-            .database
-            .get_user_by_id(
-                existing_account
-                    .user_id
-                    .typed()
-                    .map_err(|error| error.to_string())?,
-            )
-            .await
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "user not found".to_string())?;
 
         if user_info.email_verified
             && !user.email_verified()
@@ -270,8 +287,12 @@ pub(super) async fn process_oauth_sign_in(
                             .user
                             .parse_provider_input(&user_info.additional_fields, false)
                             .map_err(|error| error.to_string())?,
-                        name: user_info.name.clone(),
-                        image: user_info.image.clone(),
+                        name: user_info
+                            .name
+                            .clone()
+                            .map(|value| Some(value).into())
+                            .unwrap_or_default(),
+                        image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                         email: Some(user_info.email.to_lowercase()),
                         email_verified: Some(
                             user_info.email_verified
@@ -301,7 +322,7 @@ pub(super) async fn process_oauth_sign_in(
         .await
         .map_err(OAuthSignInError::from)?;
         let account_cookie = ctx.config.account.store_account_cookie().then(|| {
-            if !ctx.config.account.update_account_on_sign_in {
+            if !ctx.config.account.update_account_on_sign_in() {
                 return existing_account.clone();
             }
             AccountCookiePayload {
@@ -350,11 +371,12 @@ pub(super) async fn process_oauth_sign_in(
 
     let existing_user = ctx
         .database
-        .get_user_by_email(&user_info.email.to_lowercase())
+        .get_user_with_accounts(&user_info.email.to_lowercase())
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| account_query_error(error, ctx))?;
 
-    if let Some(existing_user) = existing_user {
+    if let Some(existing) = existing_user {
+        let existing_user = existing.user;
         let linking = &ctx.config.account.account_linking;
         let trusted_provider = ctx
             .trusted_providers()
@@ -363,7 +385,7 @@ pub(super) async fn process_oauth_sign_in(
 
         // Mirrors upstream's linking guard, including the local-account check:
         // an unverified local account is not implicitly linkable.
-        if !linking.enabled
+        if !linking.enabled()
             || linking.disable_implicit_linking
             || (!trusted_provider && !user_info.email_verified)
             || (linking.require_local_email_verified && !existing_user.email_verified())
@@ -450,8 +472,12 @@ pub(super) async fn process_oauth_sign_in(
                             .user
                             .parse_provider_input(&user_info.additional_fields, false)
                             .map_err(|error| error.to_string())?,
-                        name: user_info.name.clone(),
-                        image: user_info.image.clone(),
+                        name: user_info
+                            .name
+                            .clone()
+                            .map(|value| Some(value).into())
+                            .unwrap_or_default(),
+                        image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                         email: Some(user_info.email.to_lowercase()),
                         email_verified: Some(
                             user_info.email_verified
@@ -512,7 +538,7 @@ pub(super) async fn process_oauth_sign_in(
             .with_email(user_info.email.to_lowercase())
             .with_name(user_info.name.as_deref().unwrap_or(&user_info.email))
             .with_email_verified(user_info.email_verified);
-        create_user.image = user_info.image.clone();
+        create_user.image = user_info.image.clone().map(Into::into).unwrap_or_default();
         create_user.additional_fields = ctx
             .config
             .user

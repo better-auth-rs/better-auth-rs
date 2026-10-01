@@ -84,7 +84,9 @@ impl RequestRuntime {
             .advanced
             .cross_sub_domain_cookies
             .as_ref()
-            .is_some_and(|policy| policy.domain.as_deref().is_none_or(str::is_empty))
+            .is_some_and(|policy| {
+                policy.enabled() && policy.domain.as_deref().is_none_or(str::is_empty)
+            })
             && !matches!(config.base_url, BaseUrl::Dynamic(_))
             && config.base_url.as_static().is_none_or(str::is_empty)
         {
@@ -372,7 +374,13 @@ impl<S: AuthSchema> AuthContext<S> {
             .trusted_providers
             .resolve(request)
             .await?;
-        if self.config.advanced.cross_sub_domain_cookies.is_some() {
+        if self
+            .config
+            .advanced
+            .cross_sub_domain_cookies
+            .as_ref()
+            .is_some_and(|policy| policy.enabled())
+        {
             let cookies =
                 CookieSettings::from_config(&resolved.config, self.runtime_values()?.is_production);
             Arc::make_mut(&mut resolved.config).install_cookie_settings(cookies);

@@ -151,6 +151,12 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Vec<crate::wire::UserView>> {
         self.inner.list_users_by_ids(ids, limit).await
     }
+    async fn get_user_with_accounts(
+        &self,
+        email: &str,
+    ) -> AuthResult<Option<crate::store::UserAccounts>> {
+        self.inner.get_user_with_accounts(email).await
+    }
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_email(email).await
     }

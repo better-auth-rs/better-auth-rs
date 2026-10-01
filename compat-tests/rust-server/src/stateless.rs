@@ -111,7 +111,7 @@ async fn build(
 ) -> AuthResult<Arc<BetterAuth<StatelessSchema>>> {
     let mut config =
         AuthConfig::new("compat-test-only-key-not-real-minimum-32chars").base_url(base_url);
-    config.session.expires_in = Duration::seconds(600);
+    config.session.expires_in = Some(Duration::seconds(600));
     match profile {
         "stateless-explicit" => {
             config.account.store_account_cookie = Some(false);

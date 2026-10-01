@@ -1,0 +1,40 @@
+[
+  {
+    "backend": "memory",
+    "trace": [
+      "name:A",
+      "name:B",
+      "image:A.png",
+      "image:B.png"
+    ],
+    "values": [
+      {
+        "name": "A:1",
+        "image": "A.png:3"
+      },
+      {
+        "name": "B:2",
+        "image": "B.png:4"
+      }
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "trace": [
+      "name:A",
+      "name:B",
+      "image:A.png",
+      "image:B.png"
+    ],
+    "values": [
+      {
+        "name": "A:1",
+        "image": "A.png:3"
+      },
+      {
+        "name": "B:2",
+        "image": "B.png:4"
+      }
+    ]
+  }
+]

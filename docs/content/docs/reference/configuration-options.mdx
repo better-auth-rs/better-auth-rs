@@ -31,9 +31,9 @@ Explicit `secrets`, including an invalid empty vector, takes precedence over `BE
 
 ## ApiErrorConfig
 
-`api_error.throw_errors` rethrows ordinary HTTP endpoint failures. The default is `false`, which returns an empty HTTP 500. API errors from an endpoint or after hook remain endpoint responses. Before-hook and body-decoding errors reach the HTTP error policy. Native `call_endpoint` calls bypass the policy, and `on_http_request` and `on_http_response` failures remain outside its catch boundary.
+`api_error.throw_errors = Some(true)` rethrows ordinary HTTP endpoint failures. Omission uses `false`, which returns an empty HTTP 500. API errors from an endpoint or after hook remain endpoint responses. Before-hook and body-decoding errors reach the HTTP error policy. Native `call_endpoint` calls bypass the policy, and `on_http_request` and `on_http_response` failures remain outside its catch boundary.
 
-Install `AuthBuilder::on_api_error(Arc<dyn ApiErrorHandler<S>>)` to observe failures with the resolved `AuthContext<S>`. The callback returns `AuthResult<Option<ApiErrorTask>>`. An immediate `Err` replaces the original error. Return `None` after synchronous work, or return a future for detached asynchronous work. The runtime polls that future once before returning the response and preserves request scope while the future continues. A detached failure is logged and cannot replace the response; this is the Rust runtime equivalent of upstream's unawaited callback Promise. `throw_errors = true` bypasses this callback.
+Install `AuthBuilder::on_api_error(Arc<dyn ApiErrorHandler<S>>)` to observe failures with the resolved `AuthContext<S>`. The callback returns `AuthResult<Option<ApiErrorTask>>`. An immediate `Err` replaces the original error. Return `None` after synchronous work, or return a future for detached asynchronous work. The runtime polls that future once before returning the response and preserves request scope while the future continues. A detached failure is logged and cannot replace the response; this is the Rust runtime equivalent of upstream's unawaited callback Promise. `throw_errors = Some(true)` bypasses this callback.
 
 `AuthError::redirect(location)` represents upstream's symbolic `FOUND` error and bypasses the policy. A numeric 302 error made with `AuthError::from(AuthResponse)` follows the ordinary API error policy. Returning a redirect response from an endpoint does not invoke the error policy.
 
@@ -51,22 +51,24 @@ The error page reads the original Request URL. A native call must supply `Endpoi
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `expires_in` | `chrono::Duration` | `7 days` | Session lifetime |
-| `store_session_in_database` | `bool` | `false` | Retain database sessions when secondary storage is installed |
-| `preserve_session_in_database` | `bool` | `false` | Expire revoked database rows and disable cache-miss database fallback |
-| `update_age` | `Option<chrono::Duration>` | `Some(1 day)` | Age threshold before refreshing a session |
-| `disable_session_refresh` | `bool` | `false` | Disable automatic refresh entirely |
+| `expires_in` | `Option<chrono::Duration>` | `None` (seven days) | Session lifetime |
+| `store_session_in_database` | `Option<bool>` | `None` (false) | Retain database sessions when secondary storage is installed |
+| `preserve_session_in_database` | `Option<bool>` | `None` (false) | Expire revoked database rows and disable cache-miss database fallback |
+| `update_age` | `Option<chrono::Duration>` | `None` (one day) | Age threshold before refreshing a session |
+| `disable_session_refresh` | `Option<bool>` | `None` (false) | Disable automatic refresh entirely |
 | `defer_session_refresh` | `bool` | `false` | Defer GET refresh and return `needsRefresh`; POST performs the refresh. POST returns 405 when disabled |
 | `fresh_age` | `Option<chrono::Duration>` | `None` | Optional freshness window for sensitive actions |
 | `cookie_cache` | `Option<CookieCacheConfig>` | Resolved during `build()` | Omitted configuration enables JWE caching only when database and secondary storage are both absent |
 | `bearer` | `Option<BearerConfig>` | `None` | Enable Bearer authentication; `require_signature` rejects unsigned tokens |
 | `additional_fields` | `IndexMap<String, SessionFieldConfig>` | Empty | Session field defaults, validators, transforms, update generators, mappings, and visibility |
 
+These optional inputs preserve omitted values for telemetry. Read effective values through the matching methods, such as `config.session.expires_in()` and `config.account.encrypt_oauth_tokens()`.
+
 Refresh semantics:
 
 - `update_age = Some(duration)`: refresh only when older than `duration`.
-- `update_age = None`: refresh on every access.
-- `disable_session_refresh = true`: never refresh automatically.
+- `update_age = None`: use the one-day default. Use `Some(Duration::zero())` to refresh on every authoritative read.
+- `disable_session_refresh = Some(true)`: never refresh automatically.
 
 ## VerificationConfig
 
@@ -75,7 +77,7 @@ Refresh semantics:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `store_in_database` | `bool` | `false` | Keep database verification rows when secondary storage is installed |
-| `disable_cleanup` | `bool` | `false` | Disable automatic expired-row deletion during database lookup |
+| `disable_cleanup` | `Option<bool>` | `None` (false) | Disable automatic expired-row deletion during database lookup |
 | `store_identifier` | `VerificationIdentifierConfig` | Plain, no overrides | Identifier storage strategy |
 
 `VerificationIdentifierConfig.default` selects `Plain`, `Hashed`, or `Custom(Arc<dyn VerificationIdentifierHasher>)`. `overrides` is an ordered vector of `(prefix, strategy)` pairs; the first matching prefix wins. `Hashed` uses unpadded URL-safe SHA-256. `Custom` calls the asynchronous `hash` method. Read and consume operations can migrate from existing plaintext identifiers; update and deletion address only the configured representation.
@@ -137,26 +139,26 @@ The default password hasher uses Better Auth-compatible scrypt. These retained l
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `update_account_on_sign_in` | `bool` | `true` | Refresh stored OAuth tokens during sign-in |
+| `update_account_on_sign_in` | `Option<bool>` | `None` (true) | Refresh stored OAuth tokens during sign-in |
 | `account_linking` | `AccountLinkingConfig` | see below | Account-linking behavior |
-| `encrypt_oauth_tokens` | `bool` | `false` | Encrypt stored OAuth tokens |
+| `encrypt_oauth_tokens` | `Option<bool>` | `None` (false) | Encrypt stored OAuth tokens |
 | `store_account_cookie` | `Option<bool>` | `None` | Resolves to `true` without a database, including secondary-only authentication |
 | `store_state_strategy` | `Option<OAuthStateStrategy>` | `None` | Resolves to `Cookie` without server storage, otherwise `Database` |
 | `skip_state_cookie_check` | `bool` | `false` | Skip callback cookie-state verification |
 
-Ordinary sign-in preserves stored scopes. With `update_account_on_sign_in: false`, sign-in also preserves stored tokens and the account-cookie token snapshot. Explicit linking merges existing and newly granted scopes in stable order.
+Ordinary sign-in preserves stored scopes. With `update_account_on_sign_in: Some(false)`, sign-in also preserves stored tokens and the account-cookie token snapshot. Explicit linking merges existing and newly granted scopes in stable order.
 
 ### AccountLinkingConfig
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Enable account linking |
+| `enabled` | `Option<bool>` | `None` (true) | Enable account linking |
 | `trusted_providers` | `TrustedValues` | `Static(vec![])` | Static providers or an asynchronous Request resolver |
 | `allow_different_emails` | `bool` | `false` | Allow linking accounts with different emails |
-| `allow_unlinking_all` | `bool` | `false` | Allow unlinking the last linked account |
+| `allow_unlinking_all` | `Option<bool>` | `None` (false) | Allow unlinking the last linked account |
 | `disable_implicit_linking` | `bool` | `false` | Only allow explicit linking via `link-social` |
 | `require_local_email_verified` | `bool` | `true` | Refuse to implicitly link a social account to an existing local account whose email is unverified |
-| `update_user_info_on_link` | `bool` | `false` | Refresh user info when linking an account |
+| `update_user_info_on_link` | `Option<bool>` | `None` (false) | Refresh user info when linking an account |
 
 `OAuthStateStrategy` variants:
 
@@ -165,7 +167,9 @@ Ordinary sign-in preserves stored scopes. With `update_account_on_sign_in: false
 
 ## RateLimitConfig
 
-Configure HTTP rate limits with `BetterAuth::rate_limit`. Limits are enabled by default when `NODE_ENV=production`. The default window is 10 seconds and the default maximum is 100 requests. Native endpoint calls do not consume HTTP rate limits.
+Configure HTTP rate limits with `BetterAuth::rate_limit`. `RateLimitConfig.window`, `max_requests`, and `enabled` use `Option` to retain omission. These fields replace the previous materialized `default` rule. Direct assignments use `Some(value)`; `.default_limit(duration, max)` and `.enabled(bool)` keep their scalar arguments. `default_rule()` returns the concrete `EndpointRateLimit` used at runtime. Omitted, zero, or NaN window and maximum values resolve to 10 seconds and 100 requests. Native endpoint calls do not consume HTTP rate limits.
+
+When `enabled` is omitted, the middleware reads `NODE_ENV` once at initialization and enables limits only for `production`. Set the environment before building auth. Explicit true and false override the environment. Upstream captures its production flag at JavaScript module import; changing environment values between import, configuration creation, and initialization is outside the matched timing contract.
 
 ```rust
 use std::time::Duration;
@@ -201,7 +205,7 @@ Database cleanup runs only after a successful counter reset. It uses `advanced.b
 
 ## AdvancedConfig
 
-`generate_id: Option<IdGenerator>` is the legacy context-only override. Database inserts use `advanced.database.generate_id`.
+`generate_id: Option<IdGenerator>` is the legacy context-only override. Database inserts use `advanced.database.generate_id: Option<IdGeneration>`; the `generate_id()` getter applies `Random` when omitted. Direct policy assignments use `Some(policy)`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -210,7 +214,7 @@ Database cleanup runs only after a successful counter reset. It uses `advanced.b
 | `disable_csrf_check` | `Option<bool>` | `None` | Explicit CSRF policy; unset inherits the legacy `disable_origin_check` behavior |
 | `disable_origin_check` | `bool` | `false` | Skip callback / redirect target origin validation |
 | `cross_sub_domain_cookies` | `Option<CrossSubDomainConfig>` | `None` | Share cookies across subdomains |
-| `cookies` | `HashMap<String, CookieOverride>` | `{}` | Per-cookie overrides |
+| `cookies` | `Option<HashMap<String, CookieOverride>>` | `None` | Per-cookie overrides; an explicit empty map retains telemetry presence |
 | `default_cookie_attributes` | `CookieAttributes` | all `None` | Default attributes applied to every cookie |
 | `cookie_prefix` | `Option<String>` | `None` | Prefix applied to every cookie name |
 | `database` | `AdvancedDatabaseConfig` | see below | Database-related defaults |
@@ -223,12 +227,12 @@ Database cleanup runs only after a successful counter reset. It uses `advanced.b
 
 | Field | Type | Default |
 |-------|------|---------|
-| `headers` | `Vec<String>` | `["x-forwarded-for"]` |
-| `disable_ip_tracking` | `bool` | `false` |
+| `headers` | `Option<Vec<String>>` | `None` resolves to `["x-forwarded-for"]` |
+| `disable_ip_tracking` | `Option<bool>` | `None` resolves to `false` |
 | `ipv6_subnet` | `f64` | `64` |
 | `trusted_proxies` | `Vec<String>` | `[]` |
 
-Sessions, rate limiting, and CAPTCHA use this policy. Header names are checked in order. Without trusted proxies, only a single valid address is accepted. With trusted proxies, the resolver walks the chain from right to left and selects the first untrusted address. Invalid hops stop resolution. Entries accept IP addresses or CIDR ranges; invalid entries are logged and ignored. IPv4-mapped IPv6 addresses become IPv4. IPv6 addresses use the configured subnet, with fractional prefix lengths rounded down.
+Sessions, rate limiting, and CAPTCHA use this policy. The `headers()` and `disable_ip_tracking()` getters apply runtime defaults while the fields retain input presence. `Some(Vec::new())` checks no headers. Direct header and tracking assignments now use `Some(value)`. Header names are checked in order. Without trusted proxies, only a single valid address is accepted. With trusted proxies, the resolver walks the chain from right to left and selects the first untrusted address. Invalid hops stop resolution. Entries accept IP addresses or CIDR ranges; invalid entries are logged and ignored. IPv4-mapped IPv6 addresses become IPv4. IPv6 addresses use the configured subnet, with fractional prefix lengths rounded down.
 
 Disabling tracking omits session and CAPTCHA addresses and disables IP rate limiting. If tracking is enabled but no trusted address is available, rate limiting uses one shared bucket per path. Development and test environments use localhost when no address resolves.
 
@@ -236,7 +240,11 @@ Disabling tracking omits session and CAPTCHA addresses and disables IP rate limi
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `domain` | `Option<String>` | Explicit parent domain, or `None` to use the resolved URL hostname |
+| `enabled` | `Option<bool>` | `None` resolves to `false`; use `Some(true)` to share cookies |
+| `domain` | `Option<String>` | Explicit parent domain, or `None` to use the resolved URL hostname when sharing is enabled |
+| `additional_cookies` | `Option<Vec<String>>` | Preserve configured cookie names in telemetry; Better Auth 1.7.6 does not consume this option in cookie resolution |
+
+`AuthConfig::cross_sub_domain_cookies(domain)` retains its argument and enables sharing explicitly. A manually constructed `CrossSubDomainConfig` now needs `enabled: Some(true)` to enable sharing. An omitted or false setting leaves cookie domains and request-time cookie rehydration disabled. Per-cookie overrides now use `config.advanced.cookies.get_or_insert_default().insert(...)`; `Some(HashMap::new())` retains explicit-empty telemetry presence.
 
 ### CookieAttributes
 

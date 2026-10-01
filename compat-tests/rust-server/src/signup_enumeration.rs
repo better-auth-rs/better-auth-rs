@@ -17,7 +17,7 @@ impl OnExistingUserSignUp for ExistingSignup {
     ) -> AuthResult<()> {
         let request = request.ok_or_else(|| AuthError::internal("Missing signup request"))?;
         if let Some(expected) = request.headers.get("x-expected-user-name")
-            && user.name.as_ref() != Some(expected)
+            && user.name.typed()?.as_ref() != Some(expected)
         {
             return Err(AuthError::internal(
                 "Duplicate callback received the submitted user",

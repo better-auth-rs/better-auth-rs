@@ -1,3 +1,4 @@
+use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
@@ -10,7 +11,9 @@ use better_auth_core::{
     AuthError, AuthResult, organization_fields::OrganizationFields, store::OrganizationStore,
 };
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
+};
 use serde_json::json;
 
 #[async_trait]
@@ -44,6 +47,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             &config,
             true,
             self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
         )?
         .insert(self.connection())
         .await
@@ -52,17 +56,26 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     }
     async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
         let _ = Entity::<O::Member>::delete_many()
-            .filter(O::Member::column("organization_id")?.eq(id))
+            .filter(
+                O::Member::column("organization_id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Invitation>::delete_many()
-            .filter(O::Invitation::column("organization_id")?.eq(id))
+            .filter(
+                O::Invitation::column("organization_id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Organization>::delete_many()
-            .filter(O::Organization::column("id")?.eq(id))
+            .filter(
+                O::Organization::column("id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -129,6 +142,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             &config,
             true,
             self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
         )?;
         // Native JSON retains SQL NULL separately from a stored JSON null value.
         let metadata = match org.metadata {
@@ -152,26 +166,22 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
 
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
         let config = self.organization_fields()?.organization;
-        models::find::<O::Organization, _>(self.connection(), id)
-            .await?
-            .map(|row| row.record(&config))
-            .transpose()
+        models::find::<O::Organization, _>(
+            self.connection(),
+            id,
+            self.config().advanced.database.generate_id(),
+        )
+        .await?
+        .map(|row| row.record(&config))
+        .transpose()
     }
 
     async fn get_organization_by_id_value(
         &self,
         id: &serde_json::Value,
     ) -> AuthResult<Option<Organization>> {
-        Entity::<O::Organization>::find()
-            .filter(super::value_filter::equals(
-                O::Organization::column("id")?,
-                id,
-            ))
-            .one(self.connection())
+        self.get_organization_by_id_value_with_connection(self.connection(), id)
             .await
-            .map_err(map_db_err)?
-            .map(|row| row.record(&self.organization_fields()?.organization))
-            .transpose()
     }
 
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
@@ -198,7 +208,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         let config = self.organization_fields()?.organization;
         models::project::<O::Organization>(
             Entity::<O::Organization>::find()
-                .filter(O::Organization::column("id")?.is_in(ids.iter().cloned()))
+                .filter(O::Organization::column("id")?.is_in_ids(
+                    ids.iter().cloned(),
+                    self.config().advanced.database.generate_id(),
+                )?)
                 .all(self.connection())
                 .await
                 .map_err(map_db_err)?,
@@ -243,6 +256,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             &config,
             false,
             self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
         )?;
         if native_metadata && let Some(metadata) = update.metadata {
             active.set(
@@ -252,7 +266,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         }
         let _ = Entity::<O::Organization>::update_many()
             .set(active)
-            .filter(O::Organization::column("id")?.eq(id))
+            .filter(
+                O::Organization::column("id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -264,17 +281,26 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let _ = Entity::<O::Member>::delete_many()
-            .filter(O::Member::column("organization_id")?.eq(id))
+            .filter(
+                O::Member::column("organization_id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Invitation>::delete_many()
-            .filter(O::Invitation::column("organization_id")?.eq(id))
+            .filter(
+                O::Invitation::column("organization_id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Organization>::delete_many()
-            .filter(O::Organization::column("id")?.eq(id))
+            .filter(
+                O::Organization::column("id")?
+                    .eq_id(id, self.config().advanced.database.generate_id())?,
+            )
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
@@ -283,32 +309,60 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
 
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
         let config = self.organization_fields()?;
-        let members = models::project::<O::Member>(
-            Entity::<O::Member>::find()
-                .filter(O::Member::column("user_id")?.eq(user_id))
-                .all(self.connection())
+        let rows = Entity::<O::Member>::find()
+            .filter(
+                O::Member::column("user_id")?
+                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
+            )
+            .limit(super::pagination::default_limit(
+                self.config(),
+                self.connection().get_database_backend(),
+            )?)
+            .all(self.connection())
+            .await
+            .map_err(map_db_err)?;
+        let _ = models::project::<O::Member>(rows.clone(), &config.member)?;
+        let mut organizations = Vec::with_capacity(rows.len());
+        for member in rows {
+            if let Some(row) = Entity::<O::Organization>::find()
+                .filter(
+                    O::Organization::column("id")?
+                        .eq(models::join_value(&member, "organization_id")?),
+                )
+                .one(self.connection())
                 .await
-                .map_err(map_db_err)?,
-            &config.member,
-        )?;
-        let ids = members
-            .iter()
-            .map(|member| member.organization_id.typed().cloned())
-            .collect::<AuthResult<Vec<_>>>()?;
-        let organizations = models::project::<O::Organization>(
-            Entity::<O::Organization>::find()
-                .filter(O::Organization::column("id")?.is_in(ids.clone()))
-                .all(self.connection())
-                .await
-                .map_err(map_db_err)?,
-            &config.organization,
-        )?
-        .into_iter()
-        .map(|organization| (organization.id.as_str().map(str::to_owned), organization))
-        .collect::<std::collections::HashMap<_, _>>();
-        Ok(ids
-            .into_iter()
-            .filter_map(|id| organizations.get(&Some(id)).cloned())
-            .collect())
+                .map_err(map_db_err)?
+            {
+                organizations.push(row.record(&config.organization)?);
+            }
+        }
+        Ok(organizations)
+    }
+}
+
+impl<
+    S: better_auth_core::AuthSchema,
+    O: crate::SeaOrmOrganizationSchema,
+    P: crate::SeaOrmPluginSchema,
+> SeaOrmStore<S, O, P>
+{
+    pub(super) async fn get_organization_by_id_value_with_connection<
+        C: sea_orm::ConnectionTrait,
+    >(
+        &self,
+        db: &C,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<Organization>> {
+        Entity::<O::Organization>::find()
+            .filter(super::value_filter::equals_id(
+                O::Organization::column("id")?,
+                id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .one(db)
+            .await
+            .map_err(map_db_err)?
+            .map(|row| row.record(&self.organization_fields()?.organization))
+            .transpose()
     }
 }

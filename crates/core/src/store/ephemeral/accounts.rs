@@ -3,6 +3,44 @@ use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 
 impl EphemeralStore {
+    async fn account_records(
+        &self,
+        provider: &str,
+        account_id: &str,
+    ) -> AuthResult<Vec<serde_json::Map<String, Value>>> {
+        let fields = self.config.account.field_schema();
+        self.raw("account", "findMany", |state| {
+            Ok(state
+                .accounts
+                .snapshot()?
+                .iter()
+                .filter(|record| {
+                    record.get(fields.record_storage_key("providerId"))
+                        == Some(&Value::String(provider.to_owned()))
+                        && record.get(fields.record_storage_key("accountId"))
+                            == Some(&Value::String(account_id.to_owned()))
+                })
+                .take(2)
+                .cloned()
+                .collect::<Vec<_>>())
+        })
+        .await
+    }
+
+    pub(super) fn output_accounts(
+        &self,
+        records: &[Map<String, Value>],
+    ) -> AuthResult<Vec<AccountView>> {
+        Ok(self
+            .config
+            .account
+            .field_schema()
+            .project_records(records, true, true)?
+            .into_iter()
+            .map(AccountView::from_adapter_fields)
+            .collect())
+    }
+
     pub(super) fn output_account(&self, record: &Map<String, Value>) -> AuthResult<AccountView> {
         Ok(AccountView::from_adapter_fields(
             self.config
@@ -72,31 +110,8 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         provider: &str,
         account_id: &str,
     ) -> AuthResult<Option<AccountView>> {
-        let fields = self.config.account.field_schema();
-        let records = self
-            .raw("account", "findMany", |state| {
-                Ok(state
-                    .accounts
-                    .snapshot()?
-                    .iter()
-                    .filter(|record| {
-                        record.get(fields.record_storage_key("providerId"))
-                            == Some(&Value::String(provider.to_owned()))
-                            && record.get(fields.record_storage_key("accountId"))
-                                == Some(&Value::String(account_id.to_owned()))
-                    })
-                    .take(2)
-                    .cloned()
-                    .collect::<Vec<_>>())
-            })
-            .await?;
-        // Upstream starts every row projection before observing an output error.
-        let accounts = records
-            .iter()
-            .map(|record| self.output_account(record))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .collect::<AuthResult<Vec<_>>>()?;
+        let records = self.account_records(provider, account_id).await?;
+        let accounts = self.output_accounts(&records)?;
         if accounts.len() > 1 {
             return Err(AuthError::internal(format!(
                 "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
@@ -104,6 +119,45 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             )));
         }
         Ok(accounts.into_iter().next())
+    }
+
+    async fn get_account_owner(
+        &self,
+        provider: &str,
+        account_id: &str,
+    ) -> AuthResult<Option<crate::store::AccountOwner>> {
+        let fields = self.config.account.field_schema();
+        let records = self.account_records(provider, account_id).await?;
+        let projected = records
+            .iter()
+            .map(|record| self.output_account(record))
+            .collect::<Vec<_>>();
+        let owners = futures_util::future::join_all(records.iter().zip(projected).map(
+            |(record, account)| {
+                let fields = &fields;
+                async move {
+                    let account = account?;
+                    let stored_owner_id = crate::SchemaValue::from_json(
+                        record.get(fields.record_storage_key("userId")).cloned(),
+                    );
+                    let user = match record.get(fields.record_storage_key("userId")) {
+                        Some(id) if !id.is_null() => self.get_user_by_id_value(id).await?,
+                        _ => None,
+                    };
+                    crate::store::AccountOwner::new(account, user, &stored_owner_id)
+                }
+            },
+        ))
+        .await
+        .into_iter()
+        .collect::<AuthResult<Vec<_>>>()?;
+        if owners.len() > 1 {
+            return Err(AuthError::internal(format!(
+                "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
+                serde_json::to_string(provider)?
+            )));
+        }
+        Ok(owners.into_iter().next())
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
@@ -126,10 +180,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        records
-            .iter()
-            .map(|record| self.output_account(record))
-            .collect()
+        self.output_accounts(&records)
     }
 
     async fn update_account(&self, id: &str, input: UpdateAccount) -> AuthResult<AccountView> {

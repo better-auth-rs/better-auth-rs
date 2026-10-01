@@ -1,0 +1,1441 @@
+{
+  "omitted": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "explicitDefaults": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {
+      "disableCleanup": false
+    },
+    "session": {
+      "cookieCache": {
+        "enabled": false,
+        "maxAge": 300,
+        "strategy": "compact"
+      },
+      "disableSessionRefresh": false,
+      "expiresIn": 604800,
+      "preserveSessionInDatabase": false,
+      "storeSessionInDatabase": false,
+      "updateAge": 86400
+    },
+    "account": {
+      "encryptOAuthTokens": false,
+      "updateAccountOnSignIn": true,
+      "accountLinking": {
+        "enabled": true,
+        "updateUserInfoOnLink": false,
+        "allowUnlinkingAll": false
+      }
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {
+        "defaultFindManyLimit": 100
+      },
+      "useSecureCookies": false,
+      "ipAddress": {},
+      "disableCSRFCheck": false,
+      "cookieAttributes": {
+        "secure": false,
+        "sameSite": "lax",
+        "domain": false,
+        "path": "/",
+        "httpOnly": true
+      }
+    },
+    "rateLimit": {
+      "storage": "memory",
+      "window": 10,
+      "customStorage": false,
+      "enabled": false,
+      "max": 100
+    },
+    "onAPIError": {
+      "onError": false,
+      "throw": false
+    },
+    "logger": {
+      "disabled": false,
+      "level": "warn",
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "explicitValues": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {
+      "disableCleanup": true
+    },
+    "session": {
+      "cookieCache": {
+        "enabled": true,
+        "maxAge": 900,
+        "strategy": "jwe"
+      },
+      "disableSessionRefresh": true,
+      "expiresIn": 30,
+      "freshAge": 0,
+      "preserveSessionInDatabase": true,
+      "storeSessionInDatabase": true,
+      "updateAge": 0
+    },
+    "account": {
+      "encryptOAuthTokens": true,
+      "updateAccountOnSignIn": false,
+      "accountLinking": {
+        "enabled": false,
+        "updateUserInfoOnLink": true,
+        "allowUnlinkingAll": true
+      }
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {
+        "defaultFindManyLimit": 0
+      },
+      "useSecureCookies": true,
+      "ipAddress": {},
+      "disableCSRFCheck": true,
+      "cookieAttributes": {
+        "secure": true,
+        "sameSite": "none",
+        "domain": true,
+        "path": "/auth",
+        "httpOnly": false
+      }
+    },
+    "rateLimit": {
+      "storage": "secondary-storage",
+      "window": 0,
+      "customStorage": true,
+      "enabled": true,
+      "max": 0
+    },
+    "onAPIError": {
+      "errorURL": "https://example.test/error",
+      "onError": true,
+      "throw": true
+    },
+    "logger": {
+      "disabled": true,
+      "level": "error",
+      "log": true
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "callbacks": {
+    "emailVerification": {
+      "sendVerificationEmail": true,
+      "sendOnSignUp": true,
+      "sendOnSignIn": true,
+      "autoSignInAfterVerification": true,
+      "beforeEmailVerification": true,
+      "afterEmailVerification": true
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": true,
+      "requireEmailVerification": true,
+      "sendResetPassword": true,
+      "onPasswordReset": true,
+      "password": {
+        "hash": true,
+        "verify": true
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": true
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": true
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "databaseHooks": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": true
+        },
+        "update": {
+          "after": true,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": true,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": true
+        }
+      },
+      "verification": {
+        "create": {
+          "after": true,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "pluginOmitted": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "pluginDefaults": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 3600,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "maxPasswordLength": 128,
+      "minPasswordLength": 8,
+      "sendResetPassword": false,
+      "resetPasswordTokenExpiresIn": 3600,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": true,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "enabled": false,
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "pluginValues": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 90,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "maxPasswordLength": 24,
+      "minPasswordLength": 12,
+      "sendResetPassword": false,
+      "resetPasswordTokenExpiresIn": 0,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "enabled": true,
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "fractionalDurations": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {
+        "maxAge": 1e-09
+      },
+      "expiresIn": 12.25,
+      "freshAge": -0.125,
+      "updateAge": 0.5
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "idDatabase": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {
+        "generateId": false
+      },
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "idSerial": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {
+        "generateId": "serial"
+      },
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "idUuid": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {
+        "generateId": "uuid"
+      },
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  },
+  "idCustom": {
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": false,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": false,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    },
+    "socialProviders": [],
+    "user": {
+      "changeEmail": {
+        "sendChangeEmailConfirmation": false
+      }
+    },
+    "verification": {},
+    "session": {
+      "cookieCache": {}
+    },
+    "account": {
+      "accountLinking": {}
+    },
+    "hooks": {
+      "after": false,
+      "before": false
+    },
+    "secondaryStorage": false,
+    "advanced": {
+      "cookiePrefix": false,
+      "cookies": false,
+      "crossSubDomainCookies": {
+        "domain": false
+      },
+      "database": {},
+      "ipAddress": {},
+      "cookieAttributes": {
+        "domain": false
+      }
+    },
+    "rateLimit": {
+      "customStorage": false
+    },
+    "onAPIError": {
+      "onError": false
+    },
+    "logger": {
+      "log": false
+    },
+    "databaseHooks": {
+      "user": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "session": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "account": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      },
+      "verification": {
+        "create": {
+          "after": false,
+          "before": false
+        },
+        "update": {
+          "after": false,
+          "before": false
+        }
+      }
+    }
+  }
+}

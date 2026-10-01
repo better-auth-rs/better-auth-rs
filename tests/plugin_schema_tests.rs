@@ -224,7 +224,7 @@ async fn disabled_username_ignores_inputs_without_persisting_them()
         .get_user_by_email("core@example.com")
         .await?
         .ok_or("missing user")?;
-    assert_eq!(user.name(), Some("Changed name"));
+    assert_eq!(user.name.typed().unwrap().as_deref(), Some("Changed name"));
     assert_eq!(user.username(), None);
     assert_eq!(user.display_username(), None);
     Ok(())

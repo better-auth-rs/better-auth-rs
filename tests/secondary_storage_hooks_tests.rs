@@ -125,8 +125,8 @@ async fn setup(preserve: bool) -> (BetterAuth<BundledSchema>, DatabaseConnection
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let mut config = AuthConfig::new("secondary-hook-test-secret-at-least-32-characters");
-    config.session.store_session_in_database = preserve;
-    config.session.preserve_session_in_database = preserve;
+    config.session.store_session_in_database = Some(preserve);
+    config.session.preserve_session_in_database = Some(preserve);
     let hooks = Hooks {
         cache: Arc::new(MemoryCacheAdapter::new()),
         events: Default::default(),
@@ -160,7 +160,11 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
     let (auth, database, hooks) = setup(false).await;
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("hooks@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("hooks@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let session = auth
@@ -198,7 +202,11 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
     hooks.cancel.store(true, Ordering::SeqCst);
     let other = auth
         .store()
-        .create_user(CreateUser::new().with_email("cancelled@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("cancelled@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     assert!(
@@ -254,7 +262,7 @@ async fn transaction_publishes_session_and_after_hook_only_after_commit() {
         let result: AuthResult<String> = transaction(auth.store().as_ref(), move |tx| {
             Box::pin(async move {
                 let user = tx
-                    .create_user(CreateUser::new().with_email(tx_email))
+                    .create_user(CreateUser::new().with_email(tx_email).with_name("Fixture"))
                     .await?;
                 let session = tx
                     .create_session_with_deferred_secondary(input(user.id.typed().unwrap().clone()))
@@ -303,7 +311,9 @@ async fn default_transaction_session_mirrors_the_uncommitted_user_without_deferr
             let email = "immediate@example.com";
             let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
                 Box::pin(async move {
-                    let user = tx.create_user(CreateUser::new().with_email(email)).await?;
+                    let user = tx
+                        .create_user(CreateUser::new().with_email(email).with_name("Fixture"))
+                        .await?;
                     let session = tx
                         .create_session(input(user.id.typed().unwrap().clone()))
                         .await?;
@@ -353,7 +363,11 @@ async fn preserved_session_revoke_ends_the_row_and_runs_delete_hooks_once() {
     let (auth, database, hooks) = setup(true).await;
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("preserve@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("preserve@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let session = auth
@@ -401,7 +415,11 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
         .unwrap();
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("proof@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("proof@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     for verified in [false, true] {
@@ -509,7 +527,11 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
     );
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("proof-race@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("proof-race@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let unproven = auth
@@ -602,7 +624,11 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
         .unwrap();
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("after-hook@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("after-hook@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let old = auth
@@ -683,7 +709,11 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
         .unwrap();
     let user = auth
         .store()
-        .create_user(CreateUser::new().with_email("revocation-failure@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("revocation-failure@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let _ = auth
@@ -817,7 +847,7 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                         .update_user(
                             user_id.typed().unwrap(),
                             better_auth::prelude::UpdateUser {
-                                name: Some("Updated".into()),
+                                name: Some("Updated".into()).into(),
                                 ..Default::default()
                             },
                         )
@@ -864,7 +894,7 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                         .and_then(serde_json::Value::as_str),
                     Some(name)
                 );
-                assert_eq!(stored.unwrap().name(), Some(name));
+                assert_eq!(stored.unwrap().name.typed().unwrap().as_deref(), Some(name));
             }
         }
     }
@@ -903,12 +933,12 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                         .update_user(
                             user_id.typed().unwrap(),
                             better_auth::prelude::UpdateUser {
-                                name: Some("Updated".into()),
+                                name: Some("Updated".into()).into(),
                                 ..Default::default()
                             },
                         )
                         .await?;
-                    assert_eq!(updated.name(), Some("Updated"));
+                    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Updated"));
                     if delete {
                         tx.delete_user(user_id.typed().unwrap()).await?;
                         assert!(tx.get_user_by_id(user_id.typed().unwrap()).await?.is_none());
@@ -945,7 +975,7 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                 );
             } else {
                 let name = if commit { "Updated" } else { "Original" };
-                assert_eq!(stored.unwrap().name(), Some(name));
+                assert_eq!(stored.unwrap().name.typed().unwrap().as_deref(), Some(name));
                 assert!(
                     auth.store()
                         .get_session(session.token())

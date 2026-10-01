@@ -21,10 +21,19 @@ impl MembershipLimitPolicy for CountLimits {
 
 #[tokio::test]
 async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
-    let ctx = create_test_context().await;
+    let mut ctx = create_test_context().await;
+    ctx.extensions.insert(Arc::new(
+        better_auth_core::endpoint_dispatch::EndpointDispatcher::<
+            better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
+        >::new(Arc::new(Vec::new()), Default::default(), []),
+    ));
     let user = ctx
         .database
-        .create_user(CreateUser::new().with_email("member-input@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("member-input@example.com")
+                .with_name("Fixture"),
+        )
         .await
         .unwrap();
     let organization = ctx

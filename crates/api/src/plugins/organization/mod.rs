@@ -9,7 +9,7 @@ mod policy;
 mod request;
 mod server_api;
 pub use better_auth_core::organization_fields::OrganizationFields;
-pub use server_api::AddMemberInput;
+pub use server_api::{AddMemberInput, OrganizationApi};
 pub mod rbac;
 pub mod types;
 
@@ -284,6 +284,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         ctx.database
             .configure_organization_fields(self.config.schema.clone())?;
         ctx.extensions.insert(self.config.schema.clone());
+        ctx.extensions.insert(self.clone());
 
         S::Session::require_plugin_fields("organization", &["active_organization_id"])?;
         if self.config.teams.enabled {

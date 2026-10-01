@@ -1,0 +1,800 @@
+[
+  {
+    "backend": "memory",
+    "limit": null,
+    "operations": {
+      "organizations": {
+        "result": [
+          "org-a",
+          "org-b"
+        ],
+        "events": [
+          "member:owner",
+          "member:owner",
+          "organization:org-a",
+          "organization:org-b"
+        ]
+      },
+      "teams": {
+        "result": [
+          "team-a",
+          "team-b"
+        ],
+        "events": [
+          "team:team-a",
+          "team:team-b"
+        ]
+      },
+      "userTeams": {
+        "result": [
+          "team-b",
+          "team-a"
+        ],
+        "events": [
+          "team:team-b",
+          "team:team-a"
+        ]
+      },
+      "teamMembers": {
+        "result": [
+          "alice",
+          "bob"
+        ],
+        "events": []
+      },
+      "roles": {
+        "result": [
+          "first",
+          "second"
+        ],
+        "events": [
+          "role:first",
+          "role:second"
+        ]
+      },
+      "invitations": {
+        "result": [
+          "accepted",
+          "expired",
+          "fresh"
+        ],
+        "events": [
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member"
+        ]
+      },
+      "received": {
+        "result": [
+          {
+            "id": "expired",
+            "name": "org-a"
+          },
+          {
+            "id": "fresh",
+            "name": "org-a"
+          }
+        ],
+        "events": [
+          "user:carol",
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member",
+          "organization:org-a",
+          "organization:org-a",
+          "organization:org-a"
+        ]
+      },
+      "full": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired",
+            "fresh"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      },
+      "fullSlug": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired",
+            "fresh"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      }
+    }
+  },
+  {
+    "backend": "memory",
+    "limit": 1,
+    "operations": {
+      "organizations": {
+        "result": [
+          "org-a"
+        ],
+        "events": [
+          "member:owner",
+          "organization:org-a"
+        ]
+      },
+      "teams": {
+        "result": [
+          "team-a"
+        ],
+        "events": [
+          "team:team-a"
+        ]
+      },
+      "userTeams": {
+        "result": [
+          "team-b"
+        ],
+        "events": [
+          "team:team-b"
+        ]
+      },
+      "teamMembers": {
+        "result": [
+          "alice"
+        ],
+        "events": []
+      },
+      "roles": {
+        "result": [
+          "first"
+        ],
+        "events": [
+          "role:first"
+        ]
+      },
+      "invitations": {
+        "result": [
+          "accepted"
+        ],
+        "events": [
+          "invitation:member"
+        ]
+      },
+      "received": {
+        "result": [],
+        "events": [
+          "user:carol",
+          "invitation:member",
+          "organization:org-a"
+        ]
+      },
+      "full": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice"
+          ],
+          "invitations": [
+            "accepted"
+          ],
+          "teams": [
+            "team-a"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "member:owner",
+          "team:team-a",
+          "user:alice",
+          "member:owner"
+        ]
+      },
+      "fullSlug": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice"
+          ],
+          "invitations": [
+            "accepted"
+          ],
+          "teams": [
+            "team-a"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "member:owner",
+          "team:team-a",
+          "user:alice",
+          "member:owner"
+        ]
+      }
+    }
+  },
+  {
+    "backend": "memory",
+    "limit": 2,
+    "operations": {
+      "organizations": {
+        "result": [
+          "org-a",
+          "org-b"
+        ],
+        "events": [
+          "member:owner",
+          "member:owner",
+          "organization:org-a",
+          "organization:org-b"
+        ]
+      },
+      "teams": {
+        "result": [
+          "team-a",
+          "team-b"
+        ],
+        "events": [
+          "team:team-a",
+          "team:team-b"
+        ]
+      },
+      "userTeams": {
+        "result": [
+          "team-b",
+          "team-a"
+        ],
+        "events": [
+          "team:team-b",
+          "team:team-a"
+        ]
+      },
+      "teamMembers": {
+        "result": [
+          "alice",
+          "bob"
+        ],
+        "events": []
+      },
+      "roles": {
+        "result": [
+          "first",
+          "second"
+        ],
+        "events": [
+          "role:first",
+          "role:second"
+        ]
+      },
+      "invitations": {
+        "result": [
+          "accepted",
+          "expired"
+        ],
+        "events": [
+          "invitation:member",
+          "invitation:admin"
+        ]
+      },
+      "received": {
+        "result": [
+          {
+            "id": "expired",
+            "name": "org-a"
+          }
+        ],
+        "events": [
+          "user:carol",
+          "invitation:member",
+          "invitation:admin",
+          "organization:org-a",
+          "organization:org-a"
+        ]
+      },
+      "full": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      },
+      "fullSlug": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      }
+    }
+  },
+  {
+    "backend": "sqlite",
+    "limit": null,
+    "operations": {
+      "organizations": {
+        "result": [
+          "org-a",
+          "org-b"
+        ],
+        "events": [
+          "member:owner",
+          "member:owner",
+          "organization:org-a",
+          "organization:org-b"
+        ]
+      },
+      "teams": {
+        "result": [
+          "team-a",
+          "team-b"
+        ],
+        "events": [
+          "team:team-a",
+          "team:team-b"
+        ]
+      },
+      "userTeams": {
+        "result": [
+          "team-b",
+          "team-a"
+        ],
+        "events": [
+          "team:team-b",
+          "team:team-a"
+        ]
+      },
+      "teamMembers": {
+        "result": [
+          "alice",
+          "bob"
+        ],
+        "events": []
+      },
+      "roles": {
+        "result": [
+          "first",
+          "second"
+        ],
+        "events": [
+          "role:first",
+          "role:second"
+        ]
+      },
+      "invitations": {
+        "result": [
+          "accepted",
+          "expired",
+          "fresh"
+        ],
+        "events": [
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member"
+        ]
+      },
+      "received": {
+        "result": [
+          {
+            "id": "expired",
+            "name": "org-a"
+          },
+          {
+            "id": "fresh",
+            "name": "org-a"
+          }
+        ],
+        "events": [
+          "user:carol",
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member",
+          "organization:org-a",
+          "organization:org-a",
+          "organization:org-a"
+        ]
+      },
+      "full": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired",
+            "fresh"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      },
+      "fullSlug": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired",
+            "fresh"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "invitation:member",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      }
+    }
+  },
+  {
+    "backend": "sqlite",
+    "limit": 1,
+    "operations": {
+      "organizations": {
+        "result": [
+          "org-a"
+        ],
+        "events": [
+          "member:owner",
+          "organization:org-a"
+        ]
+      },
+      "teams": {
+        "result": [
+          "team-a"
+        ],
+        "events": [
+          "team:team-a"
+        ]
+      },
+      "userTeams": {
+        "result": [
+          "team-b"
+        ],
+        "events": [
+          "team:team-b"
+        ]
+      },
+      "teamMembers": {
+        "result": [
+          "alice"
+        ],
+        "events": []
+      },
+      "roles": {
+        "result": [
+          "first"
+        ],
+        "events": [
+          "role:first"
+        ]
+      },
+      "invitations": {
+        "result": [
+          "accepted"
+        ],
+        "events": [
+          "invitation:member"
+        ]
+      },
+      "received": {
+        "result": [],
+        "events": [
+          "user:carol",
+          "invitation:member",
+          "organization:org-a"
+        ]
+      },
+      "full": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice"
+          ],
+          "invitations": [
+            "accepted"
+          ],
+          "teams": [
+            "team-a"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "member:owner",
+          "team:team-a",
+          "user:alice",
+          "member:owner"
+        ]
+      },
+      "fullSlug": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice"
+          ],
+          "invitations": [
+            "accepted"
+          ],
+          "teams": [
+            "team-a"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "member:owner",
+          "team:team-a",
+          "user:alice",
+          "member:owner"
+        ]
+      }
+    }
+  },
+  {
+    "backend": "sqlite",
+    "limit": 2,
+    "operations": {
+      "organizations": {
+        "result": [
+          "org-a",
+          "org-b"
+        ],
+        "events": [
+          "member:owner",
+          "member:owner",
+          "organization:org-a",
+          "organization:org-b"
+        ]
+      },
+      "teams": {
+        "result": [
+          "team-a",
+          "team-b"
+        ],
+        "events": [
+          "team:team-a",
+          "team:team-b"
+        ]
+      },
+      "userTeams": {
+        "result": [
+          "team-b",
+          "team-a"
+        ],
+        "events": [
+          "team:team-b",
+          "team:team-a"
+        ]
+      },
+      "teamMembers": {
+        "result": [
+          "alice",
+          "bob"
+        ],
+        "events": []
+      },
+      "roles": {
+        "result": [
+          "first",
+          "second"
+        ],
+        "events": [
+          "role:first",
+          "role:second"
+        ]
+      },
+      "invitations": {
+        "result": [
+          "accepted",
+          "expired"
+        ],
+        "events": [
+          "invitation:member",
+          "invitation:admin"
+        ]
+      },
+      "received": {
+        "result": [
+          {
+            "id": "expired",
+            "name": "org-a"
+          }
+        ],
+        "events": [
+          "user:carol",
+          "invitation:member",
+          "invitation:admin",
+          "organization:org-a",
+          "organization:org-a"
+        ]
+      },
+      "full": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      },
+      "fullSlug": {
+        "result": {
+          "name": "org-a",
+          "members": [
+            "alice",
+            "bob"
+          ],
+          "invitations": [
+            "accepted",
+            "expired"
+          ],
+          "teams": [
+            "team-a",
+            "team-b"
+          ]
+        },
+        "events": [
+          "user:alice",
+          "organization:org-a",
+          "invitation:member",
+          "invitation:admin",
+          "member:owner",
+          "member:member",
+          "team:team-a",
+          "team:team-b",
+          "user:alice",
+          "user:bob",
+          "member:owner"
+        ]
+      }
+    }
+  }
+]

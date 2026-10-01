@@ -125,7 +125,7 @@ async fn check_order<S: AuthSchema>(
                     .update_user(
                         tx_user_id.typed().unwrap(),
                         UpdateUser {
-                            name: Some("Updated".into()),
+                            name: Some("Updated".into()).into(),
                             ..Default::default()
                         },
                     )
@@ -186,7 +186,7 @@ async fn check_order<S: AuthSchema>(
         .unwrap()
         .unwrap();
     assert_eq!(
-        stored.name(),
+        stored.name.typed().unwrap().as_deref(),
         Some(if rollback { "Original" } else { "Updated" })
     );
     assert_eq!(
@@ -368,21 +368,21 @@ async fn retained_memory_transaction_shares_committed_rows_but_not_table_members
             .update_user(
                 id,
                 UpdateUser {
-                    name: Some("Delayed".into()),
+                    name: Some("Delayed".into()).into(),
                     ..Default::default()
                 },
             )
             .await
             .unwrap();
     }
-    assert_eq!(
+    assert!(
         store
             .get_user_by_id(&unchanged_id)
             .await
             .unwrap()
             .unwrap()
-            .name(),
-        None
+            .name
+            .is_undefined()
     );
     assert_eq!(
         store
@@ -390,7 +390,10 @@ async fn retained_memory_transaction_shares_committed_rows_but_not_table_members
             .await
             .unwrap()
             .unwrap()
-            .name(),
+            .name
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("Delayed")
     );
     retained.delete_user(&created_id).await.unwrap();
@@ -413,7 +416,7 @@ async fn missing_public_ids_preserve_pinned_commit_and_retained_row_behavior() {
     use better_auth::config::IdGeneration;
     use better_auth_core::{CreateVerification, store::VerificationStore};
     let mut config = AuthConfig::default();
-    config.advanced.database.generate_id = IdGeneration::Database;
+    config.advanced.database.generate_id = Some(IdGeneration::Database);
     let store = EphemeralStore::new(Arc::new(config));
     for identifier in ["first", "second"] {
         let _ = store

@@ -261,7 +261,7 @@ impl SiwePlugin {
             let mut create = CreateUser::new()
                 .with_email(&user_email)
                 .with_name(profile.name.unwrap_or_else(|| address.clone()));
-            create.image = Some(Some(profile.avatar.unwrap_or_default()));
+            create.image = Some(profile.avatar.unwrap_or_default()).into();
 
             let endpoint =
                 super::endpoint_context::EndpointContext::new(Some(req), req.body_as_json()?, ctx);

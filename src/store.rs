@@ -7,8 +7,8 @@ pub use better_auth_core::store::database_hooks::{
     VerificationUpdate,
 };
 pub use better_auth_core::store::{
-    AuthStore, AuthTransaction, CacheAdapter, EphemeralStore, MemoryCacheAdapter, RateLimitRecord,
-    RateLimitStore, RuntimeStore, SecondaryStorage, SessionUpdateWriter, StatelessSchema,
-    StoreCapabilities, VerificationCleanup, VerificationCreateWriter, VerificationSessionCleanup,
-    transaction,
+    AccountOwner, AuthStore, AuthTransaction, CacheAdapter, EphemeralStore, InvitationOrganization,
+    MemoryCacheAdapter, OrganizationRoleKey, RateLimitRecord, RateLimitStore, RuntimeStore,
+    SecondaryStorage, SessionUpdateWriter, StatelessSchema, StoreCapabilities, UserAccounts,
+    VerificationCleanup, VerificationCreateWriter, VerificationSessionCleanup, transaction,
 };

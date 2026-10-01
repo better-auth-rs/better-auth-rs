@@ -196,9 +196,13 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         let _ = overrides
             .email
             .get_or_insert_with(|| format!("test-{}@example.com", random_lower(8)));
-        let _ = overrides.name.get_or_insert_with(|| "Test User".into());
+        if overrides.name.is_undefined() {
+            overrides.name = Some("Test User".into()).into();
+        }
         let _ = overrides.email_verified.get_or_insert(true);
-        let _ = overrides.image.get_or_insert(None);
+        if overrides.image.is_undefined() {
+            overrides.image = None.into();
+        }
         let _ = overrides.created_at.get_or_insert(now);
         let _ = overrides.updated_at.get_or_insert(now);
         Ok(overrides)
@@ -351,7 +355,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         };
         let input = CreateSession {
             user_id: options.user_id.into(),
-            expires_at: Utc::now() + self.auth.config.session.expires_in,
+            expires_at: Utc::now() + self.auth.config.session.expires_in(),
             ip_address: meta.ip_address,
             user_agent: meta.user_agent,
             impersonated_by: None,

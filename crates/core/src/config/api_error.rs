@@ -7,8 +7,8 @@ use crate::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthS
 #[serde(default, rename_all = "camelCase")]
 pub struct ApiErrorConfig {
     /// Rethrow ordinary errors before invoking the optional error callback.
-    #[serde(rename = "throw")]
-    pub throw_errors: bool,
+    #[serde(rename = "throw", skip_serializing_if = "Option::is_none")]
+    pub throw_errors: Option<bool>,
     /// Error-page redirect and OAuth's default error destination.
     #[serde(rename = "errorURL")]
     pub error_url: Option<String>,

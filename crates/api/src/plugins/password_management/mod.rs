@@ -60,8 +60,8 @@ pub struct PasswordManagementPlugin {
 #[plugin(name = "PasswordManagementPlugin")]
 pub struct PasswordManagementConfig {
     /// Reset token lifetime in seconds. Zero selects the one-hour default.
-    #[config(default = 3600)]
-    pub reset_password_token_expires_in: i64,
+    #[config(default = None)]
+    pub reset_password_token_expires_in: Option<i64>,
     #[config(default = true)]
     pub require_current_password: bool,
     #[config(default = true)]
@@ -80,6 +80,16 @@ pub struct PasswordManagementConfig {
     /// Custom password hasher. When `None`, the default scrypt hasher is used.
     #[config(default = None)]
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
+}
+
+impl PasswordManagementConfig {
+    /// Read the reset-token lifetime in seconds. Omission and zero use one hour.
+    pub fn reset_password_token_expires_in(&self) -> i64 {
+        match self.reset_password_token_expires_in {
+            None | Some(0) => 3600,
+            Some(seconds) => seconds,
+        }
+    }
 }
 
 impl std::fmt::Debug for PasswordManagementConfig {
@@ -113,6 +123,16 @@ impl std::fmt::Debug for PasswordManagementConfig {
 
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin {
+    fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+        let options = &mut options.email_and_password;
+        options.reset_password_token_expires_in = self.config.reset_password_token_expires_in;
+        options.send_reset_password = self.config.send_reset_password.is_some();
+        options.on_password_reset = self.config.on_password_reset.is_some();
+        options.revoke_sessions_on_password_reset = self.config.revoke_sessions_on_password_reset;
+        options.password.hash |= self.config.password_hasher.is_some();
+        options.password.verify |= self.config.password_hasher.is_some();
+    }
+
     fn password_hasher(&self) -> Option<Arc<dyn PasswordHasher>> {
         self.config.password_hasher.clone()
     }

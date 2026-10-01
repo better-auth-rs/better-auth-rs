@@ -1,4 +1,5 @@
 use super::*;
+use crate::store::TeamStore;
 
 pub(super) struct EphemeralTransaction {
     pub(super) store: EphemeralStore,
@@ -6,6 +7,48 @@ pub(super) struct EphemeralTransaction {
 
 #[async_trait]
 impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
+    async fn get_member_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::Member>> {
+        self.store.get_member_value(organization_id, user_id).await
+    }
+    async fn get_organization_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::Organization>> {
+        self.store.get_organization_by_id_value(id).await
+    }
+    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+        self.store.get_team_value(id).await
+    }
+    async fn count_organization_members_value(&self, id: &serde_json::Value) -> AuthResult<i64> {
+        self.store.count_organization_members_value(id).await
+    }
+    async fn create_member(&self, input: crate::CreateMember) -> AuthResult<crate::Member> {
+        self.store.create_member(input).await
+    }
+    async fn add_team_member(
+        &self,
+        team_id: &crate::SchemaValue<String>,
+        user_id: &str,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        self.store.add_team_member(team_id, user_id, maximum).await
+    }
+    async fn delete_member(&self, id: &str) -> AuthResult<()> {
+        self.store.delete_member_subject(id, None)
+    }
+    async fn delete_member_for_user(
+        &self,
+        id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        self.store
+            .delete_member_subject(id, Some((organization_id, user_id)))
+    }
     fn clone_handle(&self) -> Arc<dyn AuthTransaction<StatelessSchema>> {
         Arc::new(Self {
             store: self.store.clone(),

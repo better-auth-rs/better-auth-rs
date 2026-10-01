@@ -164,7 +164,7 @@ async fn run(reuse: bool, outcome: &'static str) -> Value {
     let auth = AuthBuilder::new(config.clone())
         .store(SeaOrmStore::<BundledSchema>::new(config, db.clone()))
         .rate_limit(better_auth_core::middleware::RateLimitConfig {
-            enabled: false,
+            enabled: Some(false),
             ..Default::default()
         })
         .plugin(InstallHooks(Arc::new(Hooks {

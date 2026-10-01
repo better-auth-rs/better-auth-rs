@@ -36,6 +36,7 @@ async fn store() -> SeaOrmStore<BundledSchema> {
     for id in ["user-a", "user-b"] {
         store
             .create_user(CreateUser {
+                name: Some("Fixture".into()).into(),
                 id: Some(id.into()),
                 email: Some(format!("{id}@example.com")),
                 ..Default::default()

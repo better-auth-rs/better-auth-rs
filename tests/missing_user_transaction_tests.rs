@@ -40,7 +40,7 @@ struct MissingUpdateHooks {
 
 fn update_name(name: &str) -> UpdateUser {
     UpdateUser {
-        name: Some(name.into()),
+        name: Some(name.into()).into(),
         ..Default::default()
     }
 }
@@ -55,7 +55,7 @@ impl MissingUpdateHooks {
             return Ok(DatabaseHookUpdate::Cancel);
         }
         if matches!(self.scenario, Scenario::NestedBeforeError)
-            && update.name.as_deref() == Some("outer")
+            && update.name.typed().unwrap().as_deref() == Some("outer")
         {
             let result = transaction
                 .unwrap()
@@ -153,7 +153,7 @@ async fn check_missing_update<S: AuthSchema>(
     }
     let outcome: AuthResult<()> = transaction(store.as_ref(), move |tx| {
         Box::pin(async move {
-            let _ = tx.create_user(CreateUser::new().with_email("commit-proof@example.com")).await?;
+            let _ = tx.create_user(CreateUser::new().with_email("commit-proof@example.com").with_name("Fixture")).await?;
             let before_events = events.clone();
             tx.queue_after_commit(Box::pin(async move {
                 before_events.lock().unwrap().push("earlier");

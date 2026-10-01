@@ -12,11 +12,11 @@ Logging, tracing, and telemetry have separate controls. Disabling one does not d
 ```rust
 use better_auth::observability::LogLevel;
 
-config.logger.level = LogLevel::Info;
+config.logger.level = Some(LogLevel::Info);
 config.logger.disable_colors = Some(true);
 ```
 
-Set `disabled` to suppress all instance logger output. Set `log` to an `Arc<dyn LogSink>` to receive the level, original message, and argument list. `LogArgument` preserves text, JSON values, and errors without applying format placeholders. The default sink uses Rust `tracing` events. Concurrent authentication instances retain their own logger configuration.
+Set `disabled = Some(true)` to suppress all instance logger output. `disabled` and `level` use `Option` to retain omission. `None` keeps logging enabled at the warning threshold; `Some(false)` and `Some(LogLevel::Warn)` apply the same runtime defaults but remain explicit telemetry options. Set `log` to an `Arc<dyn LogSink>` to receive the level, original message, and argument list. `LogArgument` preserves text, JSON values, and errors without applying format placeholders. The default sink uses Rust `tracing` events. Concurrent authentication instances retain their own logger configuration.
 
 ## Tracing
 
@@ -41,3 +41,11 @@ Telemetry defaults to disabled. Set `config.telemetry.enabled = true` or `BETTER
 A custom transport takes precedence over the HTTP endpoint and debug output. `config.telemetry.debug` prints reports through the default logger instead of using the HTTP transport. The logger threshold still applies. Telemetry is suppressed when `NODE_ENV=test` or a truthy `TEST` environment variable identifies a test process.
 
 Initialization starts the report before plugin initialization without waiting for a pending transport. The telemetry module reuses its first project identifier across instances. Transport failures are logged through the default logger and do not fail authentication. Application logger callbacks are not used for these transport failures. Report payloads must not contain authentication secrets or request records.
+
+Session `expires_in`, `update_age`, `fresh_age`, and cookie-cache `max_age` report seconds with their configured fractional precision. Whole-second values remain JSON integers. Telemetry projection does not apply runtime duration defaults or truncate subsecond values.
+
+The init report captures configured options before storage defaults and plugin initialization. Optional session and account scalar settings, verification cleanup, cookie-cache settings, cookie attributes, cookie-map presence, cross-subdomain settings, IP tracking/header settings, database query limits, CSRF settings, rate-limit scalars and storage, API error policy, and logger options preserve omission. Email/password, verification, password-reset, and change-email scalar options and callback presence come from configured plugins, including typed callback wrappers. Omitted `auto_sign_in` resolves to true at runtime but reports false in telemetry, matching upstream’s explicit-option coercion. Database hook presence comes from `#[database_hooks]` declarations; plugin-owned hooks do not count as application hooks.
+
+The config projection is partial. IP scalar options, OAuth provider options, model mappings, and field definitions still need option-preserving configuration types before the report can match every upstream field. The report does not infer supplied options by comparing runtime values with defaults.
+
+ID-generation telemetry preserves `Database` as false, `Serial` as `"serial"`, and `Uuid` as `"uuid"`. Omitted policies and Rust’s explicit `Random` have no configured upstream JSON value. Custom generators remain typed callbacks and are never invoked for metadata; the JSON projection omits functions, as upstream JSON serialization does.

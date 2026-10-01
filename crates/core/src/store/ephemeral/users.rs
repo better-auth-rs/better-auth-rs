@@ -3,6 +3,17 @@ use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 
 impl EphemeralStore {
+    async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
+        self.raw("user", "findOne", |state| {
+            Ok(state
+                .users
+                .snapshot()?
+                .into_iter()
+                .find(|user| user.email.as_deref() == Some(&email.to_lowercase())))
+        })
+        .await
+    }
+
     async fn finish_user_update(
         &self,
         id: &str,
@@ -14,9 +25,38 @@ impl EphemeralStore {
         Ok(user)
     }
 
-    fn output_user(&self, mut user: UserView) -> AuthResult<UserView> {
-        user.additional_fields = self.config.user.output_fields(&user.additional_fields)?;
-        Ok(user)
+    fn output_user(&self, user: UserView) -> AuthResult<UserView> {
+        // Projection preserves the one input row.
+        Ok(self.output_users(vec![user])?.remove(0))
+    }
+
+    fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
+        let storage = users
+            .iter_mut()
+            .map(|user| {
+                let mut input = std::mem::take(&mut user.additional_fields);
+                for (name, value) in [("name", &user.name), ("image", &user.image)] {
+                    if let Some(config) = self.config.user.additional_fields.get(name)
+                        && let Some(raw) = value.json()?
+                    {
+                        let _ =
+                            input.insert(config.field_name.as_deref().unwrap_or(name).into(), raw);
+                    }
+                }
+                Ok(input)
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        let fields = self.config.user.output_fields_many(&storage)?;
+        for (user, mut fields) in users.iter_mut().zip(fields) {
+            if self.config.user.additional_fields.contains_key("name") {
+                user.name = crate::SchemaValue::from_json(fields.remove("name"));
+            }
+            if self.config.user.additional_fields.contains_key("image") {
+                user.image = crate::SchemaValue::from_json(fields.remove("image"));
+            }
+            user.additional_fields = fields;
+        }
+        Ok(users)
     }
     pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
         self.prepare_user_update_optional(update)
@@ -50,8 +90,17 @@ impl EphemeralStore {
                 }
             }
         }
-        let fields = update.take_user_field_input(&self.config.user);
+        let fields = update.take_user_field_input(&self.config.user)?;
         update.additional_fields = self.config.user.storage_fields(fields, false)?;
+        for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
+            if let Some(field) = self.config.user.additional_fields.get(name) {
+                *target = crate::SchemaValue::from_json(
+                    update
+                        .additional_fields
+                        .remove(field.field_name.as_deref().unwrap_or(name)),
+                );
+            }
+        }
         update.username = self
             .config
             .user
@@ -95,17 +144,17 @@ impl EphemeralStore {
                         }
                         user.email = Some(email.to_lowercase());
                     }
-                    if let Some(name) = update.name {
+                    if !update.name.is_undefined() {
                         if let Some(fields) = &mut user.visible_fields {
                             let _ = fields.insert("name".into());
                         }
-                        user.name = Some(name);
+                        user.name = update.name;
                     }
-                    if let Some(image) = update.image {
+                    if !update.image.is_undefined() {
                         if let Some(fields) = &mut user.visible_fields {
                             let _ = fields.insert("image".into());
                         }
-                        user.image = image;
+                        user.image = update.image;
                     }
                     if let Some(email_verified) = update.email_verified {
                         user.email_verified = email_verified;
@@ -215,8 +264,18 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
             create_user.prepare_user_fields(&self.config.user)?;
         }
-        let fields = create_user.take_user_field_input(&self.config.user);
-        let fields = self.config.user.storage_fields(fields, true)?;
+        let fields = create_user.take_user_field_input(&self.config.user)?;
+        let mut fields = self.config.user.storage_fields(fields, true)?;
+        for (name, target) in [
+            ("name", &mut create_user.name),
+            ("image", &mut create_user.image),
+        ] {
+            if let Some(field) = self.config.user.additional_fields.get(name) {
+                *target = crate::SchemaValue::from_json(
+                    fields.remove(field.field_name.as_deref().unwrap_or(name)),
+                );
+            }
+        }
         let username = self
             .config
             .user
@@ -238,9 +297,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             additional_fields: fields,
             visible_fields: Some(
                 [
-                    ("name", create_user.name.is_some()),
+                    ("name", !create_user.name.is_undefined()),
                     ("email", create_user.email.is_some()),
-                    ("image", create_user.image.is_some()),
+                    ("image", !create_user.image.is_undefined()),
                     ("banReason", create_user.ban_reason.is_some()),
                     ("banExpires", create_user.ban_expires.is_some()),
                 ]
@@ -267,7 +326,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             name: create_user.name,
             email: create_user.email,
             email_verified: create_user.email_verified.unwrap_or(false),
-            image: create_user.image.flatten(),
+            image: create_user.image,
             created_at: create_user.created_at.unwrap_or(now),
             updated_at: create_user.updated_at.unwrap_or(now),
             is_anonymous: create_user.is_anonymous,
@@ -345,23 +404,27 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        users
-            .into_iter()
-            .map(|user| self.output_user(user))
-            .collect()
+        self.output_users(users)
+    }
+
+    async fn get_user_with_accounts(
+        &self,
+        email: &str,
+    ) -> AuthResult<Option<crate::store::UserAccounts>> {
+        let Some(record) = self.user_record_by_email(email).await? else {
+            return Ok(None);
+        };
+        let stored_user_id = record.id.clone();
+        let user = self.output_user(record)?;
+        let accounts = match stored_user_id.as_str() {
+            Some(id) => self.get_user_accounts(id).await?,
+            None => Vec::new(),
+        };
+        crate::store::UserAccounts::new(user, accounts, &stored_user_id).map(Some)
     }
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
-        let user = self
-            .raw("user", "findOne", |state| {
-                Ok(state
-                    .users
-                    .snapshot()?
-                    .iter()
-                    .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))
-                    .cloned())
-            })
-            .await?;
+        let user = self.user_record_by_email(email).await?;
         user.map(|user| self.output_user(user)).transpose()
     }
 
@@ -465,10 +528,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .raw("user", "findMany", |state| state.users.snapshot())
             .await?;
         let (users, _) = crate::user_query::apply_list_users(users, &params);
-        let users = users
-            .into_iter()
-            .map(|user| self.output_user(user))
-            .collect::<AuthResult<Vec<_>>>()?;
+        let users = self.output_users(users)?;
         let total = self
             .raw("user", "count", |state| {
                 Ok(crate::user_query::count_users(

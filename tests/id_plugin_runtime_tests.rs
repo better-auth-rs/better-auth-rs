@@ -35,14 +35,14 @@ async fn missing_plugin_ids_preserve_create_and_followup_operations() {
             .base_url("http://localhost:3000");
         let calls = Arc::new(AtomicUsize::new(0));
         config.advanced.database.generate_id =
-            IdGeneration::Custom(IdGenerator::new(move |request| {
+            Some(IdGeneration::Custom(IdGenerator::new(move |request| {
                 let count = calls.fetch_add(1, Ordering::SeqCst) + 1;
                 Ok(Some(if request.model == model {
                     String::new()
                 } else {
                     format!("{}-{count}", request.model)
                 }))
-            }));
+            })));
         let auth = BetterAuth::stateless(config)
             .plugin(EmailPasswordPlugin::new().password_hasher(Arc::new(Hasher)))
             .plugin(SessionManagementPlugin::new())

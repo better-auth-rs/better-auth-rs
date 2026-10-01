@@ -39,6 +39,13 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.get_account(provider, provider_account_id).await
     }
+    async fn get_account_owner(
+        &self,
+        provider: &str,
+        account_id: &str,
+    ) -> AuthResult<Option<AccountOwner>> {
+        self.inner.get_account_owner(provider, account_id).await
+    }
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>> {
         self.inner.get_user_accounts(user_id).await
     }
@@ -145,6 +152,16 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
         self.inner.delete_member(member_id).await
     }
+    async fn delete_member_for_user(
+        &self,
+        member_id: &str,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<()> {
+        self.inner
+            .delete_member_for_user(member_id, organization_id, user_id)
+            .await
+    }
     async fn list_organization_members(&self, org_id: &str) -> AuthResult<Vec<Member>> {
         self.inner.list_organization_members(org_id).await
     }
@@ -156,6 +173,12 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     }
     async fn count_organization_members(&self, org_id: &str) -> AuthResult<i64> {
         self.inner.count_organization_members(org_id).await
+    }
+    async fn count_organization_members_value(
+        &self,
+        org_id: &serde_json::Value,
+    ) -> AuthResult<i64> {
+        self.inner.count_organization_members_value(org_id).await
     }
     async fn count_organization_owners(&self, org_id: &str) -> AuthResult<i64> {
         self.inner.count_organization_owners(org_id).await
@@ -199,7 +222,10 @@ impl<S: AuthSchema> InvitationStore for SecondaryStore<S> {
             .count_pending_organization_invitations(org_id)
             .await
     }
-    async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<Invitation>> {
+    async fn list_user_invitations(
+        &self,
+        email: &str,
+    ) -> AuthResult<Vec<super::super::InvitationOrganization>> {
         self.inner.list_user_invitations(email).await
     }
 }
@@ -439,6 +465,9 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_team(id).await
     }
+    async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
+        self.inner.count_organization_teams(organization_id).await
+    }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>> {
         self.inner.list_organization_teams(organization_id).await
     }
@@ -451,6 +480,9 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
         user_id: &str,
     ) -> AuthResult<Option<crate::TeamMember>> {
         self.inner.get_team_member(team_id, user_id).await
+    }
+    async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
+        self.inner.count_team_members(team_id).await
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<crate::TeamMember>> {
         self.inner.list_team_members(team_id).await
@@ -478,6 +510,27 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<crate::OrganizationRole>> {
         self.inner.get_organization_role(id).await
+    }
+    async fn find_organization_role(
+        &self,
+        organization_id: &str,
+        key: super::super::OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<crate::OrganizationRole>> {
+        self.inner
+            .find_organization_role(organization_id, key)
+            .await
+    }
+    async fn query_organization_roles(
+        &self,
+        organization_id: &str,
+        names: &[String],
+    ) -> AuthResult<Vec<crate::OrganizationRole>> {
+        self.inner
+            .query_organization_roles(organization_id, names)
+            .await
+    }
+    async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
+        self.inner.count_organization_roles(organization_id).await
     }
     async fn list_organization_roles(
         &self,

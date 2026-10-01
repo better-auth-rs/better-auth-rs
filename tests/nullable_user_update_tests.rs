@@ -116,7 +116,7 @@ fn state() -> (Observer, Arc<Cache>) {
 }
 fn update(name: &str) -> UpdateUser {
     UpdateUser {
-        name: Some(name.into()),
+        name: Some(name.into()).into(),
         ..Default::default()
     }
 }
@@ -181,7 +181,10 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             .await
             .unwrap()
             .unwrap()
-            .name(),
+            .name
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("Original")
     );
     assert_eq!(cached_name(&cache, &token).await, "Original");
@@ -213,7 +216,10 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             .await
             .unwrap()
             .unwrap()
-            .name(),
+            .name
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("After error")
     );
     assert_eq!(cached_name(&cache, &token).await, "Original");
@@ -245,7 +251,10 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
                 .await
                 .unwrap()
                 .unwrap()
-                .name(),
+                .name
+                .typed()
+                .unwrap()
+                .as_deref(),
             Some(if commit { "Committed" } else { "After error" })
         );
         assert_eq!(
@@ -352,6 +361,8 @@ async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_no
                 .unwrap()
                 .unwrap()
                 .name
+                .typed()
+                .unwrap()
                 .as_deref(),
             Some(if phase == 1 { "Original" } else { "Written" })
         );

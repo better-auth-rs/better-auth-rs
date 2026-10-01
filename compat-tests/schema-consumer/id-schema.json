@@ -1,0 +1,14 @@
+{
+  "account": {
+    "additionalFields": {
+      "userId": { "type": "string", "required": true, "fieldName": "user_id", "references": { "model": "user", "field": "id" } },
+      "owner": { "type": "string", "required": false, "fieldName": "owner_id", "references": { "model": "user", "field": "id" } }
+    }
+  },
+  "member": {
+    "additionalFields": {
+      "sponsor": { "type": "string", "required": false, "fieldName": "sponsor_id", "references": { "model": "user", "field": "id" } },
+      "externalId": { "type": "string", "required": false, "fieldName": "external_id" }
+    }
+  }
+}

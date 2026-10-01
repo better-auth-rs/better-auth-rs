@@ -4,6 +4,34 @@ use better_auth_schema_registry::{EntityRole, ExtraEntitySchema, FieldDef};
 use heck::{ToLowerCamelCase, ToSnakeCase};
 use serde::Deserialize;
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum IdGeneration {
+    #[default]
+    Random,
+    Serial,
+    Uuid,
+    Database,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum Database {
+    #[default]
+    Sqlite,
+    Postgres,
+    Mysql,
+}
+
+impl IdGeneration {
+    pub(crate) fn rust_type(self, database: Database) -> &'static str {
+        match (self, database) {
+            (Self::Serial, Database::Sqlite) => "i64",
+            (Self::Serial, _) => "i32",
+            (Self::Uuid, Database::Postgres) => "Uuid",
+            _ => "String",
+        }
+    }
+}
+
 #[derive(Default, Deserialize)]
 #[serde(transparent)]
 pub(crate) struct SchemaConfig(pub BTreeMap<String, ModelConfig>);
@@ -171,6 +199,35 @@ impl SchemaConfig {
 }
 
 impl Entity {
+    pub(crate) fn resolve_ids(
+        &mut self,
+        generation: IdGeneration,
+        database: Database,
+    ) -> Result<(), String> {
+        for field in &mut self.fields {
+            let reference = field.references_id(self.registry_table);
+            if !field.primary_key && !reference {
+                continue;
+            }
+            let kind = if reference
+                && field.attributes.is_some()
+                && generation.rust_type(database) == "String"
+            {
+                "better_auth::seaorm::ReferenceId"
+            } else {
+                generation.rust_type(database)
+            };
+            let optional = matches!(&field.ty, syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option"));
+            field.ty = syn::parse_str(&if optional {
+                format!("Option<{kind}>")
+            } else {
+                kind.to_owned()
+            })
+            .map_err(|error| format!("invalid ID type: {error}"))?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn resolve(
         definition: &ExtraEntitySchema,
         fields: &[FieldDef],
@@ -305,6 +362,22 @@ impl Entity {
 }
 
 impl Field {
+    pub(crate) fn references_id(&self, table: &str) -> bool {
+        self.attributes.as_ref().map_or_else(
+            || {
+                better_auth_schema_registry::entity_foreign_keys(table)
+                    .iter()
+                    .any(|(column, _)| self.registry_column == Some(*column))
+            },
+            |attributes| {
+                attributes
+                    .references
+                    .as_ref()
+                    .is_some_and(|reference| reference.field == "id")
+            },
+        )
+    }
+
     fn apply_builtin_override(
         &mut self,
         definition: &FieldDef,

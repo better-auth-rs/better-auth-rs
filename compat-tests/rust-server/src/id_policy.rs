@@ -26,7 +26,7 @@ pub async fn run(input: Value) -> AuthResult<Value> {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let mut config = AuthConfig::new("runtime-id-probe-secret-at-least-thirty-two-characters")
         .base_url("http://localhost:3000");
-    config.advanced.database.generate_id = if mode == "database" {
+    config.advanced.database.generate_id = Some(if mode == "database" {
         IdGeneration::Database
     } else {
         let calls = calls.clone();
@@ -45,7 +45,7 @@ pub async fn run(input: Value) -> AuthResult<Value> {
                 )
             })
         }))
-    };
+    });
     let cache = Arc::new(MemoryCacheAdapter::new());
     let mut builder = BetterAuth::stateless(config)
         .rate_limit(better_auth_core::middleware::RateLimitConfig::new().enabled(false))

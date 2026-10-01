@@ -130,7 +130,7 @@ async fn organization_user_pages_and_missing_users_match_upstream() -> AuthResul
             let mut config =
                 AuthConfig::new("organization-query-limits-secret-at-least-32-characters")
                     .base_url("http://organization.test");
-            config.logger.disabled = true;
+            config.logger.disabled = Some(true);
             config.advanced.database.default_find_many_limit = database_limit;
             let plugin = OrganizationPlugin::with_config(OrganizationConfig {
                 membership_limit,

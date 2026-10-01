@@ -80,13 +80,20 @@ pub trait SendDeleteAccountVerification: Send + Sync {
 /// Configuration for the change-email feature.
 #[derive(Clone, Default)]
 pub struct ChangeEmailConfig {
-    /// Whether the change-email endpoints are enabled. Default: `false`.
-    pub enabled: bool,
+    /// Whether the change-email endpoints are enabled. Omission uses `false`.
+    pub enabled: Option<bool>,
     /// Update an unverified user's email immediately. A configured verification
     /// sender still sends to the new address after session-cookie issuance.
     pub update_without_verification: bool,
     /// Optional custom callback for sending the confirmation email.
     pub send_change_email_confirmation: Option<Arc<dyn SendChangeEmailConfirmation>>,
+}
+
+impl ChangeEmailConfig {
+    /// Read the change-email setting. Omission disables the endpoints.
+    pub fn enabled(&self) -> bool {
+        self.enabled.unwrap_or(false)
+    }
 }
 
 impl std::fmt::Debug for ChangeEmailConfig {
@@ -177,7 +184,7 @@ impl UserManagementPlugin {
     // -- builder helpers --
 
     pub fn change_email_enabled(mut self, enabled: bool) -> Self {
-        self.config.change_email.enabled = enabled;
+        self.config.change_email.enabled = Some(enabled);
         self
     }
 
@@ -318,6 +325,15 @@ impl UserManagementPlugin {
 
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
+    fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+        options.change_email_enabled = self.config.change_email.enabled;
+        options.send_change_email_confirmation = self
+            .config
+            .change_email
+            .send_change_email_confirmation
+            .is_some();
+    }
+
     fn name(&self) -> &'static str {
         "user-management"
     }

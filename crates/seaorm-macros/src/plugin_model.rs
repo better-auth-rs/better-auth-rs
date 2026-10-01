@@ -30,6 +30,7 @@ pub(super) fn generate(
     };
     let core = registry::core_field_names(role);
     let mut columns = Vec::new();
+    let mut references = Vec::new();
     let mut assignments = Vec::new();
     let mut output = Vec::new();
     for field in &fields.named {
@@ -55,13 +56,26 @@ pub(super) fn generate(
         aliases.sort();
         aliases.dedup();
         columns.push(quote!(#(#aliases)|* => Ok(Column::#column),));
-        assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),));
+        let reference = identity::is_reference(role, field)?;
+        references.push(quote!(Column::#column => #reference,));
+        let decoded = if name == "id" || reference {
+            identity::decode(field, core_root)
+        } else {
+            quote!(#core_root::serde_json::from_value(value)?)
+        };
+        assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
         if !core.contains(&name.as_str()) {
             continue;
         }
-        let value = if name == "id"
-            || (role == EntityRole::DeviceCode && matches!(name.as_str(), "client_id" | "scope"))
-        {
+        let value = if name == "id" {
+            quote!(#core_root::SchemaValue::Typed(self.#ident.to_string()))
+        } else if reference {
+            if identity::optional_inner(&field.ty).is_some() {
+                quote!(self.#ident.as_ref().map(ToString::to_string))
+            } else {
+                quote!(self.#ident.to_string())
+            }
+        } else if role == EntityRole::DeviceCode && matches!(name.as_str(), "client_id" | "scope") {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
@@ -96,6 +110,9 @@ pub(super) fn generate(
             }
             fn record(&self) -> #core_root::AuthResult<Self::Record> {
                 Ok(#record { #(#output)* })
+            }
+            fn is_id_reference(column: &Column) -> bool {
+                match column { #(#references)* }
             }
             fn apply_fields(active: &mut ActiveModel, fields: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {

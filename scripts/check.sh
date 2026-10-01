@@ -11,5 +11,6 @@ cargo test --workspace --locked --features axum,seaorm2,redis-cache --no-fail-fa
 cargo check -p better-auth --locked --no-default-features --features rustls,axum,seaorm2,redis-cache
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features axum,seaorm2,redis-cache
 ./scripts/consumer-check.sh
+cargo check --locked --manifest-path examples/fullstack/backend/Cargo.toml
 bun scripts/quick-start-check.ts
 ./scripts/alignment-check.sh

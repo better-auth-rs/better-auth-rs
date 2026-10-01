@@ -96,7 +96,7 @@ pub(crate) async fn unlink_account_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
     let accounts = ctx.database.get_user_accounts(user.id().typed()?).await?;
-    if accounts.len() == 1 && !ctx.config.account.account_linking.allow_unlinking_all {
+    if accounts.len() == 1 && !ctx.config.account.account_linking.allow_unlinking_all() {
         return Err(AuthError::bad_request("You can't unlink your last account"));
     }
     let account = accounts
