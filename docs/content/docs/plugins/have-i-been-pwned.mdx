@@ -1,0 +1,29 @@
+---
+title: Have I Been Pwned
+description: Reject compromised passwords before password hashing.
+---
+
+`HaveIBeenPwnedPlugin` checks the HIBP password corpus before the configured password hasher runs. Register the plugin in any order relative to `EmailPasswordPlugin` and `PasswordManagementPlugin`.
+
+```rust
+use better_auth::plugins::{EmailPasswordPlugin, HaveIBeenPwnedPlugin};
+
+let auth = better_auth::BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .plugin(HaveIBeenPwnedPlugin::new())
+    .plugin(EmailPasswordPlugin::new())
+    .build()
+    .await?;
+```
+
+The default paths are `/sign-up/email`, `/change-password`, `/reset-password`, `/email-otp/reset-password`, `/phone-number/reset-password`, `/admin/create-user`, and `/admin/set-user-password`. `HaveIBeenPwnedConfig.paths` replaces that list. An empty list checks no endpoints. `enabled: false` bypasses checks. `custom_password_compromised_message` replaces the rejection message; an empty string retains the default.
+
+A compromised password returns HTTP 400 with code `PASSWORD_COMPROMISED`. HTTP, network, and malformed range-response failures return HTTP 500. The plugin does not treat an unavailable service as a clean password. Login verification remains unchanged.
+
+Checks run at the hashing call, after the endpoint's preceding work. Reset endpoints consume the reset proof before checking the password. Admin user creation inserts the user before checking the supplied password. Change-password checks the new password before verifying the current password. These orders match Better Auth 1.7.6.
+
+`is_password_compromised(password).await` checks the official service directly. Only the first five hexadecimal characters of the original password's SHA-1 digest leave the process. The password is not normalized for this lookup. Requests include `Add-Padding: true` and `User-Agent: BetterAuth Password Checker`.
+
+For a compatible self-hosted range service, create `PasswordCompromiseClient::new("https://passwords.example/range/")` and pass the client to `HaveIBeenPwnedPlugin::client`. The client also exposes `is_password_compromised` and an `http_client` setter for proxy and TLS configuration. The five-character prefix is appended to the configured URL.
+
+The plugin uses the active request scope and removes the configured base path before matching endpoint paths. Calling its installed hash wrapper outside an authentication endpoint scope is an error. The standalone checker does not require an endpoint scope.

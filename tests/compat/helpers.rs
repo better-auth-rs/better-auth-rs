@@ -356,8 +356,7 @@ pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth
         .plugin(
             UserManagementPlugin::new()
                 .change_email_enabled(true)
-                .delete_user_enabled(true)
-                .require_delete_verification(false),
+                .delete_user_enabled(true),
         )
         .plugin(ApiKeyPlugin::builder().build())
         .plugin(DeviceAuthorizationPlugin::new())
@@ -720,8 +719,7 @@ impl TestHarness {
             .plugin(
                 UserManagementPlugin::new()
                     .change_email_enabled(true)
-                    .delete_user_enabled(true)
-                    .require_delete_verification(false),
+                    .delete_user_enabled(true),
             )
             .plugin(ApiKeyPlugin::builder().build())
             .plugin(mock_oauth_plugin())

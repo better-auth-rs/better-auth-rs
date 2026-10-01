@@ -2,7 +2,10 @@ use chrono::{Duration, Utc};
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
 use better_auth_core::utils::password as password_utils;
-use better_auth_core::{AuthContext, AuthError, AuthResult, StatusResponse, UpdateUser};
+use better_auth_core::wire::UserView;
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResult, StatusResponse, UpdateUser,
+};
 
 use super::types::{ChangeEmailRequest, DeleteUserRequest};
 use super::{UserInfo, UserManagementConfig};
@@ -78,7 +81,7 @@ pub(crate) async fn change_email_core(
         };
     let callback_url = body.callback_url.as_deref().unwrap_or("/");
     let verification_token = create_email_verification_token(
-        &ctx.config.secret,
+        ctx.config.signing_secret(),
         user.email().unwrap_or_default(),
         Some(&new_email),
         Duration::hours(24),
@@ -116,12 +119,17 @@ pub(crate) async fn change_email_core(
 
 pub(crate) async fn delete_user_core(
     body: &DeleteUserRequest,
-    user: &impl AuthUser,
+    user: &UserView,
     session: &impl AuthSession,
+    req: &AuthRequest,
     config: &UserManagementConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessMessageResponse> {
-    if let Some(password) = body.password.as_deref() {
+    if let Some(password) = body
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+    {
         ctx.password_policy.validate_max_length(password)?;
         let account = ctx
             .database
@@ -138,63 +146,58 @@ pub(crate) async fn delete_user_core(
             .map_err(|_| AuthError::bad_request("Invalid password"))?;
     }
 
-    if let Some(token) = body.token.as_deref() {
-        let _ = delete_user_callback_core(token, user, config, ctx).await?;
+    if let Some(token) = body.token.as_deref().filter(|token| !token.is_empty()) {
+        let (user, _) = ctx.require_authoritative_session(req).await?;
+        let _ = delete_user_callback_core(token, &user, req, config, ctx).await?;
         return Ok(SuccessMessageResponse {
             success: true,
             message: "User deleted".to_string(),
         });
     }
 
-    if config.delete_user.require_verification {
-        let email = user
-            .email()
-            .filter(|email| !email.is_empty())
-            .ok_or_else(|| {
-                AuthError::bad_request("Cannot send verification email: user has no email address")
-            })?;
+    if let Some(sender) = &config.delete_user.send_delete_account_verification {
         let token = uuid::Uuid::new_v4().simple().to_string();
+        let expires_in = if config.delete_user.delete_token_expires_in.is_zero() {
+            Duration::hours(24)
+        } else {
+            config.delete_user.delete_token_expires_in
+        };
         let _ = ctx
             .database
             .create_verification(better_auth_core::CreateVerification {
                 identifier: format!("delete-account-{token}"),
-                value: user.id().to_string(),
-                expires_at: Utc::now() + config.delete_user.delete_token_expires_in,
+                value: user.id.to_owned(),
+                expires_at: Utc::now()
+                    .checked_add_signed(expires_in)
+                    .ok_or_else(|| AuthError::config("Delete token expiry is out of range"))?,
             })
             .await?;
-        let verification_url = format!(
+        let url = format!(
             "{}/delete-user/callback?token={}&callbackURL={}",
             ctx.config.base_url,
             token,
             urlencoding::encode(body.callback_url.as_deref().unwrap_or("/")),
         );
-
-        let subject = "Confirm account deletion";
-        let html = format!(
-            "<p>Click the link below to confirm the deletion of your account:</p>\
-             <p><a href=\"{url}\">Confirm Account Deletion</a></p>\
-             <p>If you did not request this, please ignore this email.</p>",
-            url = verification_url
-        );
-        let text = format!("Confirm account deletion: {}", verification_url);
-        send_email_or_log(ctx, email, subject, &html, &text, "delete-user").await;
-
+        // Upstream runInBackgroundOrAwait logs notification failures after storing the token.
+        if let Err(error) = sender.send(user, &url, &token, Some(req)).await {
+            tracing::error!(%error, "Delete account verification sender failed");
+        }
         return Ok(SuccessMessageResponse {
             success: true,
-            message: "Verification email sent".to_string(),
+            message: "Verification email sent".into(),
         });
     }
 
-    if body.password.is_none()
-        && let Some(fresh_age) = ctx.config.session.fresh_age
-        && session.created_at() + fresh_age < Utc::now()
+    if body.password.as_deref().is_none_or(str::is_empty)
+        && !crate::plugins::helpers::session_is_fresh(session, &ctx.config)
     {
-        return Err(AuthError::bad_request(
-            "Session expired. Re-authenticate to perform this action.",
-        ));
+        return Err(AuthError::Upstream {
+            status: 400,
+            code: "SESSION_EXPIRED",
+            message: "Session expired. Re-authenticate to perform this action.",
+        });
     }
-
-    perform_user_deletion(user, config, ctx).await?;
+    perform_user_deletion(user, req, config, ctx).await?;
 
     Ok(SuccessMessageResponse {
         success: true,
@@ -204,63 +207,44 @@ pub(crate) async fn delete_user_core(
 
 pub(crate) async fn delete_user_callback_core(
     token: &str,
-    current_user: &impl AuthUser,
+    current_user: &UserView,
+    req: &AuthRequest,
     config: &UserManagementConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessMessageResponse> {
-    if let Some(verification) = ctx
+    let verification = ctx
         .database
-        .get_verification_by_identifier(&format!("delete-account-{token}"))
+        .consume_verification_by_identifier(&format!("delete-account-{token}"))
         .await?
-    {
-        if verification.expires_at() < Utc::now() || verification.value() != current_user.id() {
-            return Err(AuthError::not_found("Invalid token"));
-        }
-
-        perform_user_deletion(current_user, config, ctx).await?;
-        ctx.database
-            .delete_verification_by_identifier(&format!("delete-account-{token}"))
-            .await?;
-
-        return Ok(SuccessMessageResponse {
-            success: true,
-            message: "User deleted".to_string(),
-        });
+        .ok_or_else(|| AuthError::not_found("Invalid token"))?;
+    if verification.value() != current_user.id {
+        return Err(AuthError::not_found("Invalid token"));
     }
-
-    Err(AuthError::not_found("Invalid token"))
+    perform_user_deletion(current_user, req, config, ctx).await?;
+    Ok(SuccessMessageResponse {
+        success: true,
+        message: "User deleted".into(),
+    })
 }
 
-/// Delete a user together with all their sessions and accounts.
 async fn perform_user_deletion(
-    user: &impl AuthUser,
+    user: &UserView,
+    req: &AuthRequest,
     config: &UserManagementConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<()> {
-    let user_info = UserInfo::from_auth_user(user);
-
-    if let Some(ref hook) = config.delete_user.before_delete {
-        hook.before_delete(&user_info).await?;
+    if let Some(hook) = &config.delete_user.before_delete {
+        hook.before_delete(user, Some(req)).await?;
     }
-
-    ctx.database.delete_user_sessions(&user.id()).await?;
-
-    let accounts = ctx.database.get_user_accounts(&user.id()).await?;
-    for account in &accounts {
+    ctx.database.delete_user_sessions(&user.id).await?;
+    for account in ctx.database.get_user_accounts(&user.id).await? {
         ctx.database.delete_account(&account.id()).await?;
     }
-
-    ctx.database.delete_user(&user.id()).await?;
-
-    if let Some(ref hook) = config.delete_user.after_delete
-        && let Err(error) = hook.after_delete(&user_info).await
-    {
-        tracing::warn!(
-            error = %error,
-            user_id = %user_info.id,
-            "after_delete hook failed (user already deleted)"
-        );
+    ctx.database.delete_user(&user.id).await?;
+    // Queue revocation before the application hook so error responses also clear credentials.
+    ctx.session_manager().clear_cookies(req)?;
+    if let Some(hook) = &config.delete_user.after_delete {
+        hook.after_delete(user, Some(req)).await?;
     }
-
     Ok(())
 }

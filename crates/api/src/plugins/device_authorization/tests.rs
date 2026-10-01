@@ -19,6 +19,30 @@ fn json_body(response: &AuthResponse) -> Value {
     serde_json::from_slice(&response.body).unwrap()
 }
 
+#[tokio::test]
+async fn generated_code_configuration_checks_storage_limits_at_initialization() {
+    let ctx = test_helpers::create_test_context().await;
+    for (device, user, valid) in [
+        (0, 8, false),
+        (40, 0, false),
+        (192, 8, false),
+        (40, 192, false),
+        (191, 191, true),
+    ] {
+        let plugin = DeviceAuthorizationPlugin::new()
+            .device_code_length(device)
+            .user_code_length(user);
+        let mut init =
+            better_auth_core::AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+        assert_eq!(
+            better_auth_core::AuthPlugin::on_init(&plugin, &mut init)
+                .await
+                .is_ok(),
+            valid
+        );
+    }
+}
+
 fn device_token_request(device_code: &str, client_id: &str) -> better_auth_core::AuthRequest {
     test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
@@ -160,8 +184,8 @@ async fn test_device_code_uses_custom_generators_and_hook() {
     let hook_calls = Arc::new(AtomicUsize::new(0));
     let hook_calls_clone = hook_calls.clone();
     let plugin = DeviceAuthorizationPlugin::new()
-        .generate_device_code_with(|| "custom-device-code".to_string())
-        .generate_user_code_with(|| "CUSTOM12".to_string())
+        .generate_device_code_with(|| async { Ok("custom-device-code".to_string()) })
+        .generate_user_code_with(|| async { Ok("CUSTOM12".to_string()) })
         .on_device_auth_request(move |client_id, scope| {
             let hook_calls = hook_calls_clone.clone();
             async move {

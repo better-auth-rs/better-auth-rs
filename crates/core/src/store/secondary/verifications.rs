@@ -8,6 +8,99 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 impl<S: AuthSchema> SecondaryStore<S> {
+    pub(super) async fn create_verification_in_transaction(
+        &self,
+        mut input: CreateVerification,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<S::Verification> {
+        input.identifier = self
+            .config
+            .verification
+            .store_identifier
+            .process(&input.identifier)
+            .await?
+            .0;
+        let identifier = input.identifier.clone();
+        let verification = if self.database_verifications() {
+            match transaction {
+                Some(transaction) => transaction.create_verification(input).await?,
+                None => self.inner.create_verification(input).await?,
+            }
+        } else {
+            match transaction {
+                Some(transaction) => {
+                    transaction
+                        .before_create_runtime_verification(&mut input)
+                        .await?
+                }
+                None => {
+                    self.inner
+                        .before_create_runtime_verification(&mut input)
+                        .await?
+                }
+            }
+            let now = Utc::now();
+            S::Verification::from_runtime_fields(object(serde_json::to_value(
+                VerificationView {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    identifier: input.identifier,
+                    value: input.value,
+                    expires_at: input.expires_at,
+                    created_at: now,
+                    updated_at: now,
+                },
+            )?)?)?
+        };
+        self.cache_verification(&identifier, &verification).await?;
+        if !self.database_verifications() && transaction.is_none() {
+            self.inner
+                .after_create_runtime_verification(&verification)
+                .await?;
+        }
+        Ok(verification)
+    }
+
+    pub(super) async fn find_verification_in_transaction(
+        &self,
+        identifier: &str,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<Option<S::Verification>> {
+        let identifiers = self.verification_identifiers(identifier).await?;
+        for candidate in &identifiers {
+            if let Some(cached) = self.cached_verification(candidate).await? {
+                return Ok(Some(cached));
+            }
+        }
+        if !self.database_verifications() {
+            return Ok(None);
+        }
+        let mut found = None;
+        for candidate in &identifiers {
+            found = match transaction {
+                Some(transaction) => {
+                    transaction
+                        .get_verification_including_expired(candidate)
+                        .await?
+                }
+                None => {
+                    self.inner
+                        .get_verification_including_expired(candidate)
+                        .await?
+                }
+            };
+            if found.is_some() {
+                break;
+            }
+        }
+        if !self.config.verification.disable_cleanup {
+            let _ = match transaction {
+                Some(transaction) => transaction.delete_expired_verifications().await?,
+                None => self.inner.delete_expired_verifications().await?,
+            };
+        }
+        Ok(found)
+    }
+
     async fn cache_verification(
         &self,
         identifier: &str,
@@ -95,72 +188,16 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
         Ok(inserted)
     }
 
-    async fn create_verification(
-        &self,
-        mut input: CreateVerification,
-    ) -> AuthResult<S::Verification> {
-        input.identifier = self
-            .config
-            .verification
-            .store_identifier
-            .process(&input.identifier)
-            .await?
-            .0;
-        let identifier = input.identifier.clone();
-        let verification = if self.database_verifications() {
-            self.inner.create_verification(input).await?
-        } else {
-            self.inner
-                .before_create_runtime_verification(&mut input)
-                .await?;
-            let now = Utc::now();
-            S::Verification::from_runtime_fields(object(serde_json::to_value(
-                VerificationView {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    identifier: input.identifier,
-                    value: input.value,
-                    expires_at: input.expires_at,
-                    created_at: now,
-                    updated_at: now,
-                },
-            )?)?)?
-        };
-        self.cache_verification(&identifier, &verification).await?;
-        if !self.database_verifications() {
-            self.inner
-                .after_create_runtime_verification(&verification)
-                .await?;
-        }
-        Ok(verification)
+    async fn create_verification(&self, input: CreateVerification) -> AuthResult<S::Verification> {
+        self.create_verification_in_transaction(input, None).await
     }
 
     async fn get_verification_including_expired(
         &self,
         identifier: &str,
     ) -> AuthResult<Option<S::Verification>> {
-        let identifiers = self.verification_identifiers(identifier).await?;
-        for candidate in &identifiers {
-            if let Some(cached) = self.cached_verification(candidate).await? {
-                return Ok(Some(cached));
-            }
-        }
-        if !self.database_verifications() {
-            return Ok(None);
-        }
-        let mut found = None;
-        for candidate in &identifiers {
-            found = self
-                .inner
-                .get_verification_including_expired(candidate)
-                .await?;
-            if found.is_some() {
-                break;
-            }
-        }
-        if !self.config.verification.disable_cleanup {
-            let _ = self.inner.delete_expired_verifications().await?;
-        }
-        Ok(found)
+        self.find_verification_in_transaction(identifier, None)
+            .await
     }
 
     async fn get_verification_by_identifier(

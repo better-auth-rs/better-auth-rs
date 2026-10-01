@@ -100,7 +100,11 @@ POST /delete-user
 Authorization: Bearer <token>
 ```
 
-Deletes the authenticated user and all associated sessions and accounts.
+Enable deletion with `UserManagementPlugin::delete_user_enabled(true)`. Without a sender, the endpoint deletes the authenticated user and associated sessions and accounts. A password proves freshness; otherwise, the session must be younger than `session.fresh_age` (24 hours when omitted). Zero disables the freshness check.
+
+Configure `.send_delete_account_verification(Arc<dyn SendDeleteAccountVerification>)` to require email confirmation. The sender receives the complete public `UserView`, URL, token, and original request. The initial response keeps the session active. Sender failures are logged after storing the token. The old `require_delete_verification` boolean is replaced by this explicit sender configuration.
+
+The callback resolves an authoritative session and atomically consumes the confirmation token before checking ownership or calling `before_delete`. Rejected ownership and callback failures do not restore the token. `before_delete` and `after_delete` receive the complete public user and original request. Both errors propagate. Cookie revocation occurs before `after_delete`, so an error after deletion still clears credentials.
 
 ### Change Email
 
@@ -167,4 +171,15 @@ Content-Type: application/json
 }
 ```
 
-Removes the specified provider link. Fails if it's the user's only authentication method.
+Removes the specified provider link. A session older than or equal to the configured freshness window returns `403 SESSION_NOT_FRESH`; the default window is 24 hours, and zero disables the check. The endpoint also rejects removal of the last authentication method unless `allow_unlinking_all` is enabled.
+
+
+## User admission
+
+Configure `AuthBuilder::validate_user_info(Arc<dyn ValidateUserInfo<S>>)` to implement upstream `user.validateUserInfo`. The callback receives `UserValidationData` and the complete typed `EndpointContext<S>`. Its source identifies the method, operation, provider, and original provider profile. Creation data precedes database hooks and adapter transforms; generated user identifiers are absent.
+
+Return `Ok(None)` to permit the operation or `Ok(Some(UserValidationRejection::new(code).with_description(message)))` to reject it. A rejection returns HTTP 403 with the application code. Callback errors are logged and return `validation_failed` without exposing internal details. Protected email signup returns a synthetic response after a rejection, following the same enumeration protection as an existing email.
+
+The callback runs during user creation by email/password, Email OTP, phone, magic link, anonymous sign-in, admin, and SIWE. OAuth also invokes the callback before implicit account linking, redirect-based account linking, and an existing provider account's token update. Upstream 1.7.6 does not invoke the callback for ordinary returning password login or the direct ID-token `/link-social` branch.
+
+During transactional signup and OAuth creation, use `EndpointContext::transaction` for callback database work. Callback failure rolls back that transaction. Outside a transaction, use `EndpointContext::auth.database`. Raw store operations do not invoke the admission callback; application persistence is separate from authentication admission.

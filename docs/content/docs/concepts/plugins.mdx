@@ -22,6 +22,7 @@ Better Auth uses a plugin system to compose authentication features. Each plugin
 | Plugin | Description | Docs |
 |--------|-------------|------|
 | `OAuthPlugin` | Social sign-in via Google, GitHub, Discord, and custom OAuth providers | [OAuth Plugin](/docs/plugins/oauth) |
+| `CaptchaPlugin` | HTTP CAPTCHA checks with five providers | [CAPTCHA](/docs/plugins/captcha) |
 | `TwoFactorPlugin` | Two-factor authentication with TOTP, OTP, and backup codes | [2FA Plugin](/docs/plugins/two-factor) |
 | `OrganizationPlugin` | Multi-tenancy with organizations, members, invitations, and RBAC | [Organization Plugin](/docs/plugins/organization) |
 | `AdminPlugin` | User management, banning, impersonation, and role management | [Admin Plugin](/docs/plugins/admin) |
@@ -72,9 +73,11 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
 }
 ```
 
-`on_init`, `before_request`, and `after_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
+`on_init`, `on_http_request`, `before_request`, and `after_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
 
-`before_request` hooks run in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` ends request handling. `after_request` hooks receive successful and error responses before application response middleware. Check the response status before changing response data.
+`on_http_request(&AuthRequest, &AuthContext<S>) -> AuthResult<Option<AuthResponse>>` runs only for HTTP calls, after rate limiting and before endpoint middleware and validation. Returning a response skips the endpoint and its `before_request` / `after_request` hooks. Native plugin API calls bypass this phase.
+
+`before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` ends request handling. `after_request` hooks receive successful and error responses before application response middleware. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks. Check the response status before changing response data.
 
 For user and session creation or deletion, register `SeaOrmHooks` on `SeaOrmStore`. These hooks receive the active database transaction.
 

@@ -1,9 +1,10 @@
 //! Common traits and data types used by handlers, tests, hooks, and direct dispatch.
 
 pub use crate::{
-    ApiKeyStart, AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth,
-    SchemaValue,
+    ApiKeyStart, Argon2PasswordHasher, AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema,
+    BetterAuth, SchemaValue, ScryptPasswordHasher,
 };
+pub use better_auth_core::PasswordHasher;
 pub use better_auth_core::entity::{
     AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
     AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,

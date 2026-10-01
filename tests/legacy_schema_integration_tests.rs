@@ -5,6 +5,7 @@
 )]
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHasher};
@@ -15,7 +16,9 @@ use better_auth::prelude::{
     AuthAccount, AuthRequest, AuthSession, AuthUser, AuthVerification, CreateAccount,
     CreateSession, CreateUser, CreateVerification, HttpMethod, UpdateAccount, UpdateUser,
 };
-use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
+use better_auth::{
+    Argon2PasswordHasher, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth,
+};
 use better_auth_seaorm::sea_orm;
 use better_auth_seaorm::sea_orm::entity::prelude::*;
 use better_auth_seaorm::sea_orm::{ActiveValue::NotSet, ActiveValue::Set, ConnectionTrait, Schema};
@@ -790,7 +793,11 @@ async fn legacy_numeric_schema_existing_user_can_sign_in() {
     let store = SeaOrmStore::<LegacySchema>::new(config.clone(), database);
     let auth = BetterAuth::<LegacySchema>::new(config)
         .store(store)
-        .plugin(EmailPasswordPlugin::new().enable_signup(true))
+        .plugin(
+            EmailPasswordPlugin::new()
+                .enable_signup(true)
+                .password_hasher(Arc::new(Argon2PasswordHasher)),
+        )
         .plugin(SessionManagementPlugin::new())
         .plugin(PasswordManagementPlugin::new())
         .plugin(AccountManagementPlugin::new())

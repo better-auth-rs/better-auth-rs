@@ -23,7 +23,7 @@ where
         db: &C,
         tx: Option<&DatabaseTransaction>,
         mut create_account: CreateAccount,
-    ) -> AuthResult<S::Account>
+    ) -> AuthResult<Option<S::Account>>
     where
         C: ConnectionTrait,
     {
@@ -34,7 +34,7 @@ where
                 .await?
                 .is_cancelled()
             {
-                return Err(cancelled_by_hook("account creation"));
+                return Ok(None);
             }
         }
         let now = Utc::now();
@@ -45,7 +45,7 @@ where
         for hook in self.hooks() {
             hook.after_create_account(&account, &hook_context).await?;
         }
-        Ok(account)
+        Ok(Some(account))
     }
 
     pub(crate) async fn create_account_in_tx(
@@ -54,7 +54,8 @@ where
         create_account: CreateAccount,
     ) -> AuthResult<S::Account> {
         self.create_account_with_connection(tx, Some(tx), create_account)
-            .await
+            .await?
+            .ok_or_else(|| cancelled_by_hook("account creation"))
     }
 }
 
@@ -66,6 +67,15 @@ where
     S::Account: SeaOrmAccountModel,
 {
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account> {
+        self.create_account_optional(create_account)
+            .await?
+            .ok_or_else(|| cancelled_by_hook("account creation"))
+    }
+
+    async fn create_account_optional(
+        &self,
+        create_account: CreateAccount,
+    ) -> AuthResult<Option<S::Account>> {
         self.create_account_with_connection(self.connection(), None, create_account)
             .await
     }
@@ -93,7 +103,17 @@ where
             .map_err(map_db_err)
     }
 
-    async fn update_account(&self, id: &str, mut update: UpdateAccount) -> AuthResult<S::Account> {
+    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<S::Account> {
+        self.update_account_optional(id, update)
+            .await?
+            .ok_or_else(|| cancelled_by_hook("account update"))
+    }
+
+    async fn update_account_optional(
+        &self,
+        id: &str,
+        mut update: UpdateAccount,
+    ) -> AuthResult<Option<S::Account>> {
         let account_id = <S::Account as SeaOrmAccountModel>::parse_id(id)?;
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
@@ -102,7 +122,7 @@ where
                 .await?
                 .is_cancelled()
             {
-                return Err(cancelled_by_hook("account update"));
+                return Ok(None);
             }
         }
         let Some(model) = <S::Account as SeaOrmAccountModel>::Entity::find()
@@ -121,7 +141,7 @@ where
         for hook in self.hooks() {
             hook.after_update_account(&account, &hook_context).await?;
         }
-        Ok(account)
+        Ok(Some(account))
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {

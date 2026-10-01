@@ -85,6 +85,7 @@ impl RateLimitConfig {
 /// for single-process deployments and testing.
 pub struct RateLimitMiddleware {
     config: RateLimitConfig,
+    ip_address: crate::config::IpAddressConfig,
     /// Keyed by (client_identifier, path).
     buckets: Mutex<HashMap<String, RateLimitBucket>>,
 }
@@ -118,18 +119,15 @@ impl RateLimitMiddleware {
     pub fn new(config: RateLimitConfig) -> Self {
         Self {
             config,
+            ip_address: crate::config::IpAddressConfig::default(),
             buckets: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Derive a client key from the request. Uses X-Forwarded-For, then
-    /// falls back to a fixed key (single-bucket) when no IP is available.
-    fn client_key(req: &AuthRequest) -> String {
-        req.headers
-            .get("x-forwarded-for")
-            .or_else(|| req.headers.get("x-real-ip"))
-            .cloned()
-            .unwrap_or_else(|| "unknown".to_string())
+    /// Use the same client-address policy as session creation and HTTP plugins.
+    pub fn ip_address_config(mut self, config: crate::config::IpAddressConfig) -> Self {
+        self.ip_address = config;
+        self
     }
 
     fn limit_for_path(&self, path: &str) -> &EndpointRateLimit {
@@ -147,12 +145,13 @@ impl Middleware for RateLimitMiddleware {
     }
 
     async fn before_request(&self, req: &AuthRequest) -> AuthResult<Option<AuthResponse>> {
-        if !self.config.enabled {
+        if !self.config.enabled || self.ip_address.disable_ip_tracking {
             return Ok(None);
         }
 
         let limit = self.limit_for_path(&req.path);
-        let key = format!("{}:{}", Self::client_key(req), req.path);
+        let ip = self.ip_address.resolve(req);
+        let key = format!("{}|{}", ip.as_deref().unwrap_or("no-trusted-ip"), req.path);
         let now = Instant::now();
         let mut buckets = self
             .buckets

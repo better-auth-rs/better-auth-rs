@@ -13,6 +13,8 @@ use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_
 
 pub(super) struct OAuthSignInOptions<'a> {
     pub(super) request: &'a AuthRequest,
+    pub(super) profile: Option<&'a serde_json::Value>,
+    pub(super) body: serde_json::Value,
     pub(super) disable_sign_up: bool,
     pub(super) callback_url: &'a str,
     pub(super) email_verification:
@@ -60,6 +62,8 @@ pub(super) struct ProcessOAuthUserResult {
 pub(super) enum OAuthSignInError {
     Generic(String),
     Banned(String),
+    Admission(crate::plugins::user_admission::UserValidationRejection),
+    Endpoint(AuthResponse),
 }
 
 impl OAuthSignInError {
@@ -76,18 +80,31 @@ impl OAuthSignInError {
                 &serde_json::json!({"code": "OAUTH_LINK_ERROR", "message": message}),
             )?,
             Self::Banned(message) => AuthError::banned_user(message).to_auth_response(),
+            Self::Admission(error) => error.into_auth_error().to_auth_response(),
+            Self::Endpoint(response) => response,
         })
     }
 
-    pub(super) fn redirect_parts(&self) -> (String, Option<&str>) {
-        match self {
-            // Upstream turns a plain internal error string into the `error`
-            // param verbatim, with no description.
+    pub(super) fn redirect_parts(&self) -> AuthResult<(String, Option<String>)> {
+        Ok(match self {
             Self::Generic(message) => (message.replace(' ', "_"), None),
-            // An APIError instead redirects with its `code` and message, so the
-            // param is the constant, not a lowercased word.
-            Self::Banned(message) => ("BANNED_USER".to_string(), Some(message.as_str())),
-        }
+            Self::Banned(message) => ("BANNED_USER".into(), Some(message.clone())),
+            Self::Admission(error) => (error.error.clone(), Some(error.message().to_owned())),
+            Self::Endpoint(response) => {
+                let body: serde_json::Value = serde_json::from_slice(&response.body)?;
+                (
+                    body.get("code")
+                        .and_then(serde_json::Value::as_str)
+                        .ok_or_else(|| {
+                            AuthError::internal("OAuth endpoint rejection omitted its error code")
+                        })?
+                        .to_owned(),
+                    body.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned),
+                )
+            }
+        })
     }
 }
 
@@ -133,7 +150,36 @@ pub(super) async fn process_oauth_sign_in(
     )
     .map_err(|error| error.to_string())?;
 
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(options.request),
+        options.body.clone(),
+        ctx,
+    );
+    endpoint.path = Some(callback_path(options.request));
+    if options.request.path() == "/sign-in/social"
+        && ctx.metadata.get("anonymous.enabled") == Some(&serde_json::Value::Bool(true))
+    {
+        endpoint.session = ctx
+            .session_manager()
+            .resolve(
+                options.request,
+                better_auth_core::session::SessionRead::Cached,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .data
+            .map(|data| (data.user, data.session));
+    }
     if let Some(existing_account) = linked_account {
+        validate_provider_user(
+            user_info,
+            &existing_account.user_id(),
+            provider_name,
+            options.profile,
+            crate::plugins::user_admission::UserValidationAction::SignIn,
+            &endpoint,
+        )
+        .await?;
         if ctx.config.account.update_account_on_sign_in {
             let _ = ctx
                 .database
@@ -283,6 +329,15 @@ pub(super) async fn process_oauth_sign_in(
             return Err(OAuthSignInError::Generic("account not linked".to_string()));
         }
 
+        validate_provider_user(
+            user_info,
+            &existing_user.id(),
+            provider_name,
+            options.profile,
+            crate::plugins::user_admission::UserValidationAction::LinkAccount,
+            &endpoint,
+        )
+        .await?;
         let mut linked_user = existing_user;
         let created_account = ctx
             .database
@@ -385,7 +440,6 @@ pub(super) async fn process_oauth_sign_in(
             .with_email(user_info.email.to_lowercase())
             .with_name(user_info.name.as_deref().unwrap_or(&user_info.email))
             .with_email_verified(user_info.email_verified);
-        apply_default_role(ctx, &mut create_user);
         create_user.image = user_info.image.clone();
         create_user.additional_fields = ctx
             .config
@@ -393,28 +447,60 @@ pub(super) async fn process_oauth_sign_in(
             .parse_provider_input(&user_info.additional_fields, true)
             .map_err(|error| error.to_string())?;
 
-        let created_user = ctx
-            .database
-            .create_user(create_user)
-            .await
-            .map_err(|_| "unable to create user".to_string())?;
-
-        let created_account = ctx
-            .database
-            .create_account(CreateAccount {
-                user_id: created_user.id().to_string(),
-                account_id: user_info.id.clone(),
-                provider_id: provider_name.to_string(),
-                access_token: token_bundle.access_token,
-                refresh_token: token_bundle.refresh_token,
-                id_token: token_bundle.id_token,
-                access_token_expires_at: tokens.access_token_expires_at,
-                refresh_token_expires_at: tokens.refresh_token_expires_at,
-                scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
-                password: None,
+        let context = ctx.clone();
+        let request = options.request.clone();
+        let admission_body = options.body.clone();
+        let admission_session = endpoint.session;
+        let source = crate::plugins::user_admission::UserValidationSource::oauth(
+            provider_name,
+            options.profile,
+            crate::plugins::user_admission::UserValidationAction::CreateUser,
+        );
+        let account = CreateAccount {
+            user_id: String::new(),
+            account_id: user_info.id.clone(),
+            provider_id: provider_name.to_owned(),
+            access_token: token_bundle.access_token,
+            refresh_token: token_bundle.refresh_token,
+            id_token: token_bundle.id_token,
+            access_token_expires_at: tokens.access_token_expires_at,
+            refresh_token_expires_at: tokens.refresh_token_expires_at,
+            scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
+            password: None,
+        };
+        let outcome = better_auth_core::store::transaction(ctx.database.as_ref(), move |tx| {
+            Box::pin(async move {
+                let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+                    Some(&request),
+                    admission_body,
+                    &context,
+                );
+                endpoint.path = Some(callback_path(&request));
+                endpoint.session = admission_session;
+                endpoint.transaction = Some(tx);
+                if let Err(error) =
+                    crate::plugins::user_admission::validate_create(&create_user, source, &endpoint)
+                        .await
+                {
+                    return Err(error.into_auth_error());
+                }
+                apply_default_role(&context, &mut create_user);
+                let user = tx.create_user(create_user).await?;
+                let account = tx
+                    .create_account(CreateAccount {
+                        user_id: user.id().into_owned(),
+                        ..account
+                    })
+                    .await?;
+                Ok((user, account))
             })
-            .await
-            .map_err(|_| "unable to create user".to_string())?;
+        })
+        .await
+        .map_err(|error| match error {
+            AuthError::Response(_) => OAuthSignInError::Endpoint(error.to_auth_response()),
+            _ => OAuthSignInError::Generic("unable to create user".to_owned()),
+        })?;
+        let (created_user, created_account) = outcome;
 
         options
             .check_email_verification(provider, &created_user, true, ctx)
@@ -450,7 +536,7 @@ pub(super) async fn process_oauth_sign_in(
 pub(crate) async fn sign_in_verified_profile(
     provider_name: &str,
     provider: &super::providers::OAuthProvider,
-    user: OAuthUserInfo,
+    user: super::providers::OAuthUserInfoResponse,
     tokens: OAuthTokenSet,
     disable_sign_up: bool,
     req: &AuthRequest,
@@ -462,15 +548,20 @@ pub(crate) async fn sign_in_verified_profile(
             config: provider.clone(),
             generic: None,
         },
-        &user,
+        &user.user,
         &tokens,
         OAuthSignInOptions {
             request: req,
+            profile: Some(&user.data),
+            body: req.body_as_json()?,
             disable_sign_up,
             callback_url: "/",
             email_verification: None,
         },
-        &better_auth_core::RequestMeta::from_request(req),
+        &better_auth_core::RequestMeta::from_request_with_config(
+            req,
+            &ctx.config.advanced.ip_address,
+        ),
         ctx,
     )
     .await
@@ -484,6 +575,8 @@ pub(crate) async fn sign_in_verified_profile(
         }
         OAuthSignInError::Generic(message) => AuthError::authentication_failed(message),
         OAuthSignInError::Banned(message) => AuthError::banned_user(message),
+        OAuthSignInError::Admission(error) => error.into_auth_error(),
+        OAuthSignInError::Endpoint(response) => response.into(),
     })?;
     Ok(AuthResponse::json(
         200,
@@ -496,4 +589,45 @@ pub(crate) async fn sign_in_verified_profile(
             &ctx.config,
         ),
     ))
+}
+
+pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
+    user: &OAuthUserInfo,
+    user_id: &str,
+    provider: &str,
+    profile: Option<&serde_json::Value>,
+    action: crate::plugins::user_admission::UserValidationAction,
+    endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
+) -> Result<(), OAuthSignInError> {
+    let mut fields = user.additional_fields.clone();
+    let _ = fields.insert("id".into(), user_id.into());
+    let _ = fields.insert("email".into(), user.email.to_lowercase().into());
+    let _ = fields.insert("emailVerified".into(), user.email_verified.into());
+    if let Some(name) = &user.name {
+        let _ = fields.insert("name".into(), name.clone().into());
+    }
+    if let Some(image) = &user.image {
+        let _ = fields.insert("image".into(), image.clone().into());
+    }
+    crate::plugins::user_admission::validate(
+        crate::plugins::user_admission::UserValidationData {
+            user: fields,
+            source: crate::plugins::user_admission::UserValidationSource::oauth(
+                provider, profile, action,
+            ),
+        },
+        endpoint,
+    )
+    .await
+    .map_err(OAuthSignInError::Admission)
+}
+
+pub(super) fn callback_path(request: &AuthRequest) -> &str {
+    if request.path().starts_with("/callback/") {
+        "/callback/:id"
+    } else if request.path().starts_with("/oauth2/callback/") {
+        "/oauth2/callback/:providerId"
+    } else {
+        request.path()
+    }
 }

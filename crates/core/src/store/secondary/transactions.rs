@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 enum CommittedEffect<S: AuthSchema> {
     Session(S::Session),
+    Verification(S::Verification),
     UserUpdated(S::User),
     UserDeleted {
         id: String,
@@ -22,6 +23,33 @@ struct Transaction<'a, S: AuthSchema> {
 
 #[async_trait]
 impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
+    async fn create_verification(
+        &self,
+        input: crate::CreateVerification,
+    ) -> AuthResult<S::Verification> {
+        let verification = self
+            .runtime
+            .create_verification_in_transaction(input, Some(self.inner))
+            .await?;
+        if !self.runtime.database_verifications() {
+            self.effects
+                .lock()
+                .map_err(|_| AuthError::internal("Transaction cache queue lock poisoned"))?
+                .push(CommittedEffect::Verification(verification.clone()));
+        }
+        Ok(verification)
+    }
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<S::Verification>> {
+        self.runtime
+            .find_verification_in_transaction(identifier, Some(self.inner))
+            .await
+    }
+    async fn delete_expired_verifications(&self) -> AuthResult<usize> {
+        self.inner.delete_expired_verifications().await
+    }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>> {
         self.inner.get_user_by_id(id).await
     }
@@ -37,6 +65,9 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
+        if self.runtime.storage.is_none() {
+            return self.inner.delete_user(id).await;
+        }
         let sessions = self.runtime.references(id).await?;
         self.inner.delete_user(id).await?;
         self.effects
@@ -78,9 +109,6 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
         &self,
         work: Box<TransactionWork<S>>,
     ) -> AuthResult<BoxedTransactionValue> {
-        if self.storage.is_none() {
-            return self.inner.transaction_boxed(work).await;
-        }
         let effects = Arc::new(Mutex::new(Vec::new()));
         let queued = effects.clone();
         let runtime = self.clone();
@@ -105,6 +133,12 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
         for effect in committed {
             let session = match effect {
                 CommittedEffect::Session(session) => session,
+                CommittedEffect::Verification(verification) => {
+                    self.inner
+                        .after_create_runtime_verification(&verification)
+                        .await?;
+                    continue;
+                }
                 CommittedEffect::UserUpdated(user) => {
                     // Upstream runs cache refresh after commit and logs backend failures.
                     if let Err(error) = self.refresh_user_sessions(&user).await {

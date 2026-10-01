@@ -117,7 +117,7 @@ impl MultiSessionPlugin {
                 create_session_cookie(&session.token, &ctx.config),
             );
         } else {
-            for cookie in delete_session_cookie_headers(&ctx.config) {
+            for cookie in delete_session_cookie_headers(req, &ctx.config) {
                 response.headers.append("Set-Cookie", cookie);
             }
         }
@@ -177,7 +177,7 @@ impl MultiSessionPlugin {
             "Set-Cookie",
             create_cookie(
                 &name,
-                &sign_cookie_value(&token, &ctx.config.secret),
+                &sign_cookie_value(&token, ctx.config.signing_secret()),
                 ctx.config.session.expires_in.num_seconds(),
                 &ctx.config,
             ),
@@ -207,7 +207,7 @@ fn signed_device_token(
     name: &str,
     config: &better_auth_core::AuthConfig,
 ) -> Option<String> {
-    get_cookie(req, name).and_then(|value| verify_cookie_value(&value, &config.secret))
+    get_cookie(req, name).and_then(|value| verify_cookie_value(&value, config.signing_secret()))
 }
 
 fn device_cookies(
@@ -223,7 +223,7 @@ fn device_cookies(
                 .filter(|cookie| cookie.name().contains("_multi-"))
                 .filter(|cookie| seen.insert(cookie.name().to_owned()))
                 .filter_map(|cookie| {
-                    verify_cookie_value(cookie.value(), &config.secret)
+                    verify_cookie_value(cookie.value(), config.signing_secret())
                         .map(|token| (cookie.name().to_owned(), token))
                 })
                 .collect()

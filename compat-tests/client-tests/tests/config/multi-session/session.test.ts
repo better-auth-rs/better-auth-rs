@@ -1,5 +1,29 @@
 import { expect } from "bun:test";
 import { compatScenario } from "../../../support/scenario";
+import { cookies } from "../oauth-proxy/flow";
+
+compatScenario("revoking the final device session clears every cached session chunk", async ctx => {
+  const signup = await ctx.actor().fetch(`${ctx.baseURL}/api/auth/sign-up/email`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: ctx.uniqueEmail("multi-chunks"), password: "password123", name: "Chunks" }),
+  });
+  expect(signup.status).toBe(200);
+  const { token } = await signup.json();
+  const chunkNames = ["better-auth.session_data.0", "better-auth.session_data.1"];
+  const cookie = `${cookies(signup)}; ${chunkNames.map(name => `${name}=stale`).join("; ")}; better-auth.session_data.01=unrelated`;
+  const revoked = await ctx.actor().fetch(`${ctx.baseURL}/api/auth/multi-session/revoke`, {
+    method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ sessionToken: token }),
+  });
+  expect(revoked.status).toBe(200);
+  expect(await revoked.json()).toEqual({ status: true });
+  for (const name of chunkNames) {
+    expect(revoked.headers.getSetCookie().some(value => value.startsWith(`${name}=`) && value.includes("Max-Age=0"))).toBe(true);
+  }
+  expect(revoked.headers.getSetCookie().some(value => value.startsWith("better-auth.session_data.01="))).toBe(false);
+  const session = await ctx.actor().client.getSession();
+  expect(session.data).toBeNull();
+  return { cleared: chunkNames, session };
+});
 
 compatScenario("multi-session switches only signed device sessions and revokes all on sign-out", async (ctx) => {
   const browser = ctx.actor();

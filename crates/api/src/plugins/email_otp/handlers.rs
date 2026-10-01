@@ -5,8 +5,7 @@ use super::{
 };
 use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{
-    SessionIssueError, apply_default_role, apply_user_create_fields, get_credential_account,
-    issue_user_session,
+    SessionIssueError, apply_user_create_fields, get_credential_account, issue_user_session,
 };
 use better_auth_core::utils::{cookie_utils::create_session_cookie, password};
 use better_auth_core::wire::UserView;
@@ -159,8 +158,13 @@ impl EmailOtpPlugin {
                     .with_email_verified(true);
                 input.image = body.optional("image").map(str::to_owned);
                 apply_user_create_fields(ctx, body.fields(), &mut input).await?;
-                apply_default_role(ctx, &mut input);
-                ctx.database.create_user(input).await?
+
+                let endpoint = EndpointContext::new(
+                    Some(req),
+                    serde_json::Value::Object(body.fields().clone()),
+                    ctx,
+                );
+                crate::plugins::user_admission::create_user(input, "email-otp", &endpoint).await?
             }
         };
         self.session_response(req, ctx, &user.id(), false).await
@@ -243,7 +247,11 @@ impl EmailOtpPlugin {
                 .await?;
         }
         if let Some(hook) = &ctx.password_policy.on_password_reset {
-            hook(serde_json::to_value(ctx.user_view(&user)?)?).await?;
+            hook(password::PasswordResetEvent {
+                user: ctx.internal_user_view(&user)?,
+                request: Some(req.clone()),
+            })
+            .await?;
         }
         if !user.email_verified() {
             let _ = ctx
@@ -384,7 +392,7 @@ impl EmailOtpPlugin {
         user_id: &str,
         verification: bool,
     ) -> AuthResult<AuthResponse> {
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         let issued = issue_user_session(ctx, user_id, meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;

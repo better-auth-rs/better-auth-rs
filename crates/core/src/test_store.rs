@@ -178,6 +178,20 @@ struct MemoryTransaction<'a> {
 
 #[async_trait]
 impl AuthTransaction<BundledSchema> for MemoryTransaction<'_> {
+    async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {
+        self.store.create_verification(input).await
+    }
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<VerificationView>> {
+        self.store
+            .get_verification_including_expired(identifier)
+            .await
+    }
+    async fn delete_expired_verifications(&self) -> AuthResult<usize> {
+        self.store.delete_expired_verifications().await
+    }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
         self.store.get_user_by_id(id).await
     }

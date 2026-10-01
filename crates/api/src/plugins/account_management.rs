@@ -72,15 +72,7 @@ pub(crate) async fn list_accounts_core(
             updated_at: acc
                 .updated_at()
                 .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            scopes: acc
-                .scope()
-                .map(|s| {
-                    s.split([' ', ','])
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            scopes: super::helpers::parse_stored_scopes(acc.scope()),
         })
         .collect::<Vec<_>>();
 
@@ -127,7 +119,14 @@ impl AccountManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
+        let (user, session) = ctx.require_session(req).await?;
+        if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config) {
+            return Err(AuthError::Upstream {
+                status: 403,
+                code: "SESSION_NOT_FRESH",
+                message: "Session is not fresh",
+            });
+        }
 
         let unlink_req: UnlinkAccountRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,

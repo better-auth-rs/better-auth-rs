@@ -155,8 +155,10 @@ pub(super) fn create_challenge_cookie(
     config: &PasskeyConfig,
     token: &str,
 ) -> AuthResult<String> {
-    let signed =
-        better_auth_core::utils::cookie_utils::sign_cookie_value(token, &auth_config.secret);
+    let signed = better_auth_core::utils::cookie_utils::sign_cookie_value(
+        token,
+        auth_config.signing_secret(),
+    );
     Ok(better_auth_core::utils::cookie_utils::create_cookie(
         &challenge_cookie_name(auth_config, config),
         &signed,
@@ -169,8 +171,11 @@ pub(super) fn decode_challenge_cookie(
     auth_config: &AuthConfig,
     raw_cookie: &str,
 ) -> AuthResult<String> {
-    better_auth_core::utils::cookie_utils::verify_cookie_value(raw_cookie, &auth_config.secret)
-        .ok_or(AuthError::Unauthenticated)
+    better_auth_core::utils::cookie_utils::verify_cookie_value(
+        raw_cookie,
+        auth_config.signing_secret(),
+    )
+    .ok_or(AuthError::Unauthenticated)
 }
 
 pub(super) fn generate_ts_user_handle() -> String {

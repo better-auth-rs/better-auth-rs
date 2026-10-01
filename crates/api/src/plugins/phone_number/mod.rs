@@ -14,9 +14,7 @@ use chrono::{Duration, Utc};
 use rand::Rng;
 use serde_json::{Value, json};
 
-use super::helpers::{
-    SessionIssueError, apply_default_role, get_credential_account, issue_user_session_with_lifetime,
-};
+use super::helpers::{SessionIssueError, get_credential_account, issue_user_session_with_lifetime};
 
 mod callbacks;
 use crate::plugins::endpoint_context::EndpointContext;
@@ -402,8 +400,8 @@ impl PhoneNumberPlugin {
             super::helpers::apply_user_create_fields(ctx, &rest, &mut create).await?;
             create.phone_number = Some(phone.to_owned());
             create.phone_number_verified = Some(true);
-            apply_default_role(ctx, &mut create);
-            ctx.database.create_user(create).await?
+
+            super::user_admission::create_user(create, "phone-number", &endpoint).await?
         } else {
             return Err(error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"));
         };
@@ -504,7 +502,7 @@ impl PhoneNumberPlugin {
         dont_remember: bool,
         status: bool,
     ) -> AuthResult<AuthResponse> {
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         let lifetime = if dont_remember {
             Duration::days(1)
         } else {
@@ -620,7 +618,11 @@ impl PhoneNumberPlugin {
                 .await?;
         }
         if let Some(callback) = &ctx.password_policy.on_password_reset {
-            callback(serde_json::to_value(ctx.user_view(&user)?)?).await?;
+            callback(better_auth_core::utils::password::PasswordResetEvent {
+                user: ctx.internal_user_view(&user)?,
+                request: Some(req.clone()),
+            })
+            .await?;
         }
         if ctx.password_policy.revoke_sessions_on_password_reset {
             ctx.database.delete_user_sessions(&user.id()).await?;

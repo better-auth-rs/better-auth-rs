@@ -114,7 +114,10 @@ pub(super) async fn create_trust_device_cookie_header(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<String> {
     let identifier = format!("trust-device-{}", uuid::Uuid::new_v4());
-    let token = sign_value(&ctx.config.secret, &format!("{}!{}", user.id(), identifier))?;
+    let token = sign_value(
+        ctx.config.signing_secret(),
+        &format!("{}!{}", user.id(), identifier),
+    )?;
     let value = format!("{}!{}", token, identifier);
     let expires_at = Utc::now() + Duration::seconds(trust_device_max_age(ctx));
     _ = ctx
@@ -126,7 +129,7 @@ pub(super) async fn create_trust_device_cookie_header(
         })
         .await?;
     create_signed_cookie_header(
-        &ctx.config.secret,
+        ctx.config.signing_secret(),
         &ctx.config,
         TRUST_DEVICE_COOKIE_SUFFIX,
         &value,
@@ -160,7 +163,7 @@ pub(super) fn read_signed_cookie<S: better_auth_core::AuthSchema>(
     let Some(raw_cookie) = get_cookie(req, &cookie_name) else {
         return Ok(None);
     };
-    verify_signed_cookie_value(&ctx.config.secret, &raw_cookie)
+    verify_signed_cookie_value(ctx.config.signing_secret(), &raw_cookie)
 }
 
 pub(super) fn sign_cookie_value(secret: &str, value: &str) -> AuthResult<String> {
@@ -195,11 +198,17 @@ pub(super) fn verify_signature(secret: &str, value: &str, signature: &str) -> Au
     Ok(mac.verify_slice(&decoded).is_ok())
 }
 
-pub(super) fn encrypt_value(secret: &str, plaintext: &str) -> AuthResult<String> {
+pub(super) fn encrypt_value<'a>(
+    secret: impl Into<better_auth_core::SecretKey<'a>>,
+    plaintext: &str,
+) -> AuthResult<String> {
     crate::plugins::symmetric::encrypt(secret, plaintext)
 }
 
-pub(super) fn decrypt_value(secret: &str, encrypted: &str) -> AuthResult<String> {
+pub(super) fn decrypt_value<'a>(
+    secret: impl Into<better_auth_core::SecretKey<'a>>,
+    encrypted: &str,
+) -> AuthResult<String> {
     crate::plugins::symmetric::decrypt(secret, encrypted)
 }
 

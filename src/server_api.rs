@@ -240,3 +240,10 @@ impl<S: AuthSchema> ApiKeyApi<'_, S> {
             .await
     }
 }
+
+impl<S: AuthSchema> BetterAuth<S> {
+    /// Access server-only Email OTP creation and retrieval using the registered plugin.
+    pub fn email_otp(&self) -> AuthResult<better_auth_api::plugins::email_otp::EmailOtpApi<'_, S>> {
+        better_auth_api::plugins::email_otp::EmailOtpApi::from_context(self.context())
+    }
+}

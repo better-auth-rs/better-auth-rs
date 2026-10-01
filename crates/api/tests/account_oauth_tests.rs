@@ -29,7 +29,6 @@ use better_auth_api::plugins::oauth::{
     OAuthConfig, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo,
 };
 use chrono::{Duration, Utc};
-use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Serialize;
 
 use serde_json::json;
@@ -228,23 +227,28 @@ fn encode_account_cookie(
     access_token_expires_at: Option<chrono::DateTime<Utc>>,
 ) -> String {
     let now = Utc::now();
-    encode(
-        &Header::default(),
-        &TestAccountCookieClaims {
-            id: Some(account.id().to_string()),
-            user_id: account.user_id().to_string(),
-            provider_id: account.provider_id(),
-            account_id: account.account_id(),
-            access_token,
-            refresh_token,
-            id_token: account.id_token(),
-            access_token_expires_at,
-            refresh_token_expires_at: account.refresh_token_expires_at(),
-            scope: account.scope(),
-            exp: (now + Duration::minutes(5)).timestamp() as usize,
-            iat: now.timestamp() as usize,
-        },
-        &EncodingKey::from_secret(TEST_SECRET.as_bytes()),
+    better_auth_core::utils::jwe::encode(
+        serde_json::from_value(
+            serde_json::to_value(TestAccountCookieClaims {
+                id: Some(account.id().to_string()),
+                user_id: account.user_id().to_string(),
+                provider_id: account.provider_id(),
+                account_id: account.account_id(),
+                access_token,
+                refresh_token,
+                id_token: account.id_token(),
+                access_token_expires_at,
+                refresh_token_expires_at: account.refresh_token_expires_at(),
+                scope: account.scope(),
+                exp: (now + Duration::minutes(5)).timestamp() as usize,
+                iat: now.timestamp() as usize,
+            })
+            .unwrap(),
+        )
+        .unwrap(),
+        TEST_SECRET,
+        "better-auth-account",
+        300,
     )
     .unwrap()
 }
@@ -512,7 +516,7 @@ async fn test_encryption_disabled_stores_plaintext() {
 
 // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
-async fn test_get_access_token_rejects_plaintext_when_encryption_is_enabled() {
+async fn test_get_access_token_preserves_plaintext_when_encryption_is_enabled() {
     let config = Arc::new(test_config_with_encryption());
     let db = create_test_database().await;
 
@@ -541,17 +545,19 @@ async fn test_get_access_token_rejects_plaintext_when_encryption_is_enabled() {
     req.headers
         .insert("cookie".to_string(), session_cookie(&session_token));
 
-    let result = oauth_plugin.on_request(&req, &ctx).await;
-    assert!(result.is_err(), "plaintext tokens must not be accepted");
+    let response = oauth_plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+    assert_eq!(response.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body["accessToken"], "plain-access-token");
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
 #[tokio::test]
-async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
+async fn test_refresh_token_migrates_plaintext_when_encryption_is_enabled() {
     let config = Arc::new(test_config_with_encryption());
     let db = create_test_database().await;
 
-    let (_, session_token, account_id) = setup_user_with_account(
+    let (user_id, session_token, account_id) = setup_user_with_account(
         &db,
         &config,
         "plaintext-refresh@example.com",
@@ -563,10 +569,22 @@ async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
 
     let ctx = AuthContext::new(config.clone(), db.clone());
     let mut oauth_config = OAuthConfig::default();
-    oauth_config.providers.insert(
-        "google".to_string(),
-        make_test_provider("http://localhost:65535"),
-    );
+    let mut provider = make_test_provider("http://localhost:65535");
+    provider.refresh_access_token = Some(Arc::new(RotatingRefreshHandler {
+        sequence: Arc::new(std::sync::Mutex::new(vec![(
+            "plain-refresh-token".to_string(),
+            OAuthTokenSet {
+                access_token: Some("rotated-access-token".to_string()),
+                refresh_token: Some("rotated-refresh-token".to_string()),
+                id_token: Some("plain-id-token".to_string()),
+                access_token_expires_at: Some(Utc::now() + Duration::minutes(30)),
+                ..Default::default()
+            },
+        )])),
+    }));
+    oauth_config
+        .providers
+        .insert("google".to_string(), provider);
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/refresh-token");
@@ -576,11 +594,21 @@ async fn test_refresh_token_rejects_plaintext_when_encryption_is_enabled() {
     req.headers
         .insert("cookie".to_string(), session_cookie(&session_token));
 
-    let result = oauth_plugin.on_request(&req, &ctx).await;
-    assert!(
-        result.is_err(),
-        "plaintext refresh tokens must not be accepted"
+    let response = oauth_plugin.on_request(&req, &ctx).await.unwrap().unwrap();
+    assert_eq!(response.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body["accessToken"], "rotated-access-token");
+    assert_eq!(body["idToken"], "plain-id-token");
+    let account = db.get_user_accounts(&user_id).await.unwrap().remove(0);
+    assert_eq!(
+        decrypt_token(account.access_token().unwrap(), TEST_SECRET).unwrap(),
+        "rotated-access-token"
     );
+    assert_eq!(
+        decrypt_token(account.refresh_token().unwrap(), TEST_SECRET).unwrap(),
+        "rotated-refresh-token"
+    );
+    assert_eq!(account.id_token(), Some("plain-id-token"));
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/account.ts :: getAccessToken/refreshToken cookie-backed token refresh behavior; adapted to the Rust account and OAuth route behavior.
@@ -1219,7 +1247,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
     });
 
     db.create_verification(CreateVerification {
-        identifier: format!("oauth:{}", state),
+        identifier: state.to_owned(),
         value: payload.to_string(),
         expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
     })
@@ -1361,7 +1389,7 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     });
 
     db.create_verification(CreateVerification {
-        identifier: format!("oauth:{}", state),
+        identifier: state.to_owned(),
         value: payload.to_string(),
         expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
     })

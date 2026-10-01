@@ -1,0 +1,27 @@
+---
+title: CAPTCHA
+description: Verify human requests before authentication endpoints run.
+---
+
+`CaptchaPlugin` supports Cloudflare Turnstile, Google reCAPTCHA, hCaptcha, CaptchaFox, and Vercel BotID. It checks HTTP requests after rate limiting and before endpoint validation, authentication, or application endpoint hooks. Native API calls bypass CAPTCHA.
+
+```rust
+use better_auth::plugins::{CaptchaPlugin, captcha::CaptchaProvider};
+
+let captcha = CaptchaPlugin::new(CaptchaProvider::cloudflare_turnstile("provider-secret"));
+let auth = better_auth::BetterAuth::<AppAuthSchema>::new(config)
+    .store(store)
+    .plugin(captcha)
+    .build()
+    .await?;
+```
+
+The default endpoints are `/sign-up/email`, `/sign-in/email`, and `/request-password-reset`. Set `endpoints` to replace this list. An empty list selects the defaults. Exact paths and `*` / `**` wildcard patterns follow Better Auth 1.7.6 matching. Matching applies to all HTTP methods and removes the configured base path, repeated slashes, and a trailing slash.
+
+Token providers read the `x-captcha-response` header. Missing tokens return HTTP 400 `MISSING_RESPONSE`; rejected verification returns HTTP 403 `VERIFICATION_FAILED`; unavailable services, timeout, missing secrets, or callback errors return HTTP 500 `UNKNOWN_ERROR`. CAPTCHA errors use the upstream JSON text response. A rejected request does not run endpoint hooks.
+
+`CaptchaProvider` variants expose each provider's options. Turnstile and reCAPTCHA support `expected_action` and `allowed_hostnames`. Empty actions and hostname lists disable those checks. reCAPTCHA defaults `min_score` to `0.5`; the threshold applies only when the provider returns a numeric score. hCaptcha and CaptchaFox accept `site_key`. `site_verify_url_override` selects a compatible verification service; an empty URL uses the provider default. Verification requests use the global `advanced.ip_address` policy.
+
+For Vercel BotID, implement `BotIdChecker` and use `CaptchaProvider::vercel_bot_id`. The default decision accepts `is_bot == false`. Set the `VercelBotId` variant's `validate_request` to an `Arc<dyn BotIdRequestValidator>` to inspect the original request and verdict, including verified bot metadata. BotID does not require a CAPTCHA token or secret. The checker and validator share a ten-second deadline. A timeout does not cancel an application callback already running.
+
+Remote verification uses the same ten-second response-header deadline as Better Auth's fetch client. Provider-specific JSON and form payloads, site keys, remote IP names, and error semantics match the upstream plugin.

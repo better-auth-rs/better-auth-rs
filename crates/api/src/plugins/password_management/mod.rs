@@ -21,7 +21,7 @@ use handlers::*;
 use types::*;
 
 /// Type alias for the async password-reset callback to keep Clippy happy.
-pub use better_auth_core::utils::password::OnPasswordResetCallback;
+pub use better_auth_core::utils::password::{OnPasswordResetCallback, PasswordResetEvent};
 
 /// Trait for sending password reset emails.
 ///
@@ -36,6 +36,16 @@ pub trait SendResetPassword: Send + Sync {
     /// * `url` - The full reset URL including the token
     /// * `token` - The raw reset token
     async fn send(&self, user: &serde_json::Value, url: &str, token: &str) -> AuthResult<()>;
+
+    async fn send_with_request(
+        &self,
+        user: &serde_json::Value,
+        url: &str,
+        token: &str,
+        _request: Option<&AuthRequest>,
+    ) -> AuthResult<()> {
+        self.send(user, url, token).await
+    }
 }
 
 /// Password management plugin for password reset and change functionality
@@ -46,8 +56,9 @@ pub struct PasswordManagementPlugin {
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "PasswordManagementPlugin")]
 pub struct PasswordManagementConfig {
-    #[config(default = 24)]
-    pub reset_token_expiry_hours: i64,
+    /// Reset token lifetime in seconds. Zero selects the one-hour default.
+    #[config(default = 3600)]
+    pub reset_password_token_expires_in: i64,
     #[config(default = true)]
     pub require_current_password: bool,
     #[config(default = true)]
@@ -60,10 +71,10 @@ pub struct PasswordManagementConfig {
     #[config(default = None)]
     pub send_reset_password: Option<Arc<dyn SendResetPassword>>,
     /// Callback invoked after a password is successfully reset.
-    /// The user is provided as a serialized `serde_json::Value`.
+    /// Errors propagate after the password write and before session revocation.
     #[config(default = None)]
     pub on_password_reset: Option<Arc<OnPasswordResetCallback>>,
-    /// Custom password hasher. When `None`, the default Argon2 hasher is used.
+    /// Custom password hasher. When `None`, the default scrypt hasher is used.
     #[config(default = None)]
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
 }
@@ -71,7 +82,10 @@ pub struct PasswordManagementConfig {
 impl std::fmt::Debug for PasswordManagementConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PasswordManagementConfig")
-            .field("reset_token_expiry_hours", &self.reset_token_expiry_hours)
+            .field(
+                "reset_password_token_expires_in",
+                &self.reset_password_token_expires_in,
+            )
             .field("require_current_password", &self.require_current_password)
             .field("send_email_notifications", &self.send_email_notifications)
             .field(
@@ -96,10 +110,11 @@ impl std::fmt::Debug for PasswordManagementConfig {
 
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin {
+    fn password_hasher(&self) -> Option<Arc<dyn PasswordHasher>> {
+        self.config.password_hasher.clone()
+    }
+
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
-        if self.config.password_hasher.is_some() {
-            ctx.password_policy.hasher = self.config.password_hasher.clone();
-        }
         ctx.password_policy.on_password_reset = self.config.on_password_reset.clone();
         ctx.password_policy.revoke_sessions_on_password_reset =
             self.config.revoke_sessions_on_password_reset;
@@ -160,7 +175,7 @@ impl PasswordManagementPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = request_password_reset_core(&body, &self.config, ctx).await?;
+        let response = request_password_reset_core(&body, &self.config, req, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -173,10 +188,10 @@ impl PasswordManagementPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        if body.token.is_none() {
+        if body.token.as_deref().is_none_or(str::is_empty) {
             body.token = req.query.get("token").cloned();
         }
-        let response = reset_password_core(&body, &self.config, ctx).await?;
+        let response = reset_password_core(&body, req, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -195,7 +210,7 @@ impl PasswordManagementPlugin {
             .get_current_user(req, ctx)
             .await?
             .ok_or(AuthError::Unauthenticated)?;
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
 
         let (response, new_token) =
             change_password_core(&body, &user, &self.config, &meta, ctx).await?;

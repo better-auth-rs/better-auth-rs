@@ -1,10 +1,11 @@
 use chrono::{Duration, Utc};
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use better_auth_core::entity::AuthAccount;
-use better_auth_core::{AuthConfig, AuthRequest, AuthResult, OAuthStateStrategy};
+use better_auth_core::{
+    AuthConfig, AuthError, AuthRequest, AuthResult, OAuthStateStrategy, SecretKey,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct OAuthStateLink {
@@ -26,7 +27,7 @@ pub(crate) struct OAuthStatePayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<OAuthStateLink>,
     #[serde(rename = "expiresAt")]
-    pub expires_at: i64,
+    pub expires_at: f64,
     #[serde(rename = "requestSignUp", skip_serializing_if = "Option::is_none")]
     pub request_sign_up: Option<bool>,
     #[serde(
@@ -42,6 +43,36 @@ pub(crate) struct OAuthStatePayload {
 }
 
 impl OAuthStatePayload {
+    pub(crate) fn parse(value: &str) -> AuthResult<Self> {
+        let mut value: Value = serde_json::from_str(value)?;
+        for field in [
+            "errorURL",
+            "newUserURL",
+            "link",
+            "requestSignUp",
+            "idTokenNonce",
+            "serverContext",
+        ] {
+            if value.get(field).is_some_and(Value::is_null) {
+                return Err(AuthError::bad_request("Invalid OAuth state payload"));
+            }
+        }
+        if let Some(link) = value.get_mut("link").and_then(Value::as_object_mut) {
+            let user_id = better_auth_core::SchemaValue::<String>::from_json(link.remove("userId"))
+                .display_string()?;
+            let _ = link.insert("userId".into(), user_id.into());
+        }
+        let payload: Self = serde_json::from_value(value)?;
+        if payload
+            .additional_data
+            .get("oauthState")
+            .is_some_and(|value| !value.is_string())
+        {
+            return Err(AuthError::bad_request("Invalid OAuth state nonce"));
+        }
+        Ok(payload)
+    }
+
     pub(crate) fn new(
         callback_url: String,
         code_verifier: String,
@@ -57,7 +88,7 @@ impl OAuthStatePayload {
             error_url,
             new_user_url,
             link,
-            expires_at: (Utc::now() + Duration::minutes(10)).timestamp_millis(),
+            expires_at: (Utc::now() + Duration::minutes(10)).timestamp_millis() as f64,
             request_sign_up,
             server_context: Map::new(),
             id_token_nonce: None,
@@ -66,7 +97,7 @@ impl OAuthStatePayload {
     }
 
     pub(crate) fn is_expired(&self) -> bool {
-        self.expires_at < Utc::now().timestamp_millis()
+        self.expires_at < Utc::now().timestamp_millis() as f64
     }
 }
 
@@ -117,29 +148,6 @@ impl AccountCookiePayload {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StateCookieClaims {
-    state: String,
-    exp: usize,
-    iat: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StatePayloadClaims {
-    #[serde(flatten)]
-    payload: OAuthStatePayload,
-    exp: usize,
-    iat: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AccountCookieClaims {
-    #[serde(flatten)]
-    payload: AccountCookiePayload,
-    exp: usize,
-    iat: usize,
-}
-
 pub(crate) fn state_cookie_name(config: &AuthConfig) -> String {
     match config.account.store_state_strategy {
         OAuthStateStrategy::Cookie => related_cookie_name(config, "oauth_state"),
@@ -152,94 +160,52 @@ pub(crate) fn account_cookie_name(config: &AuthConfig) -> String {
 }
 
 pub(crate) fn create_database_state_cookie_value(secret: &str, state: &str) -> AuthResult<String> {
-    let now = Utc::now();
-    let claims = StateCookieClaims {
-        state: state.to_string(),
-        exp: (now + Duration::minutes(10)).timestamp() as usize,
-        iat: now.timestamp() as usize,
-    };
-    Ok(encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )?)
+    Ok(better_auth_core::utils::cookie_utils::sign_cookie_value(
+        state, secret,
+    ))
 }
 
 pub(crate) fn decode_database_state_cookie_value(secret: &str, token: &str) -> AuthResult<String> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    Ok(decode::<StateCookieClaims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )?
-    .claims
-    .state)
+    better_auth_core::utils::cookie_utils::verify_cookie_value(token, secret)
+        .ok_or_else(|| AuthError::bad_request("Invalid OAuth state cookie"))
 }
 
-pub(crate) fn create_cookie_state_value(
-    secret: &str,
+pub(crate) fn create_cookie_state_value<'a>(
+    secret: impl Into<SecretKey<'a>>,
     payload: &OAuthStatePayload,
 ) -> AuthResult<String> {
-    let now = Utc::now();
-    let claims = StatePayloadClaims {
-        payload: payload.clone(),
-        exp: (now + Duration::minutes(10)).timestamp() as usize,
-        iat: now.timestamp() as usize,
-    };
-    Ok(encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )?)
+    let encrypted = crate::plugins::symmetric::encrypt(secret, &serde_json::to_string(payload)?)?;
+    Ok(urlencoding::encode(&encrypted).into_owned())
 }
 
-pub(crate) fn decode_cookie_state_value(
-    secret: &str,
+pub(crate) fn decode_cookie_state_value<'a>(
+    secret: impl Into<SecretKey<'a>>,
     token: &str,
 ) -> AuthResult<OAuthStatePayload> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    Ok(decode::<StatePayloadClaims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )?
-    .claims
-    .payload)
+    let token = urlencoding::decode(token)
+        .map_err(|error| AuthError::bad_request(format!("Invalid OAuth state cookie: {error}")))?;
+    OAuthStatePayload::parse(&crate::plugins::symmetric::decrypt(secret, &token)?)
 }
 
-pub(crate) fn create_account_cookie_value(
-    secret: &str,
+pub(crate) fn create_account_cookie_value<'a>(
+    secret: impl Into<SecretKey<'a>>,
     payload: &AccountCookiePayload,
     max_age: Duration,
 ) -> AuthResult<String> {
-    let now = Utc::now();
-    let claims = AccountCookieClaims {
-        payload: payload.clone(),
-        exp: (now + max_age).timestamp() as usize,
-        iat: now.timestamp() as usize,
-    };
-    Ok(encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )?)
+    better_auth_core::utils::jwe::encode(
+        serde_json::from_value(serde_json::to_value(payload)?)?,
+        secret,
+        "better-auth-account",
+        max_age.num_seconds(),
+    )
 }
 
-pub(crate) fn decode_account_cookie_value(
-    secret: &str,
+pub(crate) fn decode_account_cookie_value<'a>(
+    secret: impl Into<SecretKey<'a>>,
     token: &str,
-) -> AuthResult<AccountCookiePayload> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    Ok(decode::<AccountCookieClaims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )?
-    .claims
-    .payload)
+) -> Option<AccountCookiePayload> {
+    let payload = better_auth_core::utils::jwe::decode(token, secret, "better-auth-account")?;
+    serde_json::from_value(Value::Object(payload)).ok()
 }
 
 pub(crate) fn get_cookie(req: &AuthRequest, name: &str) -> Option<String> {

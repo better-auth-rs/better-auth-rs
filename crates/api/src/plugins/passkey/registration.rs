@@ -5,7 +5,7 @@ use better_auth_core::{
     store::AuthTransaction,
     wire::{PasskeyView, UserView},
 };
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use serde_json::{Map, Value};
 use std::sync::Arc;
 use webauthn_rs_core::proto::RegisterPublicKeyCredential;
@@ -40,12 +40,7 @@ pub(super) async fn registration_session<S: AuthSchema>(
         return optional_session(ctx, req).await;
     }
     let (user, session) = ctx.require_session(req).await?;
-    let fresh_age = ctx
-        .config
-        .session
-        .fresh_age
-        .unwrap_or_else(|| Duration::hours(24));
-    if !fresh_age.is_zero() && Utc::now() - session.created_at >= fresh_age {
+    if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config) {
         return Err(AuthError::Upstream {
             status: 403,
             code: "SESSION_NOT_FRESH",
@@ -363,7 +358,7 @@ impl<S: AuthSchema> Registration<S> {
             let input = CreateSession {
                 user_id: user.id().into_owned(),
                 expires_at: Utc::now() + self.ctx.config.session.expires_in,
-                ip_address: self.request.headers.get("x-forwarded-for").cloned(),
+                ip_address: self.ctx.config.advanced.ip_address.resolve(&self.request),
                 user_agent: self.request.headers.get("user-agent").cloned(),
                 impersonated_by: None,
                 active_organization_id: None,

@@ -733,7 +733,12 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                     let encoded = cache.get(&cached_token).await?.unwrap();
                     let cached: serde_json::Value =
                         serde_json::from_str(encoded.as_str().unwrap())?;
-                    assert_eq!(cached["user"]["name"], "Original");
+                    assert_eq!(
+                        cached
+                            .pointer("/user/name")
+                            .and_then(serde_json::Value::as_str),
+                        Some("Original")
+                    );
                     if commit {
                         Ok(())
                     } else {
@@ -754,8 +759,97 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                 let cached: serde_json::Value =
                     serde_json::from_str(encoded.as_str().unwrap()).unwrap();
                 let name = if commit { "Updated" } else { "Original" };
-                assert_eq!(cached["user"]["name"], name);
+                assert_eq!(
+                    cached
+                        .pointer("/user/name")
+                        .and_then(serde_json::Value::as_str),
+                    Some(name)
+                );
                 assert_eq!(stored.unwrap().name(), Some(name));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn transaction_user_changes_without_secondary_follow_database_commit_and_rollback() {
+    for delete in [false, true] {
+        for commit in [false, true] {
+            let database = Database::connect("sqlite::memory:").await.unwrap();
+            migrator::run_migrations(&database).await.unwrap();
+            let config = AuthConfig::new("database-transaction-secret-at-least-32-characters");
+            let auth = AuthBuilder::<BundledSchema>::new(config.clone())
+                .store(SeaOrmStore::<BundledSchema>::new(config, database))
+                .build()
+                .await
+                .unwrap();
+            let user = auth
+                .store()
+                .create_user(
+                    CreateUser::new()
+                        .with_email("database-transaction@example.com")
+                        .with_name("Original"),
+                )
+                .await
+                .unwrap();
+            let session = auth
+                .store()
+                .create_session(input(user.id.clone()))
+                .await
+                .unwrap();
+            let user_id = user.id.clone();
+            let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
+                Box::pin(async move {
+                    let updated = tx
+                        .update_user(
+                            &user_id,
+                            better_auth::prelude::UpdateUser {
+                                name: Some("Updated".into()),
+                                ..Default::default()
+                            },
+                        )
+                        .await?;
+                    assert_eq!(updated.name(), Some("Updated"));
+                    if delete {
+                        tx.delete_user(&user_id).await?;
+                        assert!(tx.get_user_by_id(&user_id).await?.is_none());
+                    }
+                    if commit {
+                        Ok(())
+                    } else {
+                        Err(AuthError::internal("database transaction rollback"))
+                    }
+                })
+            })
+            .await;
+            if commit {
+                result.unwrap();
+            } else {
+                assert_eq!(
+                    result.unwrap_err().to_string(),
+                    "Internal server error: database transaction rollback"
+                );
+            }
+            let stored = auth.store().get_user_by_id(&user.id).await.unwrap();
+            if delete && commit {
+                assert!(stored.is_none());
+                assert!(
+                    auth.store()
+                        .get_session(session.token())
+                        .await
+                        .unwrap()
+                        .is_none()
+                );
+            } else {
+                let name = if commit { "Updated" } else { "Original" };
+                assert_eq!(stored.unwrap().name(), Some(name));
+                assert!(
+                    auth.store()
+                        .get_session(session.token())
+                        .await
+                        .unwrap()
+                        .is_some()
+                );
             }
         }
     }

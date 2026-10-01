@@ -9,7 +9,8 @@ This page documents the public configuration types in `crates/core/src/config.rs
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `secret` | `String` | empty until set | Signing/encryption secret; must be at least 32 characters |
+| `secret` | `String` | resolved during `build()` | Signing/encryption key, or the legacy decryption key when `secrets` is configured; short or low-entropy values produce warnings |
+| `secrets` | `Option<Vec<VersionedSecret>>` | `None` | Ordered rotation keys; the first key signs and encrypts new data |
 | `app_name` | `String` | `"Better Auth"` | App name used by emails and cookie-related metadata |
 | `base_url` | `String` | `"http://localhost:3000"` | Base URL for the auth service |
 | `base_path` | `String` | `"/api/auth"` | Auth route mount prefix |
@@ -22,6 +23,10 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `account` | `AccountConfig` | see below | OAuth/account-linking behavior |
 | `email_provider` | `Option<Arc<dyn EmailProvider>>` | `None` | Global email provider |
 | `advanced` | `AdvancedConfig` | see below | Advanced cookie, IP, and DB options |
+
+`build()` resolves explicit nonempty `secret`, then `BETTER_AUTH_SECRET`, then `AUTH_SECRET`. Without a key, development uses Better Auth's default key. `NODE_ENV=production` rejects that default single key. As upstream does, `NODE_ENV=test` or nonempty `TEST` other than the exact string `false` skips single-key validation.
+
+Explicit `secrets`, including an invalid empty vector, takes precedence over `BETTER_AUTH_SECRETS`. The environment format is `2:current-key,1:previous-key`; entries and values are trimmed, and values may contain colons. Versioned keys always require nonempty values and unique versions, including in test environments. `VersionedSecret.version` is a `u128` with a canonical JavaScript integer value below `1e21`; environment versions follow upstream decimal-prefix parsing and JavaScript number rounding. The explicit or environment single key remains available for decrypting legacy records, except the default development key.
 
 ## SessionConfig
 
@@ -94,9 +99,11 @@ Without secondary storage, session and verification data remain in the database 
 | `require_lowercase` | `bool` | `false` | Require lowercase letters |
 | `require_numbers` | `bool` | `false` | Require digits |
 | `require_special` | `bool` | `false` | Require special characters |
-| `argon2_config` | `Argon2Config` | see below | Argon2 tuning |
+| `argon2_config` | `Argon2Config` | see below | Legacy configuration field; built-in hashers do not use this field. Select a custom `PasswordHasher` to tune hashing. |
 
 ### Argon2Config
+
+The default password hasher uses Better Auth-compatible scrypt. These retained legacy fields do not change its parameters or the explicit `Argon2PasswordHasher`. See [password storage and migration](/docs/authentication/email-password#password-storage-and-migration).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -137,7 +144,7 @@ Without secondary storage, session and verification data remain in the database 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `ip_address` | `IpAddressConfig` | see below | Client IP extraction behavior |
-| `disable_csrf_check` | `bool` | `false` | Disable request-origin / Fetch Metadata CSRF checks |
+| `disable_csrf_check` | `Option<bool>` | `None` | Explicit CSRF policy; unset inherits the legacy `disable_origin_check` behavior |
 | `disable_origin_check` | `bool` | `false` | Skip callback / redirect target origin validation |
 | `cross_sub_domain_cookies` | `Option<CrossSubDomainConfig>` | `None` | Share cookies across subdomains |
 | `cookies` | `HashMap<String, CookieOverride>` | `{}` | Per-cookie overrides |
@@ -150,8 +157,14 @@ Without secondary storage, session and verification data remain in the database 
 
 | Field | Type | Default |
 |-------|------|---------|
-| `headers` | `Vec<String>` | `["x-forwarded-for", "x-real-ip"]` |
+| `headers` | `Vec<String>` | `["x-forwarded-for"]` |
 | `disable_ip_tracking` | `bool` | `false` |
+| `ipv6_subnet` | `f64` | `64` |
+| `trusted_proxies` | `Vec<String>` | `[]` |
+
+Sessions, rate limiting, and CAPTCHA use this policy. Header names are checked in order. Without trusted proxies, only a single valid address is accepted. With trusted proxies, the resolver walks the chain from right to left and selects the first untrusted address. Invalid hops stop resolution. Entries accept IP addresses or CIDR ranges; invalid entries are logged and ignored. IPv4-mapped IPv6 addresses become IPv4. IPv6 addresses use the configured subnet, with fractional prefix lengths rounded down.
+
+Disabling tracking omits session and CAPTCHA addresses and disables IP rate limiting. If tracking is enabled but no trusted address is available, rate limiting uses one shared bucket per path. Development and test environments use localhost when no address resolves.
 
 ### CrossSubDomainConfig
 

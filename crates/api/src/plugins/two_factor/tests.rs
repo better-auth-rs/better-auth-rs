@@ -85,9 +85,14 @@ async fn test_begin_sign_in_challenge_sets_pending_cookie_and_remember_choice() 
     let (ctx, user, _session) =
         create_test_context_with_credential_user("challenge@example.com", true).await;
 
-    let challenge = begin_sign_in_challenge(&user, Some(false), &ctx)
-        .await
-        .unwrap();
+    let challenge = begin_sign_in_challenge(
+        &user,
+        Some(false),
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
+        &ctx,
+    )
+    .await
+    .unwrap();
     assert!(challenge.response.two_factor_redirect);
 
     let two_factor_cookie = challenge

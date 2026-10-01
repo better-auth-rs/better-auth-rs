@@ -239,6 +239,37 @@ impl MagicLinkPlugin {
                     .with_email(proof.email)
                     .with_name(proof.name.unwrap_or_default())
                     .with_email_verified(true);
+
+                let endpoint = super::endpoint_context::EndpointContext::new(
+                    Some(req),
+                    serde_json::Value::Null,
+                    ctx,
+                );
+                if let Err(rejection) = super::user_admission::validate_create(
+                    &user,
+                    super::user_admission::UserValidationSource::new(
+                        "magic-link",
+                        super::user_admission::UserValidationAction::CreateUser,
+                    ),
+                    &endpoint,
+                )
+                .await
+                {
+                    let message = rejection.message().to_owned();
+                    let mut target = error_callback;
+                    let pairs: Vec<_> = target
+                        .query_pairs()
+                        .filter(|(key, _)| key != "error" && key != "error_description")
+                        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+                        .collect();
+                    let _ = target
+                        .query_pairs_mut()
+                        .clear()
+                        .extend_pairs(pairs)
+                        .append_pair("error", &rejection.error)
+                        .append_pair("error_description", &message);
+                    return Ok(redirect(target));
+                }
                 apply_default_role(ctx, &mut user);
                 ctx.database.create_user(user).await?
             }
@@ -255,7 +286,7 @@ impl MagicLinkPlugin {
             };
             user
         };
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;

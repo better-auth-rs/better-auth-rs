@@ -69,19 +69,6 @@ impl CsrfMiddleware {
         )
     }
 
-    fn normalized_path<'a>(&self, path: &'a str) -> &'a str {
-        let base_path = self.auth_config.base_path.as_str();
-        if !base_path.is_empty() && base_path != "/" {
-            path.strip_prefix(base_path).unwrap_or(path)
-        } else {
-            path
-        }
-    }
-
-    fn is_form_csrf_path(path: &str) -> bool {
-        matches!(path, "/sign-in/email" | "/sign-up/email")
-    }
-
     fn header<'a>(req: &'a AuthRequest, name: &str) -> Option<&'a str> {
         req.headers
             .iter()
@@ -99,7 +86,7 @@ impl CsrfMiddleware {
     }
 
     fn validate_origin(&self, req: &AuthRequest, force_validate: bool) -> Result<(), AuthError> {
-        if self.auth_config.advanced.disable_csrf_check
+        if self.auth_config.advanced.csrf_check_disabled()
             || self.auth_config.advanced.disable_origin_check
         {
             return Ok(());
@@ -109,10 +96,17 @@ impl CsrfMiddleware {
             return Ok(());
         }
 
-        let origin = Self::header(req, "origin")
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-            .or_else(|| Self::header(req, "referer").and_then(extract_origin))
+        let inferred_origin = (Self::header(req, "origin") == Some("null")
+            && Self::header(req, "sec-fetch-site") == Some("same-origin"))
+        .then(|| req.url().map(|url| url.origin().ascii_serialization()))
+        .flatten();
+        let origin = inferred_origin
+            .or_else(|| {
+                Self::header(req, "origin")
+                    .filter(|value| !value.is_empty())
+                    .map(ToOwned::to_owned)
+                    .or_else(|| Self::header(req, "referer").and_then(extract_origin))
+            })
             .filter(|value| value != "null")
             .ok_or_else(|| AuthError::forbidden(MISSING_OR_NULL_ORIGIN))?;
 
@@ -123,10 +117,9 @@ impl CsrfMiddleware {
         }
     }
 
-    fn validate_form_csrf(&self, req: &AuthRequest) -> Result<(), AuthError> {
-        if self.auth_config.advanced.disable_csrf_check
-            || self.auth_config.advanced.disable_origin_check
-        {
+    /// Validate a login form after the endpoint's input schema has passed.
+    pub fn validate_form_request(&self, req: &AuthRequest) -> Result<(), AuthError> {
+        if !self.config.enabled || self.auth_config.advanced.csrf_check_disabled() {
             return Ok(());
         }
 
@@ -208,6 +201,9 @@ impl CsrfMiddleware {
     }
 
     fn request_body_map(req: &AuthRequest) -> Option<Map<String, Value>> {
+        if let Some(body) = req.parsed_http_body() {
+            return body.as_object().cloned();
+        }
         let content_type = Self::header(req, "content-type").unwrap_or_default();
 
         if content_type.contains("application/x-www-form-urlencoded") {
@@ -248,12 +244,7 @@ impl Middleware for CsrfMiddleware {
             return Ok(None);
         }
 
-        let path = self.normalized_path(req.path());
-        let csrf_result = if Self::is_form_csrf_path(path) {
-            self.validate_form_csrf(req)
-        } else {
-            self.validate_origin(req, false)
-        };
+        let csrf_result = self.validate_origin(req, false);
 
         if let Err(error) = csrf_result {
             return Ok(Some(Self::reject(error)));
@@ -346,7 +337,12 @@ mod tests {
                 ("sec-fetch-mode", "cors"),
             ],
         );
-        assert!(mw.before_request(&req).await.unwrap().is_none());
+        assert!(
+            mw.validate_form_request(&req)
+                .err()
+                .map(|error| error.to_auth_response())
+                .is_none()
+        );
     }
 
     // Rust-specific surface: Rust middleware implementations are library-specific behavior with no direct TS analogue.
@@ -362,7 +358,12 @@ mod tests {
                 ("sec-fetch-mode", "navigate"),
             ],
         );
-        let message = forbidden_message(mw.before_request(&req).await.unwrap()).await;
+        let message = forbidden_message(
+            mw.validate_form_request(&req)
+                .err()
+                .map(|error| error.to_auth_response()),
+        )
+        .await;
         assert_eq!(message, CROSS_SITE_NAVIGATION_LOGIN_BLOCKED);
     }
 
@@ -376,7 +377,12 @@ mod tests {
                 vec![("origin", ""), ("referer", "http://evil.com/login")],
             ] {
                 let req = make_request(path, None, false, &headers);
-                let message = forbidden_message(mw.before_request(&req).await.unwrap()).await;
+                let message = forbidden_message(
+                    mw.validate_form_request(&req)
+                        .err()
+                        .map(|error| error.to_auth_response()),
+                )
+                .await;
                 assert_eq!(message, INVALID_ORIGIN);
             }
             for headers in [
@@ -385,7 +391,12 @@ mod tests {
                 vec![("referer", "http://localhost:3000/login")],
             ] {
                 let req = make_request(path, None, false, &headers);
-                assert!(mw.before_request(&req).await.unwrap().is_none());
+                assert!(
+                    mw.validate_form_request(&req)
+                        .err()
+                        .map(|error| error.to_auth_response())
+                        .is_none()
+                );
             }
         }
     }

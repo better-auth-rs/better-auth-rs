@@ -197,7 +197,14 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .unwrap();
     assert_eq!(first_record.id, second_record.id);
     assert_ne!(first.totp_uri, second.totp_uri);
-    let pending = begin_sign_in_challenge(&user, None, &ctx).await.unwrap();
+    let pending = begin_sign_in_challenge(
+        &user,
+        None,
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
+        &ctx,
+    )
+    .await
+    .unwrap();
     assert!(pending.response.two_factor_methods.is_empty());
     let unverified = verify_totp_core(
         &challenge_request(&pending),
@@ -285,7 +292,14 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         trust_device: None,
     };
     for round in 0..2 {
-        let challenge = begin_sign_in_challenge(&user, None, &ctx).await.unwrap();
+        let challenge = begin_sign_in_challenge(
+            &user,
+            None,
+            &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
+            &ctx,
+        )
+        .await
+        .unwrap();
         let req = challenge_request(&challenge);
         for _ in 0..5 {
             assert_eq!(
@@ -304,7 +318,14 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
             assert!(!req.take_response_headers().unwrap().is_empty());
         }
     }
-    let challenge = begin_sign_in_challenge(&user, None, &ctx).await.unwrap();
+    let challenge = begin_sign_in_challenge(
+        &user,
+        None,
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
+        &ctx,
+    )
+    .await
+    .unwrap();
     let req = challenge_request(&challenge);
     let valid = VerifyBackupCodeRequest {
         code: enrollment.backup_codes.unwrap()[0].clone(),
@@ -353,7 +374,14 @@ async fn concurrent_otp_requests_create_only_one_session_and_invalidate_older_co
         send_otp: Some(outbox.clone()),
         ..Default::default()
     };
-    let challenge = begin_sign_in_challenge(&user, None, &ctx).await.unwrap();
+    let challenge = begin_sign_in_challenge(
+        &user,
+        None,
+        &AuthRequest::new(better_auth_core::HttpMethod::Post, "/sign-in/email"),
+        &ctx,
+    )
+    .await
+    .unwrap();
     let req = challenge_request(&challenge);
     let _ = send_otp_core(&req, &config, &ctx).await.unwrap();
     let _ = send_otp_core(&req, &config, &ctx).await.unwrap();

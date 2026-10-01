@@ -1,8 +1,7 @@
 use base64::Engine;
 use chrono::{Duration, Utc};
 use indexmap::IndexMap;
-use rand::distributions::Alphanumeric;
-use rand::{Rng, thread_rng};
+use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
@@ -22,7 +21,7 @@ use super::resolved::{ResolvedOAuthConfig as OAuthConfig, ResolvedProvider};
 use super::state::{
     AccountCookiePayload, OAuthStateLink, OAuthStatePayload, account_cookie_name,
     create_account_cookie_value, create_cookie_state_value, create_database_state_cookie_value,
-    decode_account_cookie_value, filter_additional_state_data, get_cookie, state_cookie_name,
+    decode_account_cookie_value, filter_additional_state_data, state_cookie_name,
 };
 use super::types::{
     LinkSocialRequest, OAuthIdTokenRequest, SocialSignInRequest, SocialSignInResponse,
@@ -34,12 +33,14 @@ use super::signin::{OAuthSignInOptions, process_oauth_sign_in};
 // Shared helpers (DRY)
 // ---------------------------------------------------------------------------
 
+fn random_base64url(bytes: usize) -> String {
+    let mut random = vec![0; bytes];
+    rand::thread_rng().fill_bytes(&mut random);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(random)
+}
+
 fn generate_pkce() -> (String, String) {
-    let verifier: String = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(43)
-        .map(char::from)
-        .collect();
+    let verifier = random_base64url(96);
     let mut hasher = Sha256::new();
     hasher.update(verifier.as_bytes());
     let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
@@ -149,39 +150,44 @@ fn account_cookie_max_age(config: &better_auth_core::AuthConfig) -> Duration {
         .unwrap_or_else(|| Duration::minutes(5))
 }
 
-pub(super) fn create_account_cookie_header(
+pub(super) fn create_account_cookie_headers(
+    req: &AuthRequest,
     config: &better_auth_core::AuthConfig,
-    secret: &str,
     payload: &AccountCookiePayload,
-) -> AuthResult<String> {
+) -> AuthResult<Vec<String>> {
     let max_age = account_cookie_max_age(config);
-    let value = create_account_cookie_value(secret, payload, max_age)?;
-    Ok(better_auth_core::utils::cookie_utils::create_cookie(
+    let value = create_account_cookie_value(config.encryption_secret(), payload, max_age)?;
+    better_auth_core::utils::cookie_utils::create_chunked_cookies(
+        req,
         &account_cookie_name(config),
         &value,
-        max_age.num_seconds(),
+        Some(max_age.num_seconds()),
         config,
-    ))
+    )
 }
 
 pub(super) fn decode_account_cookie(
     req: &AuthRequest,
     config: &better_auth_core::AuthConfig,
-    secret: &str,
 ) -> AuthResult<Option<AccountCookiePayload>> {
-    let Some(value) = get_cookie(req, &account_cookie_name(config)) else {
+    let Some(value) = better_auth_core::utils::cookie_utils::get_chunked_cookie(
+        req,
+        &account_cookie_name(config),
+    ) else {
         return Ok(None);
     };
-    decode_account_cookie_value(secret, &value).map(Some)
+    Ok(decode_account_cookie_value(
+        config.encryption_secret(),
+        &value,
+    ))
 }
 
 pub(super) fn attach_state_cookie(
     response: AuthResponse,
     config: &better_auth_core::AuthConfig,
-    secret: &str,
     state: &str,
 ) -> AuthResult<AuthResponse> {
-    let value = create_database_state_cookie_value(secret, state)?;
+    let value = create_database_state_cookie_value(config.signing_secret(), state)?;
     Ok(response.with_appended_header(
         "Set-Cookie",
         better_auth_core::utils::cookie_utils::create_cookie(
@@ -196,10 +202,9 @@ pub(super) fn attach_state_cookie(
 pub(super) fn attach_cookie_state_payload(
     response: AuthResponse,
     config: &better_auth_core::AuthConfig,
-    secret: &str,
     payload: &OAuthStatePayload,
 ) -> AuthResult<AuthResponse> {
-    let value = create_cookie_state_value(secret, payload)?;
+    let value = create_cookie_state_value(config.encryption_secret(), payload)?;
     Ok(response.with_appended_header(
         "Set-Cookie",
         better_auth_core::utils::cookie_utils::create_cookie(
@@ -299,8 +304,22 @@ pub(super) async fn complete_link_social(
     user_info: &OAuthUserInfo,
     tokens: &OAuthTokenSet,
     link: &OAuthStateLink,
-    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> Result<(), String> {
+    profile: Option<&serde_json::Value>,
+    endpoint: &crate::plugins::endpoint_context::EndpointContext<
+        '_,
+        impl better_auth_core::AuthSchema,
+    >,
+) -> Result<(), super::signin::OAuthSignInError> {
+    let ctx = endpoint.auth;
+    super::signin::validate_provider_user(
+        user_info,
+        &link.user_id,
+        provider_name,
+        profile,
+        crate::plugins::user_admission::UserValidationAction::LinkAccount,
+        endpoint,
+    )
+    .await?;
     let linking = &ctx.config.account.account_linking;
     let trusted_provider = linking
         .trusted_providers
@@ -308,11 +327,11 @@ pub(super) async fn complete_link_social(
         .any(|trusted| trusted == provider_name);
 
     if !linking.enabled || (!trusted_provider && !user_info.email_verified) {
-        return Err("unable_to_link_account".to_string());
+        return Err("unable_to_link_account".to_string().into());
     }
 
     if !linking.allow_different_emails && !user_info.email.eq_ignore_ascii_case(&link.email) {
-        return Err("email_doesn't_match".to_string());
+        return Err("email_doesn't_match".to_string().into());
     }
 
     if let Some(existing_account) = ctx
@@ -322,7 +341,9 @@ pub(super) async fn complete_link_social(
         .map_err(|error| error.to_string())?
     {
         if existing_account.user_id() != link.user_id {
-            return Err("account_already_linked_to_different_user".to_string());
+            return Err("account_already_linked_to_different_user"
+                .to_string()
+                .into());
         }
 
         let token_bundle = encrypt_token_set(
@@ -476,6 +497,8 @@ async fn sign_in_with_id_token_core(
         },
         OAuthSignInOptions {
             request: req,
+            profile: Some(&user_info.data),
+            body: req.body_as_json()?,
             disable_sign_up: provider.config.disable_implicit_sign_up
                 && !body.request_sign_up.unwrap_or(false)
                 || provider.config.disable_sign_up,
@@ -511,7 +534,7 @@ async fn link_with_id_token_core(
     body: &LinkSocialRequest,
     id_token: &OAuthIdTokenRequest,
     provider: &ResolvedProvider,
-    session: &impl AuthSession,
+    current_user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
     verify_id_token(provider, id_token).await?;
@@ -521,10 +544,6 @@ async fn link_with_id_token_core(
         OAuthUserInfoRequest {
             access_token: id_token.access_token.clone(),
             refresh_token: id_token.refresh_token.clone(),
-            access_token_expires_at: id_token
-                .expires_at
-                .and_then(|timestamp| chrono::DateTime::<Utc>::from_timestamp(timestamp, 0)),
-            scopes: id_token.scopes.clone().unwrap_or_default(),
             id_token: Some(id_token.token.clone()),
             ..Default::default()
         },
@@ -545,10 +564,37 @@ async fn link_with_id_token_core(
         });
     }
 
-    let existing_accounts = ctx.database.get_user_accounts(&session.user_id()).await?;
-    if existing_accounts.iter().any(|account| {
-        account.provider_id() == body.provider && account.account_id() == response.user.id
-    }) {
+    if let Some(account) = ctx
+        .database
+        .get_account(&body.provider, &response.user.id)
+        .await?
+    {
+        if account.user_id() != current_user.id() {
+            return Err(AuthError::Upstream {
+                status: 409,
+                code: "SOCIAL_ACCOUNT_ALREADY_LINKED",
+                message: "Social account already linked",
+            });
+        }
+        let tokens = encrypt_token_set(
+            ctx,
+            id_token.access_token.clone(),
+            id_token.refresh_token.clone(),
+            Some(id_token.token.clone()),
+        )?;
+        let _ = ctx
+            .database
+            .update_account_optional(
+                &account.id(),
+                UpdateAccount {
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
+                    id_token: tokens.id_token,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        apply_link_user_info(&current_user.id(), &response.user, ctx).await;
         return Ok(SocialSignInResponse {
             url: Some(String::new()),
             redirect: false,
@@ -558,11 +604,6 @@ async fn link_with_id_token_core(
         });
     }
 
-    let current_user = ctx
-        .database
-        .get_user_by_id(&session.user_id())
-        .await?
-        .ok_or(AuthError::UserNotFound)?;
     let current_email = current_user
         .email()
         .ok_or_else(|| AuthError::forbidden("User email not found"))?;
@@ -573,54 +614,51 @@ async fn link_with_id_token_core(
         .any(|trusted| trusted == &body.provider);
 
     if !linking.enabled || (!trusted_provider && !response.user.email_verified) {
-        return Err(AuthError::forbidden(
-            "Account not linked - linking not allowed",
-        ));
+        return Err(AuthError::Upstream {
+            status: 401,
+            code: "LINKING_NOT_ALLOWED",
+            message: "Account not linked - linking not allowed",
+        });
     }
     if !linking.allow_different_emails && !response.user.email.eq_ignore_ascii_case(current_email) {
-        return Err(AuthError::forbidden(
-            "Account not linked - different emails not allowed",
-        ));
+        return Err(AuthError::Upstream {
+            status: 401,
+            code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
+            message: "Account not linked - different emails not allowed",
+        });
     }
 
-    let token_bundle = encrypt_token_set(
-        ctx,
-        id_token.access_token.clone(),
-        id_token.refresh_token.clone(),
-        Some(id_token.token.clone()),
-    )?;
-    let _ = ctx
-        .database
-        .create_account(CreateAccount {
-            user_id: session.user_id().to_string(),
-            provider_id: body.provider.clone(),
-            account_id: response.user.id,
-            access_token: token_bundle.access_token,
-            refresh_token: token_bundle.refresh_token,
-            id_token: token_bundle.id_token,
-            access_token_expires_at: id_token
-                .expires_at
-                .and_then(|timestamp| chrono::DateTime::<Utc>::from_timestamp(timestamp, 0)),
-            refresh_token_expires_at: None,
-            scope: id_token.scopes.as_ref().map(|scopes| scopes.join(",")),
-            password: None,
-        })
-        .await
-        .map_err(|_| AuthError::bad_request("Account not linked - unable to create account"))?;
-
-    if linking.update_user_info_on_link {
+    let created = async {
+        let token_bundle = encrypt_token_set(
+            ctx,
+            id_token.access_token.clone(),
+            id_token.refresh_token.clone(),
+            Some(id_token.token.clone()),
+        )?;
         let _ = ctx
             .database
-            .update_user(
-                &session.user_id(),
-                UpdateUser {
-                    name: response.user.name.clone(),
-                    image: response.user.image.clone(),
-                    ..Default::default()
-                },
-            )
-            .await;
+            .create_account_optional(CreateAccount {
+                user_id: current_user.id().to_string(),
+                provider_id: body.provider.clone(),
+                account_id: response.user.id.clone(),
+                access_token: token_bundle.access_token,
+                refresh_token: token_bundle.refresh_token,
+                id_token: token_bundle.id_token,
+                access_token_expires_at: None,
+                refresh_token_expires_at: None,
+                scope: None,
+                password: None,
+            })
+            .await?;
+        Ok::<_, AuthError>(())
     }
+    .await;
+    created.map_err(|_| AuthError::Upstream {
+        status: 417,
+        code: "LINKING_FAILED",
+        message: "Account not linked - unable to create account",
+    })?;
+    apply_link_user_info(&current_user.id(), &response.user, ctx).await;
 
     Ok(SocialSignInResponse {
         url: Some(String::new()),
@@ -629,6 +667,37 @@ async fn link_with_id_token_core(
         token: None,
         user: None,
     })
+}
+
+async fn apply_link_user_info(
+    user_id: &str,
+    user_info: &OAuthUserInfo,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) {
+    if !ctx.config.account.account_linking.update_user_info_on_link {
+        return;
+    }
+    let result = async {
+        ctx.database
+            .update_user(
+                user_id,
+                UpdateUser {
+                    additional_fields: ctx
+                        .config
+                        .user
+                        .parse_provider_input(&user_info.additional_fields, false)?,
+                    name: user_info.name.clone(),
+                    image: user_info.image.clone(),
+                    ..Default::default()
+                },
+            )
+            .await
+    }
+    .await;
+    // Upstream treats profile synchronization as optional after the account write succeeds.
+    if let Err(error) = result {
+        tracing::warn!(%error, "Could not update user info on account link");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -768,7 +837,7 @@ pub(super) async fn initiate_oauth_flow_core(
     request: FlowStartRequest<'_>,
 ) -> AuthResult<InitiatedOAuthFlow> {
     let (code_verifier, code_challenge) = generate_pkce();
-    let state = uuid::Uuid::new_v4().to_string();
+    let state = random_base64url(24);
 
     let mut payload = OAuthStatePayload::new(
         request.callback_url.to_string(),
@@ -789,20 +858,17 @@ pub(super) async fn initiate_oauth_flow_core(
             .insert("anonymousUserId".into(), serde_json::json!(user_id));
     }
 
-    payload.id_token_nonce = request.provider.requires_nonce().then(|| {
-        thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(32)
-            .map(char::from)
-            .collect()
-    });
+    payload.id_token_nonce = request
+        .provider
+        .requires_nonce()
+        .then(|| random_base64url(24));
 
     match ctx.config.account.store_state_strategy {
         better_auth_core::OAuthStateStrategy::Database => {
             let _ = ctx
                 .database
                 .create_verification(CreateVerification {
-                    identifier: format!("oauth:{}", state),
+                    identifier: state.clone(),
                     value: serde_json::to_string(&payload)?,
                     expires_at: Utc::now() + Duration::minutes(10),
                 })
@@ -857,7 +923,10 @@ pub(crate) async fn handle_social_sign_in(
     if let Some(response) = invalid_additional_params(body.additional_params.as_ref()) {
         return Ok(response);
     }
-    let meta = better_auth_core::RequestMeta::from_request(req);
+    let meta = better_auth_core::RequestMeta::from_request_with_config(
+        req,
+        &ctx.config.advanced.ip_address,
+    );
     if let Some(id_token) = &body.id_token {
         let provider = config
             .providers
@@ -892,18 +961,13 @@ pub(crate) async fn handle_social_sign_in(
             if response.token.is_some() {
                 return Ok(auth_response);
             }
-            attach_state_cookie(auth_response, &ctx.config, &ctx.config.secret, &flow.state)
+            attach_state_cookie(auth_response, &ctx.config, &flow.state)
         }
         better_auth_core::OAuthStateStrategy::Cookie => {
             if response.token.is_some() {
                 return Ok(auth_response);
             }
-            attach_cookie_state_payload(
-                auth_response,
-                &ctx.config,
-                &ctx.config.secret,
-                &flow.payload,
-            )
+            attach_cookie_state_payload(auth_response, &ctx.config, &flow.payload)
         }
     }
 }
@@ -913,7 +977,7 @@ pub(crate) async fn handle_link_social(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (_, session) = ctx.require_session(req).await?;
+    let (user, session) = ctx.require_session(req).await?;
     let body: LinkSocialRequest = match better_auth_core::validate_request_body(req) {
         Ok(v) => v,
         Err(resp) => return Ok(resp),
@@ -930,7 +994,7 @@ pub(crate) async fn handle_link_social(
                 code: "PROVIDER_NOT_FOUND",
                 message: "Provider not found",
             })?;
-        let response = link_with_id_token_core(&body, id_token, provider, &session, ctx).await?;
+        let response = link_with_id_token_core(&body, id_token, provider, &user, ctx).await?;
         return AuthResponse::json(200, &response).map_err(AuthError::from);
     }
 
@@ -946,14 +1010,11 @@ pub(crate) async fn handle_link_social(
 
     match ctx.config.account.store_state_strategy {
         better_auth_core::OAuthStateStrategy::Database => {
-            attach_state_cookie(auth_response, &ctx.config, &ctx.config.secret, &flow.state)
+            attach_state_cookie(auth_response, &ctx.config, &flow.state)
         }
-        better_auth_core::OAuthStateStrategy::Cookie => attach_cookie_state_payload(
-            auth_response,
-            &ctx.config,
-            &ctx.config.secret,
-            &flow.payload,
-        ),
+        better_auth_core::OAuthStateStrategy::Cookie => {
+            attach_cookie_state_payload(auth_response, &ctx.config, &flow.payload)
+        }
     }
 }
 

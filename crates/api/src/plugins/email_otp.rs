@@ -9,7 +9,9 @@ use std::sync::Arc;
 pub(crate) mod callbacks;
 pub use callbacks::{EmailOtpCallbackFuture, EmailOtpCallbacks};
 mod handlers;
+mod native;
 mod otp;
+pub use native::EmailOtpApi;
 mod request;
 
 /// Purpose of an email OTP.
@@ -69,17 +71,19 @@ pub enum EmailOtpStorage {
     Hashed,
     /// Encrypt with the auth secret before persistence.
     Encrypted,
-    /// Application-owned hashing or reversible encryption.
-    Custom(Arc<dyn EmailOtpCodec>),
+    /// Application-owned irreversible hashing.
+    CustomHash(super::one_time_token::TokenHasher),
+    /// Application-owned reversible encryption.
+    CustomEncryption(Arc<dyn EmailOtpCodec>),
 }
 
-/// Custom OTP protection compatible with upstream hash or encrypt/decrypt callbacks.
+/// Application encryption and decryption for stored OTPs.
 #[async_trait]
 pub trait EmailOtpCodec: Send + Sync {
-    /// Hash or encrypt an OTP for persistence.
+    /// Encrypt an OTP for persistence.
     async fn encode(&self, otp: &str) -> AuthResult<String>;
-    /// Decrypt stored codes; return `None` for irreversible hashing.
-    async fn decode(&self, stored: &str) -> AuthResult<Option<String>>;
+    /// Decrypt a stored OTP. Propagate invalid ciphertext and application failures.
+    async fn decode(&self, stored: &str) -> AuthResult<String>;
 }
 
 /// Application generator for deterministic or custom-format codes.

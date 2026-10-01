@@ -20,10 +20,20 @@ import { defaultStatements } from "better-auth/plugins/organization/access";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { createEmailOtpFixture } from "./email-otp";
+import { createEmailOtpNativeFixture } from "./email-otp-native";
+import { createEmailOtpTransactionFixture } from "./email-otp-transaction";
+import { httpBodyOptions } from "./http-body";
+import { createOAuthLinkIdTokenFixture } from "./oauth-link-id-token";
 import { createSecondaryStorageFixture } from "./secondary-storage";
 import { sessionFieldOptions } from "./session-fields";
 import { createCookieVersionFixture } from "./cookie-version";
 import { passwordPolicyOptions } from "./password-policy";
+import { createAuthLifecycleFixture } from "./auth-lifecycle";
+import { createCaptchaFixture } from "./captcha";
+import { createCryptoFixture } from "./crypto";
+import { createUserAdmissionFixture } from "./user-admission";
+import { createDeviceGenerators } from "./device-generators";
+import { createPasswordSecurityFixture } from "./password-security";
 import { signupEnumerationOptions } from "./signup-enumeration";
 import { createPasskeyOptions } from "./passkey-options";
 import { createCustomSessionFixture } from "./custom-session";
@@ -65,8 +75,14 @@ function hasOwn(obj: unknown, key: string) {
 }
 
 const PORT = getPort();
+const captchaFixture = createCaptchaFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const jwtFixture = await createJwtFixture(process.env.COMPAT_PROFILE ?? "", `http://localhost:${PORT}`);
 const database = new Database(":memory:");
+const cryptoFixture = createCryptoFixture(process.env.COMPAT_PROFILE ?? "", database);
+const userAdmission = createUserAdmissionFixture(process.env.COMPAT_PROFILE ?? "");
+const deviceGenerators = createDeviceGenerators(process.env.COMPAT_PROFILE ?? "", database);
+const authLifecycle = createAuthLifecycleFixture(process.env.COMPAT_PROFILE ?? "", database);
+const passwordSecurity = createPasswordSecurityFixture();
 const identityFixture = createIdentityFixture(database, process.env.COMPAT_PROFILE ?? "");
 const apiKeyStorageFixture = createApiKeyStorageFixture();
 const secondaryFixture = createSecondaryStorageFixture(process.env.COMPAT_PROFILE ?? "", database);
@@ -78,6 +94,9 @@ const otpCallbacks = createOtpCallbacksFixture(process.env.COMPAT_PROFILE ?? "")
 const twoFactorConfig = twoFactorOptions(process.env.COMPAT_PROFILE ?? "");
 const apiKeyCallbacks = createApiKeyCallbacks(process.env.COMPAT_PROFILE ?? "");
 const emailOtpFixture = createEmailOtpFixture(database, process.env.COMPAT_PROFILE ?? "");
+const emailOtpNative = createEmailOtpNativeFixture(process.env.COMPAT_PROFILE ?? "");
+const emailOtpTransaction = createEmailOtpTransactionFixture(process.env.COMPAT_PROFILE ?? "");
+const oauthLinkIdToken = createOAuthLinkIdTokenFixture(process.env.COMPAT_PROFILE ?? "");
 const oneTapFixture = createOneTapFixture(process.env.COMPAT_PROFILE ?? "");
 const organizationCallbacks = createOrganizationCallbacks(process.env.COMPAT_PROFILE ?? "");
 const resetPasswordOutbox = new Map<string, { url: string; token: string }>();
@@ -88,7 +107,7 @@ const twoFactorContext = createTwoFactorContextFixture(twoFactorOtpOutbox);
 const invitationEmailOutbox: { id: string; email: string; role: string }[] = [];
 let invitationSenderFails = false;
 let resetPasswordMode: "capture" | "throw" = "capture";
-let oauthRefreshMode: "success" | "error" = "success";
+let oauthRefreshMode: "success" | "error" | "empty" = "success";
 type SocialProfile = {
   sub: string;
   email: string;
@@ -304,11 +323,12 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 const proxyCase = process.env.COMPAT_PROXY_CASE ? JSON.parse(process.env.COMPAT_PROXY_CASE) : {};
 const authOptions = {
   secondaryStorage: apiKeyStorageFixture.secondaryStorage,
-  verification: apiKeyStorageFixture.enabled ? { storeInDatabase: true } : undefined,
+  verification: { ...(apiKeyStorageFixture.enabled ? { storeInDatabase: true } : {}), ...emailOtpTransaction.verification },
   baseURL: proxyCase.baseURL ?? `http://localhost:${PORT}`,
   trustedOrigins: proxyCase.trustedOrigins ?? [],
   basePath: "/api/auth",
   ...(process.env.COMPAT_PROFILE === "oauth-proxy-cookie" ? { account: { storeStateStrategy: "cookie" as const } } : {}),
+  ...(oauthLinkIdToken.enabled ? { account: oauthLinkIdToken.account, databaseHooks: oauthLinkIdToken.databaseHooks } : {}),
   secret: ["compat", "test", "only", "key", "not", "real", "minimum", "32chars"].join("-"),
   database,
   emailAndPassword: {
@@ -325,6 +345,10 @@ const authOptions = {
     },
     ...passwordPolicyOptions(process.env.COMPAT_PROFILE ?? ""),
     ...signupEnumeration?.emailAndPassword,
+    ...authLifecycle.emailAndPassword,
+    ...passwordSecurity.emailAndPassword(process.env.COMPAT_PROFILE ?? ""),
+    ...userAdmission.emailAndPassword,
+    ...emailOtpTransaction.emailAndPassword,
   },
   emailVerification: {
     ...(process.env.COMPAT_PROFILE === "otp-callbacks-override" ? { sendOnSignUp: true } : {}),
@@ -343,15 +367,18 @@ const authOptions = {
       }
     },
   },
-  session: apiKeyStorageFixture.enabled ? { storeSessionInDatabase: true } : ["user-fields", "organization-cache", "jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? {
+  session: authLifecycle.options.session ?? (apiKeyStorageFixture.enabled ? { storeSessionInDatabase: true } : ["user-fields", "organization-cache", "jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? {
     cookieCache: { enabled: true, strategy: ["jwt-cache", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? "jwt" as const : "compact" as const },
     ...(process.env.COMPAT_PROFILE === "organization-jwt" ? { additionalFields: {
       deviceLabel: { type: "string" as const, required: false },
       internalNote: { type: "string" as const, required: false, input: false, returned: false },
     } } : {}),
-  } : undefined,
+  } : undefined),
   user: {
-    additionalFields: signupEnumeration?.userFields ?? cookieVersionFixture.userFields ?? (["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team", "two-factor-context"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined),
+    ...userAdmission.user,
+    ...emailOtpTransaction.user,
+    ...(oauthLinkIdToken.enabled ? oauthLinkIdToken.user : {}),
+    additionalFields: (oauthLinkIdToken.enabled ? oauthLinkIdToken.user.additionalFields : undefined) ?? authLifecycle.options.user?.additionalFields ?? signupEnumeration?.userFields ?? cookieVersionFixture.userFields ?? (["user-fields", "organization-jwt"].includes(process.env.COMPAT_PROFILE ?? "") ? userFields : ["organization-callbacks", "organization-custom-team", "two-factor-context"].includes(process.env.COMPAT_PROFILE ?? "") ? { secretNote: { type: "string", required: false, returned: false, defaultValue: "hidden" } } : undefined),
     changeEmail: {
       enabled: true,
       async sendChangeEmailConfirmation({
@@ -372,11 +399,14 @@ const authOptions = {
     },
     deleteUser: {
       enabled: true,
+      ...authLifecycle.deleteUser,
     },
   },
   rateLimit: {
     enabled: ["device-rate-limit", "device-rate-window"].includes(process.env.COMPAT_PROFILE ?? ""),
   },
+  ...captchaFixture.options,
+  ...httpBodyOptions(process.env.COMPAT_PROFILE ?? ""),
   socialProviders: {
     github: {
       clientId: "github-client-id",
@@ -416,17 +446,21 @@ const authOptions = {
         }
 
         return {
-          accessToken: "google-access-token",
-          refreshToken: "google-refresh-token",
-          idToken: "google-id-token",
+          accessToken: oauthRefreshMode === "empty" ? "" : "google-access-token",
+          refreshToken: oauthRefreshMode === "empty" ? "" : "google-refresh-token",
+          idToken: oauthRefreshMode === "empty" ? "" : "google-id-token",
           accessTokenExpiresAt: new Date(Date.now() + 3600_000),
           refreshTokenExpiresAt: new Date(Date.now() + 7200_000),
           scopes: ["openid", "email", "profile"],
         };
       },
+      ...(oauthLinkIdToken.enabled ? oauthLinkIdToken.google : {}),
     },
   },
   plugins: [
+    ...captchaFixture.plugins,
+    ...userAdmission.plugins,
+    ...(process.env.COMPAT_PROFILE?.startsWith("password-security") && process.env.COMPAT_PROFILE !== "password-security-after" ? [passwordSecurity.plugin(process.env.COMPAT_PROFILE)] : []),
     ...jwtFixture.plugins,
     ...mappedPluginExtras,
     ...(process.env.COMPAT_PROFILE?.startsWith("oauth-proxy") ? [oAuthProxy(process.env.COMPAT_PROXY_OPTIONS ? JSON.parse(process.env.COMPAT_PROXY_OPTIONS) : { productionURL: "https://production.example.com", currentURL: `http://localhost:${PORT}` })] : []),
@@ -434,7 +468,9 @@ const authOptions = {
     ...tokenRoutePlugins(process.env.COMPAT_PROFILE ?? "", verificationEmailOutbox),
     ...customSessionFixture.plugins,
     ...(["otp-callbacks", "otp-callbacks-override"].includes(process.env.COMPAT_PROFILE ?? "") ? otpCallbacks.plugins : []),
-    ...(process.env.COMPAT_PROFILE?.startsWith("email-otp") || process.env.COMPAT_PROFILE === "user-fields" ? [emailOtpFixture.plugin] : []),
+    ...emailOtpNative.plugins,
+    ...emailOtpTransaction.plugins,
+    ...((process.env.COMPAT_PROFILE?.startsWith("email-otp") && !emailOtpNative.enabled && !emailOtpTransaction.enabled) || process.env.COMPAT_PROFILE === "user-fields" ? [emailOtpFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE?.startsWith("one-tap") ? [oneTapFixture.plugin] : []),
     ...(process.env.COMPAT_PROFILE === "device-bearer" ? [bearer()] : []),
     admin(),
@@ -458,6 +494,7 @@ const authOptions = {
               return () => ++issued <= 2 ? "same-code" : issued <= 6 ? "next-code" : "after-code";
             })()
           : undefined,
+      ...deviceGenerators.options,
     }),
     organization({
       ...(process.env.COMPAT_PROFILE === "organization-empty-roles" ? { roles: {} } : {}),
@@ -523,10 +560,12 @@ const authOptions = {
         },
       ],
     }),
+    ...(process.env.COMPAT_PROFILE === "password-security-after" ? [passwordSecurity.plugin(process.env.COMPAT_PROFILE)] : []),
   ],
   ...secondaryFixture.options,
   ...sessionFieldOptions(process.env.COMPAT_PROFILE ?? "", secondaryFixture.options.session),
   ...cookieVersionFixture.options,
+  ...cryptoFixture.options,
   ...passkeyOptions.authOptions,
   ...customSessionFixture.options,
 } as const;
@@ -581,6 +620,24 @@ const server = Bun.serve({
         return hiddenUserFields.handler(new Request(url, request));
       }
 
+      const lifecycleResponse = await authLifecycle.route(request, auth);
+      const captchaResponse = await captchaFixture.handle(request, auth);
+      if (captchaResponse) return captchaResponse;
+      const cryptoResponse = await cryptoFixture.handle(request, auth);
+      if (cryptoResponse) return cryptoResponse;
+      const admissionResponse = await userAdmission.route(request, auth);
+      if (admissionResponse) return admissionResponse;
+      const emailOtpNativeResponse = await emailOtpNative.route(request, auth);
+      if (emailOtpNativeResponse) return emailOtpNativeResponse;
+      const emailOtpTransactionResponse = await emailOtpTransaction.route(request, auth);
+      if (emailOtpTransactionResponse) return emailOtpTransactionResponse;
+      const oauthLinkIdTokenResponse = await oauthLinkIdToken.route(request, auth);
+      if (oauthLinkIdTokenResponse) return oauthLinkIdTokenResponse;
+      const deviceGeneratorsResponse = await deviceGenerators.handle(request);
+      if (deviceGeneratorsResponse) return deviceGeneratorsResponse;
+      if (lifecycleResponse) return lifecycleResponse;
+      const passwordSecurityResponse = await passwordSecurity.handle(request, auth);
+      if (passwordSecurityResponse) return passwordSecurityResponse;
       const secondaryResponse = await secondaryFixture.route(request, auth);
       if (secondaryResponse) return secondaryResponse;
       const cookieVersionResponse = await cookieVersionFixture.route(request);
@@ -646,7 +703,15 @@ const server = Bun.serve({
         identityFixture.reset();
         organizationCallbacks.reset();
         emailOtpFixture.reset();
+        emailOtpNative.reset();
+        emailOtpTransaction.reset();
+        oauthLinkIdToken.reset();
         otpCallbacks.reset();
+        authLifecycle.reset();
+        captchaFixture.reset();
+        userAdmission.reset();
+        deviceGenerators.reset();
+        passwordSecurity.reset();
         twoFactorContext.reset();
         apiKeyStorageFixture.reset();
         secondaryFixture.reset();
@@ -853,7 +918,7 @@ const server = Bun.serve({
 
       if (url.pathname === "/__test/set-oauth-refresh-mode" && request.method === "POST") {
         const body = (await readJson(request)) as { mode?: string } | null;
-        oauthRefreshMode = body?.mode === "error" ? "error" : "success";
+        oauthRefreshMode = body?.mode === "error" ? "error" : body?.mode === "empty" ? "empty" : "success";
         return jsonResponse({ status: true, mode: oauthRefreshMode });
       }
 

@@ -164,7 +164,7 @@ impl EmailVerificationPlugin {
             callback_url,
         };
 
-        let ip_address = req.headers.get("x-forwarded-for").cloned();
+        let ip_address = ctx.config.advanced.ip_address.resolve(req);
         let user_agent = req.headers.get("user-agent").cloned();
         let current_session = ctx.require_session(req).await.ok();
 
@@ -220,7 +220,7 @@ impl EmailVerificationPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<()> {
         let verification_token = token::create_email_verification_token(
-            &ctx.config.secret,
+            ctx.config.signing_secret(),
             email,
             None,
             self.config.verification_token_expiry,

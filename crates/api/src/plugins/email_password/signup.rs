@@ -90,6 +90,7 @@ pub(super) fn synthetic_response(
 /// only when `auto_sign_in` is true.
 pub(super) async fn sign_up_core(
     body: &SignUpRequest,
+    endpoint_body: Value,
     config: &EmailPasswordConfig,
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -152,7 +153,7 @@ pub(super) async fn sign_up_core(
     let synthetic_create = create_user.clone();
     apply_default_role(ctx, &mut create_user);
     let auto_sign_in = config.auto_sign_in && !config.require_email_verification;
-    let meta = RequestMeta::from_request(req);
+    let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
     let expires_in = ctx.config.session.expires_in;
     let ip_address = meta.ip_address.clone();
     let user_agent = meta.user_agent.clone();
@@ -162,10 +163,35 @@ pub(super) async fn sign_up_core(
     let user_metadata = ctx.metadata.clone();
     let supports_native_json = database.supports_native_json();
 
+    let admission_context = ctx.clone();
+    let admission_request = req.clone();
+    let mut admission_input = synthetic_create.clone();
+    admission_input.email_verified = Some(false);
     let result: Option<SignUpResult> =
         better_auth_core::store::transaction(database.as_ref(), move |tx| {
             let _database = transaction_database.clone();
             Box::pin(async move {
+                let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+                    Some(&admission_request),
+                    endpoint_body,
+                    &admission_context,
+                );
+                endpoint.transaction = Some(tx);
+                let admitted = crate::plugins::user_admission::validate_create(
+                    &admission_input,
+                    crate::plugins::user_admission::UserValidationSource::new(
+                        "email-password",
+                        crate::plugins::user_admission::UserValidationAction::CreateUser,
+                    ),
+                    &endpoint,
+                )
+                .await;
+                if let Err(error) = admitted {
+                    if protect_enumeration {
+                        return Ok(None);
+                    }
+                    return Err(error.into_auth_error());
+                }
                 let user = match tx.create_user(create_user).await {
                     Ok(user) => user,
                     Err(error) if protect_enumeration && error.status_code() == 403 => {

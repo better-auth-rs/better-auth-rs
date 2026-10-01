@@ -50,6 +50,8 @@ The `organization-jwt` profile verifies teams together with asymmetric session c
 
 The Cargo runner builds the Rust fixture before starting either server. Health deadlines measure server startup, not compilation or Cargo lock waits.
 
+Paired scenarios have a 30-second default deadline for both runtimes together. Multi-step authentication retains the upstream scrypt parameters; Cargo optimizes the scrypt dependency in development builds. The Cargo runner stops Bun at the first failed scenario because a timed-out callback can still write to the shared fixture database. Individual scenarios may specify a longer deadline for deliberate expiry waits. Assertions and trace comparison remain unchanged.
+
 Generic OAuth scenarios use a shared local OIDC issuer with real signed ID tokens, discovery, JWKS, and token endpoints. They cover nonce binding, issuer and audience checks, key rotation, profile mapping, authorization parameters, client authentication, refresh, and provider logout. The Cargo runner starts the issuer and both auth servers. Run only these scenarios with `devenv shell -- cargo test --test client_compat_tests oidc_client_compat -- --ignored --nocapture`.
 
 ## Components
@@ -174,3 +176,15 @@ The `organization-empty-roles` profile preserves the distinction between omitted
 The eight `two-factor-*` option profiles verify passwordless management and per-factor overrides, disabled TOTP, server-only TOTP generation, digit counts and periods, plain/hashed/encrypted/custom OTP storage, OTP attempt limits, custom backup generation, and backup-code storage. Scenarios decrypt actual persisted secrets and backup codes with the pinned upstream crypto implementation. Custom-codec failure, duplicate backup codes, OTP exhaustion, and replay remain observable.
 
 The `two-factor-context` profile installs only the context-aware sender. The callback reads the typed store and observes validated input, request headers, and the resolved session. The scenario verifies rejected unauthenticated requests, input filtering, and delivery errors after OTP persistence.
+
+`password-scrypt` verifies bidirectional credentials with the pinned upstream: each server verifies the other's persisted hash and signs in after a database credential transfer. The five `password-security*` profiles cover HIBP path selection, registration order, disabled checks, custom messages, actual range HTTP headers and failures, hash ordering, reset-token consumption, admin partial persistence, and sign-in validation.
+
+The nine `captcha-*` profiles exercise real local provider requests, endpoint matching, provider failures and BotID callbacks. Unknown paths and unsupported HTTP methods still execute HTTP request hooks. CAPTCHA runs before media-type and JSON parsing errors. Sign-in fixtures also exercise URL-encoded bodies and schema/CSRF ordering.
+
+The three `http-body*` profiles verify matched-route JSON decoding before origin checks and authentication, persisted form signup, and the OAuth/device-code form exceptions. They distinguish explicit `disableCSRFCheck: false` from an omitted value when `disableOriginCheck` is enabled. The successful multi-login scenario uses the existing 30-second scrypt test budget.
+
+`crypto-database` and `crypto-cookie` transfer encrypted records, OAuth state and account cookies between runtimes. The scenarios preserve key versions, state bindings and error redirects while checking rotation, key retirement, explicit legacy fallback and cookie confidentiality. Large account cookies cross runtimes unchanged, clear stale chunks when replaced, and expire all chunks on sign-out. Access-token retrieval covers damaged and retired credentials before and after expiry, including unused refresh tokens. `device-generators` awaits both generators and verifies failure persistence, retry order and Unicode limits.
+
+The three `auth-lifecycle*` profiles inspect reset expiry, session freshness, deletion confirmation and callback failures at their persistence boundaries. `user-admission` and `user-admission-protected` verify typed creation sources, transaction rollback, OAuth admission and protected signup responses.
+
+The five `email-otp-native*` profiles call the server-only creation and recovery APIs. The scenarios compare plain, hashed, encrypted and custom storage, callback failures, missing/expired records and generation context without adding public authentication routes.

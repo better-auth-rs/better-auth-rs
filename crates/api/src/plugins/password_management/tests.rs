@@ -829,14 +829,14 @@ async fn test_plugin_on_request_routing() {
 #[tokio::test]
 async fn test_configuration() {
     let config = PasswordManagementConfig {
-        reset_token_expiry_hours: 48,
+        reset_password_token_expires_in: 172800,
         require_current_password: false,
         send_email_notifications: false,
         ..Default::default()
     };
 
     let plugin = PasswordManagementPlugin::with_config(config);
-    assert_eq!(plugin.config.reset_token_expiry_hours, 48);
+    assert_eq!(plugin.config.reset_password_token_expires_in, 172800);
     assert!(!plugin.config.require_current_password);
     assert!(!plugin.config.send_email_notifications);
 }
@@ -913,7 +913,11 @@ async fn test_on_password_reset_callback() {
     });
 
     let plugin = PasswordManagementPlugin::new().on_password_reset(callback);
-    let (ctx, user, _session) = create_test_context_with_user().await;
+    let (mut ctx, user, _session) = create_test_context_with_user().await;
+
+    let mut init = better_auth_core::AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+    plugin.on_init(&mut init).await.unwrap();
+    ctx.password_policy = init.password_policy;
 
     let reset_token = create_reset_token(&ctx, &user.id).await;
 
@@ -942,7 +946,11 @@ async fn test_on_password_reset_callback() {
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_false() {
     let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(false);
-    let (ctx, user, session) = create_test_context_with_user().await;
+    let (mut ctx, user, session) = create_test_context_with_user().await;
+
+    let mut init = better_auth_core::AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+    plugin.on_init(&mut init).await.unwrap();
+    ctx.password_policy = init.password_policy;
 
     let reset_token = create_reset_token(&ctx, &user.id).await;
 
@@ -976,7 +984,11 @@ async fn test_revoke_sessions_on_password_reset_false() {
 #[tokio::test]
 async fn test_revoke_sessions_on_password_reset_true() {
     let plugin = PasswordManagementPlugin::new().revoke_sessions_on_password_reset(true);
-    let (ctx, user, _session) = create_test_context_with_user().await;
+    let (mut ctx, user, _session) = create_test_context_with_user().await;
+
+    let mut init = better_auth_core::AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+    plugin.on_init(&mut init).await.unwrap();
+    ctx.password_policy = init.password_policy;
 
     let reset_token = create_reset_token(&ctx, &user.id).await;
 

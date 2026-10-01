@@ -174,8 +174,7 @@ async fn create_full_auth() -> BetterAuth<TestSchema> {
         .plugin(
             better_auth::plugins::UserManagementPlugin::new()
                 .change_email_enabled(true)
-                .delete_user_enabled(true)
-                .require_delete_verification(false),
+                .delete_user_enabled(true),
         )
         .plugin(better_auth::plugins::AccountManagementPlugin::new())
         .plugin(better_auth::plugins::OAuthPlugin::new())
@@ -716,16 +715,15 @@ async fn test_contract_openapi_endpoint() {
     assert!(body["paths"].is_object(), "Must have 'paths' object");
 }
 
-/// Unhandled routes should return 404 with { "message": "..." }
+/// Unhandled routes return an empty 404 response, matching the upstream router.
 #[tokio::test]
 async fn test_contract_not_found_response() {
     let auth = create_full_auth().await;
-    let (status, body) =
-        send_json_request(&auth, HttpMethod::Get, "/nonexistent-route", None).await;
+    let response = auth
+        .handle_request(AuthRequest::new(HttpMethod::Get, "/nonexistent-route"))
+        .await
+        .expect("Request should complete");
 
-    assert_eq!(status, 404);
-    assert!(
-        body["message"].is_string(),
-        "404 response must have 'message' field"
-    );
+    assert_eq!(response.status, 404);
+    assert!(response.body.is_empty(), "404 response body must be empty");
 }

@@ -79,10 +79,10 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     let encrypted_backup_codes = config
         .backup_code_options
         .storage
-        .encode(&backup_codes, &ctx.config.secret)
+        .encode(&backup_codes, ctx.config.encryption_secret())
         .await?;
     let secret = generate_secret();
-    let encrypted_secret = encrypt_value(&ctx.config.secret, &secret)?;
+    let encrypted_secret = encrypt_value(ctx.config.encryption_secret(), &secret)?;
 
     let mut set_cookie_headers = Vec::new();
     if config.skip_verification_on_enable {
@@ -218,7 +218,7 @@ pub(super) async fn get_totp_uri_core(
 ) -> AuthResult<TotpUriResponse> {
     require_totp(config)?;
     let two_factor = load_two_factor_record(user, ctx).await?;
-    let secret = decrypt_value(&ctx.config.secret, two_factor.secret())?;
+    let secret = decrypt_value(ctx.config.encryption_secret(), two_factor.secret())?;
     verify_user_password(
         ctx,
         user,
@@ -249,7 +249,7 @@ pub(super) async fn verify_totp_core(
     assert_not_locked(&state, &two_factor, &config.account_lockout, ctx).await?;
     let attempt = begin_attempt(&state, req, ctx).await?;
     let valid = (|| {
-        let secret = decrypt_value(&ctx.config.secret, two_factor.secret())?;
+        let secret = decrypt_value(ctx.config.encryption_secret(), two_factor.secret())?;
         build_totp(config, &secret, None, state.user(), ctx)?
             .check_current(&body.code)
             .map_err(|error| AuthError::internal(format!("Failed to verify TOTP: {error}")))
@@ -319,7 +319,10 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
     let otp: String = (0..config.otp_digits)
         .map(|_| char::from(b'0' + rand::thread_rng().gen_range(0..10)))
         .collect();
-    let stored_otp = config.otp_storage.encode(&otp, &ctx.config.secret).await?;
+    let stored_otp = config
+        .otp_storage
+        .encode(&otp, ctx.config.encryption_secret())
+        .await?;
     let identifier = otp_verification_identifier(state.key());
 
     _ = ctx
@@ -394,7 +397,7 @@ pub(super) async fn verify_otp_core(
 
     let is_valid = config
         .otp_storage
-        .verify(stored_otp, &body.code, &ctx.config.secret)
+        .verify(stored_otp, &body.code, ctx.config.encryption_secret())
         .await?;
 
     if !is_valid {
@@ -454,7 +457,7 @@ pub(super) async fn generate_backup_codes_core(
     let encrypted = config
         .backup_code_options
         .storage
-        .encode(&backup_codes, &ctx.config.secret)
+        .encode(&backup_codes, ctx.config.encryption_secret())
         .await?;
     _ = ctx
         .database
@@ -484,7 +487,7 @@ pub(super) async fn verify_backup_code_core(
     let decoded = match config
         .backup_code_options
         .storage
-        .decode(two_factor.backup_codes(), &ctx.config.secret)
+        .decode(two_factor.backup_codes(), ctx.config.encryption_secret())
         .await
     {
         Ok(codes) => codes,
@@ -508,7 +511,7 @@ pub(super) async fn verify_backup_code_core(
     let encrypted = config
         .backup_code_options
         .storage
-        .encode(&backup_codes, &ctx.config.secret)
+        .encode(&backup_codes, ctx.config.encryption_secret())
         .await?;
     if !ctx
         .database
@@ -566,7 +569,7 @@ pub(super) async fn view_backup_codes_core<S: better_auth_core::AuthSchema>(
         .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
     let Some(backup_codes) = config
         .storage
-        .decode(two_factor.backup_codes(), &ctx.config.secret)
+        .decode(two_factor.backup_codes(), ctx.config.encryption_secret())
         .await?
     else {
         return Err(AuthError::bad_request("Invalid backup code"));

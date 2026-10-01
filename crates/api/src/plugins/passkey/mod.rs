@@ -133,7 +133,7 @@ impl PasskeyPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let ip_address = req.headers.get("x-forwarded-for").cloned();
+        let ip_address = ctx.config.advanced.ip_address.resolve(req);
         let user_agent = req.headers.get("user-agent").cloned();
         match verify_authentication_core(&body, req, &self.config, ip_address, user_agent, ctx)
             .await?

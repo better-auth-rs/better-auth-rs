@@ -308,7 +308,8 @@ pub(crate) async fn inspect_trusted_device(
     };
 
     let clear_header = create_clear_cookie(&cookie_name, &ctx.config);
-    let Some(signed_value) = verify_signed_cookie_value(&ctx.config.secret, &raw_cookie)? else {
+    let Some(signed_value) = verify_signed_cookie_value(ctx.config.signing_secret(), &raw_cookie)?
+    else {
         return Ok(TrustedDeviceCheck {
             trusted: false,
             set_cookie_headers: vec![clear_header],
@@ -323,7 +324,7 @@ pub(crate) async fn inspect_trusted_device(
     };
 
     let expected_token = sign_value(
-        &ctx.config.secret,
+        ctx.config.signing_secret(),
         &format!("{}!{}", user.id(), trust_identifier),
     )?;
     if token != expected_token {
@@ -365,6 +366,7 @@ pub(crate) async fn inspect_trusted_device(
 pub(crate) async fn begin_sign_in_challenge(
     user: &impl AuthUser,
     remember_me: Option<bool>,
+    req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInTwoFactorRedirect> {
     let identifier = format!("2fa-{}", uuid::Uuid::new_v4());
@@ -386,7 +388,7 @@ pub(crate) async fn begin_sign_in_challenge(
         })
         .await?;
 
-    let mut headers = delete_session_cookie_headers(&ctx.config);
+    let mut headers = delete_session_cookie_headers(req, &ctx.config);
     headers.retain(|cookie| {
         !cookie.starts_with(&format!(
             "{}=",
@@ -394,7 +396,7 @@ pub(crate) async fn begin_sign_in_challenge(
         ))
     });
     headers.push(create_signed_cookie_header(
-        &ctx.config.secret,
+        ctx.config.signing_secret(),
         &ctx.config,
         TWO_FACTOR_COOKIE_SUFFIX,
         &identifier,
@@ -403,7 +405,7 @@ pub(crate) async fn begin_sign_in_challenge(
 
     if remember_me == Some(false) {
         headers.push(create_signed_cookie_header(
-            &ctx.config.secret,
+            ctx.config.signing_secret(),
             &ctx.config,
             DONT_REMEMBER_COOKIE_SUFFIX,
             "true",
@@ -798,7 +800,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
             "Invalid two factor cookie",
         ));
     };
-    let meta = RequestMeta::from_request(req);
+    let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
     let expires_in = if pending.dont_remember {
         Duration::days(1)
     } else {
@@ -823,7 +825,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
         ));
         if pending.dont_remember {
             set_cookie_headers.push(create_signed_cookie_header(
-                &ctx.config.secret,
+                ctx.config.signing_secret(),
                 &ctx.config,
                 DONT_REMEMBER_COOKIE_SUFFIX,
                 "true",

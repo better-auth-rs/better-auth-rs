@@ -69,7 +69,7 @@ async fn build_auth_with_route_plugin() -> BetterAuth<TestSchema> {
 // validates configuration before producing a `BetterAuth` instance.
 #[tokio::test]
 async fn test_builder_rejects_invalid_config() {
-    let config = AuthConfig::default();
+    let config = AuthConfig::default().secrets(vec![]);
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), test_database().await);
     let result = BetterAuth::<TestSchema>::new(config)
         .store(store)

@@ -58,7 +58,8 @@ pub use config::{
     AccountConfig, AccountLinkingConfig, AdvancedConfig, AdvancedDatabaseConfig, Argon2Config,
     AuthConfig, BearerConfig, CookieAttributes, CookieCacheConfig, CookieCacheStrategy,
     CookieOverride, CrossSubDomainConfig, IpAddressConfig, JwtConfig, OAuthStateStrategy,
-    PasswordConfig, SameSite, SessionConfig, SessionFieldConfig, core_paths, extract_origin,
+    PasswordConfig, SameSite, SecretKey, SessionConfig, SessionFieldConfig, VersionedSecret,
+    core_paths, extract_origin,
 };
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
@@ -94,7 +95,9 @@ pub use types::{
     UpdateTwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
     WalletAddress,
 };
-pub use utils::password::{PasswordHasher, hash_password, verify_password};
+pub use utils::password::{
+    Argon2PasswordHasher, PasswordHasher, ScryptPasswordHasher, hash_password, verify_password,
+};
 #[doc(hidden)]
 pub use uuid;
 pub use wire::{
@@ -104,3 +107,5 @@ pub use wire::{
 
 #[doc(hidden)]
 pub use crate as __private_core;
+
+mod http_body;

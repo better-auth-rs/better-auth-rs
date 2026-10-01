@@ -17,12 +17,13 @@ use better_auth_core::utils::cookie_utils::{
 };
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::utils::username::{
-    UsernameValidationError, normalize_username, normalize_username_fields, validate_username,
+    UsernameValidationError, normalize_username, validate_username,
 };
 use better_auth_core::wire::UserView;
 
 use crate::plugins::helpers::{SessionIssueError, issue_user_session_with_lifetime};
 
+mod request;
 mod signup;
 use signup::sign_up_core;
 pub use signup::{CustomSyntheticUser, OnExistingUserSignUp, SyntheticUserInput};
@@ -76,7 +77,7 @@ pub struct EmailPasswordConfig {
     /// Whether to automatically sign in the user after sign-up (default: true).
     /// When false, sign-up returns the user but doesn't create a session.
     pub auto_sign_in: bool,
-    /// Custom password hasher. When `None`, the default Argon2 hasher is used.
+    /// Custom password hasher. When `None`, the default scrypt hasher is used.
     pub password_hasher: Option<Arc<dyn PasswordHasher>>,
     /// Notify the application after a protected duplicate signup hashes its password.
     pub on_existing_user_sign_up: Option<Arc<dyn OnExistingUserSignUp>>,
@@ -122,11 +123,9 @@ pub(crate) struct SignUpRequest {
     additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct SignInRequest {
-    #[validate(email(message = "Invalid email address"))]
     email: String,
-    #[validate(length(min = 1, message = "Password is required"))]
     password: String,
     #[serde(rename = "callbackURL")]
     callback_url: Option<String>,
@@ -273,33 +272,27 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let mut filtered_req;
-        let signup_req_source = if self.config.username {
-            req
-        } else {
-            let mut body: serde_json::Value = req
-                .body_as_json()
-                .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-            if let Some(body) = body.as_object_mut() {
-                _ = body.remove("username");
-                _ = body.remove("displayUsername");
-            }
-            filtered_req = req.clone();
-            filtered_req.body = Some(serde_json::to_vec(&body)?);
-            &filtered_req
-        };
-        let mut signup_req: SignUpRequest =
-            match better_auth_core::validate_request_body(signup_req_source) {
+        let mut endpoint_body: serde_json::Value = req
+            .body_as_json()
+            .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
+        if self.config.username {
+            request::complete_signup_username(&mut endpoint_body);
+        }
+        let mut parsed_body = endpoint_body.clone();
+        if !self.config.username
+            && let Some(body) = parsed_body.as_object_mut()
+        {
+            _ = body.remove("username");
+            _ = body.remove("displayUsername");
+        }
+        let mut signup_req_source = req.clone();
+        signup_req_source.body = Some(serde_json::to_vec(&parsed_body)?);
+        let signup_req: SignUpRequest =
+            match better_auth_core::validate_request_body(&signup_req_source) {
                 Ok(v) => v,
                 Err(resp) => return Ok(resp),
             };
-
-        let (username, display_username) = normalize_username_fields(
-            signup_req.username.take(),
-            signup_req.display_username.take(),
-        );
-        signup_req.username = username;
-        signup_req.display_username = display_username;
+        request::form_csrf(req, ctx)?;
 
         if let Some(username) = signup_req.username.as_deref() {
             match validate_username(username) {
@@ -330,7 +323,12 @@ impl EmailPasswordPlugin {
             // Upstream's username hook rejects a taken username before the user
             // is created, so the client sees USERNAME_IS_ALREADY_TAKEN rather
             // than a failed insert.
-            if ctx.database.get_user_by_username(username).await?.is_some() {
+            if ctx
+                .database
+                .get_user_by_username(&normalize_username(username))
+                .await?
+                .is_some()
+            {
                 return username_error_response(
                     400,
                     "USERNAME_IS_ALREADY_TAKEN",
@@ -339,7 +337,8 @@ impl EmailPasswordPlugin {
             }
         }
 
-        let (response, session_token) = sign_up_core(&signup_req, &self.config, req, ctx).await?;
+        let (response, session_token) =
+            sign_up_core(&signup_req, endpoint_body, &self.config, req, ctx).await?;
 
         if let Some(token) = session_token {
             let cookie_header = create_session_cookie(&token, &ctx.config);
@@ -354,19 +353,13 @@ impl EmailPasswordPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        if let Ok(raw_body) = req.body_as_json::<serde_json::Value>()
-            && let Some(email) = raw_body.get("email").and_then(|value| value.as_str())
-            && !email.validate_email()
-        {
+        let signin_req = request::sign_in(req)?;
+        request::form_csrf(req, ctx)?;
+        if !signin_req.email.validate_email() {
             return Err(AuthError::bad_request("Invalid email"));
         }
 
-        let signin_req: SignInRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
-
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         match sign_in_core(
             req,
             &signin_req,
@@ -449,7 +442,7 @@ impl EmailPasswordPlugin {
             }
         }
 
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         match sign_in_username_core(
             req,
             &signin_req,
@@ -593,7 +586,8 @@ async fn finalize_sign_in_with_user_core(
         if trusted_device.trusted {
             set_cookie_headers.extend(trusted_device.set_cookie_headers);
         } else {
-            let redirect = two_factor::begin_sign_in_challenge(&user, remember_me, ctx).await?;
+            let redirect =
+                two_factor::begin_sign_in_challenge(&user, remember_me, req, ctx).await?;
             let mut redirect_headers = trusted_device.set_cookie_headers;
             redirect_headers.extend(redirect.set_cookie_headers);
             return Ok(SignInCoreResult::TwoFactorRedirect {
@@ -634,7 +628,7 @@ async fn finalize_sign_in_with_user_core(
     if remember_me == Some(false) {
         set_cookie_headers.push(create_session_like_cookie(
             &related_cookie_name(&ctx.config, "dont_remember"),
-            &sign_cookie_value("true", &ctx.config.secret),
+            &sign_cookie_value("true", ctx.config.signing_secret()),
             None,
             &ctx.config,
         ));
@@ -665,13 +659,27 @@ pub(crate) async fn sign_in_core(
     ctx.password_policy.validate_max_length(&body.password)?;
     let verification = EmailVerificationPlugin::from_context(ctx);
     let email_verification = email_verification.or(verification.as_ref());
-    let user = ctx
-        .database
-        .get_user_by_email(&body.email)
-        .await?
-        .ok_or(AuthError::InvalidCredentials)?;
+    let Some(user) = ctx.database.get_user_by_email(&body.email).await? else {
+        _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
+            .await?;
+        return Err(AuthError::InvalidCredentials);
+    };
 
-    verify_user_password(&user, &body.password, ctx).await?;
+    let stored_hash = match load_credential_password_hash(&user, ctx).await {
+        Ok(hash) if !hash.is_empty() => hash,
+        Ok(_) | Err(AuthError::InvalidCredentials) => {
+            _ = password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password)
+                .await?;
+            return Err(AuthError::InvalidCredentials);
+        }
+        Err(error) => return Err(error),
+    };
+    password_utils::verify_password(
+        ctx.password_policy.hasher.as_ref(),
+        &body.password,
+        &stored_hash,
+    )
+    .await?;
 
     if (config.require_email_verification
         || email_verification.is_some_and(EmailVerificationPlugin::is_verification_required))
@@ -799,10 +807,11 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
         "email-password"
     }
 
+    fn password_hasher(&self) -> Option<Arc<dyn PasswordHasher>> {
+        self.config.password_hasher.clone()
+    }
+
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
-        if self.config.password_hasher.is_some() {
-            ctx.password_policy.hasher = self.config.password_hasher.clone();
-        }
         ctx.password_policy.min_length = self.config.password_min_length;
         ctx.password_policy.max_length = self.config.password_max_length;
         if self.config.username {
@@ -813,7 +822,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
-        let mut routes = vec![AuthRoute::post("/sign-in/email", "sign_in_email")];
+        let mut routes = vec![
+            AuthRoute::post("/sign-in/email", "sign_in_email")
+                .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
+        ];
         if self.config.username {
             routes.push(AuthRoute::post("/sign-in/username", "sign_in_username"));
             routes.push(AuthRoute::post(
@@ -823,7 +835,12 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
         }
 
         if self.config.enable_signup {
-            routes.push(AuthRoute::post("/sign-up/email", "sign_up_email"));
+            routes.push(
+                AuthRoute::post("/sign-up/email", "sign_up_email").allowed_media_types(&[
+                    "application/x-www-form-urlencoded",
+                    "application/json",
+                ]),
+            );
         }
 
         routes
@@ -867,6 +884,8 @@ mod tests {
         let config = Arc::new(config);
         let database = crate::plugins::test_helpers::create_test_database().await;
         let mut init = better_auth_core::AuthInitContext::new(config.clone(), database.clone());
+        init.password_policy.hasher =
+            <EmailPasswordPlugin as AuthPlugin<TestSchema>>::password_hasher(plugin);
         plugin.on_init(&mut init).await.unwrap();
         let parts = init.into_parts();
         AuthContext {

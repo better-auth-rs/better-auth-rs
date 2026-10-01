@@ -293,7 +293,7 @@ impl JwtPlugin {
             key.to_string()
         } else {
             serde_json::to_string(&super::symmetric::encrypt(
-                &ctx.config.secret,
+                ctx.config.encryption_secret(),
                 &key.to_string(),
             )?)?
         };

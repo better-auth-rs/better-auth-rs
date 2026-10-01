@@ -142,6 +142,11 @@ pub(crate) async fn get_user_core(
 
 pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
+    req: &better_auth_core::AuthRequest,
+    session: (
+        better_auth_core::wire::UserView,
+        better_auth_core::wire::SessionView,
+    ),
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<AdminUserView>> {
@@ -163,7 +168,17 @@ pub(crate) async fn create_user_core(
         .with_role(role);
     create_user.additional_fields = body.data.clone().unwrap_or_default();
 
-    let user = ctx.database.create_user(create_user).await?;
+    let mut input: serde_json::Map<String, serde_json::Value> = req.body_as_json()?;
+    input.retain(|key, _| {
+        matches!(
+            key.as_str(),
+            "email" | "name" | "password" | "role" | "data"
+        )
+    });
+    let mut endpoint =
+        crate::plugins::endpoint_context::EndpointContext::new(Some(req), input.into(), ctx);
+    endpoint.session = Some(session);
+    let user = crate::plugins::user_admission::create_user(create_user, "admin", &endpoint).await?;
 
     if let Some(password) = body
         .password

@@ -58,7 +58,7 @@ function normalizeScalar(value: string, key: string, baseURL: string | undefined
     }
     return alias;
   }
-  if (key === "location" || key === "url" || key.endsWith("URL") || key.endsWith("Url")) {
+  if (key === "location" || key === "url" || key === "verification_uri" || key === "verification_uri_complete" || key.endsWith("URL") || key.endsWith("Url")) {
     return normalizeUrl(value, baseURL);
   }
   if (CLOCK_FIELDS.has(key) && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();

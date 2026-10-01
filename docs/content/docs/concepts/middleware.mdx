@@ -31,6 +31,8 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 Returns `403 Forbidden` when the origin is not trusted.
 
+HTTP CAPTCHA checks run before body parsing. Matched routes decode JSON before origin checks; `AuthRoute::allowed_media_types` overrides the accepted media types. Email sign-in and sign-up also accept URL-encoded forms. Both endpoints run form CSRF checks after input validation. Form CSRF checks block cross-site navigation and validate supplied origin, referer, or Fetch Metadata headers. Native endpoint calls without an HTTP request bypass this phase.
+
 ## Rate Limiting
 
 Limits requests per client per time window.
@@ -56,17 +58,17 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `per_endpoint` | `HashMap` | `{}` |
 | `enabled` | `bool` | `true` |
 
-Client identification uses `X-Forwarded-For`, then `X-Real-IP`, then a default bucket.
+Client identification uses `advanced.ip_address`, shared with session creation and CAPTCHA. The default header is `X-Forwarded-For`. Configure trusted proxy addresses or CIDR ranges before accepting forwarded chains. IPv4-mapped IPv6 addresses become IPv4, and IPv6 addresses use the configured subnet. Disabling IP tracking disables IP rate limiting; otherwise unresolved addresses share one bucket per path.
 
 When rate limited, returns `429`:
 
 ```json
 {
-  "code": "RATE_LIMIT_EXCEEDED",
-  "message": "Too many requests",
-  "retryAfter": 45
+  "message": "Too many requests. Please try again later."
 }
 ```
+
+The `X-Retry-After` header contains the remaining wait in seconds.
 
 ## CORS
 

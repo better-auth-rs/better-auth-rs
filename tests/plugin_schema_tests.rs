@@ -192,7 +192,7 @@ async fn disabled_username_ignores_inputs_without_persisting_them()
     let signup = AuthRequest::from_parts(
         HttpMethod::Post,
         "/sign-up/email".into(),
-        HashMap::new(),
+        HashMap::from([("content-type".into(), "application/json".into())]),
         Some(serde_json::to_vec(&json!({
             "name": "Core user", "email": "core@example.com", "password": "password123",
             "username": { "ignored": true }, "displayUsername": 42
@@ -209,7 +209,10 @@ async fn disabled_username_ignores_inputs_without_persisting_them()
     let update = AuthRequest::from_parts(
         HttpMethod::Post,
         "/update-user".into(),
-        HashMap::from([("authorization".into(), format!("Bearer {token}"))]),
+        HashMap::from([
+            ("authorization".into(), format!("Bearer {token}")),
+            ("content-type".into(), "application/json".into()),
+        ]),
         Some(serde_json::to_vec(&json!({
             "name": "Changed name", "username": "ignored_update", "displayUsername": []
         }))?),

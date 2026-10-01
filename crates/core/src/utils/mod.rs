@@ -3,5 +3,8 @@
 pub mod cookie_utils;
 pub mod date;
 pub(crate) mod email;
+pub mod ip;
+pub mod jwe;
 pub mod password;
+pub mod symmetric;
 pub mod username;

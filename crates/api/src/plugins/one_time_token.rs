@@ -268,7 +268,7 @@ pub(crate) fn response_session_token(
             !cookie.value().is_empty()
                 && cookie.max_age().is_none_or(|age| age.whole_seconds() != 0)
         })
-        .and_then(|cookie| verify_cookie_value(cookie.value(), &config.secret))
+        .and_then(|cookie| verify_cookie_value(cookie.value(), config.signing_secret()))
 }
 
 #[cfg(test)]

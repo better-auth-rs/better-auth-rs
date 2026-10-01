@@ -25,7 +25,7 @@ let config = AuthConfig::new("your-secret-key-at-least-32-characters-long")
 
 | Method | Description |
 |--------|-------------|
-| `new(secret)` | Create config with the signing secret (minimum 32 characters) |
+| `new(secret)` | Create config with an explicit signing secret; use at least 32 random characters |
 | `app_name(name)` | Set the app name used by emails and cookie-related metadata |
 | `base_url(url)` | Set the auth service base URL |
 | `base_path(path)` | Set the route mount prefix (default `/api/auth`) |
@@ -83,7 +83,7 @@ Controls the optional JWT surface.
 
 ## PasswordConfig
 
-Controls password validation and Argon2 hashing parameters.
+Controls password validation. The default password format is Better Auth-compatible scrypt; select a custom `PasswordHasher` to change hashing.
 
 | Field | Type | Default |
 |-------|------|---------|
@@ -93,7 +93,7 @@ Controls password validation and Argon2 hashing parameters.
 | `require_numbers` | `bool` | `false` |
 | `require_special` | `bool` | `false` |
 
-`PasswordConfig::argon2_config` defaults to:
+The retained `PasswordConfig::argon2_config` fields have these defaults, but built-in hashers do not read them. See [password storage and migration](/docs/authentication/email-password#password-storage-and-migration) before upgrading a database containing Argon2 credentials.
 
 | Field | Type | Default |
 |-------|------|---------|
@@ -121,4 +121,8 @@ For password reset specifically, `POST /request-password-reset` is enabled by `P
 
 ## Validation
 
-`AuthConfig::validate()` checks that the secret is at least 32 characters. This is called automatically during `build()`.
+`build()` calls `AuthConfig::resolve_secrets()` before plugin initialization. An explicit nonempty secret takes precedence over `BETTER_AUTH_SECRET`, then `AUTH_SECRET`. Without a configured key, development uses the upstream default; `NODE_ENV=production` rejects that default. Short or low-entropy secrets produce warnings instead of rejecting startup. Upstream's test-mode exception is described in the [configuration reference](/docs/reference/configuration-options).
+
+For rotation, set `.secrets(vec![VersionedSecret::new(2, current), VersionedSecret::new(1, previous)])` or `BETTER_AUTH_SECRETS=2:current-key,1:previous-key`. The first entry protects new data; older entries decrypt retained versioned data. Keep an explicit `secret` or single-key environment variable to decrypt legacy records. An explicit `secrets` vector overrides the environment and must not be empty.
+
+`AuthConfig::validate()` validates an already supplied or resolved configuration without reading environment variables. It rejects empty single keys, empty version arrays, invalid versions, duplicate versions, and empty versioned values. Use `resolve_secrets()` when initializing configuration outside the builder.

@@ -21,6 +21,11 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
+scrypt = "0.12.0"
+hex = "0.4.3"
+sha1 = "0.11.0"
+subtle = "2.6.1"
+regex = "1.13.1"
 indexmap = "2.14.2"
 sha3 = "0.12.0"
 chacha20poly1305 = "0.11.0"
@@ -195,6 +200,10 @@ unnecessary_safety_comment = "warn"
 unfulfilled_lint_expectations = "warn"
 unreachable_pub = "warn"
 unused_results = "warn"
+
+# Keep the upstream KDF cost while making multi-step debug authentication tests practical.
+[profile.dev.package.scrypt]
+opt-level = 3
 
 [profile.release]
 opt-level = 3

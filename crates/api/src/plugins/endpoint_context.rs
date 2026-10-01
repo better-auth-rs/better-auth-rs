@@ -17,6 +17,8 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     pub body: Value,
     /// Full typed runtime, including the store, options, metadata, and extensions.
     pub auth: &'a AuthContext<S>,
+    /// Active transaction. Use this store for database work inside transactional callbacks.
+    pub transaction: Option<&'a dyn better_auth_core::store::AuthTransaction<S>>,
     /// Session already resolved by this endpoint before the callback.
     pub session: Option<(
         better_auth_core::wire::UserView,
@@ -26,6 +28,11 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     pub response: Option<&'a AuthResponse>,
 }
 impl<'a, S: AuthSchema> EndpointContext<'a, S> {
+    /// Use the registered Email OTP plugin within this endpoint's active transaction.
+    pub fn email_otp(&self) -> AuthResult<super::email_otp::EmailOtpApi<'a, S>> {
+        super::email_otp::EmailOtpApi::from_endpoint(self)
+    }
+
     pub(crate) fn new(
         request: Option<&'a AuthRequest>,
         body: Value,
@@ -36,6 +43,7 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
             path: request.map(AuthRequest::path),
             body,
             auth,
+            transaction: None,
             session: None,
             response: None,
         }
@@ -57,6 +65,9 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     fn routes(&self) -> Vec<AuthRoute> {
         self.plugin.routes()
     }
+    fn password_hasher(&self) -> Option<Arc<dyn better_auth_core::PasswordHasher>> {
+        self.plugin.password_hasher()
+    }
     fn rate_limits(
         &self,
     ) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
@@ -72,6 +83,13 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
         self.plugin.before_request(req, ctx).await
+    }
+    async fn on_http_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        self.plugin.on_http_request(req, ctx).await
     }
     async fn on_request(
         &self,

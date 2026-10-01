@@ -585,6 +585,7 @@ dependencies = [
  "chrono",
  "cookie",
  "futures-util",
+ "hex",
  "hkdf 0.12.4",
  "hmac 0.12.1",
  "indexmap 2.14.2",
@@ -593,12 +594,14 @@ dependencies = [
  "nonzero_ext",
  "openssl",
  "rand 0.8.8",
+ "regex",
  "reqwest",
  "serde",
  "serde_cbor_2",
  "serde_json",
  "serde_path_to_error",
  "serde_with",
+ "sha1 0.11.0",
  "sha2 0.10.9",
  "sha3",
  "thiserror 2.0.21",
@@ -622,9 +625,11 @@ dependencies = [
  "base64 0.22.1",
  "better-auth-macros",
  "better-auth-schema-registry",
+ "chacha20poly1305",
  "chrono",
  "cookie",
  "glob-match",
+ "hex",
  "hkdf 0.12.4",
  "hmac 0.12.1",
  "indexmap 2.14.2",
@@ -632,9 +637,11 @@ dependencies = [
  "jsonwebtoken",
  "percent-encoding",
  "rand 0.8.8",
+ "scrypt",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subtle",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -2811,6 +2818,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
+name = "pbkdf2"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "112d82ceb8c5bf524d9af484d4e4970c9fd5a0cc15ba14ad93dccd28873b0629"
+dependencies = [
+ "digest 0.11.3",
+ "hmac 0.13.0",
+]
+
+[[package]]
 name = "pem-rfc7468"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3340,6 +3357,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "salsa20"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f874456e72520ff1375a06c588eaf074b0f01f9e9e1aada45bd9b7954a6e42c"
+dependencies = [
+ "cfg-if",
+ "cipher 0.5.2",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3377,6 +3404,18 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "scrypt"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87af57419b594aa23fa95f09f0e06d80d84ba01c26148c43844cad6ff4485f0"
+dependencies = [
+ "cfg-if",
+ "pbkdf2",
+ "salsa20",
+ "sha2 0.11.0",
+]
 
 [[package]]
 name = "sea-bae"

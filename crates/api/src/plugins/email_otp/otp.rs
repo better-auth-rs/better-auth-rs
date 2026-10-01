@@ -75,28 +75,43 @@ impl EmailOtpPlugin {
                 .collect()
         }))
     }
-    async fn store_code(&self, code: &str, secret: &str) -> AuthResult<String> {
+    async fn store_code(
+        &self,
+        code: &str,
+        secret: better_auth_core::SecretKey<'_>,
+    ) -> AuthResult<String> {
         match &self.config.storage {
             EmailOtpStorage::Plain => Ok(code.to_owned()),
             EmailOtpStorage::Hashed => Ok(URL_SAFE_NO_PAD.encode(Sha256::digest(code.as_bytes()))),
             EmailOtpStorage::Encrypted => encrypt(secret, code),
-            EmailOtpStorage::Custom(codec) => codec.encode(code).await,
+            EmailOtpStorage::CustomHash(hash) => hash(code.to_owned()).await,
+            EmailOtpStorage::CustomEncryption(codec) => codec.encode(code).await,
         }
     }
-    async fn recover(&self, code: &str, secret: &str) -> AuthResult<Option<String>> {
+    pub(super) async fn recover(
+        &self,
+        code: &str,
+        secret: better_auth_core::SecretKey<'_>,
+    ) -> AuthResult<Option<String>> {
         match &self.config.storage {
             EmailOtpStorage::Plain => Ok(Some(code.to_owned())),
-            EmailOtpStorage::Hashed => Ok(None),
+            EmailOtpStorage::Hashed | EmailOtpStorage::CustomHash(_) => Ok(None),
             EmailOtpStorage::Encrypted => decrypt(secret, code).map(Some),
-            EmailOtpStorage::Custom(codec) => codec.decode(code).await,
+            EmailOtpStorage::CustomEncryption(codec) => codec.decode(code).await.map(Some),
         }
     }
-    async fn matches(&self, stored: &str, provided: &str, secret: &str) -> AuthResult<bool> {
+    async fn matches(
+        &self,
+        stored: &str,
+        provided: &str,
+        secret: better_auth_core::SecretKey<'_>,
+    ) -> AuthResult<bool> {
         let (stored, provided) = match self.recover(stored, secret).await? {
             Some(plaintext) => (plaintext, provided.to_owned()),
             None => (stored.to_owned(), self.store_code(provided, secret).await?),
         };
         // HMAC verification compares fixed-size tags without exposing a matching code prefix.
+        let secret = secret.current()?;
         let mut expected = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
             .map_err(|error| AuthError::internal(error.to_string()))?;
         expected.update(stored.as_bytes());
@@ -151,15 +166,18 @@ impl EmailOtpPlugin {
     ) -> AuthResult<String> {
         let ctx = endpoint.auth;
         let otp = self.generate(endpoint, email, kind)?;
-        let stored = self.store_code(&otp, &ctx.config.secret).await?;
-        let _ = ctx
-            .database
-            .create_verification(CreateVerification {
-                identifier: identifier.to_owned(),
-                value: format!("{stored}:0"),
-                expires_at: Utc::now() + self.config.expires_in,
-            })
+        let stored = self
+            .store_code(&otp, ctx.config.encryption_secret())
             .await?;
+        let input = CreateVerification {
+            identifier: identifier.to_owned(),
+            value: format!("{stored}:0"),
+            expires_at: Utc::now() + self.config.expires_in,
+        };
+        let _ = match endpoint.transaction {
+            Some(transaction) => transaction.create_verification(input).await?,
+            None => ctx.database.create_verification(input).await?,
+        };
         Ok(otp)
     }
     pub(super) async fn resolve_otp(
@@ -180,7 +198,7 @@ impl EmailOtpPlugin {
             if existing.expires_at() >= Utc::now()
                 && attempts < self.attempts()
                 && let Some(otp) = self
-                    .recover(stored, &ctx.config.secret)
+                    .recover(stored, ctx.config.encryption_secret())
                     .await?
                     .filter(|otp| !otp.is_empty())
             {
@@ -233,7 +251,10 @@ impl EmailOtpPlugin {
             }
             return Err(too_many_attempts());
         }
-        if !self.matches(stored, provided, &ctx.config.secret).await? {
+        if !self
+            .matches(stored, provided, ctx.config.encryption_secret())
+            .await?
+        {
             let value = format!("{stored}:{}", attempts + 1);
             if consume {
                 let _ = ctx
@@ -255,7 +276,7 @@ impl EmailOtpPlugin {
     }
 }
 
-fn split(value: &str) -> (&str, u32) {
+pub(super) fn split(value: &str) -> (&str, u32) {
     value
         .rsplit_once(':')
         .map_or((value, 0), |(code, attempts)| {

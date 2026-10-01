@@ -9,13 +9,9 @@ Better Auth is designed with security as a core principle. This page documents t
 
 ### Hashing Algorithm
 
-Better Auth uses **Argon2id** for password hashing, which is the current recommendation from OWASP and the winner of the Password Hashing Competition. Argon2 is resistant to:
+The default `ScryptPasswordHasher` matches upstream: NFKC normalization, scrypt with `N=16384`, `r=16`, `p=1`, and a 64-byte derived key. Stored credentials use `salt:hash` with a random hexadecimal salt. `Argon2PasswordHasher` remains available for applications that explicitly select their existing credential format. The default hasher does not fall back to another algorithm.
 
-- GPU-based attacks
-- Side-channel attacks
-- Time-memory trade-off attacks
-
-Passwords are hashed with a unique random salt per user.
+Add [Have I Been Pwned](/docs/plugins/have-i-been-pwned) to reject compromised passwords before credential writes.
 
 ### Password Policies
 
@@ -89,6 +85,10 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 Requests from untrusted origins receive a `403 Forbidden` response.
 Better Auth also validates callback and redirect targets against `trusted_origins` unless `advanced.disable_origin_check` is enabled.
 
+`advanced.disable_csrf_check` preserves an unset value. With `disable_origin_check = true`, `None` also disables form CSRF checks for upstream compatibility. `Some(false)` retains Fetch Metadata checks against cross-site navigation; `Some(true)` disables those checks explicitly. The `AuthConfig::disable_csrf_check(bool)` builder sets an explicit value.
+
+Matched HTTP endpoints decode JSON before origin checks and endpoint authentication. Email sign-in, email sign-up, OAuth callbacks, and device-code requests also accept URL-encoded forms. CAPTCHA runs before body decoding. Native APIs use typed input and skip this HTTP phase.
+
 The origin check selects a truthy body `callbackURL` before the query value. It reads `redirectTo`, `errorCallbackURL`, and `newUserCallbackURL` only from the body. Selected truthy values must be strings; other JSON types return `400 Bad Request`. The origin check skips `null`, `false`, `0`, and empty strings; endpoint validation still applies.
 
 ## CORS
@@ -133,7 +133,7 @@ OAuth state is validated on every callback to prevent CSRF attacks. State tokens
 
 ### Token Storage
 
-OAuth access tokens and refresh tokens are stored server-side in the database. They are never exposed directly to the client.
+Set `account.encrypt_oauth_tokens = true` to encrypt stored OAuth access and refresh tokens. Authenticated account token endpoints can return those tokens. ID tokens remain unencrypted, matching upstream. The optional account cookie uses authenticated JWE encryption.
 
 ## Two-Factor Authentication
 
@@ -143,7 +143,7 @@ TOTP secrets are stored securely in the database. Codes are time-based with a co
 
 ### Backup Codes
 
-Backup codes are hashed with Argon2 before storage. Only the plaintext codes are returned once during generation.
+Backup codes use encrypted JSON by default. Configure a hashing or application codec when the application requires a different storage policy. Successful verification consumes the selected code.
 
 ### OTP
 
@@ -164,7 +164,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 ## Secret Key
 
-The secret key is used for signing and verification. It must be:
+The secret key is used for signing and verification. Use a key with these properties:
 
 - At least 32 characters long
 - Kept secret and never committed to version control
@@ -174,6 +174,26 @@ The secret key is used for signing and verification. It must be:
 let secret = std::env::var("AUTH_SECRET").expect("AUTH_SECRET must be set");
 let config = AuthConfig::new(&secret);
 ```
+
+### Secret Rotation
+
+Configure `AuthConfig.secrets` with the current encryption key first and retain older keys while records still require them:
+
+```rust
+use better_auth::{AuthConfig, config::VersionedSecret};
+
+let config = AuthConfig::new(std::env::var("LEGACY_AUTH_SECRET")?)
+    .secrets(vec![
+        VersionedSecret::new(2, std::env::var("CURRENT_AUTH_SECRET")?),
+        VersionedSecret::new(1, std::env::var("PREVIOUS_AUTH_SECRET")?),
+    ]);
+```
+
+New symmetric records use `$ba$<version>$` envelopes. Decryption selects the retained key named in the envelope. A retired version fails without trying another key. Bare hexadecimal records require the explicit legacy `secret`. An empty legacy secret disables that migration path.
+
+JWE session and account cookies identify their key by its thumbprint. Readers accept retained keys and the explicit legacy key. An explicit unknown key ID fails; older cookies without a key ID try the retained keys. Cookie purposes remain separate, so an account cookie cannot be decoded as a session cookie.
+
+Signing uses only the current key. Retaining an encryption key does not keep old signed session tokens valid after rotation.
 
 ## Production Checklist
 

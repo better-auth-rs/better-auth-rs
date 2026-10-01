@@ -138,7 +138,10 @@ impl OneTapPlugin {
         super::oauth::sign_in_verified_profile(
             "google",
             provider,
-            user,
+            super::oauth::OAuthUserInfoResponse {
+                user,
+                data: payload,
+            },
             OAuthTokenSet {
                 id_token: Some(token.to_owned()),
                 scopes: vec!["openid".into(), "profile".into(), "email".into()],

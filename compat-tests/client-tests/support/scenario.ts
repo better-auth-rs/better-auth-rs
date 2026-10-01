@@ -255,7 +255,7 @@ function formatDiffs(title: string, diffs: ReturnType<typeof diff>) {
 export function compatScenario(
   scenarioName: string,
   scenario: (ctx: ScenarioServerContext) => Promise<unknown>,
-  timeout?: number,
+  timeout = 30_000,
 ) {
   test.serial(scenarioName, async () => {
     const seed = `${Date.now()}-${crypto.randomUUID()}`;

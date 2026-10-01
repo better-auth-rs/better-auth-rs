@@ -355,8 +355,8 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
 }
 
 #[tokio::test]
-async fn sign_out_decrypts_stored_id_token_and_revokes_session_even_if_decryption_fails() {
-    for corrupt_token in [false, true] {
+async fn sign_out_preserves_stored_id_token_and_revokes_session() {
+    for non_jwt_token in [false, true] {
         let mut config = AuthConfig::new("oauth-logout-secret-at-least-32-characters");
         config.account.encrypt_oauth_tokens = true;
         let fixture = fixture(Arc::new(config)).await;
@@ -368,12 +368,12 @@ async fn sign_out_decrypts_stored_id_token_and_revokes_session_even_if_decryptio
             Some(raw_id_token.to_string()),
         )
         .unwrap();
-        let stored_id_token = if corrupt_token {
+        assert_eq!(encrypted.id_token.as_deref(), Some(raw_id_token));
+        let stored_id_token = if non_jwt_token {
             "invalid-ciphertext".to_string()
         } else {
             encrypted.id_token.unwrap()
         };
-        assert_ne!(stored_id_token, raw_id_token);
         let _ = fixture
             .ctx
             .database
@@ -407,21 +407,16 @@ async fn sign_out_decrypts_stored_id_token_and_revokes_session_even_if_decryptio
         };
         assert_eq!(response.status, 200);
         let body: Value = serde_json::from_slice(&response.body).unwrap();
-        if corrupt_token {
-            assert_eq!(body, json!({ "success": true }));
-            assert!(response.headers.get("Location").is_none());
-        } else {
-            let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
-            assert_eq!(url.host_str(), Some("provider.example"));
-            assert!(
-                url.query_pairs()
-                    .any(|(name, value)| name == "id_token_hint" && value == raw_id_token)
-            );
-            assert_eq!(
-                response.headers.get("Location").map(String::as_str),
-                Some(url.as_str())
-            );
-        }
+        let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
+        assert_eq!(url.host_str(), Some("provider.example"));
+        assert!(
+            url.query_pairs()
+                .any(|(name, value)| name == "id_token_hint" && value == stored_id_token)
+        );
+        assert_eq!(
+            response.headers.get("Location").map(String::as_str),
+            Some(url.as_str())
+        );
         assert!(
             fixture
                 .ctx

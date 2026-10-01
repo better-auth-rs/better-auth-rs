@@ -11,6 +11,8 @@ Configure application user fields with `AuthConfig.user.additional_fields` and m
 
 The [JWT plugin](docs/content/docs/plugins/jwt.mdx) supports local and custom signing, server-only verification, and asymmetric session cookie caches.
 
+Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification and [Have I Been Pwned](docs/content/docs/plugins/have-i-been-pwned.mdx) for compromised-password checks. [Versioned secrets](docs/content/docs/reference/security.mdx#secret-rotation) support encryption-key rotation with retained legacy data.
+
 [![Crates.io](https://img.shields.io/crates/v/better-auth.svg)](https://crates.io/crates/better-auth)
 [![Documentation](https://docs.rs/better-auth/badge.svg)](https://docs.rs/better-auth)
 [![CI](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/better-auth-rs/better-auth-rs/actions/workflows/ci.yml)
@@ -71,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Set `AUTH_SECRET` to a random secret of at least 32 characters, then run `cargo run`. The in-memory database resets when the process stops. Use application-owned versioned migrations for persistent databases; `create_auth_tables` only initializes an empty database.
+Set `AUTH_SECRET` to a random secret of at least 32 characters, then run `cargo run`. The builder resolves explicit secrets before `BETTER_AUTH_SECRET` and `AUTH_SECRET`; short secrets warn, while `NODE_ENV=production` rejects the default development key. The in-memory database resets when the process stops. Use application-owned versioned migrations for persistent databases; `create_auth_tables` only initializes an empty database.
 
 The [quick-start guide](docs/content/docs/quick-start.mdx) includes sign-up and cookie session requests; the check gate compiles and runs the documented application. The [independent consumer](compat-tests/schema-consumer) verifies public schema derives, generated entities, registration, login, Axum sessions, API keys, and TOTP.
 
@@ -82,6 +84,10 @@ Plugins include email/password, username, sessions, password management, email v
 Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
 
 The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements.
+
+The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence.
+
+Passwords use Better Auth's scrypt format by default. The [password guide](docs/content/docs/authentication/email-password.mdx) explains explicit Argon2 migration. Add [HaveIBeenPwnedPlugin](docs/content/docs/plugins/have-i-been-pwned.mdx) to reject compromised passwords before hashing.
 
 | Cargo feature | Purpose |
 | --- | --- |

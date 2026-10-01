@@ -221,8 +221,14 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
 }
 
 impl OAuthProxyPlugin {
-    fn encryption_key<'a, S: AuthSchema>(&'a self, ctx: &'a AuthContext<S>) -> &'a str {
-        self.config.secret.as_deref().unwrap_or(&ctx.config.secret)
+    fn encryption_key<'a, S: AuthSchema>(
+        &'a self,
+        ctx: &'a AuthContext<S>,
+    ) -> better_auth_core::SecretKey<'a> {
+        self.config
+            .secret
+            .as_deref()
+            .map_or_else(|| ctx.config.encryption_secret(), Into::into)
     }
 
     fn initiate<S: AuthSchema>(
@@ -303,7 +309,7 @@ impl OAuthProxyPlugin {
             OAuthStateStrategy::Database => {
                 let verification = ctx
                     .database
-                    .get_verification_by_identifier(&format!("oauth:{original_state}"))
+                    .get_verification_by_identifier(&original_state)
                     .await?
                     .ok_or_else(|| AuthError::internal("OAuth proxy state was not persisted"))?;
                 verification.value().to_owned()
@@ -318,7 +324,7 @@ impl OAuthProxyPlugin {
                         AuthError::internal("OAuth proxy state cookie was not issued")
                     })?;
                 serde_json::to_string(&state::decode_cookie_state_value(
-                    &ctx.config.secret,
+                    ctx.config.encryption_secret(),
                     value,
                 )?)?
             }
@@ -543,7 +549,7 @@ impl OAuthProxyPlugin {
         let state = match ctx.config.account.store_state_strategy {
             OAuthStateStrategy::Database => ctx
                 .database
-                .consume_verification_by_identifier(&format!("oauth:{}", profile.state))
+                .consume_verification_by_identifier(&profile.state)
                 .await?
                 .and_then(|verification| {
                     serde_json::from_str::<OAuthStatePayload>(verification.value()).ok()
@@ -551,7 +557,8 @@ impl OAuthProxyPlugin {
             OAuthStateStrategy::Cookie => {
                 state::get_cookie(req, &state::state_cookie_name(&ctx.config))
                     .and_then(|value| {
-                        state::decode_cookie_state_value(&ctx.config.secret, &value).ok()
+                        state::decode_cookie_state_value(ctx.config.encryption_secret(), &value)
+                            .ok()
                     })
                     .filter(|state| {
                         !state.is_expired()
@@ -606,17 +613,24 @@ impl OAuthProxyPlugin {
             }),
             ..Default::default()
         };
+        let provider_profile = profile.profile.clone().map(Value::Object);
         if let Some(link) = state.link {
             if let Err(error) = handlers::complete_link_social(
                 &profile.account.provider_id,
                 &user,
                 &tokens,
                 &link,
-                ctx,
+                Some(provider_profile.as_ref().unwrap_or(&serde_json::json!({}))),
+                &crate::plugins::endpoint_context::EndpointContext::new(
+                    Some(req),
+                    Value::Null,
+                    ctx,
+                ),
             )
             .await
             {
-                return Ok(redirect_error(error_url, &error, None)?
+                let (code, description) = error.redirect_parts()?;
+                return Ok(redirect_error(error_url, &code, description.as_deref())?
                     .with_appended_header("Set-Cookie", clear));
             }
             return Ok(handlers::redirect_response(&profile.callback_url)
@@ -638,6 +652,8 @@ impl OAuthProxyPlugin {
             &tokens,
             super::signin::OAuthSignInOptions {
                 request: req,
+                profile: provider_profile.as_ref(),
+                body: Value::Null,
                 disable_sign_up: profile.disable_sign_up.unwrap_or(false),
                 callback_url: &profile.callback_url,
                 email_verification: ctx
@@ -645,15 +661,18 @@ impl OAuthProxyPlugin {
                     .get::<std::sync::Arc<super::resolved::ResolvedOAuthConfig>>()
                     .and_then(|config| config.email_verification.as_deref()),
             },
-            &better_auth_core::RequestMeta::from_request(req),
+            &better_auth_core::RequestMeta::from_request_with_config(
+                req,
+                &ctx.config.advanced.ip_address,
+            ),
             ctx,
         )
         .await
         {
             Ok(outcome) => outcome,
             Err(error) => {
-                let (code, description) = error.redirect_parts();
-                return Ok(redirect_error(error_url, &code, description)?
+                let (code, description) = error.redirect_parts()?;
+                return Ok(redirect_error(error_url, &code, description.as_deref())?
                     .with_appended_header("Set-Cookie", clear));
             }
         };

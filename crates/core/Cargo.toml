@@ -54,6 +54,10 @@ josekit.workspace = true
 percent-encoding = "2.3.2"
 better-auth-schema-registry.workspace = true
 indexmap = { workspace = true }
+scrypt.workspace = true
+hex.workspace = true
+chacha20poly1305.workspace = true
+subtle.workspace = true
 
 [features]
 default = []

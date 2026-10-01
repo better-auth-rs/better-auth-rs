@@ -1,4 +1,5 @@
 mod cookie_cache;
+mod secrets;
 mod verification;
 use crate::email::EmailProvider;
 use crate::error::AuthError;
@@ -7,6 +8,8 @@ pub use crate::user_fields::{
 };
 use chrono::Duration;
 pub use cookie_cache::{CookieCacheVersion, CookieCacheVersionCallback};
+pub(crate) use secrets::parse_secret_version;
+pub use secrets::{SecretKey, VersionedSecret};
 use std::collections::HashMap;
 use std::sync::Arc;
 pub use verification::{
@@ -454,6 +457,10 @@ pub struct AuthConfig {
     /// Secret key for signing tokens and sessions
     pub secret: String,
 
+    /// Ordered encryption keys. The first key also signs new cookies and tokens.
+    /// `secret` remains the explicit legacy decryption key when this is set.
+    pub secrets: Option<Vec<VersionedSecret>>,
+
     /// Application name, used for cookie prefixes, email templates, etc.
     ///
     /// Defaults to `"Better Auth"`.
@@ -786,13 +793,13 @@ pub struct AdvancedConfig {
     /// IP address extraction configuration.
     pub ip_address: IpAddressConfig,
 
-    /// If `true`, the CSRF-check middleware is disabled.
-    pub disable_csrf_check: bool,
+    /// Explicit CSRF policy. `None` inherits the legacy `disable_origin_check` behavior.
+    pub disable_csrf_check: Option<bool>,
 
     /// If `true`, callback / redirect target origin validation is skipped.
     ///
     /// This mirrors Better Auth TS `advanced.disableOriginCheck`.
-    /// It does **not** disable the request-origin CSRF checks.
+    /// When `disable_csrf_check` is unset, this also disables form CSRF checks.
     pub disable_origin_check: bool,
 
     /// Cross-subdomain cookie sharing configuration.
@@ -820,15 +827,25 @@ pub struct AdvancedConfig {
     pub trusted_proxy_headers: Vec<String>,
 }
 
+impl AdvancedConfig {
+    pub(crate) fn csrf_check_disabled(&self) -> bool {
+        self.disable_csrf_check.unwrap_or(self.disable_origin_check)
+    }
+}
+
 /// IP-address extraction configuration.
 #[derive(Debug, Clone)]
 pub struct IpAddressConfig {
     /// Ordered list of headers to check for the client IP.
-    /// Defaults to `["x-forwarded-for", "x-real-ip"]`.
+    /// Defaults to `["x-forwarded-for"]`.
     pub headers: Vec<String>,
 
     /// If `true`, IP tracking is entirely disabled (no IP stored in sessions).
     pub disable_ip_tracking: bool,
+    /// IPv6 network prefix retained when normalizing addresses. Defaults to 64.
+    pub ipv6_subnet: f64,
+    /// Trusted proxy addresses or CIDR ranges, removed from the right of forwarded chains.
+    pub trusted_proxies: Vec<String>,
 }
 
 /// Configuration for sharing cookies across sub-domains.
@@ -878,6 +895,7 @@ impl Default for AuthConfig {
     fn default() -> Self {
         Self {
             secret: String::new(),
+            secrets: None,
             app_name: "Better Auth".to_string(),
             base_url: "http://localhost:3000".to_string(),
             base_path: "/api/auth".to_string(),
@@ -921,8 +939,10 @@ impl Default for SessionConfig {
 impl Default for IpAddressConfig {
     fn default() -> Self {
         Self {
-            headers: vec!["x-forwarded-for".to_string(), "x-real-ip".to_string()],
+            headers: vec!["x-forwarded-for".to_string()],
             disable_ip_tracking: false,
+            ipv6_subnet: 64.0,
+            trusted_proxies: Vec::new(),
         }
     }
 }
@@ -972,6 +992,30 @@ impl Default for Argon2Config {
 }
 
 impl AuthConfig {
+    /// Configure current and retained encryption keys in priority order.
+    pub fn secrets(mut self, keys: Vec<VersionedSecret>) -> Self {
+        self.secrets = Some(keys);
+        self
+    }
+
+    pub fn signing_secret(&self) -> &str {
+        self.secrets
+            .as_deref()
+            .and_then(|keys| keys.first())
+            .map_or(&self.secret, |key| key.value.as_str())
+    }
+
+    pub fn encryption_secret(&self) -> SecretKey<'_> {
+        match self.secrets.as_deref() {
+            Some(keys) => SecretKey::Versioned {
+                keys,
+                legacy_secret: (!self.secret.is_empty() && self.secret != secrets::DEFAULT_SECRET)
+                    .then_some(self.secret.as_str()),
+            },
+            None => SecretKey::Single(&self.secret),
+        }
+    }
+
     pub fn new(secret: impl Into<String>) -> Self {
         Self {
             secret: secret.into(),
@@ -1086,7 +1130,7 @@ impl AuthConfig {
     }
 
     pub fn disable_csrf_check(mut self, disabled: bool) -> Self {
-        self.advanced.disable_csrf_check = disabled;
+        self.advanced.disable_csrf_check = Some(disabled);
         self
     }
 
@@ -1145,16 +1189,14 @@ impl AuthConfig {
         self.disabled_paths.iter().any(|disabled| disabled == path)
     }
     pub fn validate(&self) -> Result<(), AuthError> {
+        if self.secrets.is_some() {
+            return self.encryption_secret().validate();
+        }
         if self.secret.is_empty() {
             return Err(AuthError::config("Secret key cannot be empty"));
         }
 
-        if self.secret.len() < 32 {
-            return Err(AuthError::config(
-                "Secret key must be at least 32 characters",
-            ));
-        }
-
+        secrets::warn_secret_strength(&self.secret);
         Ok(())
     }
 }
@@ -1298,7 +1340,7 @@ mod tests {
         assert_eq!(cfg.app_name, "MyApp");
         assert_eq!(cfg.base_path, "/auth");
         assert_eq!(cfg.password.min_length, 12);
-        assert!(cfg.advanced.disable_csrf_check);
+        assert_eq!(cfg.advanced.disable_csrf_check, Some(true));
         assert!(cfg.advanced.disable_origin_check);
         assert_eq!(cfg.advanced.cookie_prefix, Some("myapp".to_string()));
     }
@@ -1425,9 +1467,9 @@ mod tests {
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
     #[test]
-    fn validate_rejects_short_secret() {
+    fn validate_accepts_short_secret_with_warning() {
         let cfg = AuthConfig::new("short");
-        assert!(cfg.validate().is_err());
+        assert!(cfg.validate().is_ok());
     }
 
     // Rust-specific surface: `AuthConfig`, related configuration builders, and `core_paths` are public Rust APIs with no direct TS analogue.
@@ -1574,7 +1616,7 @@ mod tests {
     #[test]
     fn ip_address_config_defaults() {
         let ip = IpAddressConfig::default();
-        assert_eq!(ip.headers, vec!["x-forwarded-for", "x-real-ip"]);
+        assert_eq!(ip.headers, vec!["x-forwarded-for"]);
         assert!(!ip.disable_ip_tracking);
     }
 }

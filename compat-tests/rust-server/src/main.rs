@@ -58,8 +58,18 @@ mod passkey_options;
 mod two_factor_options;
 mod two_factor_context;
 mod password_policy;
+mod password_security;
+mod auth_lifecycle;
+mod captcha;
+mod crypto;
+mod user_admission;
+mod device_generators;
 mod signup_enumeration;
 mod email_otp;
+mod email_otp_native;
+mod email_otp_transaction;
+mod http_body;
+mod oauth_link_id_token;
 mod identity_routes;
 mod jwt_fixture;
 mod oidc;
@@ -100,6 +110,7 @@ enum ResetPasswordMode {
 enum OAuthRefreshMode {
     Success,
     Error,
+    Empty,
 }
 
 #[derive(Clone)]
@@ -394,14 +405,16 @@ struct CompatGoogleRefreshHandler {
 #[async_trait::async_trait]
 impl OAuthRefreshTokenHandler for CompatGoogleRefreshHandler {
     async fn refresh_access_token(&self, _refresh_token: &str) -> Result<OAuthTokenSet, String> {
-        if *self.mode.lock().await == OAuthRefreshMode::Error {
+        let mode = *self.mode.lock().await;
+        if mode == OAuthRefreshMode::Error {
             return Err("invalid refresh token".to_string());
         }
+        let token = |value: &str| Some(if mode == OAuthRefreshMode::Empty { String::new() } else { value.to_owned() });
 
         Ok(OAuthTokenSet {
             token_type: Some("Bearer".to_string()),
-            access_token: Some("google-access-token".to_string()),
-            refresh_token: Some("google-refresh-token".to_string()),
+            access_token: token("google-access-token"),
+            refresh_token: token("google-refresh-token"),
             access_token_expires_at: Some(Utc::now() + chrono::Duration::hours(1)),
             refresh_token_expires_at: Some(Utc::now() + chrono::Duration::hours(2)),
             scopes: vec![
@@ -409,7 +422,7 @@ impl OAuthRefreshTokenHandler for CompatGoogleRefreshHandler {
                 "email".to_string(),
                 "profile".to_string(),
             ],
-            id_token: Some("google-id-token".to_string()),
+            id_token: token("google-id-token"),
             raw: None,
         })
     }
@@ -671,6 +684,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     secondary_storage::SecondaryFixture::configure(&device_profile, &mut config);
     session_fields::configure(&device_profile, &mut config);
     signup_enumeration::configure(&device_profile, &mut config);
+    auth_lifecycle::AuthLifecycleFixture::configure(&device_profile, &mut config);
+    crypto::configure(&device_profile, &mut config);
+    http_body::configure(&device_profile, &mut config);
+    email_otp_transaction::EmailOtpTransactionFixture::configure(&device_profile, &mut config);
+    oauth_link_id_token::OAuthLinkIdTokenFixture::configure(&device_profile, &mut config);
+    let captcha_fixture = captcha::CaptchaFixture::default();
+    captcha_fixture.configure(&device_profile, &mut config);
+    let captcha_plugin = captcha_fixture.plugin(&device_profile, &config.base_url);
     let cookie_version_fixture = cookie_version::CookieVersionFixture::default();
     cookie_version_fixture.configure(&device_profile, &mut config);
     let cookie_version_router = cookie_version_fixture.router();
@@ -715,8 +736,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let secondary_fixture =
         secondary_storage::SecondaryFixture::new(&device_profile, database.clone());
+    let oauth_link_id_token_fixture = oauth_link_id_token::OAuthLinkIdTokenFixture::default();
+    let mut hooks = if passkey_options.enabled() { vec![passkey_options.hooks()] } else { secondary_fixture.hooks() };
+    if oauth_link_id_token::OAuthLinkIdTokenFixture::enabled(&device_profile) {
+        hooks.push(oauth_link_id_token_fixture.hooks());
+    }
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), database)
-        .with_hooks(if passkey_options.enabled() { vec![passkey_options.hooks()] } else { secondary_fixture.hooks() });
+        .with_hooks(hooks);
     let store: Arc<dyn better_auth::store::AuthStore<TestSchema>> =
         if device_profile == "organization-fields" {
             Arc::new(store.with_organization_schema::<organization_fields::models::Models>())
@@ -739,7 +765,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         reset_database.clone(),
     )));
     let email_otp_fixture = email_otp::EmailOtpFixture::default();
+    let email_otp_native_fixture = email_otp_native::EmailOtpNativeFixture::default();
+    let email_otp_transaction_fixture = email_otp_transaction::EmailOtpTransactionFixture::default();
     let otp_callbacks = otp_callbacks::OtpCallbacksFixture::default();
+    let password_security_fixture = password_security::PasswordSecurityFixture::new().await;
+    let auth_lifecycle_fixture = auth_lifecycle::AuthLifecycleFixture::default();
+    let user_admission_fixture = user_admission::UserAdmissionFixture::default();
+    let device_generators_fixture = device_generators::DeviceGenerators::default();
     let otp_callbacks_router = otp_callbacks.router();
     let api_key_storage_fixture = api_key_storage::ApiKeyStorageFixture::default();
     let api_key_callbacks = api_key_callbacks::ApiKeyCallbacks::default();
@@ -799,20 +831,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             DeviceAuthorizationPlugin::new().expires_in(chrono::Duration::seconds(2))
         }
         "device-custom" => {
-            DeviceAuthorizationPlugin::new().generate_user_code_with(|| "custom-code".to_string())
+            DeviceAuthorizationPlugin::new().generate_user_code_with(|| async { Ok("custom-code".to_string()) })
         }
         "device-collision" => {
             let issued = std::sync::atomic::AtomicUsize::new(0);
             DeviceAuthorizationPlugin::new().generate_user_code_with(move || {
-                match issued.fetch_add(1, std::sync::atomic::Ordering::Relaxed) {
+                let value = match issued.fetch_add(1, std::sync::atomic::Ordering::Relaxed) {
                     0..2 => "same-code".to_string(),
                     2..6 => "next-code".to_string(),
                     _ => "after-code".to_string(),
-                }
+                };
+                async move { Ok(value) }
             })
         }
         _ => DeviceAuthorizationPlugin::new(),
     };
+    let device_plugin = device_generators_fixture.apply(&device_profile, device_plugin);
     let mut organization_config = OrganizationConfig {
         cancel_pending_invitations_on_re_invite: device_profile
             .starts_with("organization-invitation-"),
@@ -911,14 +945,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let builder = AuthBuilder::<TestSchema>::new(config)
         .store_arc(store)
-        .rate_limit(RateLimitConfig::new().enabled(matches!(
+        .rate_limit(captcha::CaptchaFixture::rate_limit(&device_profile, RateLimitConfig::new().enabled(matches!(
             device_profile.as_str(),
             "device-rate-limit" | "device-rate-window"
-        )))
+        ))));
+    let builder = if device_profile.starts_with("captcha-") {
+        builder.plugin(captcha_plugin).plugin(captcha_fixture.clone())
+    } else { builder };
+    let builder = if device_profile.starts_with("password-security") && device_profile != "password-security-after" {
+        builder.plugin(password_security_fixture.plugin(&device_profile))
+    } else { builder };
+    let builder = builder
         .plugin(
-            signup_enumeration::plugin(&device_profile, password_policy::configure(&device_profile, EmailPasswordPlugin::new()
+            email_otp_transaction::EmailOtpTransactionFixture::password(&device_profile, user_admission_fixture.password(&device_profile, signup_enumeration::plugin(&device_profile, password_policy::configure(&device_profile, password_security_fixture.configure(&device_profile, EmailPasswordPlugin::new()
                 .enable_signup(true)
-                .username(true))),
+                .username(true)))))),
         )
         .plugin(SessionManagementPlugin::new())
         .plugin(AccountManagementPlugin::new())
@@ -928,10 +969,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(AdminPlugin::new())
         .plugin(passkey_options.apply(PasskeyPlugin::new()))
         .plugin(
-            PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
+            auth_lifecycle_fixture.password(&device_profile, PasswordManagementPlugin::new().send_reset_password(Arc::new(CompatResetSender {
                 outbox: reset_outbox.clone(),
                 mode: reset_password_mode.clone(),
-            })),
+            }))),
         )
         .plugin({
             let plugin = EmailVerificationPlugin::new()
@@ -946,23 +987,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .plugin(
-            UserManagementPlugin::new()
+            auth_lifecycle_fixture.users(&device_profile, UserManagementPlugin::new()
                 .change_email_enabled(true)
                 .send_change_email_confirmation(Arc::new(CompatChangeEmailSender {
                     verification_outbox: verification_outbox.clone(),
                     outbox: change_email_outbox.clone(),
                 }))
-                .delete_user_enabled(true)
-                .require_delete_verification(false),
+                .delete_user_enabled(true)),
         )
         .plugin(two_factor_context.plugin::<TestSchema>(&device_profile, two_factor_plugin.clone(), two_factor_otp_outbox.clone()))
-        .plugin(oidc::configure(mock_oauth_plugin(
+        .plugin(oauth_link_id_token_fixture.oauth(&device_profile, oidc::configure(mock_oauth_plugin(
             port,
             social_profile.clone(),
             social_id_token_valid.clone(),
             oauth_refresh_mode.clone(),
-        )));
-    let builder = if device_profile.starts_with("email-otp") || device_profile == "user-fields" {
+        ))));
+    let builder = if device_profile == "password-security-after" { builder.plugin(password_security_fixture.plugin(&device_profile)) } else { builder };
+    let builder = if (device_profile.starts_with("email-otp") && !device_profile.starts_with("email-otp-native") && device_profile != "email-otp-transaction") || device_profile == "user-fields" {
         builder.plugin(email_otp_fixture.plugin(&device_profile))
     } else {
         builder
@@ -1003,6 +1044,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         builder
     };
     let builder = identity_fixture.add_plugins(builder, &device_profile);
+    let builder = user_admission_fixture.builder(&device_profile, builder);
+    let builder = email_otp_native_fixture.builder(&device_profile, builder);
+    let builder = email_otp_transaction_fixture.builder(&device_profile, builder);
+    let builder = oauth_link_id_token_fixture.builder(&device_profile, builder);
     let builder = if device_profile.starts_with("oauth-proxy") {
         builder.plugin(oauth_proxy::plugin(port))
     } else {
@@ -1019,6 +1064,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         builder
     };
     let auth = Arc::new(builder.build().await?);
+    let captcha_router = captcha_fixture.router(auth.clone());
+    let email_otp_native_router = email_otp_native_fixture.router(auth.clone());
+    let email_otp_transaction_router = email_otp_transaction_fixture.router(auth.clone());
+    let oauth_link_id_token_router = oauth_link_id_token_fixture.router(auth.clone());
+    let crypto_router = crypto::router(auth.clone());
+    let user_admission_router = user_admission_fixture.router(auth.clone());
+    let device_generators_router = device_generators_fixture.router(reset_database.clone());
+    let password_security_router = password_security_fixture.router(auth.store().clone());
+    let auth_lifecycle_router = auth_lifecycle_fixture.router(auth.clone(), reset_database.clone());
     let secondary_router = secondary_fixture.router(auth.clone());
     let api_key_storage_router = api_key_storage_fixture.router(auth.clone());
     let api_key_callbacks_router = api_key_callbacks.router(auth.clone(), api_key_plugin.clone());
@@ -1324,7 +1378,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move || {
                 let identity_fixture = identity_fixture.clone();
                 let email_otp_fixture = email_otp_fixture.clone();
+                let email_otp_native_fixture = email_otp_native_fixture.clone();
+                let email_otp_transaction_fixture = email_otp_transaction_fixture.clone();
+                let oauth_link_id_token_fixture = oauth_link_id_token_fixture.clone();
                 let otp_callbacks = otp_callbacks.clone();
+                let password_security_fixture = password_security_fixture.clone();
+                let auth_lifecycle_fixture = auth_lifecycle_fixture.clone();
+                let captcha_fixture = captcha_fixture.clone();
+                let user_admission_fixture = user_admission_fixture.clone();
+                let device_generators_fixture = device_generators_fixture.clone();
                 let api_key_storage_fixture = api_key_storage_fixture.clone();
                 let secondary_fixture = secondary_fixture.clone();
                 let cookie_version_fixture = cookie_version_fixture.clone();
@@ -1356,7 +1418,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     reset_outbox.lock().await.clear();
                     identity_fixture.reset().await;
                     email_otp_fixture.reset().await;
+                    email_otp_native_fixture.reset();
+                    email_otp_transaction_fixture.reset();
+                    oauth_link_id_token_fixture.reset();
                     otp_callbacks.reset().await;
+                    password_security_fixture.reset();
+                    auth_lifecycle_fixture.reset().await;
+                    captcha_fixture.reset().await;
+                    user_admission_fixture.reset();
+                    device_generators_fixture.reset();
                     api_key_storage_fixture.reset();
                     secondary_fixture.reset();
                     cookie_version_fixture.reset();
@@ -1603,10 +1673,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             post(move |Json(body): Json<ModeRequest>| {
                 let oauth_mode = oauth_mode_for_set.clone();
                 async move {
-                    *oauth_mode.lock().await = if body.mode == "error" {
-                        OAuthRefreshMode::Error
-                    } else {
-                        OAuthRefreshMode::Success
+                    *oauth_mode.lock().await = match body.mode.as_str() {
+                        "error" => OAuthRefreshMode::Error,
+                        "empty" => OAuthRefreshMode::Empty,
+                        _ => OAuthRefreshMode::Success,
                     };
                     Json(serde_json::json!({ "status": true }))
                 }
@@ -1875,7 +1945,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route(
             "/__test/oauth/token",
-            post(move || {
+            post(move |axum::Form(form): axum::Form<std::collections::HashMap<String, String>>| {
                 let oauth_mode = oauth_mode_for_token.clone();
                 async move {
                     if *oauth_mode.lock().await == OAuthRefreshMode::Error {
@@ -1888,15 +1958,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
 
+                    let google = form.get("client_id").is_some_and(|client| client == "google-client-id");
                     (
                         axum::http::StatusCode::OK,
                         Json(serde_json::json!({
-                            "access_token": "new-access-token",
-                            "refresh_token": "new-refresh-token",
-                            "id_token": "mock-id-token",
+                            "access_token": if google { "google-access-token" } else { "new-access-token" },
+                            "refresh_token": if google { "google-refresh-token" } else { "new-refresh-token" },
+                            "id_token": if google { "google-id-token" } else { "mock-id-token" },
                             "expires_in": 3600,
                             "refresh_token_expires_in": 7200,
-                            "scope": "openid,email,profile",
+                            "scope": if google { "openid email profile" } else { "openid,email,profile" },
                         })),
                     )
                 }
@@ -1918,7 +1989,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(auth)
         .merge(oauth_proxy::router(reset_database.clone()))
         .merge(email_otp_router)
+        .merge(email_otp_native_router)
+        .merge(email_otp_transaction_router)
+        .merge(oauth_link_id_token_router)
         .merge(otp_callbacks_router)
+        .merge(password_security_router)
+        .merge(auth_lifecycle_router)
+        .merge(captcha_router)
+        .merge(crypto_router)
+        .merge(user_admission_router)
+        .merge(device_generators_router)
         .merge(api_key_storage_router)
         .merge(secondary_router)
         .merge(cookie_version_router)

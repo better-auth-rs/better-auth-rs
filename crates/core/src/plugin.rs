@@ -46,6 +46,11 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     /// Routes that this plugin handles
     fn routes(&self) -> Vec<AuthRoute>;
 
+    /// Select the base password hasher before plugin initialization wraps it.
+    fn password_hasher(&self) -> Option<Arc<dyn crate::utils::password::PasswordHasher>> {
+        None
+    }
+
     /// Default endpoint limits, overridden by explicit application limits.
     fn rate_limits(&self) -> AuthResult<Vec<(String, crate::middleware::EndpointRateLimit)>> {
         Ok(Vec::new())
@@ -57,7 +62,17 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
         Ok(())
     }
 
-    /// Called before route matching for every incoming request.
+    /// Inspect an HTTP request after rate limiting and before endpoint middleware.
+    /// Native API calls do not run this hook. A response skips endpoint hooks.
+    async fn on_http_request(
+        &self,
+        _req: &AuthRequest,
+        _ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
+    }
+
+    /// Called for a registered endpoint after HTTP body decoding and origin checks.
     ///
     /// Return `Some(BeforeRequestAction::Respond(..))` to short-circuit with a
     /// response, `Some(BeforeRequestAction::InjectSession { .. })` to attach a
@@ -119,7 +134,9 @@ macro_rules! impl_auth_plugin {
     (
         $plugin:ty, $name:expr;
         routes {
-            $( $method:ident $path:literal => $handler:ident, $op_id:literal );* $(;)?
+            $( $method:ident $path:literal => $handler:ident, $op_id:literal
+                $(, allowed_media_types = [$($media_type:literal),* $(,)?])?
+            );* $(;)?
         }
         $( extra { $($extra:tt)* } )?
     ) => {
@@ -129,7 +146,8 @@ macro_rules! impl_auth_plugin {
 
             fn routes(&self) -> Vec<$crate::AuthRoute> {
                 vec![
-                    $( $crate::AuthRoute::new($crate::impl_auth_plugin!(@pat $method), $path, $op_id), )*
+                    $( $crate::AuthRoute::new($crate::impl_auth_plugin!(@pat $method), $path, $op_id)
+                        $(.allowed_media_types(&[$($media_type),*]))?, )*
                 ]
             }
 
@@ -160,6 +178,8 @@ pub struct AuthRoute {
     pub method: HttpMethod,
     /// Identifier used as the OpenAPI `operationId` for this route.
     pub operation_id: String,
+    /// HTTP media types accepted before endpoint middleware. Empty uses the JSON default.
+    pub allowed_media_types: Vec<String>,
 }
 
 /// Initialization context passed to plugin setup.
@@ -202,6 +222,30 @@ impl<S: AuthSchema> Clone for AuthContext<S> {
 }
 
 impl AuthRoute {
+    /// Match the method and slash-separated path, including named `{parameter}` segments.
+    pub fn matches(&self, method: &HttpMethod, path: &str) -> bool {
+        if self.method != *method {
+            return false;
+        }
+        let mut actual = path.split('/');
+        for expected in self.path.split('/') {
+            let Some(actual) = actual.next() else {
+                return false;
+            };
+            if expected != actual
+                && !(expected.starts_with('{') && expected.ends_with('}') && !actual.is_empty())
+            {
+                return false;
+            }
+        }
+        actual.next().is_none()
+    }
+
+    pub fn allowed_media_types(mut self, types: &[&str]) -> Self {
+        self.allowed_media_types = types.iter().map(|value| (*value).to_owned()).collect();
+        self
+    }
+
     pub fn new(
         method: HttpMethod,
         path: impl Into<String>,
@@ -211,6 +255,7 @@ impl AuthRoute {
             path: path.into(),
             method,
             operation_id: operation_id.into(),
+            allowed_media_types: Vec::new(),
         }
     }
 
@@ -535,7 +580,10 @@ mod tests {
             "cookie".into(),
             format!(
                 "better-auth.session_token={}",
-                crate::utils::cookie_utils::sign_cookie_value(&session.token, &config.secret)
+                crate::utils::cookie_utils::sign_cookie_value(
+                    &session.token,
+                    config.signing_secret()
+                )
             ),
         );
 

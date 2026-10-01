@@ -32,22 +32,3 @@ pub fn validate_username(username: &str) -> Result<(), UsernameValidationError> 
         Err(UsernameValidationError::Invalid)
     }
 }
-
-pub fn normalize_username_fields(
-    mut username: Option<String>,
-    mut display_username: Option<String>,
-) -> (Option<String>, Option<String>) {
-    if username.is_some() && display_username.is_none() {
-        display_username = username.clone();
-    }
-
-    if display_username.is_some() && username.is_none() {
-        username = display_username.clone();
-    }
-
-    if let Some(username_value) = username.as_mut() {
-        *username_value = normalize_username(username_value);
-    }
-
-    (username, display_username)
-}

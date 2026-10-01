@@ -30,6 +30,25 @@ pub type TransactionWork<S> =
 
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>: Send + Sync {
+    /// Run verification creation hooks for secondary-only values in this transaction.
+    async fn before_create_runtime_verification(
+        &self,
+        _verification: &mut CreateVerification,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    /// Create a verification using the active transaction and its configured storage policy.
+    async fn create_verification(
+        &self,
+        verification: CreateVerification,
+    ) -> AuthResult<S::Verification>;
+    /// Read the latest verification, including expired values, inside the active transaction.
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<S::Verification>>;
+    /// Delete expired verification records inside the active transaction.
+    async fn delete_expired_verifications(&self) -> AuthResult<usize>;
     /// Run session creation hooks before creating a session outside the database.
     async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
         Ok(())
@@ -224,6 +243,14 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
 #[async_trait]
 pub trait AccountStore<S: AuthSchema>: Send + Sync {
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
+    /// Create an account, returning `None` when its own before-create hook cancels the write.
+    /// Hook errors, including errors from nested writes, remain errors.
+    async fn create_account_optional(
+        &self,
+        create_account: CreateAccount,
+    ) -> AuthResult<Option<S::Account>> {
+        self.create_account(create_account).await.map(Some)
+    }
     async fn get_account(
         &self,
         provider: &str,
@@ -231,6 +258,15 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<Option<S::Account>>;
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<S::Account>>;
     async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<S::Account>;
+    /// Update an account, returning `None` when its own before-update hook cancels the write.
+    /// Stores without cancellable hooks may use the default implementation.
+    async fn update_account_optional(
+        &self,
+        id: &str,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<S::Account>> {
+        self.update_account(id, update).await.map(Some)
+    }
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
 }
 

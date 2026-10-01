@@ -220,6 +220,10 @@ impl AuthError {
         if let Self::Response(response) = self {
             return response.0;
         }
+        if let Self::PasswordHash(error) = self {
+            tracing::error!(%error, "Password hashing failed");
+            return crate::types::AuthResponse::new(500);
+        }
         let (status, code, message) = self.error_payload();
         crate::types::AuthResponse::json(
             status,

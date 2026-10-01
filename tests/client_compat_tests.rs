@@ -233,6 +233,8 @@ fn run_bun_phase_suite(
 ) {
     let output = Command::new("bun")
         .arg("test")
+        // A timed-out scenario can still write to the shared fixture database.
+        .arg("--bail")
         .args(paths)
         .env("COMPAT_PROFILE", profile)
         .current_dir(project_root().join("compat-tests/client-tests"))
@@ -427,6 +429,34 @@ async fn configuration_client_compat() {
         "jwt-date",
         "jwt-relative",
         "password-policy",
+        "password-scrypt",
+        "password-security",
+        "password-security-after",
+        "password-security-disabled",
+        "password-security-empty",
+        "password-security-custom",
+        "auth-lifecycle",
+        "auth-lifecycle-confirmation",
+        "auth-lifecycle-zero",
+        "crypto-database",
+        "crypto-cookie",
+        "oauth-link-id-token",
+        "oauth-link-id-token-disabled",
+        "device-generators",
+        "http-body",
+        "http-body-csrf-explicit",
+        "http-body-csrf-legacy",
+        "user-admission",
+        "user-admission-protected",
+        "captcha-turnstile",
+        "captcha-recaptcha",
+        "captcha-hcaptcha",
+        "captcha-captchafox",
+        "captcha-botid",
+        "captcha-botid-default",
+        "captcha-paths",
+        "captcha-empty-secret",
+        "captcha-rate-limit",
         "signup-enumeration",
         "signup-verification",
         "signup-synthetic",
@@ -461,6 +491,12 @@ async fn configuration_client_compat() {
         "device-rate-window",
         "device-bearer",
         "email-otp",
+        "email-otp-native",
+        "email-otp-native-hash",
+        "email-otp-native-encrypted",
+        "email-otp-native-custom-hash",
+        "email-otp-native-custom-encrypted",
+        "email-otp-transaction",
         "email-otp-options",
         "email-otp-reuse",
         "magic-link",
@@ -512,6 +548,10 @@ async fn configuration_client_compat() {
                 )
                 .await;
             }
+        } else if profile.starts_with("password-security") {
+            run_client_compat_profile(&["./tests/config/password-security/"], profile).await;
+        } else if profile.starts_with("http-body") {
+            run_client_compat_profile(&["./tests/config/http-body/"], profile).await;
         } else if profile.starts_with("custom-session") {
             run_client_compat_profile(&["./tests/config/custom-session/"], profile).await;
         } else if profile.starts_with("two-factor-") && profile != "two-factor-context" {

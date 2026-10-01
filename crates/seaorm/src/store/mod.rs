@@ -22,6 +22,7 @@ mod sessions;
 mod team_capacity;
 mod team_invitation;
 mod teams;
+mod transaction_verifications;
 mod two_factor;
 mod two_factor_security;
 mod user_verification;
@@ -42,7 +43,7 @@ pub mod __private_test_support {
 }
 
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use better_auth_core::store::{
@@ -179,6 +180,7 @@ struct SeaOrmTransaction<
 > {
     store: &'a SeaOrmStore<S, O, P>,
     tx: &'a DatabaseTransaction,
+    verification_effects: Mutex<Vec<transaction_verifications::Effect<S>>>,
 }
 
 #[async_trait]
@@ -189,7 +191,33 @@ where
     S::User: SeaOrmUserModel,
     S::Account: SeaOrmAccountModel,
     S::Session: SeaOrmSessionModel,
+    S::Verification: crate::schema::SeaOrmVerificationModel,
 {
+    async fn before_create_runtime_verification(
+        &self,
+        input: &mut better_auth_core::CreateVerification,
+    ) -> AuthResult<()> {
+        self.store
+            .before_runtime_verification_in_tx(input, Some(self.tx))
+            .await
+    }
+    async fn create_verification(
+        &self,
+        input: better_auth_core::CreateVerification,
+    ) -> AuthResult<S::Verification> {
+        self.create_transaction_verification(input).await
+    }
+    async fn get_verification_including_expired(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<S::Verification>> {
+        self.store
+            .find_verification_with_connection(self.tx, identifier)
+            .await
+    }
+    async fn delete_expired_verifications(&self) -> AuthResult<usize> {
+        self.delete_expired_transaction_verifications().await
+    }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<S::User>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         let id = S::User::parse_id(id)?;
@@ -271,6 +299,7 @@ where
     S::User: SeaOrmUserModel,
     S::Account: SeaOrmAccountModel,
     S::Session: SeaOrmSessionModel,
+    S::Verification: crate::schema::SeaOrmVerificationModel,
 {
     async fn transaction_boxed(
         &self,
@@ -280,11 +309,16 @@ where
         let tx_store = SeaOrmTransaction {
             store: self,
             tx: &tx,
+            verification_effects: Mutex::new(Vec::new()),
         };
 
         match work(&tx_store).await {
             Ok(value) => {
+                let effects = tx_store.verification_effects.into_inner().map_err(|_| {
+                    AuthError::internal("Verification transaction queue lock poisoned")
+                })?;
                 tx.commit().await.map_err(map_db_err)?;
+                self.finish_verification_effects(effects).await?;
                 Ok(value)
             }
             Err(err) => {

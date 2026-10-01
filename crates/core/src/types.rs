@@ -43,6 +43,7 @@ pub struct AuthRequest {
     pub body: Option<Vec<u8>>,
     pub query: HashMap<String, String>,
     url: Option<url::Url>,
+    pub(crate) parsed_http_body: Option<crate::http_body::ParsedHttpBody>,
     /// Session authenticated by a trusted plugin hook for the current request.
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
     /// Cookie updates from session middleware, shared by normalized request clones.
@@ -61,18 +62,18 @@ pub struct RequestMeta {
 }
 
 impl RequestMeta {
-    /// Extract metadata from an [`AuthRequest`]'s headers.
-    ///
-    /// IP address is read from `x-forwarded-for` (preferred), falling back
-    /// to `x-real-ip`. User-agent is read from the `user-agent` header.
+    /// Extract metadata with the default forwarded-address policy.
     pub fn from_request(req: &AuthRequest) -> Self {
+        Self::from_request_with_config(req, &crate::config::IpAddressConfig::default())
+    }
+
+    /// Extract session metadata with the application's trusted-proxy policy.
+    pub fn from_request_with_config(
+        req: &AuthRequest,
+        config: &crate::config::IpAddressConfig,
+    ) -> Self {
         Self {
-            ip_address: req
-                .headers
-                .get("x-forwarded-for")
-                .or_else(|| req.headers.get("x-real-ip"))
-                .cloned()
-                .filter(|value| !value.is_empty()),
+            ip_address: config.resolve(req),
             user_agent: req.headers.get("user-agent").cloned(),
         }
     }
@@ -346,6 +347,7 @@ impl AuthRequest {
             body: None,
             query: HashMap::new(),
             url: None,
+            parsed_http_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -369,6 +371,7 @@ impl AuthRequest {
             body,
             query,
             url: None,
+            parsed_http_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -464,7 +467,9 @@ impl AuthRequest {
     }
 
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {
-        if let Some(body) = &self.body {
+        if let Some(body) = self.parsed_http_body() {
+            serde_json::from_value(body.clone())
+        } else if let Some(body) = &self.body {
             serde_json::from_slice(body)
         } else {
             serde_json::from_str("{}")
@@ -695,6 +700,7 @@ mod tests {
             body: Some(br#"{"name":"test"}"#.to_vec()),
             query: HashMap::new(),
             url: None,
+            parsed_http_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -802,10 +808,14 @@ mod tests {
 
     // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.
     #[test]
-    fn request_meta_falls_back_to_real_ip() {
+    fn request_meta_supports_configured_real_ip_header() {
         let mut req = AuthRequest::new(HttpMethod::Get, "/test");
         let _ = req.headers.insert("x-real-ip".into(), "5.6.7.8".into());
-        let meta = RequestMeta::from_request(&req);
+        let config = crate::config::IpAddressConfig {
+            headers: vec!["x-real-ip".into()],
+            ..Default::default()
+        };
+        let meta = RequestMeta::from_request_with_config(&req, &config);
         assert_eq!(meta.ip_address.as_deref(), Some("5.6.7.8"));
     }
 

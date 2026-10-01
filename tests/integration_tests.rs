@@ -129,6 +129,7 @@ async fn test_revoke_session_integration() {
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert(
         "authorization".to_string(),
         format!("Bearer {}", session_token1),
@@ -392,6 +393,7 @@ async fn test_get_session_post_requires_defer_session_refresh() {
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert(
         "authorization".to_string(),
         format!("Bearer {}", session_token),
@@ -422,6 +424,7 @@ async fn test_delete_user_post_method() {
     use std::collections::HashMap;
 
     let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert(
         "authorization".to_string(),
         format!("Bearer {}", session_token),
@@ -577,6 +580,7 @@ async fn test_revoke_other_sessions_integration() {
     let session2 = auth.store().create_session(create_session).await.unwrap();
 
     let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert(
         "authorization".to_string(),
         format!("Bearer {}", session_token1),
@@ -942,7 +946,7 @@ async fn test_list_accounts_with_account() {
         id_token: None,
         access_token_expires_at: None,
         refresh_token_expires_at: None,
-        scope: Some("email profile".to_string()),
+        scope: Some("email,profile".to_string()),
         password: None,
     };
     auth.store().create_account(create_account).await.unwrap();

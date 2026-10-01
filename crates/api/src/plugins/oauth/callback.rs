@@ -5,7 +5,7 @@ use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthRe
 
 use super::handlers::{
     FlowStartRequest, attach_cookie_state_payload, attach_state_cookie, auth_base_url,
-    build_redirect_url, complete_link_social, create_account_cookie_header,
+    build_redirect_url, complete_link_social, create_account_cookie_headers,
     fetch_user_info_from_provider, initiate_oauth_flow_core, parse_callback_user_payload,
     redirect_response,
 };
@@ -25,7 +25,10 @@ pub(super) async fn handle_callback(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let default_error_url = format!("{}/error", auth_base_url(ctx));
-    let meta = better_auth_core::RequestMeta::from_request(req);
+    let meta = better_auth_core::RequestMeta::from_request_with_config(
+        req,
+        &ctx.config.advanced.ip_address,
+    );
 
     let mut merged = HashMap::new();
     if req.method() == &better_auth_core::HttpMethod::Post {
@@ -79,116 +82,113 @@ pub(super) async fn handle_callback(
     let merged = req.query.clone();
 
     let error = merged.get("error").cloned();
-    let state_param = match merged.get("state").cloned() {
-        Some(state) if !state.is_empty() => state,
-        _ => {
-            if !merged.contains_key("state")
-                && merged.get("code").is_some_and(|code| !code.is_empty())
-                && let Some(provider) = config.providers.get(provider_name)
-                && provider
-                    .generic
-                    .as_ref()
-                    .is_some_and(|generic| generic.config.allow_idp_initiated)
-            {
-                let flow = initiate_oauth_flow_core(
-                    ctx,
-                    FlowStartRequest {
-                        redirect_base: None,
-                        anonymous_user_id: None,
-                        provider_name,
-                        provider,
-                        callback_url: &ctx.config.base_url,
-                        new_user_callback_url: None,
-                        error_callback_url: None,
-                        scopes: None,
-                        additional_params: None,
-                        login_hint: None,
-                        request_sign_up: None,
-                        additional_data: Default::default(),
-                        link: None,
-                        disable_redirect: false,
-                    },
-                )
-                .await?;
-                let response = redirect_response(
-                    flow.response
-                        .url
-                        .as_deref()
-                        .ok_or_else(|| AuthError::internal("Missing OAuth authorization URL"))?,
-                );
-                return match ctx.config.account.store_state_strategy {
-                    better_auth_core::OAuthStateStrategy::Database => {
-                        attach_state_cookie(response, &ctx.config, &ctx.config.secret, &flow.state)
-                    }
-                    better_auth_core::OAuthStateStrategy::Cookie => attach_cookie_state_payload(
-                        response,
-                        &ctx.config,
-                        &ctx.config.secret,
-                        &flow.payload,
-                    ),
+    let state_param =
+        match merged.get("state").cloned() {
+            Some(state) if !state.is_empty() => state,
+            _ => {
+                if !merged.contains_key("state")
+                    && merged.get("code").is_some_and(|code| !code.is_empty())
+                    && let Some(provider) = config.providers.get(provider_name)
+                    && provider
+                        .generic
+                        .as_ref()
+                        .is_some_and(|generic| generic.config.allow_idp_initiated)
+                {
+                    let flow = initiate_oauth_flow_core(
+                        ctx,
+                        FlowStartRequest {
+                            redirect_base: None,
+                            anonymous_user_id: None,
+                            provider_name,
+                            provider,
+                            callback_url: &ctx.config.base_url,
+                            new_user_callback_url: None,
+                            error_callback_url: None,
+                            scopes: None,
+                            additional_params: None,
+                            login_hint: None,
+                            request_sign_up: None,
+                            additional_data: Default::default(),
+                            link: None,
+                            disable_redirect: false,
+                        },
+                    )
+                    .await?;
+                    let response =
+                        redirect_response(flow.response.url.as_deref().ok_or_else(|| {
+                            AuthError::internal("Missing OAuth authorization URL")
+                        })?);
+                    return match ctx.config.account.store_state_strategy {
+                        better_auth_core::OAuthStateStrategy::Database => {
+                            attach_state_cookie(response, &ctx.config, &flow.state)
+                        }
+                        better_auth_core::OAuthStateStrategy::Cookie => {
+                            attach_cookie_state_payload(response, &ctx.config, &flow.payload)
+                        }
+                    };
+                }
+                let separator = if default_error_url.contains('?') {
+                    '&'
+                } else {
+                    '?'
                 };
+                return Ok(redirect_response(&format!(
+                    "{default_error_url}{separator}error=state_not_found"
+                )));
             }
-            let separator = if default_error_url.contains('?') {
-                '&'
-            } else {
-                '?'
-            };
-            return Ok(redirect_response(&format!(
-                "{default_error_url}{separator}error=state_not_found"
-            )));
-        }
-    };
+        };
     let payload = match ctx.config.account.store_state_strategy {
         better_auth_core::OAuthStateStrategy::Database => {
             let verification = match ctx
                 .database
-                .get_verification_by_identifier(&format!("oauth:{state_param}"))
+                .get_verification_by_identifier(&state_param)
                 .await?
             {
                 Some(verification) => verification,
                 None => {
                     return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=please_restart_the_process"
+                        "{default_error_url}?error=state_mismatch"
                     )));
                 }
             };
 
-            if !ctx.config.account.skip_state_cookie_check {
-                let Some(cookie_value) = get_cookie(req, &state_cookie_name(&ctx.config)) else {
+            let payload = match OAuthStatePayload::parse(verification.value()) {
+                Ok(payload) => payload,
+                Err(_) => {
                     return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=state_mismatch"
-                    )));
-                };
-                let persisted_state =
-                    match decode_database_state_cookie_value(&ctx.config.secret, &cookie_value) {
-                        Ok(state) => state,
-                        Err(_) => {
-                            return Ok(redirect_response(&format!(
-                                "{default_error_url}?error=state_mismatch"
-                            )));
-                        }
-                    };
-                if persisted_state != state_param {
-                    return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=state_mismatch"
+                        "{default_error_url}?error=internal_server_error"
                     )));
                 }
+            };
+            let bound_state_matches = payload
+                .additional_data
+                .get("oauthState")
+                .is_none_or(|value| value.as_str() == Some(state_param.as_str()));
+            let cookie_matches = ctx.config.account.skip_state_cookie_check
+                || get_cookie(req, &state_cookie_name(&ctx.config))
+                    .and_then(|value| {
+                        decode_database_state_cookie_value(ctx.config.signing_secret(), &value).ok()
+                    })
+                    .is_some_and(|value| value == state_param);
+            if !bound_state_matches || !cookie_matches {
+                return Ok(redirect_response(&build_redirect_url(
+                    &auth_base_url(ctx),
+                    payload.error_url.as_deref().or(Some(&default_error_url)),
+                    &[("error", "state_mismatch")],
+                )?));
             }
-
-            let payload: OAuthStatePayload = serde_json::from_str(verification.value())
-                .map_err(|error| AuthError::internal(format!("Invalid state payload: {error}")))?;
             ctx.database
-                .delete_verification_by_identifier(&format!("oauth:{state_param}"))
+                .delete_verification_by_identifier(&state_param)
                 .await?;
             payload
         }
         better_auth_core::OAuthStateStrategy::Cookie => {
             let Some(cookie_value) = get_cookie(req, &state_cookie_name(&ctx.config)) else {
                 return Ok(redirect_response(&format!(
-                    "{default_error_url}?error=please_restart_the_process"
+                    "{default_error_url}?error=state_mismatch"
                 )));
             };
-            match decode_cookie_state_value(&ctx.config.secret, &cookie_value) {
+            match decode_cookie_state_value(ctx.config.encryption_secret(), &cookie_value) {
                 Ok(payload) => {
                     if !payload
                         .additional_data
@@ -205,7 +205,7 @@ pub(super) async fn handle_callback(
                 }
                 Err(_) => {
                     return Ok(redirect_response(&format!(
-                        "{default_error_url}?error=please_restart_the_process"
+                        "{default_error_url}?error=state_invalid"
                     )));
                 }
             }
@@ -245,15 +245,15 @@ pub(super) async fn handle_callback(
         response
     };
 
+    if payload.is_expired() {
+        return Ok(redirect_on_error("state_mismatch", None));
+    }
+
     if let Some(error) = error.as_deref().filter(|error| !error.is_empty()) {
         return Ok(redirect_on_error(
             error,
             merged.get("error_description").map(String::as_str),
         ));
-    }
-
-    if payload.is_expired() {
-        return Ok(redirect_on_error("please_restart_the_process", None));
     }
 
     if let Some(user_id) = payload.server_context.get("anonymousUserId") {
@@ -313,11 +313,30 @@ pub(super) async fn handle_callback(
         Err(_) => return Ok(redirect_on_error("unable_to_get_user_info", None)),
     };
 
+    let callback_body = if req.method() == &better_auth_core::HttpMethod::Post {
+        serde_json::to_value(&merged)?
+    } else {
+        serde_json::Value::Null
+    };
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        callback_body.clone(),
+        ctx,
+    );
+    endpoint.path = Some(super::signin::callback_path(req));
     if let Some(link) = payload.link.as_ref() {
-        if let Err(error) =
-            complete_link_social(provider_name, &user_info.user, &tokens, link, ctx).await
+        if let Err(error) = complete_link_social(
+            provider_name,
+            &user_info.user,
+            &tokens,
+            link,
+            Some(&user_info.data),
+            &endpoint,
+        )
+        .await
         {
-            return Ok(redirect_on_error(&error, None));
+            let (code, description) = error.redirect_parts()?;
+            return Ok(redirect_on_error(&code, description.as_deref()));
         }
 
         return Ok(redirect_response(&payload.callback_url)
@@ -334,6 +353,8 @@ pub(super) async fn handle_callback(
         &tokens,
         OAuthSignInOptions {
             request: req,
+            profile: Some(&user_info.data),
+            body: callback_body,
             disable_sign_up,
             callback_url: &payload.callback_url,
             email_verification: config.email_verification.as_deref(),
@@ -345,8 +366,8 @@ pub(super) async fn handle_callback(
     {
         Ok(outcome) => outcome,
         Err(error) => {
-            let (code, description) = error.redirect_parts();
-            return Ok(redirect_on_error(&code, description));
+            let (code, description) = error.redirect_parts()?;
+            return Ok(redirect_on_error(&code, description.as_deref()));
         }
     };
 
@@ -369,10 +390,9 @@ pub(super) async fn handle_callback(
             ),
         );
     if let Some(account_cookie) = outcome.account_cookie.as_ref() {
-        response = response.with_appended_header(
-            "Set-Cookie",
-            create_account_cookie_header(&ctx.config, &ctx.config.secret, account_cookie)?,
-        );
+        for cookie in create_account_cookie_headers(req, &ctx.config, account_cookie)? {
+            response = response.with_appended_header("Set-Cookie", cookie);
+        }
     }
     Ok(response)
 }

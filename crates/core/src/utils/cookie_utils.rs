@@ -4,6 +4,11 @@
 //! duplicated across every plugin (`email_password`, `passkey`, `two_factor`,
 //! `admin`, `password_management`, `session_management`, `email_verification`).
 
+mod chunks;
+pub use chunks::{
+    clear_chunked_cookie, create_chunked_cookies, create_clear_chunked_cookies, get_chunked_cookie,
+};
+
 use crate::config::AuthConfig;
 use base64::{
     Engine as _, alphabet,
@@ -84,7 +89,7 @@ pub fn create_session_cookie_with_max_age(
 ) -> String {
     let signed = token
         .filter(|token| !token.is_empty())
-        .map(|token| sign_cookie_value(token, &config.secret));
+        .map(|token| sign_cookie_value(token, config.signing_secret()));
     create_session_like_cookie(
         &config.session.cookie_name,
         signed.as_deref().unwrap_or(""),

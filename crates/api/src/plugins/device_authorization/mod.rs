@@ -1,6 +1,6 @@
+use base64::Engine as _;
 use chrono::{Duration, Utc};
 use rand::RngCore;
-use rand::distributions::{Alphanumeric, DistString};
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
@@ -52,7 +52,7 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 type ValidateClientCallback = dyn Fn(String) -> BoxFuture<AuthResult<bool>> + Send + Sync;
 type DeviceAuthRequestCallback =
     dyn Fn(String, Option<String>) -> BoxFuture<AuthResult<()>> + Send + Sync;
-type CodeGenerator = dyn Fn() -> String + Send + Sync;
+type CodeGenerator = dyn Fn() -> BoxFuture<AuthResult<String>> + Send + Sync;
 
 #[derive(Clone)]
 struct DeviceAuthorizationConfig {
@@ -182,21 +182,23 @@ impl DeviceAuthorizationPlugin {
         self
     }
 
-    /// Use a custom device-code generator.
-    pub fn generate_device_code_with<F>(mut self, generator: F) -> Self
+    /// Await a custom device-code generator before generating the user code.
+    pub fn generate_device_code_with<F, Fut>(mut self, generator: F) -> Self
     where
-        F: Fn() -> String + Send + Sync + 'static,
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = AuthResult<String>> + Send + 'static,
     {
-        self.config.generate_device_code = Some(Arc::new(generator));
+        self.config.generate_device_code = Some(Arc::new(move || Box::pin(generator())));
         self
     }
 
-    /// Use a custom user-code generator.
-    pub fn generate_user_code_with<F>(mut self, generator: F) -> Self
+    /// Await a custom user-code generator before persisting the code pair.
+    pub fn generate_user_code_with<F, Fut>(mut self, generator: F) -> Self
     where
-        F: Fn() -> String + Send + Sync + 'static,
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = AuthResult<String>> + Send + 'static,
     {
-        self.config.generate_user_code = Some(Arc::new(generator));
+        self.config.generate_user_code = Some(Arc::new(move || Box::pin(generator())));
         self
     }
 
@@ -244,8 +246,8 @@ impl DeviceAuthorizationPlugin {
         let expires_at = Utc::now() + self.config.expires_in;
         let polling_interval = self.config.interval.num_milliseconds();
         for _ in 0..3 {
-            let device_code = self.generate_device_code();
-            let user_code = self.generate_user_code();
+            let device_code = self.generate_device_code().await?;
+            let user_code = self.generate_user_code().await?;
             match ctx
                 .database
                 .create_device_code(CreateDeviceCode {
@@ -377,7 +379,7 @@ impl DeviceAuthorizationPlugin {
                 return device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE);
             }
 
-            let meta = RequestMeta::from_request(req);
+            let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
             let session =
                 match issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
                     .await
@@ -556,35 +558,59 @@ impl DeviceAuthorizationPlugin {
         }
     }
 
-    fn generate_device_code(&self) -> String {
-        self.config
-            .generate_device_code
-            .as_ref()
-            .map(|generator| generator())
-            .unwrap_or_else(|| {
-                Alphanumeric.sample_string(&mut rand::rngs::OsRng, self.config.device_code_length)
-            })
+    async fn generate_device_code(&self) -> AuthResult<String> {
+        let code = match &self.config.generate_device_code {
+            Some(generator) => generator().await?,
+            None => {
+                let mut bytes = vec![0; (self.config.device_code_length * 3).div_ceil(4)];
+                rand::rngs::OsRng.fill_bytes(&mut bytes);
+                let mut code = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
+                code.truncate(self.config.device_code_length);
+                code
+            }
+        };
+        validate_generated_code(code, "device")
     }
 
-    fn generate_user_code(&self) -> String {
-        self.config
-            .generate_user_code
-            .as_ref()
-            .map(|generator| generator())
-            .unwrap_or_else(|| default_generate_user_code(self.config.user_code_length))
+    async fn generate_user_code(&self) -> AuthResult<String> {
+        let code = match &self.config.generate_user_code {
+            Some(generator) => generator().await?,
+            None => default_generate_user_code(self.config.user_code_length),
+        };
+        validate_generated_code(code, "user")
     }
+}
+
+fn validate_generated_code(code: String, label: &str) -> AuthResult<String> {
+    if code.chars().count() > 191 {
+        return Err(device_error_response(
+            400,
+            "invalid_request",
+            &format!("Generated {label} code must be at most 191 characters"),
+        )?
+        .into());
+    }
+    Ok(code)
 }
 
 better_auth_core::impl_auth_plugin! {
     DeviceAuthorizationPlugin, "device-authorization";
     routes {
-        post "/device/code" => handle_device_code, "device_code";
+        post "/device/code" => handle_device_code, "device_code", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"];
         post "/device/token" => handle_device_token, "device_token";
         get "/device" => handle_device_verify, "device_verify";
         post "/device/approve" => handle_device_approve, "device_approve";
         post "/device/deny" => handle_device_deny, "device_deny";
     }
     extra {
+        async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+            for (name, length) in [("deviceCodeLength", self.config.device_code_length), ("userCodeLength", self.config.user_code_length)] {
+                if !(1..=191).contains(&length) {
+                    return Err(AuthError::config(format!("{name} must be between 1 and 191")));
+                }
+            }
+            Ok(())
+        }
         fn rate_limits(&self) -> AuthResult<Vec<(String, better_auth_core::middleware::EndpointRateLimit)>> {
             let window = self.config.expires_in.to_std()
                 .map_err(|_| AuthError::config("Device code expiration must not be negative"))?;

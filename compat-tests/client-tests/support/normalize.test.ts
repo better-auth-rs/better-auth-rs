@@ -49,6 +49,12 @@ test("OIDC nonce entropy is normalized while absent or empty nonce remains obser
   expect(clientDiffs({ location: `${location}random-left` }, { location: "https://issuer.example/authorize" }).length).toBeGreaterThan(0);
 });
 
+test("device verification URLs normalize server ports while preserving code bindings", () => {
+  const normalize = (base: string, code: string) => normalizeClientValue({ verification_uri: `${base}/device`, verification_uri_complete: `${base}/device?user_code=${code}` }, "", base);
+  expect(clientDiffs(normalize("http://localhost:3100", "CODE"), normalize("http://localhost:3200", "CODE"))).toEqual([]);
+  expect(clientDiffs(normalize("http://localhost:3100", "CODE"), normalize("http://localhost:3200", "OTHER")).length).toBeGreaterThan(0);
+});
+
 test("team ID arrays retain membership, order and raw replacement values", () => {
   const left = { teams: [{ id: "one" }, { id: "two" }], hook: { teamIds: ["one", "two"] } };
   expect(clientDiffs(left, { teams: [{ id: "a" }, { id: "b" }], hook: { teamIds: ["a", "b"] } })).toEqual([]);

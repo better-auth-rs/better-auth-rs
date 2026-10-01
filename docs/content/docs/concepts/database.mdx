@@ -205,6 +205,10 @@ The canonical worked example is [`examples/postgres_usage.rs`](../../../../examp
 - additional required app fields on the user table
 - Better Auth mounted on top of the same `DatabaseConnection`
 
+## Account Hook Cancellation
+
+`AccountStore::create_account_optional` and `update_account_optional` return `None` when a database hook cancels that account write. Hook errors remain errors, including errors from nested writes. The strict `create_account` and `update_account` methods retain their existing cancellation error behavior. Custom stores with cancellable hooks must implement the optional methods; their default implementations wrap successful strict results in `Some`.
+
 ## Testing
 
 Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and test an independent consumer against the public package. The check creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. A second schema verifies all six Organization model mappings, additional field storage types, partial updates, and organization deletion. A third schema renames every field in all six plugin tables and maps user, session, account, and verification columns. Tests exercise authentication, TOTP, API key quota consumption, device claims, passkey updates, JWT keys, and wallet chain lookup. Database constraint checks cover uniqueness and foreign keys.

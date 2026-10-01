@@ -1,6 +1,13 @@
 //! Built-in plugins and plugin-specific configuration modules.
 
+pub use better_auth_api::plugins::captcha;
+pub use better_auth_api::plugins::captcha::{CaptchaPlugin, CaptchaProvider};
 pub use better_auth_api::plugins::endpoint_context;
+pub use better_auth_api::plugins::have_i_been_pwned;
+pub use better_auth_api::plugins::have_i_been_pwned::{
+    HaveIBeenPwnedConfig, HaveIBeenPwnedPlugin, PasswordCompromiseClient, is_password_compromised,
+};
+pub use better_auth_api::plugins::user_admission;
 
 pub use better_auth_api::plugins::{
     CustomSessionCallback, CustomSessionInput, CustomSessionPlugin, custom_session,
@@ -22,7 +29,7 @@ pub use better_auth_api::plugins::{
     passkey, password_management, session_management, two_factor, user_management,
 };
 pub use better_auth_api::plugins::{
-    EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
+    EmailOtpApi, EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
     EmailOtpStorage, EmailOtpType, MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin,
     MultiSessionConfig, MultiSessionPlugin, OneTimeTokenConfig, OneTimeTokenPlugin, SendEmailOtp,
     SendMagicLink, TokenStorage, email_otp, magic_link, multi_session, one_time_token,

@@ -81,8 +81,7 @@ async fn create_test_auth_with_config(mut config: AuthConfig) -> Arc<BetterAuth<
             .plugin(
                 UserManagementPlugin::new()
                     .change_email_enabled(true)
-                    .delete_user_enabled(true)
-                    .require_delete_verification(false),
+                    .delete_user_enabled(true),
             )
             .build()
             .await

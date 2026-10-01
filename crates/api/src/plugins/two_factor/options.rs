@@ -2,7 +2,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use better_auth_core::AuthResult;
+use better_auth_core::{AuthResult, SecretKey};
 use rand::{Rng, distributions::Alphanumeric};
 use sha2::{Digest, Sha256};
 
@@ -36,7 +36,7 @@ pub enum TwoFactorOtpStorage {
 }
 
 impl TwoFactorOtpStorage {
-    pub(super) async fn encode(&self, value: &str, secret: &str) -> AuthResult<String> {
+    pub(super) async fn encode(&self, value: &str, secret: SecretKey<'_>) -> AuthResult<String> {
         match self {
             Self::Plain => Ok(value.to_owned()),
             Self::Hashed => Ok(URL_SAFE_NO_PAD.encode(Sha256::digest(value.as_bytes()))),
@@ -46,7 +46,12 @@ impl TwoFactorOtpStorage {
         }
     }
 
-    pub(super) async fn verify(&self, stored: &str, input: &str, secret: &str) -> AuthResult<bool> {
+    pub(super) async fn verify(
+        &self,
+        stored: &str,
+        input: &str,
+        secret: SecretKey<'_>,
+    ) -> AuthResult<bool> {
         let (stored, input) = match self {
             Self::Encrypted => (
                 crate::plugins::symmetric::decrypt(secret, stored)?,
@@ -72,7 +77,11 @@ pub enum BackupCodeStorage {
 }
 
 impl BackupCodeStorage {
-    pub(super) async fn encode(&self, codes: &[String], secret: &str) -> AuthResult<String> {
+    pub(super) async fn encode(
+        &self,
+        codes: &[String],
+        secret: SecretKey<'_>,
+    ) -> AuthResult<String> {
         let json = serde_json::to_string(codes)?;
         match self {
             Self::Plain => Ok(json),
@@ -84,7 +93,7 @@ impl BackupCodeStorage {
     pub(super) async fn decode(
         &self,
         stored: &str,
-        secret: &str,
+        secret: SecretKey<'_>,
     ) -> AuthResult<Option<Vec<String>>> {
         let json = match self {
             Self::Plain => stored.to_owned(),

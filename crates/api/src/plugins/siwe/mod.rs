@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use sha3::{Digest, Keccak256};
 use validator::ValidateEmail;
 
-use super::helpers::{SessionIssueError, apply_default_role, issue_user_session};
+use super::helpers::{SessionIssueError, issue_user_session};
 
 type CallbackFuture<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
 type NonceCallback = dyn Fn() -> CallbackFuture<String> + Send + Sync;
@@ -322,13 +322,16 @@ impl SiwePlugin {
                 .with_email(&user_email)
                 .with_name(profile.name.unwrap_or_else(|| address.clone()));
             create.image = Some(profile.avatar.unwrap_or_default());
-            apply_default_role(ctx, &mut create);
-            let created = ctx.database.create_user(create.clone()).await;
+
+            let endpoint =
+                super::endpoint_context::EndpointContext::new(Some(req), req.body_as_json()?, ctx);
+            let created =
+                super::user_admission::create_user(create.clone(), "siwe", &endpoint).await;
             let created = match created {
                 Err(error) if supplied_email.as_deref() == Some(user_email.as_str()) => {
                     if ctx.database.get_user_by_email(&user_email).await?.is_some() {
                         create.email = Some(wallet_email);
-                        ctx.database.create_user(create).await
+                        super::user_admission::create_user(create, "siwe", &endpoint).await
                     } else {
                         Err(error)
                     }
@@ -373,7 +376,7 @@ impl SiwePlugin {
                 })
                 .await?;
         }
-        let meta = RequestMeta::from_request(req);
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;

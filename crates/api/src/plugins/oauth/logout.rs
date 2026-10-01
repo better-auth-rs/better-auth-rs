@@ -6,7 +6,6 @@ use url::Url;
 
 use crate::plugins::json_body::{self, SignOutBody};
 
-use super::encryption::maybe_decrypt;
 use super::providers::OAuthProvider;
 use super::resolved::ResolvedOAuthConfig as OAuthConfig;
 
@@ -56,20 +55,9 @@ pub(super) async fn handle_sign_out(
         if provider.config.end_session_endpoint.is_none() {
             continue;
         }
-        let id_token = match maybe_decrypt(
-            account.id_token(),
-            ctx.config.account.encrypt_oauth_tokens,
-            &ctx.config.secret,
-        ) {
-            Ok(token) => token,
-            Err(error) => {
-                tracing::error!(%error, "Failed to create provider logout URL");
-                return Ok(response);
-            }
-        };
         let Some(url) = end_session_url(
             &provider.config,
-            id_token.as_deref(),
+            account.id_token(),
             &body,
             &super::handlers::auth_base_url(ctx),
         ) else {

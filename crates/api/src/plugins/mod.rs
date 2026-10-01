@@ -2,12 +2,14 @@ pub mod account_management;
 pub mod admin;
 pub mod anonymous;
 pub mod api_key;
+pub mod captcha;
 pub mod custom_session;
 pub mod device_authorization;
 pub mod email_otp;
 pub mod email_password;
 pub mod email_verification;
 pub mod endpoint_context;
+pub mod have_i_been_pwned;
 pub mod helpers;
 mod json_body;
 pub mod jwt;
@@ -189,7 +191,7 @@ pub use better_auth_core::PasswordHasher;
 pub use custom_session::{CustomSessionCallback, CustomSessionInput, CustomSessionPlugin};
 pub use device_authorization::DeviceAuthorizationPlugin;
 pub use email_otp::{
-    EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
+    EmailOtpApi, EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
     EmailOtpStorage, EmailOtpType, SendEmailOtp,
 };
 pub use email_password::{EmailPasswordConfig, EmailPasswordPlugin};
@@ -215,3 +217,5 @@ pub use two_factor::{SendTwoFactorOtp, TwoFactorConfig, TwoFactorPlugin};
 pub use user_management::{
     ChangeEmailConfig, DeleteUserConfig, UserManagementConfig, UserManagementPlugin,
 };
+
+pub mod user_admission;

@@ -63,7 +63,7 @@ impl<S: AuthSchema> SessionManager<S> {
                     "Set-Cookie",
                     create_session_like_cookie(
                         &dont_remember_name,
-                        &sign_cookie_value("true", &self.config.secret),
+                        &sign_cookie_value("true", self.config.signing_secret()),
                         None,
                         &self.config,
                     ),
@@ -80,7 +80,8 @@ impl<S: AuthSchema> SessionManager<S> {
                     .cookie_cache
                     .as_ref()
                     .is_some_and(|cache| cache.enabled)
-                && let Some(token) = verify_cookie_value(&signed_token, &self.config.secret)
+                && let Some(token) =
+                    verify_cookie_value(&signed_token, self.config.signing_secret())
                 && let Some((session, cached_data)) =
                     self.database.get_session_snapshot(&token).await?
             {

@@ -202,7 +202,14 @@ impl AdminPlugin {
             Ok(v) => v,
             Err(resp) => return Ok(resp),
         };
-        let response = create_user_core(&body, &self.config, ctx).await?;
+        let response = create_user_core(
+            &body,
+            req,
+            (ctx.user_view(&user)?, ctx.session_view(&_session).await?),
+            &self.config,
+            ctx,
+        )
+        .await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -362,9 +369,7 @@ impl AdminPlugin {
         let (response, token) = impersonate_user_core(
             &body,
             user.id.as_str(),
-            req.headers
-                .get("x-forwarded-for")
-                .map(|value| value.as_str()),
+            ctx.config.advanced.ip_address.resolve(req).as_deref(),
             req.headers.get("user-agent").map(|value| value.as_str()),
             &self.config,
             ctx,
@@ -372,7 +377,7 @@ impl AdminPlugin {
         .await?;
         let dont_remember = ctx.session_manager().dont_remember(req);
         let admin_cookie = create_admin_session_cookie_value(
-            &ctx.config.secret,
+            ctx.config.signing_secret(),
             &AdminSessionCookiePayload {
                 session_token: session.token.clone(),
                 dont_remember,
@@ -382,7 +387,7 @@ impl AdminPlugin {
         let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
 
         let mut auth_response = AuthResponse::json(200, &response)?;
-        for cookie in delete_session_cookie_headers(&ctx.config) {
+        for cookie in delete_session_cookie_headers(req, &ctx.config) {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
         auth_response = auth_response.with_appended_header(
@@ -402,7 +407,7 @@ impl AdminPlugin {
             "Set-Cookie",
             create_session_like_cookie(
                 &related_cookie_name(&ctx.config, "dont_remember"),
-                &sign_cookie_value("true", &ctx.config.secret),
+                &sign_cookie_value("true", ctx.config.signing_secret()),
                 None,
                 &ctx.config,
             ),
@@ -430,7 +435,7 @@ impl AdminPlugin {
         let admin_cookie_value = get_cookie(req, &admin_cookie_name)
             .ok_or_else(|| AuthError::internal("Failed to find admin session"))?;
         let admin_cookie =
-            decode_admin_session_cookie_value(&ctx.config.secret, &admin_cookie_value)
+            decode_admin_session_cookie_value(ctx.config.signing_secret(), &admin_cookie_value)
                 .map_err(|_| AuthError::internal("Failed to find admin session"))?;
 
         let (response, new_token) = stop_impersonating_core(&session, &admin_cookie, ctx).await?;
@@ -453,7 +458,7 @@ impl AdminPlugin {
                 "Set-Cookie",
                 create_session_like_cookie(
                     &related_cookie_name(&ctx.config, "dont_remember"),
-                    &sign_cookie_value("true", &ctx.config.secret),
+                    &sign_cookie_value("true", ctx.config.signing_secret()),
                     None,
                     &ctx.config,
                 ),

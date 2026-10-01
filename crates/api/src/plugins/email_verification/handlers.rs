@@ -41,7 +41,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             }
 
             let token = create_email_verification_token(
-                &ctx.config.secret,
+                ctx.config.signing_secret(),
                 &body.email,
                 None,
                 config.verification_token_expiry,
@@ -70,7 +70,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
 
             if user.email_verified() {
                 let _ = create_email_verification_token(
-                    &ctx.config.secret,
+                    ctx.config.signing_secret(),
                     &body.email,
                     None,
                     config.verification_token_expiry,
@@ -80,7 +80,7 @@ pub(super) async fn send_verification_email_core<U: AuthUser>(
             }
 
             let token = create_email_verification_token(
-                &ctx.config.secret,
+                ctx.config.signing_secret(),
                 &body.email,
                 None,
                 config.verification_token_expiry,
@@ -132,7 +132,7 @@ where
         None
     };
 
-    let claims = match decode_email_verification_token(&ctx.config.secret, &query.token) {
+    let claims = match decode_email_verification_token(ctx.config.signing_secret(), &query.token) {
         Ok(claims) => claims,
         Err(AuthError::Jwt(error)) => {
             if matches!(
@@ -184,7 +184,7 @@ where
         match claims.request_type.as_deref() {
             Some("change-email-confirmation") => {
                 let new_token = create_email_verification_token(
-                    &ctx.config.secret,
+                    ctx.config.signing_secret(),
                     &claims.email,
                     Some(update_to),
                     config.verification_token_expiry,
@@ -270,7 +270,7 @@ where
                     )
                     .await?;
                 let new_token = create_email_verification_token(
-                    &ctx.config.secret,
+                    ctx.config.signing_secret(),
                     update_to,
                     None,
                     config.verification_token_expiry,

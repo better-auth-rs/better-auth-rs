@@ -10,6 +10,17 @@ use chrono::Utc;
 mod user_input;
 pub(crate) use user_input::apply_user_create_fields;
 
+pub(crate) fn session_is_fresh(
+    session: &impl better_auth_core::AuthSession,
+    config: &better_auth_core::AuthConfig,
+) -> bool {
+    let fresh_age = config
+        .session
+        .fresh_age
+        .unwrap_or_else(|| chrono::Duration::hours(24));
+    fresh_age.is_zero() || Utc::now() - session.created_at() < fresh_age
+}
+
 /// Convert an `expiresIn` value (**seconds** from now) into an RFC 3339
 /// `expires_at` timestamp string.
 ///
@@ -341,37 +352,52 @@ pub fn get_cookie(req: &AuthRequest, name: &str) -> Option<String> {
 }
 
 /// TS-style cookie clearing used by `deleteSessionCookie`.
-pub fn delete_session_cookie_headers(config: &better_auth_core::AuthConfig) -> Vec<String> {
-    let mut cookies = vec![
-        better_auth_core::utils::cookie_utils::create_clear_session_cookie(config),
-        better_auth_core::utils::cookie_utils::create_clear_cookie(
-            &better_auth_core::utils::cookie_utils::related_cookie_name(config, "session_data"),
-            config,
-        ),
-        better_auth_core::utils::cookie_utils::create_clear_cookie(
-            &better_auth_core::utils::cookie_utils::related_cookie_name(config, "dont_remember"),
-            config,
-        ),
-    ];
-
+pub fn delete_session_cookie_headers(
+    req: &AuthRequest,
+    config: &better_auth_core::AuthConfig,
+) -> Vec<String> {
+    use better_auth_core::utils::cookie_utils::{
+        create_clear_chunked_cookies, create_clear_cookie, create_clear_session_cookie,
+        related_cookie_name,
+    };
+    let mut cookies = vec![create_clear_session_cookie(config)];
+    cookies.extend(create_clear_chunked_cookies(
+        req,
+        &related_cookie_name(config, "session_data"),
+        config,
+    ));
+    cookies.push(create_clear_cookie(
+        &related_cookie_name(config, "dont_remember"),
+        config,
+    ));
     if config.account.store_account_cookie {
-        cookies.push(better_auth_core::utils::cookie_utils::create_clear_cookie(
-            &better_auth_core::utils::cookie_utils::related_cookie_name(config, "account_data"),
+        cookies.extend(create_clear_chunked_cookies(
+            req,
+            &related_cookie_name(config, "account_data"),
             config,
         ));
     }
-
     if matches!(
         config.account.store_state_strategy,
         OAuthStateStrategy::Cookie
     ) {
-        cookies.push(better_auth_core::utils::cookie_utils::create_clear_cookie(
-            &better_auth_core::utils::cookie_utils::related_cookie_name(config, "oauth_state"),
+        cookies.push(create_clear_cookie(
+            &related_cookie_name(config, "oauth_state"),
             config,
         ));
     }
-
     cookies
+}
+
+/// Parse the comma-delimited scopes stored on an OAuth account.
+pub(crate) fn parse_stored_scopes(scope: Option<&str>) -> Vec<String> {
+    scope
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|scope| !scope.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 #[cfg(test)]

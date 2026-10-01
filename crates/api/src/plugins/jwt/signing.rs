@@ -107,7 +107,7 @@ impl JwtPlugin {
             key.private_key
         } else {
             crate::plugins::symmetric::decrypt(
-                &ctx.config.secret,
+                ctx.config.encryption_secret(),
                 &serde_json::from_str::<String>(&key.private_key)?,
             )?
         };

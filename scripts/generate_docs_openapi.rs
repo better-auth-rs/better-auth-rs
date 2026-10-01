@@ -238,8 +238,7 @@ async fn build_docs_auth() -> Result<BetterAuth<BundledSchema>, DynError> {
         .plugin(
             UserManagementPlugin::new()
                 .change_email_enabled(true)
-                .delete_user_enabled(true)
-                .require_delete_verification(false),
+                .delete_user_enabled(true),
         )
         .plugin(OAuthPlugin::new())
         .plugin(DeviceAuthorizationPlugin::new())

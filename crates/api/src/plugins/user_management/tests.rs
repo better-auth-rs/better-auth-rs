@@ -6,6 +6,21 @@ use chrono::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use better_auth_core::utils::cookie_utils::related_cookie_name;
+struct NoopDeleteSender;
+#[async_trait]
+impl SendDeleteAccountVerification for NoopDeleteSender {
+    async fn send(
+        &self,
+        _user: &UserView,
+        _url: &str,
+        _token: &str,
+        _request: Option<&AuthRequest>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+}
+
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 // -- change email tests ────────────────────────────────────────────
@@ -144,9 +159,7 @@ async fn test_change_email_immediate_when_update_without_verification() {
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_immediate() {
-    let plugin = UserManagementPlugin::new()
-        .delete_user_enabled(true)
-        .require_delete_verification(false);
+    let plugin = UserManagementPlugin::new().delete_user_enabled(true);
     let (ctx, user, session) = test_helpers::create_test_context_with_user(
         CreateUser::new()
             .with_email("test@example.com")
@@ -175,9 +188,7 @@ async fn test_delete_user_immediate() {
 // Upstream reference: packages/better-auth/src/api/routes/update-user.ts :: deleteUser calls `deleteSessionCookie(ctx)`, which clears the account_data cookie when account.storeAccountCookie is enabled.
 #[tokio::test]
 async fn test_delete_user_immediate_clears_account_cookie_when_enabled() {
-    let plugin = UserManagementPlugin::new()
-        .delete_user_enabled(true)
-        .require_delete_verification(false);
+    let plugin = UserManagementPlugin::new().delete_user_enabled(true);
     let config = test_helpers::create_test_config().account(AccountConfig {
         store_account_cookie: true,
         ..Default::default()
@@ -217,7 +228,7 @@ async fn test_delete_user_immediate_clears_account_cookie_when_enabled() {
 async fn test_delete_user_with_verification() {
     let plugin = UserManagementPlugin::new()
         .delete_user_enabled(true)
-        .require_delete_verification(true);
+        .send_delete_account_verification(Arc::new(NoopDeleteSender));
     let (ctx, user, session) = test_helpers::create_test_context_with_user(
         CreateUser::new()
             .with_email("test@example.com")
@@ -279,7 +290,7 @@ async fn test_delete_user_with_verification() {
 async fn test_delete_user_callback_clears_account_cookie_when_enabled() {
     let plugin = UserManagementPlugin::new()
         .delete_user_enabled(true)
-        .require_delete_verification(true);
+        .send_delete_account_verification(Arc::new(NoopDeleteSender));
     let config = test_helpers::create_test_config().account(AccountConfig {
         store_account_cookie: true,
         ..Default::default()
@@ -337,9 +348,7 @@ async fn test_delete_user_callback_clears_account_cookie_when_enabled() {
 // Upstream reference: packages/better-auth/src/api/routes/update-user.test.ts :: describe("updateUser") and packages/better-auth/src/api/routes/update-user.ts; adapted to the Rust user-management plugin.
 #[tokio::test]
 async fn test_delete_user_unauthenticated() {
-    let plugin = UserManagementPlugin::new()
-        .delete_user_enabled(true)
-        .require_delete_verification(false);
+    let plugin = UserManagementPlugin::new().delete_user_enabled(true);
     let (ctx, _user, _session) = test_helpers::create_test_context_with_user(
         CreateUser::new()
             .with_email("test@example.com")
@@ -399,7 +408,11 @@ async fn test_delete_user_before_hook_abort() {
     struct AbortHook;
     #[async_trait]
     impl BeforeDeleteUser for AbortHook {
-        async fn before_delete(&self, _user: &UserInfo) -> AuthResult<()> {
+        async fn before_delete(
+            &self,
+            _user: &UserView,
+            _request: Option<&AuthRequest>,
+        ) -> AuthResult<()> {
             Err(AuthError::forbidden("Deletion blocked by policy"))
         }
     }
@@ -410,7 +423,11 @@ async fn test_delete_user_before_hook_abort() {
     struct AfterHook(Arc<AtomicBool>);
     #[async_trait]
     impl AfterDeleteUser for AfterHook {
-        async fn after_delete(&self, _user: &UserInfo) -> AuthResult<()> {
+        async fn after_delete(
+            &self,
+            _user: &UserView,
+            _request: Option<&AuthRequest>,
+        ) -> AuthResult<()> {
             self.0.store(true, Ordering::SeqCst);
             Ok(())
         }
@@ -418,7 +435,6 @@ async fn test_delete_user_before_hook_abort() {
 
     let plugin = UserManagementPlugin::new()
         .delete_user_enabled(true)
-        .require_delete_verification(false)
         .before_delete(Arc::new(AbortHook))
         .after_delete(Arc::new(AfterHook(called_clone)));
     let (ctx, user, session) = test_helpers::create_test_context_with_user(

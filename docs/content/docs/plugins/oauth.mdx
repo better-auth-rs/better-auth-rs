@@ -178,7 +178,11 @@ Authorization: Bearer <token>
 
 The response includes provider user info and an `account` object with `id`, `providerId`, and the provider's `accountId`. The example's Authorization header requires explicit `SessionConfig.bearer` configuration; browser clients may use signed session cookies.
 
-For `POST /get-access-token` and `POST /refresh-token`, send `{ "accountId": "local-account-id" }`. When `account.store_account_cookie` is enabled, these POST endpoints also accept `{ "useAccountCookie": true }` to select the signed account cookie. Select exactly one source. The authenticated session determines the user.
+For `POST /get-access-token` and `POST /refresh-token`, send `{ "accountId": "local-account-id" }`. When `account.store_account_cookie` is enabled, these POST endpoints also accept `{ "useAccountCookie": true }` to select the encrypted account cookie. The cookie uses upstream's JWE format and the `better-auth-account` purpose. Large values use numbered cookie chunks; replacing the cookie or signing out clears stale chunks. Select exactly one source. The authenticated session determines the user.
+
+Set `account.encrypt_oauth_tokens = true` to encrypt stored access and refresh tokens with the shared XChaCha20-Poly1305 codec. Existing plaintext tokens remain readable; subsequent token writes use encryption. ID tokens remain unencrypted, matching upstream. Versioned encryption keys and migration from a legacy secret are described in [Security](/docs/reference/security#secret-rotation).
+
+`/get-access-token` decrypts a refresh token only when the access token needs renewal. Decryption, provider refresh, and persistence failures return `400 FAILED_TO_GET_ACCESS_TOKEN`; `/refresh-token` uses `400 FAILED_TO_REFRESH_ACCESS_TOKEN` for those failures. A missing refresh token retains `REFRESH_TOKEN_NOT_FOUND`. Empty refresh and ID tokens returned by a provider preserve the existing stored values; `/get-access-token` can still return an explicitly empty provider ID token. Stored account scopes are comma-delimited and trimmed, including scopes containing spaces.
 
 For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`. Access-token, refresh-token, and account-info routes check the current database session even when a session cookie cache is enabled. A revoked session cannot read or refresh provider credentials through a cached session.
 
@@ -202,8 +206,16 @@ When the OAuth callback completes:
 - **New provider, existing email**: Links the provider when account-linking policy permits it
 - **New provider, new email**: Creates a user and links the provider when sign-up policy permits it
 
+Direct ID-token `/link-social` requests refresh an account already owned by the session user, including when new account linking is disabled. Omitted access and refresh tokens preserve stored values; explicit empty strings clear them. Another owner's account returns `409 SOCIAL_ACCOUNT_ALREADY_LINKED`. New links enforce the verified-email and matching-email policies before writing the account.
+
+With `account.account_linking.update_user_info_on_link`, direct linking also updates the name, image, and permitted additional user fields. The provider cannot replace the user's email or verification status. Better Auth 1.7.6 logs and ignores errors from this profile synchronization after the account write; account write errors still propagate. Account creation errors return `417 LINKING_FAILED`, including an after-create hook error after the row was written. Direct linking does not wrap these operations in a transaction or invoke `validate_user_info`.
+
+A before-create or before-update account hook can cancel its own write. Direct linking still synchronizes the user profile and returns success, matching upstream's null account result. Errors from nested hook operations remain errors.
+
 ### State Management
 
-OAuth state expires after 10 minutes. `account.store_state_strategy` selects database storage or a signed cookie. State includes the callback URLs, PKCE verifier, link target, sign-up intent, and OIDC nonce when nonce binding is enabled.
+OAuth state expires after 10 minutes. `account.store_state_strategy` selects database storage or an encrypted cookie. State includes the callback URLs, PKCE verifier, link target, sign-up intent, and OIDC nonce when nonce binding is enabled. Database storage uses the raw state identifier and a signed state cookie. Cookie storage encrypts the full payload and binds its `oauthState` to the callback parameter.
+
+An invalid state binding preserves the stored state and redirects to its configured error URL. A validated state is consumed before expiry or provider errors are returned. Malformed database state redirects with `internal_server_error`; malformed encrypted cookie state redirects with `state_invalid`.
 
 With `allow_idp_initiated: true`, a callback without state starts a fresh authorization request. The new request establishes state and nonce binding before a session is issued.

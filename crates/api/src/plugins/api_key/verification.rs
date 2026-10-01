@@ -295,28 +295,32 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<Option<BeforeRequestAction>> {
-        let body = match req.body.as_deref().filter(|body| !body.is_empty()) {
-            Some(body)
-                if req.headers.iter().any(|(name, value)| {
-                    name.eq_ignore_ascii_case("content-type")
-                        && value
-                            .to_ascii_lowercase()
-                            .contains("application/x-www-form-urlencoded")
-                }) =>
-            {
-                serde_json::Value::Object(
-                    url::form_urlencoded::parse(body)
-                        .map(|(name, value)| {
-                            (
-                                name.into_owned(),
-                                serde_json::Value::String(value.into_owned()),
-                            )
-                        })
-                        .collect(),
-                )
+        let body = if let Some(body) = req.parsed_http_body() {
+            body.clone()
+        } else {
+            match req.body.as_deref().filter(|body| !body.is_empty()) {
+                Some(body)
+                    if req.headers.iter().any(|(name, value)| {
+                        name.eq_ignore_ascii_case("content-type")
+                            && value
+                                .to_ascii_lowercase()
+                                .contains("application/x-www-form-urlencoded")
+                    }) =>
+                {
+                    serde_json::Value::Object(
+                        url::form_urlencoded::parse(body)
+                            .map(|(name, value)| {
+                                (
+                                    name.into_owned(),
+                                    serde_json::Value::String(value.into_owned()),
+                                )
+                            })
+                            .collect(),
+                    )
+                }
+                Some(body) => crate::plugins::json_body::decode(body).map_err(AuthError::from)?,
+                None => serde_json::Value::Null,
             }
-            Some(body) => crate::plugins::json_body::decode(body).map_err(AuthError::from)?,
-            None => serde_json::Value::Null,
         };
         let endpoint = ApiKeyEndpoint::new(ctx, Some(req), Some(req.path()), &body);
         let (session, user) = match self.authenticate_api_key(endpoint, ctx).await {
@@ -443,9 +447,12 @@ impl ApiKeyPlugin {
                 now + chrono::Duration::milliseconds(ctx.config.session.expires_in.num_seconds())
             }
         };
-        let meta = endpoint
-            .request
-            .map(better_auth_core::RequestMeta::from_request);
+        let meta = endpoint.request.map(|req| {
+            better_auth_core::RequestMeta::from_request_with_config(
+                req,
+                &ctx.config.advanced.ip_address,
+            )
+        });
         let session = SessionView {
             visible_fields: None,
             id: view.id,

@@ -9,7 +9,7 @@ use better_auth_core::{
 use rand::distributions::{Alphanumeric, DistString};
 use validator::ValidateEmail;
 
-use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
+use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 
 type FutureResult<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
 type Generator = dyn Fn() -> FutureResult<String> + Send + Sync;
@@ -133,9 +133,12 @@ impl AnonymousPlugin {
                 name
             });
         create.is_anonymous = Some(true);
-        apply_default_role(ctx, &mut create);
-        let user = ctx.database.create_user(create).await?;
-        let meta = RequestMeta::from_request(req);
+        create.email_verified = Some(false);
+
+        let endpoint =
+            super::endpoint_context::EndpointContext::new(Some(req), serde_json::Value::Null, ctx);
+        let user = super::user_admission::create_user(create, "anonymous", &endpoint).await?;
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
@@ -225,7 +228,7 @@ impl AnonymousPlugin {
         };
         let Some(token) = better_auth_core::utils::cookie_utils::verify_cookie_value(
             cookie.value(),
-            &ctx.config.secret,
+            ctx.config.signing_secret(),
         ) else {
             return Ok(());
         };

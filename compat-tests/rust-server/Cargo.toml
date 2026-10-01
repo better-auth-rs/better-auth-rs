@@ -20,3 +20,7 @@ chrono = "0.4.44"
 url = "2.5.8"
 k256 = { version = "0.14.0", features = ["ecdsa"] }
 sha3 = "0.12.0"
+
+# Keep the upstream KDF cost while making multi-step debug authentication tests practical.
+[profile.dev.package.scrypt]
+opt-level = 3

@@ -1,0 +1,21 @@
+---
+title: Device Authorization
+description: Register a device through an authenticated browser approval flow.
+---
+
+Install `DeviceAuthorizationPlugin` and generate the device-authorization schema. A client requests a code at `POST /device/code`, sends its user to the verification URI, and polls `POST /device/token`. An authenticated user must claim the code through `GET /device` before calling `/device/approve` or `/device/deny`.
+
+```rust
+use better_auth::plugins::DeviceAuthorizationPlugin;
+
+let plugin = DeviceAuthorizationPlugin::new()
+    .validate_client(|client_id| async move { Ok(client_id == "node-agent") })
+    .generate_device_code_with(|| async { Ok(issue_device_code().await?) })
+    .generate_user_code_with(|| async { Ok(issue_user_code().await?) });
+```
+
+Application generators return `AuthResult<String>`. Each attempt awaits the device-code generator, then the user-code generator, before persistence. A callback error stops the request. Codes may contain up to 191 Unicode scalar values; custom user codes retain their exact case and punctuation. The upstream contract permits an explicitly empty generated code.
+
+The plugin retries a unique-constraint collision at most three times. Each retry generates both codes again. Other persistence errors propagate. Client validation and `on_device_auth_request` run once before generation.
+
+The generator methods now accept asynchronous closures. Change a synchronous closure from `|| value` to `|| async { Ok(value) }`. Keep application-owned admission policy in `validate_client`; a valid device token does not establish machine inventory identity.

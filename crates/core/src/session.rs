@@ -398,7 +398,7 @@ impl<S: AuthSchema> SessionManager<S> {
     /// Read the signed marker for a browser-session-only login.
     pub fn dont_remember(&self, req: &AuthRequest) -> bool {
         get_cookie(req, &related_cookie_name(&self.config, "dont_remember"))
-            .and_then(|value| verify_cookie_value(&value, &self.config.secret))
+            .and_then(|value| verify_cookie_value(&value, self.config.signing_secret()))
             .is_some()
     }
 
@@ -419,10 +419,12 @@ impl<S: AuthSchema> SessionManager<S> {
             {
                 continue;
             }
-            req.append_response_header(
-                "Set-Cookie",
-                create_clear_cookie(&related_cookie_name(&self.config, suffix), &self.config),
-            )?;
+            let name = related_cookie_name(&self.config, suffix);
+            if suffix == "account_data" {
+                crate::utils::cookie_utils::clear_chunked_cookie(req, &name, &self.config)?;
+            } else {
+                req.append_response_header("Set-Cookie", create_clear_cookie(&name, &self.config))?;
+            }
         }
         Ok(())
     }
@@ -559,7 +561,7 @@ impl<S: AuthSchema> SessionManager<S> {
             let token = header.get(7..)?.trim();
             if !token.is_empty() {
                 if token.contains('.') {
-                    if let Some(value) = verify_cookie_value(token, &self.config.secret) {
+                    if let Some(value) = verify_cookie_value(token, self.config.signing_secret()) {
                         return Some(value);
                     }
                 } else if !bearer.require_signature {
@@ -568,7 +570,7 @@ impl<S: AuthSchema> SessionManager<S> {
             }
         }
         get_cookie(req, &self.config.session.cookie_name)
-            .and_then(|value| verify_cookie_value(&value, &self.config.secret))
+            .and_then(|value| verify_cookie_value(&value, self.config.signing_secret()))
     }
 }
 
