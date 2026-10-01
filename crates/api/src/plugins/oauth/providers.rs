@@ -110,7 +110,8 @@ pub struct OAuthProvider {
     pub disable_default_scope: bool,
     /// Reject direct ID-token sign-in and linking before invoking the verifier.
     pub disable_id_token_sign_in: bool,
-    /// Provider authentication prompt; omission preserves the provider default.
+    /// Authentication prompt for providers that support this option.
+    /// Omission preserves the provider default.
     pub prompt: Option<String>,
     pub authorization_params: Vec<(String, String)>,
     /// Replace the base JSON decoder for a custom provider.
@@ -215,6 +216,62 @@ impl OAuthProvider {
         }
     }
 
+    /// Configure GitLab with its built-in endpoints and active-user profile decoder.
+    pub fn gitlab(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::GitLab,
+            user_info_url: Some("https://gitlab.com/api/v4/user".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://gitlab.com/oauth/authorize",
+                "https://gitlab.com/oauth/token",
+            )
+        }
+    }
+
+    /// Configure Spotify with its built-in endpoints and profile decoder.
+    pub fn spotify(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Spotify,
+            user_info_url: Some("https://api.spotify.com/v1/me".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://accounts.spotify.com/authorize",
+                "https://accounts.spotify.com/api/token",
+            )
+        }
+    }
+
+    /// Configure Hugging Face with its built-in endpoints and HTTP profile decoder.
+    pub fn huggingface(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::HuggingFace,
+            user_info_url: Some("https://huggingface.co/oauth/userinfo".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://huggingface.co/oauth/authorize",
+                "https://huggingface.co/oauth/token",
+            )
+        }
+    }
+
+    /// Configure Polar with its built-in endpoints and HTTP profile decoder.
+    pub fn polar(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Polar,
+            user_info_url: Some("https://api.polar.sh/v1/oauth2/userinfo".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://polar.sh/oauth2/authorize",
+                "https://api.polar.sh/v1/oauth2/token",
+            )
+        }
+    }
+
     /// Return the effective implicit sign-up policy.
     pub fn disable_implicit_sign_up(&self) -> bool {
         self.disable_implicit_sign_up.unwrap_or(false)
@@ -280,10 +337,18 @@ impl OAuthProvider {
     }
 
     pub(super) fn social_prompt(&self) -> Option<&str> {
-        self.prompt
-            .as_deref()
-            .filter(|value| !value.is_empty())
-            .or_else(|| matches!(self.kind, ProviderKind::Discord).then_some("none"))
+        match self.kind {
+            ProviderKind::Custom
+            | ProviderKind::Google { .. }
+            | ProviderKind::GitHub { .. }
+            | ProviderKind::Discord
+            | ProviderKind::Polar => self
+                .prompt
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .or_else(|| matches!(self.kind, ProviderKind::Discord).then_some("none")),
+            ProviderKind::GitLab | ProviderKind::Spotify | ProviderKind::HuggingFace => None,
+        }
     }
 }
 

@@ -73,6 +73,7 @@ pub struct SeaOrmStore<
     P: crate::SeaOrmPluginSchema = crate::PluginModels,
 > {
     config: Arc<AuthConfig>,
+    model_fields: better_auth_core::plugin_runtime::ModelFields,
     db: DatabaseConnection,
     schema_revision: Arc<std::sync::atomic::AtomicU64>,
     hooks: Vec<Arc<dyn SeaOrmHooks<S>>>,
@@ -87,6 +88,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
+            model_fields: self.model_fields.clone(),
             db: self.db.clone(),
             schema_revision: self.schema_revision.clone(),
             hooks: self.hooks.clone(),
@@ -101,6 +103,7 @@ impl<S: AuthSchema> SeaOrmStore<S> {
     pub fn new(config: impl Into<Arc<AuthConfig>>, db: DatabaseConnection) -> Self {
         Self {
             config: config.into(),
+            model_fields: Default::default(),
             db,
             schema_revision: Default::default(),
             hooks: Vec::new(),
@@ -128,6 +131,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     ) -> SeaOrmStore<S, T, P> {
         SeaOrmStore {
             config: self.config,
+            model_fields: self.model_fields,
             db: self.db,
             schema_revision: self.schema_revision,
             hooks: self.hooks,
@@ -140,6 +144,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     pub fn with_plugin_schema<T: crate::SeaOrmPluginSchema>(self) -> SeaOrmStore<S, O, T> {
         SeaOrmStore {
             config: self.config,
+            model_fields: self.model_fields,
             db: self.db,
             schema_revision: self.schema_revision,
             hooks: self.hooks,

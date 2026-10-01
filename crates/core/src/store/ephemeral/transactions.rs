@@ -258,6 +258,7 @@ impl EphemeralStore {
         let queue = Arc::new(Mutex::new(Vec::new()));
         let isolated = Self {
             config: self.config.clone(),
+            model_fields: self.model_fields.clone(),
             state: Arc::new(Mutex::new(base.deep_clone()?)),
             verification_locks: self.verification_locks.clone(),
             session_config: self.session_config.clone(),

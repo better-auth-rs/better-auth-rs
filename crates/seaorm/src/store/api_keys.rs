@@ -11,7 +11,7 @@ use sea_orm::{
 use serde_json::{Map, json};
 
 use better_auth_core::ApiKeyStart;
-use better_auth_core::store::{ApiKeyStore, ApiKeyUsageWrite};
+use better_auth_core::store::{ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -42,9 +42,6 @@ fn apply_update_fields<M: SeaOrmPluginModel>(
     update: UpdateApiKey,
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::ActiveModel> {
-    if let Some(name) = update.name {
-        set::<M>(&mut active, "name", Some(name), policy)?;
-    }
     if let Some(enabled) = update.enabled {
         set::<M>(&mut active, "enabled", enabled, policy)?;
     }
@@ -130,57 +127,65 @@ where
             .start
             .map(|start| start_for_database(start, self.connection().get_database_backend()))
             .transpose()?;
+        let fields = Map::from_iter([
+            ("name".to_owned(), json!(input.name)),
+            ("start".to_owned(), json!(start)),
+            ("prefix".to_owned(), json!(input.prefix)),
+            ("key_hash".to_owned(), json!(input.key_hash)),
+            ("reference_id".to_owned(), json!(input.reference_id)),
+            ("config_id".to_owned(), json!(input.config_id)),
+            ("refill_interval".to_owned(), json!(input.refill_interval)),
+            ("refill_amount".to_owned(), json!(input.refill_amount)),
+            ("last_refill_at".to_owned(), serde_json::Value::Null),
+            ("enabled".to_owned(), json!(input.enabled)),
+            (
+                "rate_limit_enabled".to_owned(),
+                json!(input.rate_limit_enabled),
+            ),
+            (
+                "rate_limit_time_window".to_owned(),
+                json!(input.rate_limit_time_window),
+            ),
+            ("rate_limit_max".to_owned(), json!(input.rate_limit_max)),
+            ("request_count".to_owned(), json!(Some(0.0))),
+            ("remaining".to_owned(), json!(input.remaining)),
+            ("last_request".to_owned(), serde_json::Value::Null),
+            (
+                "expires_at".to_owned(),
+                json!(parse_optional_rfc3339(
+                    input.expires_at.as_deref(),
+                    "expires_at",
+                )?),
+            ),
+            ("created_at".to_owned(), json!(now)),
+            ("updated_at".to_owned(), json!(now)),
+            ("permissions".to_owned(), json!(input.permissions)),
+            ("metadata".to_owned(), json!(input.metadata)),
+        ]);
+        let fields = self
+            .model_fields
+            .fields(EntityRole::ApiKey)
+            .organization_storage_fields(fields, Map::new(), true)
+            .await?;
+        let fields = self.create_fields("apikey", None, fields)?;
         let active = super::plugin_models::active::<P::ApiKey>(
-            self.create_fields(
-                "apikey",
-                None,
-                Map::from_iter([
-                    ("name".to_owned(), json!(input.name)),
-                    ("start".to_owned(), json!(start)),
-                    ("prefix".to_owned(), json!(input.prefix)),
-                    ("key_hash".to_owned(), json!(input.key_hash)),
-                    ("reference_id".to_owned(), json!(input.reference_id)),
-                    ("config_id".to_owned(), json!(input.config_id)),
-                    ("refill_interval".to_owned(), json!(input.refill_interval)),
-                    ("refill_amount".to_owned(), json!(input.refill_amount)),
-                    ("last_refill_at".to_owned(), serde_json::Value::Null),
-                    ("enabled".to_owned(), json!(input.enabled)),
-                    (
-                        "rate_limit_enabled".to_owned(),
-                        json!(input.rate_limit_enabled),
-                    ),
-                    (
-                        "rate_limit_time_window".to_owned(),
-                        json!(input.rate_limit_time_window),
-                    ),
-                    ("rate_limit_max".to_owned(), json!(input.rate_limit_max)),
-                    ("request_count".to_owned(), json!(Some(0.0))),
-                    ("remaining".to_owned(), json!(input.remaining)),
-                    ("last_request".to_owned(), serde_json::Value::Null),
-                    (
-                        "expires_at".to_owned(),
-                        json!(parse_optional_rfc3339(
-                            input.expires_at.as_deref(),
-                            "expires_at",
-                        )?),
-                    ),
-                    ("created_at".to_owned(), json!(now)),
-                    ("updated_at".to_owned(), json!(now)),
-                    ("permissions".to_owned(), json!(input.permissions)),
-                    ("metadata".to_owned(), json!(input.metadata)),
-                ]),
-            )?,
+            fields,
             self.config().advanced.database.generate_id(),
         )?;
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
+        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
             active.insert(self.connection()).await.map_err(map_db_err)
         })
         .await?
-        .record()
+        .record()?;
+        Ok(self
+            .model_fields
+            .project_api_keys(vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
+        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
             Entity::<P::ApiKey>::find()
                 .filter(
                     P::ApiKey::column("id")?
@@ -192,11 +197,16 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
+        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
             Entity::<P::ApiKey>::find()
                 .filter(P::ApiKey::column("key_hash")?.eq(hash))
                 .one(self.connection())
@@ -205,7 +215,12 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn find_api_keys_by_reference(
@@ -213,7 +228,7 @@ where
         reference_id: &str,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), "findMany", async {
+        let rows = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findMany", async {
             let mut query = Entity::<P::ApiKey>::find()
                 .filter(P::ApiKey::column("reference_id")?.eq(reference_id));
             if let Some((field, direction)) = sort {
@@ -238,7 +253,8 @@ where
         .await?
         .iter()
         .map(SeaOrmPluginModel::record)
-        .collect()
+        .collect::<AuthResult<Vec<_>>>()?;
+        self.model_fields.project_api_keys(rows).await
     }
 
     async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
@@ -265,17 +281,29 @@ where
     async fn update_api_key_optional(
         &self,
         id: &better_auth_core::SchemaValue<String>,
-        update: UpdateApiKey,
+        mut update: UpdateApiKey,
     ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
-        let active = apply_update_fields::<P::ApiKey>(
+        let name = self
+            .model_fields
+            .name_for_storage(EntityRole::ApiKey, update.name.take().map(Some), false)
+            .await?;
+        let mut active = apply_update_fields::<P::ApiKey>(
             Default::default(),
             update,
             self.config().advanced.database.generate_id(),
         )?;
+        if let Some(name) = name {
+            set::<P::ApiKey>(
+                &mut active,
+                "name",
+                name,
+                self.config().advanced.database.generate_id(),
+            )?;
+        }
         let filter =
             P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
+        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
             super::updates::update_returning_one::<Entity<P::ApiKey>, _>(
                 self.connection(),
                 active,
@@ -286,7 +314,12 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn write_api_key_usage(
@@ -295,6 +328,14 @@ where
         write: ApiKeyUsageWrite,
     ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
+        // Upstream does not run update policies for an increment without a set patch.
+        let name = if matches!(&write, ApiKeyUsageWrite::Decrement) {
+            None
+        } else {
+            self.model_fields
+                .name_for_storage(EntityRole::ApiKey, None, false)
+                .await?
+        };
         let operation = write.operation();
         let reselect =
             P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
@@ -352,8 +393,11 @@ where
                 query = query.col_expr(P::ApiKey::column("updated_at")?, Expr::value(at));
             }
         }
+        if let Some(name) = name {
+            query = query.col_expr(P::ApiKey::column("name")?, Expr::value(name));
+        }
         let query = query.filter(guard.clone());
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
+        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {
                 super::updates::increment_returning_one::<Entity<P::ApiKey>>(
                     self.connection(),
@@ -373,7 +417,12 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn delete_api_key(&self, id: &better_auth_core::SchemaValue<String>) -> AuthResult<()> {

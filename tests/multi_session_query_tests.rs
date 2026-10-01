@@ -153,21 +153,25 @@ async fn multi_session_query_order_limits_expiration_and_cache_match_upstream() 
         config.logger.disabled = Some(true);
         config.advanced.database.default_find_many_limit = case["limit"].as_f64();
         config.session.store_session_in_database = Some(true);
-        let actual = if case["backend"] == "sqlite" {
-            let database = Database::connect("sqlite::memory:")
-                .await
-                .map_err(|error| AuthError::internal(error.to_string()))?;
-            migrator::run_migrations(&database)
-                .await
-                .map_err(|error| AuthError::internal(error.to_string()))?;
-            let store = SeaOrmStore::<BundledSchema>::new(config.clone(), database)
-                .with_runtime(Arc::new(config.clone()), Vec::new())?;
-            run(config, store, &case).await?
-        } else {
-            let store =
-                EphemeralStore::default().with_runtime(Arc::new(config.clone()), Vec::new())?;
-            run(config, store, &case).await?
-        };
+        let actual =
+            if case["backend"] == "sqlite" {
+                let database = Database::connect("sqlite::memory:")
+                    .await
+                    .map_err(|error| AuthError::internal(error.to_string()))?;
+                migrator::run_migrations(&database)
+                    .await
+                    .map_err(|error| AuthError::internal(error.to_string()))?;
+                let store = SeaOrmStore::<BundledSchema>::new(config.clone(), database)
+                    .with_runtime(Arc::new(config.clone()), Vec::new(), Default::default())?;
+                run(config, store, &case).await?
+            } else {
+                let store = EphemeralStore::default().with_runtime(
+                    Arc::new(config.clone()),
+                    Vec::new(),
+                    Default::default(),
+                )?;
+                run(config, store, &case).await?
+            };
         assert_eq!(actual, case);
     }
     Ok(())

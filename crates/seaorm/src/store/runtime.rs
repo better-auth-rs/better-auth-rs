@@ -46,9 +46,11 @@ where
         &self,
         config: Arc<AuthConfig>,
         hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
+        model_fields: better_auth_core::plugin_runtime::ModelFields,
     ) -> AuthResult<Arc<dyn AuthStore<S>>> {
         let mut store = self.clone();
         store.config = config;
+        store.model_fields = model_fields;
         store.organization_fields = Arc::new(RwLock::new(self.organization_fields()?));
         store.hooks = hooks
             .into_iter()

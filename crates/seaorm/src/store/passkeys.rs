@@ -1,6 +1,6 @@
 use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
-use super::plugin_models::{Entity, set};
+use super::plugin_models::{Entity, apply};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
@@ -9,7 +9,7 @@ use sea_orm::{
 };
 use serde_json::{Map, json};
 
-use better_auth_core::store::PasskeyStore;
+use better_auth_core::store::{PasskeyStore, schema::EntityRole};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -29,7 +29,7 @@ where
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
+        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
             Entity::<P::Passkey>::find()
                 .filter(
                     P::Passkey::column("id")?
@@ -41,14 +41,19 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_passkeys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn get_passkey_by_credential_id(
         &self,
         credential_id: &str,
     ) -> AuthResult<Option<Passkey>> {
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
+        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
             Entity::<P::Passkey>::find()
                 .filter(P::Passkey::column("credential_id")?.eq(credential_id))
                 .one(self.connection())
@@ -57,11 +62,16 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_passkeys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "findMany", async {
+        let rows = database_operation::<Entity<P::Passkey>, _>(self.config(), "findMany", async {
             Entity::<P::Passkey>::find()
                 .filter(
                     P::Passkey::column("user_id")?
@@ -78,7 +88,8 @@ where
         .await?
         .iter()
         .map(SeaOrmPluginModel::record)
-        .collect()
+        .collect::<AuthResult<Vec<_>>>()?;
+        self.model_fields.project_passkeys(rows).await
     }
 
     async fn update_passkey_authentication(
@@ -87,7 +98,22 @@ where
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
         let id = id.typed()?;
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+        let fields = self
+            .model_fields
+            .fields(EntityRole::Passkey)
+            .organization_storage_fields(
+                Map::from_iter([
+                    ("counter".into(), json!(update.counter)),
+                    ("backed_up".into(), json!(update.backed_up)),
+                    ("device_type".into(), json!(update.device_type)),
+                    ("credential".into(), json!(update.credential)),
+                    ("updated_at".into(), json!(Utc::now())),
+                ]),
+                Map::new(),
+                false,
+            )
+            .await?;
+        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(model) = Entity::<P::Passkey>::find()
                 .filter(
                     P::Passkey::column("id")?
@@ -100,36 +126,12 @@ where
                 return Ok(None);
             };
 
+            let _ = i64::try_from(update.counter)
+                .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
             let mut active = model.into_active_model();
-            set::<P::Passkey>(
+            apply::<P::Passkey>(
                 &mut active,
-                "counter",
-                i64::try_from(update.counter)
-                    .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?,
-                self.config().advanced.database.generate_id(),
-            )?;
-            set::<P::Passkey>(
-                &mut active,
-                "backed_up",
-                update.backed_up,
-                self.config().advanced.database.generate_id(),
-            )?;
-            set::<P::Passkey>(
-                &mut active,
-                "device_type",
-                update.device_type,
-                self.config().advanced.database.generate_id(),
-            )?;
-            set::<P::Passkey>(
-                &mut active,
-                "credential",
-                update.credential,
-                self.config().advanced.database.generate_id(),
-            )?;
-            set::<P::Passkey>(
-                &mut active,
-                "updated_at",
-                Utc::now(),
+                fields,
                 self.config().advanced.database.generate_id(),
             )?;
             let model = active.update(self.connection()).await.map_err(map_db_err)?;
@@ -137,10 +139,27 @@ where
         })
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?
-        .record()
+        .record()?;
+        Ok(self
+            .model_fields
+            .project_passkeys(vec![row])
+            .await?
+            .remove(0))
     }
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+        let fields = self
+            .model_fields
+            .fields(EntityRole::Passkey)
+            .organization_storage_fields(
+                Map::from_iter([
+                    ("name".into(), json!(name)),
+                    ("updated_at".into(), json!(Utc::now())),
+                ]),
+                Map::new(),
+                false,
+            )
+            .await?;
+        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(model) = Entity::<P::Passkey>::find()
                 .filter(
                     P::Passkey::column("id")?
@@ -154,16 +173,9 @@ where
             };
 
             let mut active = model.into_active_model();
-            set::<P::Passkey>(
+            apply::<P::Passkey>(
                 &mut active,
-                "name",
-                Some(name.to_owned()),
-                self.config().advanced.database.generate_id(),
-            )?;
-            set::<P::Passkey>(
-                &mut active,
-                "updated_at",
-                Utc::now(),
+                fields,
                 self.config().advanced.database.generate_id(),
             )?;
             let model = active.update(self.connection()).await.map_err(map_db_err)?;
@@ -171,7 +183,12 @@ where
         })
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?
-        .record()
+        .record()?;
+        Ok(self
+            .model_fields
+            .project_passkeys(vec![row])
+            .await?
+            .remove(0))
     }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         database_operation::<Entity<P::Passkey>, _>(self.config(), "delete", async {
@@ -200,31 +217,39 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
 
+        let fields = Map::from_iter([
+            ("name".to_owned(), json!(input.name)),
+            ("public_key".to_owned(), json!(input.public_key)),
+            ("user_id".to_owned(), json!(input.user_id)),
+            ("credential_id".to_owned(), json!(input.credential_id)),
+            ("counter".to_owned(), json!(counter)),
+            ("device_type".to_owned(), json!(input.device_type)),
+            ("backed_up".to_owned(), json!(input.backed_up)),
+            ("transports".to_owned(), json!(input.transports)),
+            ("credential".to_owned(), json!(input.credential)),
+            ("aaguid".to_owned(), json!(input.aaguid)),
+            ("created_at".to_owned(), json!(Utc::now())),
+            ("updated_at".to_owned(), json!(Utc::now())),
+        ]);
+        let fields = self
+            .model_fields
+            .fields(EntityRole::Passkey)
+            .organization_storage_fields(fields, Map::new(), true)
+            .await?;
+        let fields = self.create_fields("passkey", None, fields)?;
         let active = super::plugin_models::active::<P::Passkey>(
-            self.create_fields(
-                "passkey",
-                None,
-                Map::from_iter([
-                    ("name".to_owned(), json!(input.name)),
-                    ("public_key".to_owned(), json!(input.public_key)),
-                    ("user_id".to_owned(), json!(input.user_id)),
-                    ("credential_id".to_owned(), json!(input.credential_id)),
-                    ("counter".to_owned(), json!(counter)),
-                    ("device_type".to_owned(), json!(input.device_type)),
-                    ("backed_up".to_owned(), json!(input.backed_up)),
-                    ("transports".to_owned(), json!(input.transports)),
-                    ("credential".to_owned(), json!(input.credential)),
-                    ("aaguid".to_owned(), json!(input.aaguid)),
-                    ("created_at".to_owned(), json!(Utc::now())),
-                    ("updated_at".to_owned(), json!(Utc::now())),
-                ]),
-            )?,
+            fields,
             self.config().advanced.database.generate_id(),
         )?;
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
+        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
             active.insert(connection).await.map_err(map_db_err)
         })
         .await?
-        .record()
+        .record()?;
+        Ok(self
+            .model_fields
+            .project_passkeys(vec![row])
+            .await?
+            .remove(0))
     }
 }

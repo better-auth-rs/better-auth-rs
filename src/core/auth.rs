@@ -234,17 +234,15 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let mut init_parts = init_context.into_parts();
         let mut context = AuthContext::new(config.clone(), store.clone());
         init_parts.apply_request_runtime(&mut context);
-        let (adapter_fields, endpoint_fields) =
-            better_auth_core::plugin_runtime::resolve_user_fields(
-                &config.user,
-                init_parts.plugin_user_fields,
-            );
-        let mut adapter_config = (*config).clone();
-        adapter_config.user = adapter_fields.clone();
+        let (adapter_config, endpoint_config, model_fields) =
+            init_parts.plugin_fields.resolve(&config);
+        let adapter_fields = adapter_config.user.clone();
         let adapter_config = Arc::new(adapter_config);
-        let store = store.with_runtime(adapter_config.clone(), init_parts.database_hooks)?;
-        let mut endpoint_config = (*config).clone();
-        endpoint_config.user = endpoint_fields;
+        let store = store.with_runtime(
+            adapter_config.clone(),
+            init_parts.database_hooks,
+            model_fields,
+        )?;
         let config = Arc::new(endpoint_config);
         init_parts
             .extensions

@@ -73,6 +73,7 @@ impl AuthSchema for StatelessSchema {
 #[derive(Clone)]
 pub struct EphemeralStore {
     config: Arc<AuthConfig>,
+    model_fields: crate::plugin_runtime::ModelFields,
     state: Arc<Mutex<State>>,
     verification_locks: Arc<Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>>,
     session_config: crate::config::SessionConfig,
@@ -119,6 +120,7 @@ impl EphemeralStore {
     /// Construct an empty adapter. Restarting the process discards all records.
     pub fn new(config: Arc<AuthConfig>) -> Self {
         Self {
+            model_fields: Default::default(),
             session_config: config.session.clone(),
             config,
             state: Arc::default(),

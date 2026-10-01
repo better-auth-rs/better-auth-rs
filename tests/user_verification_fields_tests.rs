@@ -113,14 +113,14 @@ async fn verification_hooks_use_memory_and_sqlite_record_binding() {
         after: after.clone(),
     };
     let memory = EphemeralStore::new(config.clone())
-        .with_runtime(config.clone(), vec![Arc::new(patch())])
+        .with_runtime(config.clone(), vec![Arc::new(patch())], Default::default())
         .unwrap();
     verify_scalars(memory, json!(7), json!(false)).await;
     assert_eq!(after.load(Ordering::SeqCst), 1);
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let sqlite = SeaOrmStore::<BundledSchema>::new(config.clone(), database)
-        .with_runtime(config, vec![Arc::new(patch())])
+        .with_runtime(config, vec![Arc::new(patch())], Default::default())
         .unwrap();
     verify_scalars(sqlite, json!("7"), json!("0")).await;
     assert_eq!(after.load(Ordering::SeqCst), 2);
@@ -139,6 +139,7 @@ async fn failed_verification_field_conversion_rolls_back_cleanup() {
                 update: serde_json::from_value(json!({"name":null})).unwrap(),
                 after: after.clone(),
             })],
+            Default::default(),
         )
         .unwrap();
     let id = seed_access(store.as_ref()).await;
@@ -270,6 +271,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
                 },
                 after: after.clone(),
             })],
+            Default::default(),
         )
         .unwrap();
     for id in ["16", "17"] {

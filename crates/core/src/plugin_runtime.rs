@@ -6,6 +6,9 @@ use crate::request_runtime::RuntimeIdentity;
 use crate::user_fields::UserConfig;
 use crate::{AuthContext, AuthError, AuthResult, AuthSchema};
 
+mod fields;
+pub use fields::ModelFields;
+
 struct Binding<S: AuthSchema> {
     identity: RuntimeIdentity,
     context: Weak<AuthContext<S>>,

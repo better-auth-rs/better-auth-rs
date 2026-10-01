@@ -67,7 +67,9 @@ async fn id_token_profile_is_preferred_and_mapping_cannot_change_account_subject
         }))),
         ..Default::default()
     };
-    let response = fetch_user_info(&provider, &tokens, None).await.unwrap();
+    let response = fetch_user_info(&provider, &tokens, None, None)
+        .await
+        .unwrap();
     assert_eq!(response.user.id, "immutable-subject");
     assert_eq!(response.user.email, "mapped@example.com");
     assert_eq!(response.user.name.as_deref(), Some("Mapped name"));
@@ -115,7 +117,9 @@ async fn mapped_null_omits_image_without_changing_raw_profile() {
         }))),
         ..Default::default()
     };
-    let response = fetch_user_info(&provider, &tokens, None).await.unwrap();
+    let response = fetch_user_info(&provider, &tokens, None, None)
+        .await
+        .unwrap();
     assert_eq!(response.user.name, None);
     assert_eq!(response.user.image, None);
     assert_eq!(response.data["name"], "Provider name");
@@ -168,7 +172,9 @@ async fn custom_profile_and_subject_callbacks_receive_original_data() {
         access_token: Some("access".to_string()),
         ..Default::default()
     };
-    let response = fetch_user_info(&provider, &tokens, None).await.unwrap();
+    let response = fetch_user_info(&provider, &tokens, None, None)
+        .await
+        .unwrap();
     assert_eq!(response.user.id, "tenant:42");
     assert_eq!(response.user.email, "mapped@example.com");
     assert_eq!(response.data, raw.profile);
@@ -223,7 +229,9 @@ async fn id_token_without_email_falls_back_to_userinfo_with_access_token() {
         id_token: Some(encoded_claims(json!({ "sub": "id-token-subject" }))),
         ..Default::default()
     };
-    let response = fetch_user_info(&provider, &tokens, None).await.unwrap();
+    let response = fetch_user_info(&provider, &tokens, None, None)
+        .await
+        .unwrap();
     assert_eq!(response.user.id, "userinfo-subject");
     assert_eq!(response.user.email, "userinfo@example.com");
     assert!(!response.user.email_verified);
@@ -260,7 +268,7 @@ async fn invalid_verified_id_token_cannot_fall_back_to_custom_profile() {
         id_token: Some("invalid-token".to_string()),
         ..Default::default()
     };
-    let error = fetch_user_info(&provider, &tokens, Some("expected-nonce"))
+    let error = fetch_user_info(&provider, &tokens, Some("expected-nonce"), None)
         .await
         .unwrap_err();
     assert!(error.to_string().contains("ID token verification failed"));
@@ -286,7 +294,7 @@ async fn account_subject_is_validated_before_local_account_lookup() {
             },
             false,
         );
-        let error = fetch_user_info(&provider, &OAuthUserInfoRequest::default(), None)
+        let error = fetch_user_info(&provider, &OAuthUserInfoRequest::default(), None, None)
             .await
             .unwrap_err();
         assert!(error.to_string().contains("OAUTH_ACCOUNT_SUBJECT_INVALID"));
@@ -303,7 +311,7 @@ async fn account_subject_is_validated_before_local_account_lookup() {
             false,
         );
         assert_eq!(
-            fetch_user_info(&provider, &OAuthUserInfoRequest::default(), None)
+            fetch_user_info(&provider, &OAuthUserInfoRequest::default(), None, None)
                 .await
                 .unwrap()
                 .user

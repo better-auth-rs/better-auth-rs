@@ -653,17 +653,15 @@ mod tests {
             <EmailPasswordPlugin as AuthPlugin<TestSchema>>::password_hasher(plugin);
         plugin.on_init(&mut init).await.unwrap();
         let parts = init.into_parts();
-        let (adapter, endpoint) = better_auth_core::plugin_runtime::resolve_user_fields(
-            &config.user,
-            parts.plugin_user_fields.clone(),
-        );
-        let mut adapter_config = (*config).clone();
-        adapter_config.user = adapter;
+        let (adapter_config, endpoint_config, model_fields) =
+            parts.plugin_fields.clone().resolve(&config);
         let database = database
-            .with_runtime(Arc::new(adapter_config), parts.database_hooks.clone())
+            .with_runtime(
+                Arc::new(adapter_config),
+                parts.database_hooks.clone(),
+                model_fields,
+            )
             .unwrap();
-        let mut endpoint_config = (*config).clone();
-        endpoint_config.user = endpoint;
         let mut context = AuthContext::new(Arc::new(endpoint_config), database);
         parts.apply_request_runtime(&mut context);
         context.extensions = parts.extensions;

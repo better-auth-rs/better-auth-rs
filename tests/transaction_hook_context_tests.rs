@@ -127,7 +127,11 @@ async fn check<S: AuthSchema>(
 ) {
     let events: Trace = Default::default();
     let inner = inner
-        .with_runtime(config.clone(), vec![Arc::new(Hooks(events.clone()))])
+        .with_runtime(
+            config.clone(),
+            vec![Arc::new(Hooks(events.clone()))],
+            Default::default(),
+        )
         .unwrap();
     let store: Arc<dyn AuthStore<S>> = if pure {
         Arc::new(

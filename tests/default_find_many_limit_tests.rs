@@ -187,11 +187,14 @@ async fn default_limits_apply_before_projection_and_cap_snapshots_without_cappin
                     .await
                     .map_err(|error| AuthError::internal(error.to_string()))?;
                 let store = SeaOrmStore::<BundledSchema>::new((*config).clone(), database)
-                    .with_runtime(config, vec![Arc::new(hooks.clone())])?;
+                    .with_runtime(config, vec![Arc::new(hooks.clone())], Default::default())?;
                 check_limit(store, sql_count, projections, hooks).await?;
             } else {
-                let store = EphemeralStore::default()
-                    .with_runtime(config, vec![Arc::new(hooks.clone())])?;
+                let store = EphemeralStore::default().with_runtime(
+                    config,
+                    vec![Arc::new(hooks.clone())],
+                    Default::default(),
+                )?;
                 check_limit(store, Some(memory_count), projections, hooks).await?;
             }
         }

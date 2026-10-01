@@ -30,9 +30,11 @@ pub trait RuntimeStore<S: AuthSchema>: Send + Sync {
 
     /// Bind the final configuration and prepend plugin hooks without changing the original store.
     /// Share stored records, but isolate configuration and hook lists for each auth build.
+    /// Consume registered model fields in the returned adapter and forward them through wrappers.
     fn with_runtime(
         &self,
         config: Arc<AuthConfig>,
         hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
+        model_fields: crate::plugin_runtime::ModelFields,
     ) -> AuthResult<Arc<dyn AuthStore<S>>>;
 }

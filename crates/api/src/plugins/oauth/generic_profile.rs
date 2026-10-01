@@ -2,6 +2,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{AuthError, AuthResult};
 use serde_json::{Map, Value};
 
+use super::generic::VerifiedOAuthClaims;
 use super::providers::{OAuthUserInfo, OAuthUserInfoRequest, OAuthUserInfoResponse};
 use super::resolved::ResolvedGenericOAuth;
 use super::types::AccountInfoUser;
@@ -15,8 +16,9 @@ pub(super) async fn fetch_user_info(
     provider: &ResolvedGenericOAuth,
     tokens: &OAuthUserInfoRequest,
     expected_nonce: Option<&str>,
+    verified_claims: Option<Value>,
 ) -> AuthResult<OAuthUserInfoResponse> {
-    let response = fetch_profile(provider, tokens, expected_nonce).await?;
+    let response = fetch_profile(provider, tokens, expected_nonce, verified_claims).await?;
     let subject = if let Some(resolver) = &provider.config.account_subject {
         resolver.resolve_subject(tokens, &response.data).await?
     } else {
@@ -47,8 +49,11 @@ pub(super) async fn fetch_profile(
     provider: &ResolvedGenericOAuth,
     tokens: &OAuthUserInfoRequest,
     expected_nonce: Option<&str>,
+    verified_claims: Option<Value>,
 ) -> AuthResult<ProfileResponse> {
-    let verified_claims = if let (Some(token), Some(verifier)) = (
+    let verified_claims = if verified_claims.is_some() {
+        verified_claims
+    } else if let (Some(token), Some(verifier)) = (
         tokens.id_token.as_deref().filter(|token| !token.is_empty()),
         &provider.verifier,
     ) {
@@ -65,7 +70,17 @@ pub(super) async fn fetch_profile(
     };
 
     let raw = if let Some(handler) = &provider.config.get_user_info {
-        handler.get_user_info(tokens).await?
+        if let Some(claims) = &verified_claims {
+            handler
+                .get_user_info_with_verified_claims(
+                    tokens,
+                    VerifiedOAuthClaims::new(claims),
+                    provider.config.user_info_url.as_deref(),
+                )
+                .await?
+        } else {
+            handler.get_user_info(tokens).await?
+        }
     } else {
         default_profile(provider, tokens, verified_claims).await?
     };

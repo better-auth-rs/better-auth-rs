@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, SecondsFormat, Utc};
 
 use super::EphemeralStore;
-use crate::store::{ApiKeyStore, ApiKeyUsageWrite};
+use crate::store::{ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole};
 use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
 
 fn now() -> String {
@@ -19,12 +19,17 @@ fn timestamp(value: &str) -> AuthResult<i64> {
 impl ApiKeyStore for EphemeralStore {
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         let created_at = now();
-        let key = ApiKey {
+        let name = self
+            .model_fields
+            .name_for_storage(EntityRole::ApiKey, Some(input.name), true)
+            .await?
+            .flatten();
+        let mut key = ApiKey {
             id: self
                 .generated_id("apikey", None, self.lock()?.api_keys.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            name: input.name,
+            name,
             start: input.start,
             prefix: input.prefix,
             key_hash: input.key_hash,
@@ -46,36 +51,61 @@ impl ApiKeyStore for EphemeralStore {
             permissions: input.permissions,
             metadata: input.metadata,
         };
-        self.raw("apikey", "create", |state| {
-            state.api_keys.push(key.clone());
-            Ok(key)
-        })
-        .await
+        let row = self
+            .raw("apikey", "create", |state| {
+                self.assign_insert_serial_id(&mut key.id, state.api_keys.len());
+                state.api_keys.push(key.clone());
+                Ok(key)
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_api_keys(vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", "findOne", |state| state.api_keys.get(id))
-            .await
+        let row = self
+            .raw("apikey", "findOne", |state| state.api_keys.get(id))
+            .await?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn get_api_key_by_id_value(
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", "findOne", |state| state.api_keys.get(id))
-            .await
+        let row = self
+            .raw("apikey", "findOne", |state| state.api_keys.get(id))
+            .await?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", "findOne", |state| {
-            Ok(state
-                .api_keys
-                .snapshot()?
-                .iter()
-                .find(|key| key.key_hash == hash)
-                .cloned())
-        })
-        .await
+        let row = self
+            .raw("apikey", "findOne", |state| {
+                Ok(state
+                    .api_keys
+                    .snapshot()?
+                    .iter()
+                    .find(|key| key.key_hash == hash)
+                    .cloned())
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn find_api_keys_by_reference(
@@ -83,32 +113,34 @@ impl ApiKeyStore for EphemeralStore {
         reference_id: &str,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
-        self.raw("apikey", "findMany", |state| {
-            let mut keys: Vec<_> = state
-                .api_keys
-                .snapshot()?
-                .iter()
-                .filter(|key| key.reference_id == reference_id)
-                .cloned()
-                .collect();
-            if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
-                let compare = comparator(field)?;
-                keys.sort_by(|a, b| {
-                    let order = compare(a, b);
-                    if direction == "desc" {
-                        order.reverse()
-                    } else {
-                        order
-                    }
-                });
-            }
-            Ok(crate::query::paginate_memory(
-                keys,
-                Some(self.config.advanced.database.find_many_limit()),
-                None,
-            ))
-        })
-        .await
+        let rows = self
+            .raw("apikey", "findMany", |state| {
+                let mut keys: Vec<_> = state
+                    .api_keys
+                    .snapshot()?
+                    .iter()
+                    .filter(|key| key.reference_id == reference_id)
+                    .cloned()
+                    .collect();
+                if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
+                    let compare = comparator(field)?;
+                    keys.sort_by(|a, b| {
+                        let order = compare(a, b);
+                        if direction == "desc" {
+                            order.reverse()
+                        } else {
+                            order
+                        }
+                    });
+                }
+                Ok(crate::query::paginate_memory(
+                    keys,
+                    Some(self.config.advanced.database.find_many_limit()),
+                    None,
+                ))
+            })
+            .await?;
+        self.model_fields.project_api_keys(rows).await
     }
 
     async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
@@ -136,47 +168,59 @@ impl ApiKeyStore for EphemeralStore {
     async fn update_api_key_optional(
         &self,
         id: &crate::SchemaValue<String>,
-        update: UpdateApiKey,
+        mut update: UpdateApiKey,
     ) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", "update", |state| {
-            let Some(mut key) = state.api_keys.get_mut(id)? else {
-                return Ok(None);
-            };
-            macro_rules! optional {
+        let name = self
+            .model_fields
+            .name_for_storage(EntityRole::ApiKey, update.name.take().map(Some), false)
+            .await?;
+        let row = self
+            .raw("apikey", "update", |state| {
+                let Some(mut key) = state.api_keys.get_mut(id)? else {
+                    return Ok(None);
+                };
+                if let Some(name) = name {
+                    key.name = name;
+                }
+                macro_rules! optional {
             ($($field:ident),* $(,)?) => {
                 $(if let Some(value) = update.$field { key.$field = Some(value); })*
             };
         }
-            optional!(
-                name,
-                remaining,
-                rate_limit_time_window,
-                rate_limit_max,
-                refill_interval,
-                refill_amount,
-                permissions,
-                metadata,
-                request_count,
-            );
-            if let Some(value) = update.enabled {
-                key.enabled = value;
-            }
-            if let Some(value) = update.rate_limit_enabled {
-                key.rate_limit_enabled = value;
-            }
-            if let Some(value) = update.expires_at {
-                key.expires_at = value;
-            }
-            if let Some(value) = update.last_request {
-                key.last_request = value;
-            }
-            if let Some(value) = update.last_refill_at {
-                key.last_refill_at = value;
-            }
-            key.updated_at = now();
-            Ok(Some(key.clone()))
-        })
-        .await
+                optional!(
+                    remaining,
+                    rate_limit_time_window,
+                    rate_limit_max,
+                    refill_interval,
+                    refill_amount,
+                    permissions,
+                    metadata,
+                    request_count,
+                );
+                if let Some(value) = update.enabled {
+                    key.enabled = value;
+                }
+                if let Some(value) = update.rate_limit_enabled {
+                    key.rate_limit_enabled = value;
+                }
+                if let Some(value) = update.expires_at {
+                    key.expires_at = value;
+                }
+                if let Some(value) = update.last_request {
+                    key.last_request = value;
+                }
+                if let Some(value) = update.last_refill_at {
+                    key.last_refill_at = value;
+                }
+                key.updated_at = now();
+                Ok(Some(key.clone()))
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn write_api_key_usage(
@@ -184,70 +228,88 @@ impl ApiKeyStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         write: ApiKeyUsageWrite,
     ) -> AuthResult<Option<ApiKey>> {
-        self.raw("apikey", write.operation(), |state| {
-            let Some(mut key) = state.api_keys.get_mut(id)? else {
-                return Ok(None);
-            };
-            match write {
-                ApiKeyUsageWrite::Refill {
-                    previous,
-                    remaining,
-                    at,
-                } => {
-                    let actual = key.last_refill_at.as_deref().map(timestamp).transpose()?;
-                    if actual != previous.map(|date| date.timestamp_millis()) {
-                        return Ok(None);
-                    }
-                    key.remaining = Some(remaining);
-                    key.last_refill_at = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
-                }
-                ApiKeyUsageWrite::Decrement => {
-                    let Some(remaining) = key.remaining.filter(|remaining| *remaining > 0.0) else {
-                        return Ok(None);
-                    };
-                    key.remaining = Some(remaining - 1.0);
-                }
-                ApiKeyUsageWrite::StartWindow {
-                    previous_before,
-                    at,
-                } => {
-                    let actual = key.last_request.as_deref().map(timestamp).transpose()?;
-                    let matches = match previous_before {
-                        None => actual.is_none(),
-                        Some(previous) => {
-                            actual.is_some_and(|actual| actual <= previous.timestamp_millis())
+        // Upstream does not run update policies for an increment without a set patch.
+        let name = if matches!(&write, ApiKeyUsageWrite::Decrement) {
+            None
+        } else {
+            self.model_fields
+                .name_for_storage(EntityRole::ApiKey, None, false)
+                .await?
+        };
+        let row = self
+            .raw("apikey", write.operation(), |state| {
+                let Some(mut key) = state.api_keys.get_mut(id)? else {
+                    return Ok(None);
+                };
+                match write {
+                    ApiKeyUsageWrite::Refill {
+                        previous,
+                        remaining,
+                        at,
+                    } => {
+                        let actual = key.last_refill_at.as_deref().map(timestamp).transpose()?;
+                        if actual != previous.map(|date| date.timestamp_millis()) {
+                            return Ok(None);
                         }
-                    };
-                    if !matches {
-                        return Ok(None);
+                        key.remaining = Some(remaining);
+                        key.last_refill_at = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
                     }
-                    key.request_count = Some(1.0);
-                    key.last_request = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
-                }
-                ApiKeyUsageWrite::IncrementWindow {
-                    previous_after,
-                    maximum,
-                    at,
-                } => {
-                    let actual = key.last_request.as_deref().map(timestamp).transpose()?;
-                    if actual.is_none_or(|actual| actual <= previous_after.timestamp_millis())
-                        || key.request_count.unwrap_or(0.0) >= maximum
-                    {
-                        return Ok(None);
+                    ApiKeyUsageWrite::Decrement => {
+                        let Some(remaining) = key.remaining.filter(|remaining| *remaining > 0.0)
+                        else {
+                            return Ok(None);
+                        };
+                        key.remaining = Some(remaining - 1.0);
                     }
-                    key.request_count = Some(key.request_count.unwrap_or(0.0) + 1.0);
-                    key.last_request = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                    ApiKeyUsageWrite::StartWindow {
+                        previous_before,
+                        at,
+                    } => {
+                        let actual = key.last_request.as_deref().map(timestamp).transpose()?;
+                        let matches = match previous_before {
+                            None => actual.is_none(),
+                            Some(previous) => {
+                                actual.is_some_and(|actual| actual <= previous.timestamp_millis())
+                            }
+                        };
+                        if !matches {
+                            return Ok(None);
+                        }
+                        key.request_count = Some(1.0);
+                        key.last_request = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                    }
+                    ApiKeyUsageWrite::IncrementWindow {
+                        previous_after,
+                        maximum,
+                        at,
+                    } => {
+                        let actual = key.last_request.as_deref().map(timestamp).transpose()?;
+                        if actual.is_none_or(|actual| actual <= previous_after.timestamp_millis())
+                            || key.request_count.unwrap_or(0.0) >= maximum
+                        {
+                            return Ok(None);
+                        }
+                        key.request_count = Some(key.request_count.unwrap_or(0.0) + 1.0);
+                        key.last_request = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                    }
+                    ApiKeyUsageWrite::LastRequest(at) => {
+                        key.last_request = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                    }
+                    ApiKeyUsageWrite::UpdatedAt(at) => {
+                        key.updated_at = at.to_rfc3339_opts(SecondsFormat::Millis, true);
+                    }
                 }
-                ApiKeyUsageWrite::LastRequest(at) => {
-                    key.last_request = Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                if let Some(name) = name {
+                    key.name = name;
                 }
-                ApiKeyUsageWrite::UpdatedAt(at) => {
-                    key.updated_at = at.to_rfc3339_opts(SecondsFormat::Millis, true);
-                }
-            }
-            Ok(Some(key.clone()))
-        })
-        .await
+                Ok(Some(key.clone()))
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_api_keys(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {

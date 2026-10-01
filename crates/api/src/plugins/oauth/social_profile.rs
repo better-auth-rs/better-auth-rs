@@ -1,6 +1,7 @@
 use better_auth_core::{AuthError, AuthResult};
 
 use super::google::{self, VerifiedGoogleClaims};
+use super::id_token::VerifiedIdToken;
 use super::providers::{OAuthUserInfoRequest, OAuthUserInfoResponse};
 use super::resolved::ResolvedProvider;
 
@@ -16,11 +17,30 @@ pub(super) async fn fetch_user_info_with_claims(
     provider: &ResolvedProvider,
     request: OAuthUserInfoRequest,
     expected_nonce: Option<&str>,
-    claims: Option<VerifiedGoogleClaims>,
+    claims: Option<VerifiedIdToken>,
 ) -> AuthResult<OAuthUserInfoResponse> {
     if let Some(generic) = &provider.generic {
-        return super::generic_profile::fetch_user_info(generic, &request, expected_nonce).await;
+        let claims = match claims {
+            Some(VerifiedIdToken::Generic(claims)) => Some(claims),
+            None => None,
+            Some(VerifiedIdToken::Google(_)) => {
+                return Err(AuthError::internal(
+                    "Google claims supplied to a Generic provider",
+                ));
+            }
+        };
+        return super::generic_profile::fetch_user_info(generic, &request, expected_nonce, claims)
+            .await;
     }
+    let claims = match claims {
+        Some(VerifiedIdToken::Google(claims)) => Some(claims),
+        None => None,
+        Some(VerifiedIdToken::Generic(_)) => {
+            return Err(AuthError::internal(
+                "Generic claims supplied to a Social provider",
+            ));
+        }
+    };
     let mut response = fetch_social_user_info(provider, request, claims).await?;
     if let Some(mapper) = &provider.config.map_profile_to_user {
         let mapped = mapper.map_profile(&response.data).await?;
@@ -56,7 +76,7 @@ pub(super) async fn fetch_user_info_for_code(
             .id_token
             .as_deref()
             .ok_or_else(|| AuthError::internal("Missing ID token for Google profile"))?;
-        Some(
+        Some(VerifiedIdToken::Google(
             google::verify(
                 token,
                 std::slice::from_ref(&provider.config.client_id),
@@ -65,7 +85,7 @@ pub(super) async fn fetch_user_info_for_code(
             )
             .await
             .ok_or_else(|| AuthError::internal("Google ID token verification failed"))?,
-        )
+        ))
     } else {
         None
     };

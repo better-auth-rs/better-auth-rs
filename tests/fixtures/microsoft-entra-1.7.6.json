@@ -1,0 +1,580 @@
+{
+  "config": {
+    "providerId": "microsoft-entra-id",
+    "discoveryUrl": "https://login.microsoftonline.com/aabbccdd-1122-3344-5566-778899aabbcc/v2.0/.well-known/openid-configuration",
+    "requireIdTokenVerification": true,
+    "authorizationUrl": "https://login.microsoftonline.com/aabbccdd-1122-3344-5566-778899aabbcc/oauth2/v2.0/authorize",
+    "tokenUrl": "https://login.microsoftonline.com/aabbccdd-1122-3344-5566-778899aabbcc/oauth2/v2.0/token",
+    "userInfoUrl": "https://graph.microsoft.com/oidc/userinfo",
+    "scopes": [
+      "openid",
+      "profile",
+      "email"
+    ]
+  },
+  "rejectedTenants": [
+    "common",
+    "organizations",
+    "consumers",
+    "",
+    "aabbccdd112233445566778899aabbcc"
+  ],
+  "results": [
+    {
+      "input": {
+        "name": "token-profile",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Token User",
+          "email": "token@example.test",
+          "email_verified": true,
+          "picture": "https://images.test/token.png",
+          "department": "Operations"
+        }
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "name": "Token User",
+        "email": "token@example.test",
+        "email_verified": true,
+        "picture": "https://images.test/token.png",
+        "department": "Operations",
+        "image": "https://images.test/token.png",
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Token User",
+        "email": "token@example.test",
+        "image": "https://images.test/token.png",
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "token-profile",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Token User",
+          "email": "token@example.test",
+          "email_verified": true,
+          "picture": "https://images.test/token.png",
+          "department": "Operations"
+        }
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "name": "Token User",
+        "email": "token@example.test",
+        "email_verified": true,
+        "picture": "https://images.test/token.png",
+        "department": "Operations",
+        "image": "https://images.test/token.png",
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Token User",
+        "email": "token@example.test",
+        "image": "https://images.test/token.png",
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "placeholder-name",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "givenname": "Token",
+          "familyname": "Surname"
+        }
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "givenname": "Token",
+        "familyname": "Surname",
+        "name": "Token Surname",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Token Surname",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "placeholder-name",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "givenname": "Token",
+          "familyname": "Surname"
+        }
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "givenname": "Token",
+        "familyname": "Surname",
+        "name": "Token Surname",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Token Surname",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "nullable-profile",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Nullable User",
+          "email": null,
+          "email_verified": true,
+          "picture": null
+        }
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "name": "Nullable User",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "email_verified": true,
+        "picture": null,
+        "image": null,
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Nullable User",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "nullable-profile",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Nullable User",
+          "email": null,
+          "email_verified": true,
+          "picture": null
+        }
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "name": "Nullable User",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "email_verified": true,
+        "picture": null,
+        "image": null,
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Nullable User",
+        "email": "entra-object@microsoft-entra-id.placeholder.invalid",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "graph-merge",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Token User",
+          "email": "token@example.test",
+          "email_verified": true,
+          "picture": "https://images.test/token.png",
+          "department": "Operations"
+        },
+        "graph": {
+          "sub": "entra-subject",
+          "name": "Graph User",
+          "email": "graph@example.test",
+          "email_verified": false,
+          "picture": "https://images.test/graph.png",
+          "locale": "en-US"
+        }
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "sub": "entra-subject",
+        "name": "Token User",
+        "email": "token@example.test",
+        "email_verified": true,
+        "picture": "https://images.test/token.png",
+        "locale": "en-US",
+        "oid": "entra-object",
+        "department": "Operations",
+        "image": "https://images.test/token.png",
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 1,
+      "user": {
+        "name": "Mapped Token User",
+        "email": "token@example.test",
+        "image": "https://images.test/token.png",
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "graph-merge",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Token User",
+          "email": "token@example.test",
+          "email_verified": true,
+          "picture": "https://images.test/token.png",
+          "department": "Operations"
+        },
+        "graph": {
+          "sub": "entra-subject",
+          "name": "Graph User",
+          "email": "graph@example.test",
+          "email_verified": false,
+          "picture": "https://images.test/graph.png",
+          "locale": "en-US"
+        }
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "sub": "entra-subject",
+        "name": "Token User",
+        "email": "token@example.test",
+        "email_verified": true,
+        "picture": "https://images.test/token.png",
+        "locale": "en-US",
+        "oid": "entra-object",
+        "department": "Operations",
+        "image": "https://images.test/token.png",
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 1,
+      "user": {
+        "name": "Mapped Token User",
+        "email": "token@example.test",
+        "image": "https://images.test/token.png",
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "graph-fill",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "department": "Operations"
+        },
+        "graph": {
+          "sub": "entra-subject",
+          "given_name": "Graph",
+          "family_name": "User",
+          "email": "graph@example.test",
+          "email_verified": true,
+          "picture": "https://images.test/graph.png",
+          "locale": "en-US"
+        }
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "sub": "entra-subject",
+        "given_name": "Graph",
+        "family_name": "User",
+        "email": "graph@example.test",
+        "email_verified": true,
+        "picture": "https://images.test/graph.png",
+        "locale": "en-US",
+        "oid": "entra-object",
+        "department": "Operations",
+        "name": "Graph User",
+        "image": "https://images.test/graph.png",
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 1,
+      "user": {
+        "name": "Mapped Graph User",
+        "email": "graph@example.test",
+        "image": "https://images.test/graph.png",
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "graph-fill",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "department": "Operations"
+        },
+        "graph": {
+          "sub": "entra-subject",
+          "given_name": "Graph",
+          "family_name": "User",
+          "email": "graph@example.test",
+          "email_verified": true,
+          "picture": "https://images.test/graph.png",
+          "locale": "en-US"
+        }
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "sub": "entra-subject",
+        "given_name": "Graph",
+        "family_name": "User",
+        "email": "graph@example.test",
+        "email_verified": true,
+        "picture": "https://images.test/graph.png",
+        "locale": "en-US",
+        "oid": "entra-object",
+        "department": "Operations",
+        "name": "Graph User",
+        "image": "https://images.test/graph.png",
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 1,
+      "user": {
+        "name": "Mapped Graph User",
+        "email": "graph@example.test",
+        "image": "https://images.test/graph.png",
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "graph-http-fallback",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Token User",
+          "email": "token@example.test",
+          "email_verified": true
+        },
+        "graph": {
+          "error": "temporarily_unavailable"
+        },
+        "graphStatus": 503
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "name": "Token User",
+        "email": "token@example.test",
+        "email_verified": true,
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 1,
+      "user": {
+        "name": "Mapped Token User",
+        "email": "token@example.test",
+        "image": null,
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "graph-http-fallback",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "name": "Token User",
+          "email": "token@example.test",
+          "email_verified": true
+        },
+        "graph": {
+          "error": "temporarily_unavailable"
+        },
+        "graphStatus": 503
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "name": "Token User",
+        "email": "token@example.test",
+        "email_verified": true,
+        "emailVerified": true
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 1,
+      "user": {
+        "name": "Mapped Token User",
+        "email": "token@example.test",
+        "image": null,
+        "emailVerified": true,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "unicode-name-alias",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "given_name": "\uFEFFÉlodie",
+          "family_name": "Martin\uFEFF",
+          "email": "elodie@example.test"
+        }
+      },
+      "direct": true,
+      "status": 200,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "given_name": "\uFEFFÉlodie",
+        "family_name": "Martin\uFEFF",
+        "email": "elodie@example.test",
+        "name": "Élodie Martin",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Élodie Martin",
+        "email": "elodie@example.test",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "entra-object"
+      }
+    },
+    {
+      "input": {
+        "name": "unicode-name-alias",
+        "claims": {
+          "oid": "entra-object",
+          "sub": "entra-subject",
+          "given_name": "\uFEFFÉlodie",
+          "family_name": "Martin\uFEFF",
+          "email": "elodie@example.test"
+        }
+      },
+      "direct": false,
+      "status": 302,
+      "profile": {
+        "oid": "entra-object",
+        "sub": "entra-subject",
+        "given_name": "\uFEFFÉlodie",
+        "family_name": "Martin\uFEFF",
+        "email": "elodie@example.test",
+        "name": "Élodie Martin",
+        "emailVerified": false
+      },
+      "calls": [
+        "get",
+        "map"
+      ],
+      "graphRequests": 0,
+      "user": {
+        "name": "Mapped Élodie Martin",
+        "email": "elodie@example.test",
+        "image": null,
+        "emailVerified": false,
+        "accountSubject": "entra-object"
+      }
+    }
+  ]
+}

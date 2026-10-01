@@ -172,7 +172,11 @@ async fn implicit_and_sqlite_image_updates_preserve_omission_and_clear_explicit_
     let config = Arc::new(AuthConfig::default());
     let hooks = ImageHooks::default();
     let store = EphemeralStore::new(config.clone())
-        .with_runtime(config.clone(), vec![Arc::new(hooks.clone())])
+        .with_runtime(
+            config.clone(),
+            vec![Arc::new(hooks.clone())],
+            Default::default(),
+        )
         .unwrap();
     check_image(store, hooks, false).await;
 
@@ -180,7 +184,7 @@ async fn implicit_and_sqlite_image_updates_preserve_omission_and_clear_explicit_
     migrator::run_migrations(&database).await.unwrap();
     let hooks = ImageHooks::default();
     let store = SeaOrmStore::<BundledSchema>::new(config.clone(), database)
-        .with_runtime(config, vec![Arc::new(hooks.clone())])
+        .with_runtime(config, vec![Arc::new(hooks.clone())], Default::default())
         .unwrap();
     check_image(store, hooks, true).await;
 }

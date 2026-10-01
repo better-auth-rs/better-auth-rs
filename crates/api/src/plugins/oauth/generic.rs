@@ -28,11 +28,38 @@ pub trait OAuthTokenHandler: Send + Sync {
     async fn get_token(&self, request: OAuthCodeExchange<'_>) -> AuthResult<OAuthTokenSet>;
 }
 
+/// Borrowed claims from the configured OIDC signature and claim validation.
+pub struct VerifiedOAuthClaims<'a> {
+    claims: &'a Value,
+}
+
+impl<'a> VerifiedOAuthClaims<'a> {
+    pub(super) fn new(claims: &'a Value) -> Self {
+        Self { claims }
+    }
+
+    /// Read the claims returned by the configured OIDC signature and claim validation.
+    pub fn as_value(&self) -> &'a Value {
+        self.claims
+    }
+}
+
 /// Fetches the raw profile used for Generic OAuth account recognition.
 #[async_trait]
 pub trait GenericOAuthUserInfoHandler: Send + Sync {
     /// Return a provider profile or reject the authentication attempt.
     async fn get_user_info(&self, tokens: &OAuthUserInfoRequest) -> AuthResult<Value>;
+
+    /// Read verified claims and the resolved userinfo endpoint before mapping a profile.
+    /// Existing handlers retain their token-based lookup unless they override this method.
+    async fn get_user_info_with_verified_claims(
+        &self,
+        tokens: &OAuthUserInfoRequest,
+        _claims: VerifiedOAuthClaims<'_>,
+        _user_info_url: Option<&str>,
+    ) -> AuthResult<Value> {
+        self.get_user_info(tokens).await
+    }
 }
 
 /// Local profile fields; provider account identity is resolved separately.

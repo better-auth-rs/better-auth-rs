@@ -93,7 +93,7 @@ The [quick-start guide](docs/content/docs/quick-start.mdx) includes sign-up and 
 
 Plugins include email/password, username, sessions, password management, email verification, email OTP, phone numbers, anonymous accounts, SIWE, Magic Link, one-time tokens, multiple sessions, last login method, JWT, OAuth, One Tap, OAuth Proxy, organizations, two-factor authentication, passkeys, API keys, and admin. Use `UsernamePlugin` for username options or `EmailPasswordPlugin::username(true)` for defaults. Generate fields and tables for each selected plugin; startup rejects missing entity fields. Bind generated custom plugin tables with `with_plugin_schema::<AppPluginSchema>()`. See [database integration](docs/content/docs/concepts/database.mdx).
 
-Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`, including its Auth0, Keycloak, and Okta constructors. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
+Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`, including constructors for Auth0, Keycloak, Okta, and Microsoft Entra ID. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
 
 The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements. Use `auth.organization()?.add_member(Some(body)).await` for server-only member creation through the native hook pipeline.
 
@@ -114,6 +114,8 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 Optional configuration fields use `Option` to distinguish omission from an explicit value. Construct social providers with a built-in constructor or `OAuthProvider::custom`. See [configuration options](docs/content/docs/reference/configuration-options.mdx) for defaults and [OAuth](docs/content/docs/plugins/oauth.mdx) for provider configuration. [Observability](docs/content/docs/concepts/observability.mdx) documents logging, tracing, opt-in telemetry, and the current alignment boundaries.
 
 Google sign-in maps verified ID-token claims through the shared Google verifier used by One Tap. See [Google profile behavior](docs/content/docs/plugins/oauth.mdx#social-provider-inputs) for custom callbacks and account-info behavior.
+
+GitLab, Spotify, Hugging Face and Polar constructors provide their default scopes and HTTP profile mapping. See [built-in providers](docs/content/docs/plugins/oauth.mdx#built-in-providers) for supported constructors and configuration.
 
 ## Documentation and development
 

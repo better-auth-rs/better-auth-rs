@@ -39,6 +39,10 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Google | `OAuthProvider::google(client_id, client_secret)` | `email`, `profile`, `openid` |
 | GitHub | `OAuthProvider::github(client_id, client_secret)` | `read:user`, `user:email` |
 | Discord | `OAuthProvider::discord(client_id, client_secret)` | `identify`, `email` |
+| GitLab | `OAuthProvider::gitlab(client_id, client_secret)` | `read_user` |
+| Spotify | `OAuthProvider::spotify(client_id, client_secret)` | `user-read-email` |
+| Hugging Face | `OAuthProvider::huggingface(client_id, client_secret)` | `openid`, `profile`, `email` |
+| Polar | `OAuthProvider::polar(client_id, client_secret)` | `openid`, `profile`, `email` |
 
 ### Social provider inputs
 
@@ -60,11 +64,15 @@ Register social providers in one `OAuthPlugin` for the verified upstream configu
 
 Set `map_profile_to_user` to an `Arc<dyn OAuthProfileMapper>` to override local profile fields after built-in decoding. Omitted mapper fields preserve the provider value. `Some(None)` clears the name or image, and `additional_fields` adds configured application fields. The mapper cannot change the account subject. A custom `get_user_info` handler takes precedence and skips this mapper. Callback errors propagate through the existing OAuth error path. `map_user_info` remains the base JSON decoder for custom providers; it is distinct from the local-field mapper.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. `prompt` controls the provider prompt; omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, and custom providers forward the configured `prompt`. GitLab, Spotify, and Hugging Face ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
 
 Google direct ID-token sign-in and authorization-code callbacks map claims returned by the shared Google verifier used by One Tap. The verifier checks the signature, issuer, audience, token age and time claims. A supplied nonce is checked, and the configured `hd` authorization parameter restricts the hosted domain. Direct sign-in verifies once before mapping. Code callbacks and OAuth Proxy verify the token endpoint's ID token before mapping, retaining the existing callback error path. The production verifier uses Google's fixed public-key endpoint.
 
 For direct ID-token sign-in, a configured `verify_id_token` retains its application trust policy: only a successful result permits the default Google profile to parse that token's claims. Code callbacks use the shared Google verifier. A configured `get_user_info` retains precedence over the default profile and mapper. `/account-info` keeps the existing access-token/userinfo lookup, so stored-account reads do not acquire the sign-in token-age limit. Normal signed-flow fixtures cover both sign-in paths and callback precedence; complete provider parity is not claimed.
+
+GitLab and Spotify use authorization-code exchange with PKCE and Bearer userinfo requests. GitLab accepts active, unlocked profiles and selects `name`, then `username`, then an empty name. Spotify selects the first image and defaults `emailVerified` to false. Both retain the shared async profile mapper and custom `get_user_info` precedence. Their constructors do not install an ID-token verifier. For a self-hosted GitLab instance, set the existing `auth_url`, `token_url`, and `user_info_url` fields to the instance endpoints. LinkedIn is not included: its upstream authorization and code exchange omit PKCE, which requires a separate provider protocol policy.
+
+Hugging Face and Polar use the same code/PKCE, client-secret-post and Bearer userinfo flow. Hugging Face selects the first nonempty `name` or `preferred_username`; Polar selects the first nonempty `public_name` or `username`. Both use an empty name if neither exists, retain absent versus null images, and default an absent or null `email_verified` to false. Their profile mappers and custom user-info handlers follow the same precedence. Neither constructor installs an ID-token verifier. Railway and Figma are not included; they require provider-specific HTTP Basic token authentication, and Figma also has separate authorization validation and profile-error handling.
 
 ## Generic OAuth / OIDC
 
@@ -94,6 +102,19 @@ let mut provider = GenericOAuthConfig::auth0("client-id", "client-secret", "tena
 provider.require_id_token_verification = true;
 let oauth = OAuthPlugin::new().add_generic_provider("auth0", provider);
 ```
+
+`GenericOAuthConfig::microsoft_entra_id(client_id, client_secret, tenant_id)` requires a concrete tenant GUID and returns `AuthResult`. The constructor lowercases the GUID, configures tenant discovery and endpoints, enables required ID-token verification, and selects the `openid`, `profile`, and `email` scopes. Register the result as `microsoft-entra-id`.
+
+```rust
+let provider = GenericOAuthConfig::microsoft_entra_id(
+    "client-id",
+    "client-secret",
+    "aabbccdd-1122-3344-5566-778899aabbcc",
+)?;
+let oauth = OAuthPlugin::new().add_generic_provider("microsoft-entra-id", provider);
+```
+
+Entra reads the account subject from the verified `oid` claim. Verified claims take precedence over Graph profile fields. Display names assembled from given/family name aliases use JavaScript whitespace trimming. If the provider omits email, the profile uses a stable address under `microsoft-entra-id.placeholder.invalid` with `emailVerified: false`. With an access token, the handler reads the configured `user_info_url`; matching `sub` values allow Graph fields to fill missing token fields. A Graph HTTP error or a nonmatching subject retains the verified token profile, matching the upstream helper's explicit fallback. Transport and JSON errors propagate with context. Normal signed fixtures cover direct and code sign-in, profile mapping, Graph success, and HTTP 503 fallback; they do not establish live-provider or complete error-timing parity.
 
 Use the same client routes as built-in providers:
 
@@ -143,6 +164,8 @@ Use `authorization_url_params` for additional authorization parameters, `token_u
 ### Profiles and account identity
 
 Generic OAuth reads an ID-token profile when it contains `sub` and `email`, then falls back to the userinfo endpoint. `get_user_info` accepts a `GenericOAuthUserInfoHandler` for a custom raw profile. `map_profile_to_user` accepts an `OAuthProfileMapper` to return local user fields independently of account identity.
+
+After OIDC verification, the handler receives `VerifiedOAuthClaims` through `get_user_info_with_verified_claims`, together with the token set and resolved userinfo endpoint. The default method calls the existing `get_user_info` method, so existing handlers need no change. The borrowed claims expose `as_value()` and have no public constructor. A claims-dependent handler may override the new method; its ordinary `get_user_info` method must reject calls without verified claims. The Entra preset follows that contract. Direct ID-token sign-in passes the successful verification result to profile lookup; code callbacks and stored-account reads verify at their existing profile boundary. Each flow validates the received token once before the profile handler and local mapper.
 
 Set `OAuthProfile.additional_fields` to supply configured application user fields. Sign-up and profile updates apply the shared user schema, including input transforms, defaults, and protected-field filtering. OAuth Proxy preserves these mapped fields through its encrypted callback. Raw provider claims remain separate from mapped application fields.
 

@@ -96,6 +96,8 @@ pub(super) struct OidcVerifier {
     algorithms: Option<Vec<Value>>,
     cache: RwLock<Option<Arc<CachedJwks>>>,
     reload: Semaphore,
+    #[cfg(test)]
+    pub(super) verification_calls: std::sync::atomic::AtomicUsize,
 }
 
 impl OidcVerifier {
@@ -116,6 +118,8 @@ impl OidcVerifier {
             algorithms,
             cache: RwLock::new(None),
             reload: Semaphore::new(1),
+            #[cfg(test)]
+            verification_calls: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
@@ -124,6 +128,10 @@ impl OidcVerifier {
         token: &str,
         nonce: Option<&str>,
     ) -> Result<Value, OidcError> {
+        #[cfg(test)]
+        let _ = self
+            .verification_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut parts = token.split('.');
         let (Some(header), Some(payload), Some(signature), None) =
             (parts.next(), parts.next(), parts.next(), parts.next())

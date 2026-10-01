@@ -4,7 +4,7 @@
 //! and the CLI (for code generation). This is the single source of truth
 //! for which fields belong to core vs which are plugin-provided.
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EntityRole {
     User,
     Session,

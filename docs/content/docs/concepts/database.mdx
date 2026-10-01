@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Adapter configuration
 
-Every auth build passes its final configuration and plugin database hooks to `RuntimeStore::with_runtime`. Custom adapters must implement this method. Return a store view that shares stored records, binds the supplied configuration, and prepends plugin hooks to application hooks. Keep configuration and hook lists isolated from the original store and other auth builds.
+Every auth build passes its final configuration, plugin database hooks, and `ModelFields` to `RuntimeStore::with_runtime`. Custom adapters must implement this method. Return a store view that shares stored records, binds the supplied configuration and model fields, and prepends plugin hooks to application hooks. Forward `ModelFields` through adapter wrappers. Pass `ModelFields::default()` when binding a raw adapter without plugin-table policies. Keep configuration and hook lists isolated from the original store and other auth builds.
 
 `advanced.database.default_find_many_limit` preserves an optional numeric value; omission uses 100. Account and database session lists apply the default before output transforms. Bulk-delete hooks receive a limited snapshot, while the write still deletes every matching row. Verification lookup retains its explicit one-row limit, and secondary session lists remain uncapped. Memory follows JavaScript slice behavior; SQLite accepts negative integer limits as unlimited and rejects fractional or non-finite limits.
 

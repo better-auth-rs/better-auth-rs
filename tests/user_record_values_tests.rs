@@ -114,14 +114,18 @@ async fn raw_user_fields_keep_memory_values_and_sqlite_column_binding_results() 
     let config = Arc::new(AuthConfig::default());
     let trace = Trace::default();
     let store = EphemeralStore::new(config.clone())
-        .with_runtime(config.clone(), vec![Arc::new(trace.clone())])
+        .with_runtime(
+            config.clone(),
+            vec![Arc::new(trace.clone())],
+            Default::default(),
+        )
         .unwrap();
     matrix(store, trace, false).await;
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let trace = Trace::default();
     let store = SeaOrmStore::<BundledSchema>::new(config.clone(), database)
-        .with_runtime(config, vec![Arc::new(trace.clone())])
+        .with_runtime(config, vec![Arc::new(trace.clone())], Default::default())
         .unwrap();
     matrix(store, trace, true).await;
 }

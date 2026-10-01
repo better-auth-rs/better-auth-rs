@@ -81,6 +81,20 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
 
 `on_init`, `on_http_request`, `on_http_response`, `before_request`, and `after_request` have default no-op implementations. Plugins must implement `name`, `routes`, and `on_request`.
 
+### Register adapter field policies
+
+Call `AuthInitContext::register_model_fields(EntityRole, UserConfig)` during `on_init` to register fields for User, Session, Account, or Verification. Use `better_auth_core::store::schema::EntityRole`. Later plugins replace earlier declarations for the same field. Application declarations retain precedence at the adapter; plugin declarations retain precedence in existing endpoint parsers. `register_user_fields` remains available for user-only registration.
+
+The supported non-core policies are `EntityRole::Passkey` and `EntityRole::ApiKey`, each with the string field `name`. Memory and SeaORM apply its input transform before create and update, and its output transform before returning create, update, lookup, and list results. Defaults and `on_update` use the shared adapter field rules. Both synchronous and asynchronous `FieldTransforms` are supported. The projection retains every other typed record field, including internal fields omitted by serde. A transform result that cannot be represented as `Option<String>` returns the conversion error. `CreatePasskey.name = None` and `CreateApiKey.name = None` retain the existing null input; the typed field does not distinguish omitted and null values.
+
+Passkey and API Key creation capture their timestamps before awaiting the name input transform. Adapter ID generation follows that transform. Output conversion runs after persistence.
+
+Other plugin roles, other Passkey or API Key fields, references, replacement field types, and `field_name` values other than `name` return configuration errors during initialization. Application-owned SeaORM table and column attributes remain supported. This registration controls adapter conversion; it does not install route validators or change route visibility. Synchronous public-input parsing still rejects asynchronous input transforms. Organization retains its existing `OrganizationConfig::schema` interface.
+
+API Key secondary-only operations and fallback cache hits bypass adapter field policies. Database writes and fallback misses use the adapter; fallback caches retain the already-projected record. See [API Key storage](/docs/plugins/api-key#storage).
+
+An application plugin can keep a typed repository for its own tables and share the repository through `AuthInitContext::extensions`. Unknown tables do not receive Better Auth field policies or a generic CRUD interface from this registration API.
+
 `on_http_request(&AuthRequest, &AuthContext<S>) -> AuthResult<Option<AuthResponse>>` runs only for HTTP calls, after rate limiting and before endpoint middleware and validation. Returning a response skips the endpoint and its `before_request` / `after_request` hooks. Native plugin API calls bypass this phase.
 
 `before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` skips the endpoint and all after hooks. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks. HTTP response hooks still run.

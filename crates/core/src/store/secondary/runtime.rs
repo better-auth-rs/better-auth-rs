@@ -25,9 +25,12 @@ impl<S: AuthSchema> RuntimeStore<S> for SecondaryStore<S> {
         &self,
         config: Arc<AuthConfig>,
         hooks: Vec<Arc<dyn DatabaseHooks<S>>>,
+        model_fields: crate::plugin_runtime::ModelFields,
     ) -> AuthResult<Arc<dyn AuthStore<S>>> {
         Ok(Arc::new(Self {
-            inner: self.inner.with_runtime(config.clone(), hooks)?,
+            inner: self
+                .inner
+                .with_runtime(config.clone(), hooks, model_fields)?,
             storage: self.storage.clone(),
             config,
             metadata: self.metadata.clone(),

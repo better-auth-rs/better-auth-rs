@@ -4,10 +4,15 @@ use super::google::{self, AcceptedGoogleToken, VerifiedGoogleClaims};
 use super::resolved::ResolvedProvider;
 use super::types::OAuthIdTokenRequest;
 
+pub(super) enum VerifiedIdToken {
+    Google(VerifiedGoogleClaims),
+    Generic(serde_json::Value),
+}
+
 pub(super) async fn verify(
     provider: &ResolvedProvider,
     request: &OAuthIdTokenRequest,
-) -> AuthResult<Option<VerifiedGoogleClaims>> {
+) -> AuthResult<Option<VerifiedIdToken>> {
     if provider.config.disable_id_token_sign_in {
         return Err(unsupported());
     }
@@ -20,7 +25,7 @@ pub(super) async fn verify(
         return if provider.config.google_jwks_url().is_some()
             && provider.config.get_user_info.is_none()
         {
-            accepted.claims().map(Some)
+            accepted.claims().map(VerifiedIdToken::Google).map(Some)
         } else {
             Ok(None)
         };
@@ -30,8 +35,8 @@ pub(super) async fn verify(
         .as_ref()
         .and_then(|generic| generic.verifier.as_ref())
     {
-        let _ = verifier.verify(token, nonce).await.map_err(|_| invalid())?;
-        return Ok(None);
+        let claims = verifier.verify(token, nonce).await.map_err(|_| invalid())?;
+        return Ok(Some(VerifiedIdToken::Generic(claims)));
     }
     if let Some(jwks_url) = provider.config.google_jwks_url() {
         let claims = google::verify(
@@ -45,7 +50,7 @@ pub(super) async fn verify(
         if !claims.matches_hosted_domain(provider.config.google_hosted_domain()) {
             return Err(invalid());
         }
-        return Ok(Some(claims));
+        return Ok(Some(VerifiedIdToken::Google(claims)));
     }
     Err(unsupported())
 }

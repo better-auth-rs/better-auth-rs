@@ -23,7 +23,7 @@ impl UserFieldTransform {
         Self(Callback::Sync(Arc::new(callback)))
     }
 
-    /// Await a callback at core and Organization adapter boundaries.
+    /// Await a callback at core, Organization, and supported plugin adapter boundaries.
     /// Synchronous public-input parsing rejects async callbacks.
     pub fn new_async<F, Fut>(callback: F) -> Self
     where

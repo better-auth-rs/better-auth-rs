@@ -491,7 +491,7 @@ pub(super) async fn handle_account_info(
         ..Default::default()
     };
     let (user, data) = if let Some(generic) = &provider.generic {
-        let info = super::generic_profile::fetch_profile(generic, &request, None)
+        let info = super::generic_profile::fetch_profile(generic, &request, None, None)
             .await
             .map_err(|_| AuthError::Upstream {
                 status: 401,

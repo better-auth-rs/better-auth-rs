@@ -17,6 +17,10 @@ pub(super) enum ProviderKind {
         emails_url: String,
     },
     Discord,
+    GitLab,
+    Spotify,
+    HuggingFace,
+    Polar,
 }
 
 impl ProviderKind {
@@ -26,6 +30,9 @@ impl ProviderKind {
             Self::Google { .. } => &["email", "profile", "openid"],
             Self::GitHub { .. } => &["read:user", "user:email"],
             Self::Discord => &["identify", "email"],
+            Self::GitLab => &["read_user"],
+            Self::Spotify => &["user-read-email"],
+            Self::HuggingFace | Self::Polar => &["openid", "profile", "email"],
         }
     }
     pub(super) fn apply(&self, provider: &mut OAuthProvider) {
@@ -35,6 +42,18 @@ impl ProviderKind {
             }
             Self::Discord => {
                 let _ = provider.map_user_info.get_or_insert(discord_profile);
+            }
+            Self::GitLab => {
+                let _ = provider.map_user_info.get_or_insert(gitlab_profile);
+            }
+            Self::Spotify => {
+                let _ = provider.map_user_info.get_or_insert(spotify_profile);
+            }
+            Self::HuggingFace => {
+                let _ = provider.map_user_info.get_or_insert(huggingface_profile);
+            }
+            Self::Polar => {
+                let _ = provider.map_user_info.get_or_insert(polar_profile);
             }
             Self::GitHub {
                 user_url,
@@ -100,6 +119,145 @@ fn discord_profile(v: Value) -> Result<OAuthUserInfo, String> {
         }),
         email_verified: v.get("verified").and_then(|v| v.as_bool()).unwrap_or(false),
     })
+}
+
+fn gitlab_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    if v.get("state").and_then(Value::as_str) != Some("active")
+        || v.get("locked").and_then(Value::as_bool) == Some(true)
+    {
+        return Err("GitLab user is not active or is locked".into());
+    }
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("id")
+            .and_then(|value| {
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| value.as_i64().map(|value| value.to_string()))
+            })
+            .ok_or("missing id")?,
+        email: v
+            .get("email")
+            .and_then(Value::as_str)
+            .ok_or("missing email")?
+            .into(),
+        name: Some(
+            v.get("name")
+                .and_then(Value::as_str)
+                .or_else(|| v.get("username").and_then(Value::as_str))
+                .unwrap_or_default()
+                .into(),
+        ),
+        image: v
+            .get("avatar_url")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid GitLab avatar: {error}"))?,
+        email_verified: v
+            .get("email_verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+fn spotify_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("missing id")?
+            .into(),
+        email: v
+            .get("email")
+            .and_then(Value::as_str)
+            .ok_or("missing email")?
+            .into(),
+        name: v
+            .get("display_name")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        image: v
+            .get("images")
+            .and_then(Value::as_array)
+            .and_then(|images| images.first())
+            .and_then(|image| image.get("url"))
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Spotify image: {error}"))?,
+        email_verified: false,
+    })
+}
+
+fn huggingface_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("sub")
+            .and_then(Value::as_str)
+            .ok_or("missing sub")?
+            .into(),
+        email: v
+            .get("email")
+            .and_then(Value::as_str)
+            .ok_or("missing email")?
+            .into(),
+        name: Some(nonempty_profile_name(&v, "name", "preferred_username")),
+        image: v
+            .get("picture")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Hugging Face picture: {error}"))?,
+        email_verified: v
+            .get("email_verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+fn polar_profile(v: Value) -> Result<OAuthUserInfo, String> {
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: v
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("missing id")?
+            .into(),
+        email: v
+            .get("email")
+            .and_then(Value::as_str)
+            .ok_or("missing email")?
+            .into(),
+        name: Some(nonempty_profile_name(&v, "public_name", "username")),
+        image: v
+            .get("avatar_url")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Polar avatar: {error}"))?,
+        email_verified: v
+            .get("email_verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+fn nonempty_profile_name(profile: &Value, name: &str, fallback: &str) -> String {
+    [name, fallback]
+        .into_iter()
+        .find_map(|field| {
+            profile
+                .get(field)
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+        })
+        .unwrap_or_default()
+        .into()
 }
 
 #[derive(Debug, Deserialize)]

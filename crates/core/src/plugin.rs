@@ -16,7 +16,7 @@ pub type MetadataMap = HashMap<String, serde_json::Value>;
 
 pub struct AuthInitParts<S: AuthSchema> {
     request_runtime: crate::request_runtime::RequestRuntime,
-    pub plugin_user_fields: crate::user_fields::UserConfig,
+    pub plugin_fields: crate::plugin_runtime::ModelFields,
     pub database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
     pub runtime: crate::plugin_runtime::PluginRuntime<S>,
     pub extensions: crate::RuntimeExtensions,
@@ -240,7 +240,7 @@ pub struct AuthRoute {
 /// Initialization context passed to plugin setup.
 pub struct AuthInitContext<S: AuthSchema> {
     request_runtime: crate::request_runtime::RequestRuntime,
-    plugin_user_fields: crate::user_fields::UserConfig,
+    plugin_fields: crate::plugin_runtime::ModelFields,
     database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
     runtime: crate::plugin_runtime::PluginRuntime<S>,
     pub extensions: crate::RuntimeExtensions,
@@ -408,7 +408,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
         let password_policy = crate::utils::password::PasswordRuntimePolicy::new(&config.password);
         Self {
             request_runtime: Default::default(),
-            plugin_user_fields: Default::default(),
+            plugin_fields: Default::default(),
             database_hooks: Vec::new(),
             runtime: Default::default(),
             extensions: crate::RuntimeExtensions::default(),
@@ -434,9 +434,18 @@ impl<S: AuthSchema> AuthInitContext<S> {
 
     /// Register user schema fields in plugin registration order.
     pub fn register_user_fields(&mut self, fields: crate::user_fields::UserConfig) {
-        if let Some(fields) = fields.additional_fields {
-            self.plugin_user_fields.fields_mut().extend(fields);
-        }
+        self.plugin_fields
+            .extend(crate::store::schema::EntityRole::User, fields);
+    }
+
+    /// Register adapter fields for core models or the ordinary Passkey and API Key name fields.
+    /// Other plugin roles and fields return a configuration error.
+    pub fn register_model_fields(
+        &mut self,
+        role: crate::store::schema::EntityRole,
+        fields: crate::user_fields::UserConfig,
+    ) -> AuthResult<()> {
+        self.plugin_fields.register(role, fields)
     }
 
     /// Register a database hook before application-owned adapter hooks.
@@ -463,7 +472,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
     pub fn into_parts(self) -> AuthInitParts<S> {
         AuthInitParts {
             request_runtime: self.request_runtime,
-            plugin_user_fields: self.plugin_user_fields,
+            plugin_fields: self.plugin_fields,
             database_hooks: self.database_hooks,
             runtime: self.runtime,
             extensions: self.extensions,

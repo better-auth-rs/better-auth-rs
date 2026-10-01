@@ -1,0 +1,594 @@
+{
+  "version": "1.7.6",
+  "clientId": "social-http-client",
+  "state": "ordinary-state",
+  "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+  "codeChallenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+  "providers": {
+    "gitlab": {
+      "authorizationEndpoint": "https://gitlab.com/oauth/authorize",
+      "tokenEndpoint": "https://gitlab.com/oauth/token",
+      "userinfoEndpoint": "https://gitlab.com/api/v4/user",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "read_user"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "api",
+              "read_user"
+            ]
+          },
+          "requestScopes": [
+            "read_api",
+            "api"
+          ],
+          "scope": "read_user api read_user read_api api"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "api"
+            ]
+          },
+          "requestScopes": [
+            "read_api"
+          ],
+          "scope": "api read_api"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": 73,
+        "username": "gitlab-owner",
+        "name": "GitLab Owner",
+        "email": "gitlab-owner@example.test",
+        "avatar_url": "https://images.example.test/gitlab.png",
+        "state": "active",
+        "locked": false,
+        "email_verified": true
+      },
+      "defaultUser": {
+        "name": "GitLab Owner",
+        "email": "gitlab-owner@example.test",
+        "image": "https://images.example.test/gitlab.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped GitLab Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped GitLab Owner",
+        "email": "gitlab-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom GitLab Owner",
+        "email": "gitlab-owner@example.test",
+        "image": "https://images.example.test/custom-gitlab.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "null name falls back to username",
+          "profile": {
+            "id": 73,
+            "username": "gitlab-owner",
+            "name": null,
+            "email": "gitlab-owner@example.test",
+            "avatar_url": "https://images.example.test/gitlab.png",
+            "state": "active",
+            "locked": false,
+            "email_verified": true
+          },
+          "user": {
+            "name": "gitlab-owner",
+            "email": "gitlab-owner@example.test",
+            "image": "https://images.example.test/gitlab.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null name and username yield an empty name",
+          "profile": {
+            "id": 73,
+            "username": null,
+            "name": null,
+            "email": "gitlab-owner@example.test",
+            "avatar_url": "https://images.example.test/gitlab.png",
+            "state": "active",
+            "locked": false,
+            "email_verified": true
+          },
+          "user": {
+            "name": "",
+            "email": "gitlab-owner@example.test",
+            "image": "https://images.example.test/gitlab.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null avatar and omitted email verification preserve defaults",
+          "profile": {
+            "id": 73,
+            "username": "gitlab-owner",
+            "name": "GitLab Owner",
+            "email": "gitlab-owner@example.test",
+            "avatar_url": null,
+            "state": "active",
+            "locked": false
+          },
+          "user": {
+            "name": "GitLab Owner",
+            "email": "gitlab-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ],
+      "rejectedStates": [
+        {
+          "name": "blocked",
+          "patch": {
+            "state": "blocked",
+            "locked": false
+          }
+        },
+        {
+          "name": "locked",
+          "patch": {
+            "state": "active",
+            "locked": true
+          }
+        }
+      ]
+    },
+    "spotify": {
+      "authorizationEndpoint": "https://accounts.spotify.com/authorize",
+      "tokenEndpoint": "https://accounts.spotify.com/api/token",
+      "userinfoEndpoint": "https://api.spotify.com/v1/me",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "user-read-email"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "user-read-private",
+              "user-read-email"
+            ]
+          },
+          "requestScopes": [
+            "playlist-read-private",
+            "user-read-private"
+          ],
+          "scope": "user-read-email user-read-private user-read-email playlist-read-private user-read-private"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "user-read-private"
+            ]
+          },
+          "requestScopes": [
+            "playlist-read-private"
+          ],
+          "scope": "user-read-private playlist-read-private"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": "spotify-owner",
+        "display_name": "Spotify Owner",
+        "email": "spotify-owner@example.test",
+        "images": [
+          {
+            "url": "https://images.example.test/spotify-first.png"
+          },
+          {
+            "url": "https://images.example.test/spotify-second.png"
+          }
+        ]
+      },
+      "defaultUser": {
+        "name": "Spotify Owner",
+        "email": "spotify-owner@example.test",
+        "image": "https://images.example.test/spotify-first.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Spotify Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Spotify Owner",
+        "email": "spotify-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Spotify Owner",
+        "email": "spotify-owner@example.test",
+        "image": "https://images.example.test/custom-spotify.png",
+        "emailVerified": false
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty images omit the JSON image field",
+          "profile": {
+            "id": "spotify-owner",
+            "display_name": "Spotify Owner",
+            "email": "spotify-owner@example.test",
+            "images": []
+          },
+          "user": {
+            "name": "Spotify Owner",
+            "email": "spotify-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null first image stays null",
+          "profile": {
+            "id": "spotify-owner",
+            "display_name": "Spotify Owner",
+            "email": "spotify-owner@example.test",
+            "images": [
+              {
+                "url": null
+              },
+              {
+                "url": "https://images.example.test/spotify-second.png"
+              }
+            ]
+          },
+          "user": {
+            "name": "Spotify Owner",
+            "email": "spotify-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ]
+    },
+    "huggingface": {
+      "authorizationEndpoint": "https://huggingface.co/oauth/authorize",
+      "tokenEndpoint": "https://huggingface.co/oauth/token",
+      "userinfoEndpoint": "https://huggingface.co/oauth/userinfo",
+      "subjectField": "sub",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "openid profile email"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "profile",
+              "email"
+            ]
+          },
+          "requestScopes": [
+            "openid",
+            "profile"
+          ],
+          "scope": "openid profile email profile email openid profile"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "profile"
+            ]
+          },
+          "requestScopes": [
+            "email"
+          ],
+          "scope": "profile email"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "sub": "hf-owner",
+        "name": "Hugging Face Owner",
+        "preferred_username": "hf-owner",
+        "email": "hf-owner@example.test",
+        "picture": "https://images.example.test/huggingface.png",
+        "email_verified": true
+      },
+      "defaultUser": {
+        "name": "Hugging Face Owner",
+        "email": "hf-owner@example.test",
+        "image": "https://images.example.test/huggingface.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Hugging Face Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Hugging Face Owner",
+        "email": "hf-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Hugging Face Owner",
+        "email": "hf-owner@example.test",
+        "image": "https://images.example.test/custom-huggingface.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty name falls back to preferred username",
+          "profile": {
+            "sub": "hf-owner",
+            "name": "",
+            "preferred_username": "hf-owner",
+            "email": "hf-owner@example.test",
+            "picture": "https://images.example.test/huggingface.png",
+            "email_verified": true
+          },
+          "user": {
+            "name": "hf-owner",
+            "email": "hf-owner@example.test",
+            "image": "https://images.example.test/huggingface.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null names and omitted picture and verification preserve defaults",
+          "profile": {
+            "sub": "hf-owner",
+            "name": null,
+            "preferred_username": null,
+            "email": "hf-owner@example.test"
+          },
+          "user": {
+            "name": "",
+            "email": "hf-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null picture and verification preserve null image and false",
+          "profile": {
+            "sub": "hf-owner",
+            "name": "Hugging Face Owner",
+            "preferred_username": "hf-owner",
+            "email": "hf-owner@example.test",
+            "picture": null,
+            "email_verified": null
+          },
+          "user": {
+            "name": "Hugging Face Owner",
+            "email": "hf-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ]
+    },
+    "polar": {
+      "authorizationEndpoint": "https://polar.sh/oauth2/authorize",
+      "tokenEndpoint": "https://api.polar.sh/v1/oauth2/token",
+      "userinfoEndpoint": "https://api.polar.sh/v1/oauth2/userinfo",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "openid profile email"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "profile",
+              "email"
+            ],
+            "prompt": "consent"
+          },
+          "requestScopes": [
+            "openid",
+            "profile"
+          ],
+          "scope": "openid profile email profile email openid profile"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "profile"
+            ]
+          },
+          "requestScopes": [
+            "email"
+          ],
+          "scope": "profile email"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "id": "3cecbd67-5b5a-4b03-a918-54daeb12ba33",
+        "public_name": "Polar Owner",
+        "username": "polar-owner",
+        "email": "polar-owner@example.test",
+        "avatar_url": "https://images.example.test/polar.png",
+        "email_verified": true
+      },
+      "defaultUser": {
+        "name": "Polar Owner",
+        "email": "polar-owner@example.test",
+        "image": "https://images.example.test/polar.png",
+        "emailVerified": true
+      },
+      "mapperPatch": {
+        "name": "Mapped Polar Owner",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Polar Owner",
+        "email": "polar-owner@example.test",
+        "image": null,
+        "emailVerified": false,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Polar Owner",
+        "email": "polar-owner@example.test",
+        "image": "https://images.example.test/custom-polar.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty public name falls back to username",
+          "profile": {
+            "id": "3cecbd67-5b5a-4b03-a918-54daeb12ba33",
+            "public_name": "",
+            "username": "polar-owner",
+            "email": "polar-owner@example.test",
+            "avatar_url": "https://images.example.test/polar.png",
+            "email_verified": true
+          },
+          "user": {
+            "name": "polar-owner",
+            "email": "polar-owner@example.test",
+            "image": "https://images.example.test/polar.png",
+            "emailVerified": true
+          }
+        },
+        {
+          "name": "null names and omitted avatar and verification preserve defaults",
+          "profile": {
+            "id": "3cecbd67-5b5a-4b03-a918-54daeb12ba33",
+            "public_name": null,
+            "username": null,
+            "email": "polar-owner@example.test"
+          },
+          "user": {
+            "name": "",
+            "email": "polar-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null avatar and verification preserve null image and false",
+          "profile": {
+            "id": "3cecbd67-5b5a-4b03-a918-54daeb12ba33",
+            "public_name": "Polar Owner",
+            "username": "polar-owner",
+            "email": "polar-owner@example.test",
+            "avatar_url": null,
+            "email_verified": null
+          },
+          "user": {
+            "name": "Polar Owner",
+            "email": "polar-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ]
+    }
+  },
+  "promptCases": [
+    {
+      "provider": "google",
+      "configured": "consent",
+      "expected": "consent"
+    },
+    {
+      "provider": "github",
+      "configured": "consent",
+      "expected": "consent"
+    },
+    {
+      "provider": "discord",
+      "configured": "consent",
+      "expected": "consent"
+    },
+    {
+      "provider": "polar",
+      "configured": "consent",
+      "expected": "consent"
+    },
+    {
+      "provider": "gitlab",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "spotify",
+      "configured": "consent",
+      "expected": null
+    },
+    {
+      "provider": "huggingface",
+      "configured": "consent",
+      "expected": null
+    }
+  ]
+}
