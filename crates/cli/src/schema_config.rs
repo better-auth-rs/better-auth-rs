@@ -154,7 +154,13 @@ impl SchemaConfig {
             }
             if !matches!(
                 name.as_str(),
-                "organization" | "member" | "invitation" | "team" | "organizationRole"
+                "account"
+                    | "verification"
+                    | "organization"
+                    | "member"
+                    | "invitation"
+                    | "team"
+                    | "organizationRole"
             ) && !model.additional_fields.is_empty()
             {
                 return Err(format!("`{name}` does not support additionalFields"));

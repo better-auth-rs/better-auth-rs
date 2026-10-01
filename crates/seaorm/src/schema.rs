@@ -6,12 +6,10 @@ use sea_orm::{
     IntoActiveModel, Value,
 };
 
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::error::AuthResult;
 pub use better_auth_core::schema::AuthSchema;
-use better_auth_core::types::{
-    CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
-};
+use better_auth_core::types::{CreateSession, CreateUser, UpdateUser};
 
 pub trait SeaOrmUserModel:
     AuthUser + IntoActiveModel<Self::ActiveModel> + Clone + Send + Sync + 'static + FromQueryResult
@@ -38,7 +36,12 @@ pub trait SeaOrmUserModel:
         false
     }
 
-    /// Resolve an application field's serialized name to its database column.
+    /// Columns written by a handwritten insert beyond core and configured application fields.
+    fn extra_insert_columns() -> Vec<<Self::Entity as EntityTrait>::Column> {
+        Vec::new()
+    }
+
+    /// Resolve every core and configured application field to its database column.
     fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column> {
         Err(better_auth_core::AuthError::config(format!(
             "The user model does not resolve reference field: {name}"
@@ -87,7 +90,12 @@ pub trait SeaOrmSessionModel:
         false
     }
 
-    /// Resolve an application field's serialized name to its database column.
+    /// Columns written by a handwritten insert beyond core and configured application fields.
+    fn extra_insert_columns() -> Vec<<Self::Entity as EntityTrait>::Column> {
+        Vec::new()
+    }
+
+    /// Resolve every core and configured application field to its database column.
     fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column> {
         Err(better_auth_core::AuthError::config(format!(
             "The session model does not resolve reference field: {name}"
@@ -123,11 +131,11 @@ pub trait SeaOrmSessionModel:
 }
 
 pub trait SeaOrmAccountModel:
-    AuthAccount + IntoActiveModel<Self::ActiveModel> + Clone + Send + Sync + 'static + FromQueryResult
+    IntoActiveModel<Self::ActiveModel> + Clone + Send + Sync + 'static + FromQueryResult
 {
     type Id: Clone + Into<Value> + Send + Sync + 'static;
     type UserId: Clone + Into<Value> + Send + Sync + 'static;
-    type Entity: EntityTrait<Model = Self>;
+    type Entity: EntityTrait<Model = Self, Column = Self::Column>;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Send;
     type Column: ColumnTrait;
 
@@ -139,25 +147,37 @@ pub trait SeaOrmAccountModel:
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
     fn parse_user_id(user_id: &str) -> AuthResult<Self::UserId>;
 
+    /// Build a model from adapter-transformed fields, after before hooks complete.
     fn new_active(
         id: Option<Self::Id>,
-        create_account: CreateAccount,
-        now: DateTime<Utc>,
-    ) -> Self::ActiveModel;
-    fn apply_update(active: &mut Self::ActiveModel, update: UpdateAccount, now: DateTime<Utc>);
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<Self::ActiveModel>;
+    /// Resolve logical names and declared model aliases to the same database column.
+    fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column>;
+    fn native_json_field(name: &str) -> bool;
+    /// Return application columns populated by inserts outside configured field policies.
+    fn extra_insert_columns() -> Vec<<Self::Entity as EntityTrait>::Column> {
+        Vec::new()
+    }
+    /// Decode a create record or update patch into its declared SQL column types.
+    fn apply_fields(
+        active: &mut Self::ActiveModel,
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<()>;
+    /// Apply output policies once without decoding their results back into SQL column types.
+    fn record(
+        &self,
+        fields: &better_auth_core::user_fields::UserConfig,
+        supports_native_json: bool,
+        supports_native_dates: bool,
+    ) -> AuthResult<better_auth_core::wire::AccountView>;
 }
 
 pub trait SeaOrmVerificationModel:
-    AuthVerification
-    + IntoActiveModel<Self::ActiveModel>
-    + Clone
-    + Send
-    + Sync
-    + 'static
-    + FromQueryResult
+    IntoActiveModel<Self::ActiveModel> + Clone + Send + Sync + 'static + FromQueryResult
 {
     type Id: Clone + Into<Value> + Send + Sync + 'static;
-    type Entity: EntityTrait<Model = Self>;
+    type Entity: EntityTrait<Model = Self, Column = Self::Column>;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Send;
     type Column: ColumnTrait;
 
@@ -168,14 +188,28 @@ pub trait SeaOrmVerificationModel:
     fn created_at_column() -> Self::Column;
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
 
+    /// Build a model from adapter-transformed fields, after before hooks complete.
     fn new_active(
         id: Option<Self::Id>,
-        verification: CreateVerification,
-        now: DateTime<Utc>,
-    ) -> Self::ActiveModel;
-    /// Apply values returned by verification update hooks.
-    fn apply_update(
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<Self::ActiveModel>;
+    /// Resolve logical names and declared model aliases to the same database column.
+    fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column>;
+    fn native_json_field(name: &str) -> bool;
+    /// Return application columns populated by inserts outside configured field policies.
+    fn extra_insert_columns() -> Vec<<Self::Entity as EntityTrait>::Column> {
+        Vec::new()
+    }
+    /// Decode a create record or update patch into its declared SQL column types.
+    fn apply_fields(
         active: &mut Self::ActiveModel,
-        update: crate::VerificationUpdate,
+        fields: serde_json::Map<String, serde_json::Value>,
     ) -> AuthResult<()>;
+    /// Apply output policies once without decoding their results back into SQL column types.
+    fn record(
+        &self,
+        fields: &better_auth_core::user_fields::UserConfig,
+        supports_native_json: bool,
+        supports_native_dates: bool,
+    ) -> AuthResult<better_auth_core::wire::VerificationView>;
 }

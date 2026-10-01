@@ -1,4 +1,4 @@
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount, CreateUser,
@@ -61,6 +61,7 @@ pub(super) struct ProcessOAuthUserResult {
 }
 
 pub(super) enum OAuthSignInError {
+    Auth(AuthError),
     Generic(String),
     Banned(String),
     Admission(crate::plugins::user_admission::UserValidationRejection),
@@ -70,6 +71,7 @@ pub(super) enum OAuthSignInError {
 impl OAuthSignInError {
     pub(super) fn into_auth_response(self) -> AuthResult<AuthResponse> {
         Ok(match self {
+            Self::Auth(error) => return Err(error),
             Self::Generic(message) if message == "email_not_verified" => AuthError::Upstream {
                 status: 403,
                 code: "EMAIL_NOT_VERIFIED",
@@ -86,8 +88,9 @@ impl OAuthSignInError {
         })
     }
 
-    pub(super) fn redirect_parts(&self) -> AuthResult<(String, Option<String>)> {
+    pub(super) fn redirect_parts(self) -> AuthResult<(String, Option<String>)> {
         Ok(match self {
+            Self::Auth(error) => return Err(error),
             Self::Generic(message) => (message.replace(' ', "_"), None),
             Self::Banned(message) => ("BANNED_USER".into(), Some(message.clone())),
             Self::Admission(error) => (error.error.clone(), Some(error.message().to_owned())),
@@ -106,6 +109,12 @@ impl OAuthSignInError {
                 )
             }
         })
+    }
+}
+
+impl From<AuthError> for OAuthSignInError {
+    fn from(error: AuthError) -> Self {
+        Self::Auth(error)
     }
 }
 
@@ -174,7 +183,10 @@ pub(super) async fn process_oauth_sign_in(
     if let Some(existing_account) = linked_account {
         validate_provider_user(
             user_info,
-            &existing_account.user_id(),
+            existing_account
+                .user_id
+                .typed()
+                .map_err(|error| error.to_string())?,
             provider_name,
             options.profile,
             crate::plugins::user_admission::UserValidationAction::SignIn,
@@ -185,14 +197,29 @@ pub(super) async fn process_oauth_sign_in(
             let _ = ctx
                 .database
                 .update_account(
-                    &existing_account.id(),
+                    existing_account
+                        .id
+                        .typed()
+                        .map_err(|error| error.to_string())?,
                     UpdateAccount {
-                        access_token: token_bundle.access_token.clone(),
-                        refresh_token: token_bundle.refresh_token.clone(),
-                        id_token: token_bundle.id_token.clone(),
-                        access_token_expires_at: tokens.access_token_expires_at,
-                        refresh_token_expires_at: tokens.refresh_token_expires_at,
-                        scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
+                        access_token: (token_bundle.access_token.clone())
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
+                        refresh_token: (token_bundle.refresh_token.clone())
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
+                        id_token: (token_bundle.id_token.clone())
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
+                        access_token_expires_at: (tokens.access_token_expires_at)
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
+                        refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
+                        scope: ((!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")))
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
                         ..Default::default()
                     },
                 )
@@ -202,7 +229,12 @@ pub(super) async fn process_oauth_sign_in(
 
         let mut user = ctx
             .database
-            .get_user_by_id(&existing_account.user_id())
+            .get_user_by_id(
+                existing_account
+                    .user_id
+                    .typed()
+                    .map_err(|error| error.to_string())?,
+            )
             .await
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "user not found".to_string())?;
@@ -270,29 +302,33 @@ pub(super) async fn process_oauth_sign_in(
                 .account
                 .store_account_cookie()
                 .then(|| AccountCookiePayload {
-                    visible_fields: existing_account.field_presence().cloned(),
-                    id: Some(existing_account.id().to_string()),
-                    user_id: existing_account.user_id().to_string(),
-                    provider_id: provider_name.to_string(),
-                    account_id: existing_account.account_id().to_string(),
+                    provider_id: provider_name.to_owned().into(),
                     access_token: token_bundle
                         .access_token
-                        .or_else(|| existing_account.access_token().map(str::to_string)),
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_else(|| existing_account.access_token.clone()),
                     refresh_token: token_bundle
                         .refresh_token
-                        .or_else(|| existing_account.refresh_token().map(str::to_string)),
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_else(|| existing_account.refresh_token.clone()),
                     id_token: token_bundle
                         .id_token
-                        .or_else(|| existing_account.id_token().map(str::to_string)),
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_else(|| existing_account.id_token.clone()),
                     access_token_expires_at: tokens
                         .access_token_expires_at
-                        .or_else(|| existing_account.access_token_expires_at()),
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_else(|| existing_account.access_token_expires_at.clone()),
                     refresh_token_expires_at: tokens
                         .refresh_token_expires_at
-                        .or_else(|| existing_account.refresh_token_expires_at()),
-                    scope: (!tokens.scopes.is_empty())
-                        .then(|| tokens.scopes.join(","))
-                        .or_else(|| existing_account.scope().map(str::to_string)),
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_else(|| existing_account.refresh_token_expires_at.clone()),
+                    scope: if tokens.scopes.is_empty() {
+                        existing_account.scope.clone()
+                    } else {
+                        better_auth_core::SchemaValue::Typed(Some(tokens.scopes.join(",")))
+                    },
+                    ..existing_account.clone()
                 });
 
         return Ok(ProcessOAuthUserResult {
@@ -349,16 +385,29 @@ pub(super) async fn process_oauth_sign_in(
         let created_account = ctx
             .database
             .create_account(CreateAccount {
-                user_id: linked_user.id().to_string(),
-                account_id: user_info.id.clone(),
-                provider_id: provider_name.to_string(),
-                access_token: token_bundle.access_token,
-                refresh_token: token_bundle.refresh_token,
-                id_token: token_bundle.id_token,
-                access_token_expires_at: tokens.access_token_expires_at,
-                refresh_token_expires_at: tokens.refresh_token_expires_at,
-                scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
-                password: None,
+                user_id: (linked_user.id().to_string()).into(),
+                account_id: (user_info.id.clone()).into(),
+                provider_id: (provider_name.to_string()).into(),
+                access_token: (token_bundle.access_token)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                refresh_token: (token_bundle.refresh_token)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                id_token: (token_bundle.id_token)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                access_token_expires_at: (tokens.access_token_expires_at)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                scope: ((!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")))
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                password: Default::default(),
+                ..Default::default()
             })
             .await
             .map_err(|_| "unable to link account".to_string())?;
@@ -425,7 +474,7 @@ pub(super) async fn process_oauth_sign_in(
             .config
             .account
             .store_account_cookie()
-            .then(|| AccountCookiePayload::from_account(&created_account));
+            .then(|| created_account.clone());
 
         Ok(ProcessOAuthUserResult {
             issued: ctx
@@ -469,16 +518,29 @@ pub(super) async fn process_oauth_sign_in(
             crate::plugins::user_admission::UserValidationAction::CreateUser,
         );
         let account = CreateAccount {
-            user_id: String::new(),
-            account_id: user_info.id.clone(),
-            provider_id: provider_name.to_owned(),
-            access_token: token_bundle.access_token,
-            refresh_token: token_bundle.refresh_token,
-            id_token: token_bundle.id_token,
-            access_token_expires_at: tokens.access_token_expires_at,
-            refresh_token_expires_at: tokens.refresh_token_expires_at,
-            scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
-            password: None,
+            user_id: (String::new()).into(),
+            account_id: (user_info.id.clone()).into(),
+            provider_id: (provider_name.to_owned()).into(),
+            access_token: (token_bundle.access_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token: (token_bundle.refresh_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            id_token: (token_bundle.id_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            access_token_expires_at: (tokens.access_token_expires_at)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            scope: ((!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            password: Default::default(),
+            ..Default::default()
         };
         let outcome = better_auth_core::store::transaction(ctx.database.as_ref(), move |tx| {
             Box::pin(async move {
@@ -500,7 +562,7 @@ pub(super) async fn process_oauth_sign_in(
                 let user = tx.create_user(create_user).await?;
                 let account = tx
                     .create_account(CreateAccount {
-                        user_id: user.id().into_owned(),
+                        user_id: (user.id().into_owned()).into(),
                         ..account
                     })
                     .await?;
@@ -529,7 +591,7 @@ pub(super) async fn process_oauth_sign_in(
             .config
             .account
             .store_account_cookie()
-            .then(|| AccountCookiePayload::from_account(&created_account));
+            .then(|| created_account.clone());
 
         Ok(ProcessOAuthUserResult {
             issued: ctx
@@ -583,6 +645,7 @@ pub(crate) async fn sign_in_verified_profile(
     )
     .await
     .map_err(|error| match error {
+        OAuthSignInError::Auth(error) => error,
         OAuthSignInError::Generic(message) if message == "email_not_verified" => {
             AuthError::Upstream {
                 status: 403,

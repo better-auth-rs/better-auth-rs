@@ -104,6 +104,7 @@ pub(super) fn parse_roles(value: &SchemaValue<RoleInput>) -> AuthResult<SchemaVa
         }
         SchemaValue::Dynamic(value) => Ok(SchemaValue::Dynamic(value.clone())),
         SchemaValue::Undefined => Ok(SchemaValue::Undefined),
+        SchemaValue::InvalidDate => Ok(SchemaValue::InvalidDate),
     }
 }
 

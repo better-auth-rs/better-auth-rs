@@ -10,7 +10,7 @@ use std::sync::Arc;
 use totp_rs::{Algorithm, TOTP};
 use validator::Validate;
 
-use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser, AuthVerification};
+use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser};
 use better_auth_core::utils::cookie_utils::{
     create_clear_cookie, create_session_like_cookie, related_cookie_name,
 };
@@ -344,7 +344,9 @@ pub(crate) async fn inspect_trusted_device(
         });
     };
 
-    if verification.value() != user.id().as_ref() || verification.expires_at() <= Utc::now() {
+    if verification.value != user.id().as_ref()
+        || verification.expires_at.is_before_or_equal(Utc::now())
+    {
         return Ok(TrustedDeviceCheck {
             trusted: false,
             set_cookie_headers: vec![clear_header],
@@ -372,18 +374,20 @@ pub(crate) async fn begin_sign_in_challenge(
     _ = ctx
         .database
         .create_verification(CreateVerification {
-            identifier: identifier.clone(),
-            value: user.id().to_string(),
-            expires_at: Utc::now() + Duration::seconds(two_factor_cookie_max_age(ctx)),
+            identifier: (identifier.clone()).into(),
+            value: (user.id().to_string()).into(),
+            expires_at: (Utc::now() + Duration::seconds(two_factor_cookie_max_age(ctx))).into(),
+            ..Default::default()
         })
         .await?;
 
     let _ = ctx
         .database
         .create_verification(CreateVerification {
-            identifier: format!("2fa-attempts-{identifier}"),
-            value: "0".to_owned(),
-            expires_at: Utc::now() + Duration::seconds(two_factor_cookie_max_age(ctx)),
+            identifier: (format!("2fa-attempts-{identifier}")).into(),
+            value: ("0".to_owned()).into(),
+            expires_at: (Utc::now() + Duration::seconds(two_factor_cookie_max_age(ctx))).into(),
+            ..Default::default()
         })
         .await?;
 
@@ -702,7 +706,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
         .get_verification_by_identifier(&identifier)
         .await?
         .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
-    if verification.expires_at() <= Utc::now() {
+    if verification.expires_at.is_before_or_equal(Utc::now()) {
         ctx.database
             .delete_verification_by_identifier(&identifier)
             .await?;
@@ -713,7 +717,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
 
     let user = ctx
         .database
-        .get_user_by_id(verification.value())
+        .get_user_by_id(verification.value.typed()?)
         .await?
         .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
     let dont_remember = read_signed_cookie(req, DONT_REMEMBER_COOKIE_SUFFIX, ctx)?.is_some();
@@ -800,7 +804,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
         .database
         .consume_verification_by_identifier(&pending.key)
         .await?
-        .filter(|verification| verification.value() == pending.user.id)
+        .filter(|verification| verification.value == pending.user.id)
     else {
         req.append_response_header(
             "Set-Cookie",
@@ -818,7 +822,7 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     };
     let issued = issue_user_session_with_lifetime(
         ctx,
-        consumed.value(),
+        consumed.value.typed()?,
         meta.ip_address,
         meta.user_agent,
         expires_in,

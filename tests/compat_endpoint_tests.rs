@@ -146,7 +146,7 @@ async fn test_spec_driven_endpoint_validation() {
             serde_json::json!({
                 "currentPassword": "password123",
                 "newPassword": "newpassword456",
-                "revokeOtherSessions": "false"
+                "revokeOtherSessions": false
             }),
             &pw_token,
         ),
@@ -263,16 +263,18 @@ async fn test_spec_driven_endpoint_validation() {
     let account_info_account = auth
         .store()
         .create_account(CreateAccount {
-            user_id: ai_user_id.to_string(),
-            account_id: "mock-account-id".to_string(),
-            provider_id: "mock".to_string(),
-            access_token: Some("mock-access-token".to_string()),
-            refresh_token: Some("mock-refresh-token".to_string()),
-            id_token: None,
-            access_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-            refresh_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
-            scope: Some("openid,email,profile".to_string()),
-            password: None,
+            user_id: (ai_user_id.to_string()).into(),
+            account_id: ("mock-account-id".to_string()).into(),
+            provider_id: ("mock".to_string()).into(),
+            access_token: (Some("mock-access-token".to_string())).into(),
+            refresh_token: (Some("mock-refresh-token".to_string())).into(),
+            id_token: Default::default(),
+            access_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(1))).into(),
+            refresh_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(2)))
+                .into(),
+            scope: (Some("openid,email,profile".to_string())).into(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .expect("account-info test account should be created");
@@ -281,7 +283,10 @@ async fn test_spec_driven_endpoint_validation() {
         get_with_auth_and_query(
             "/account-info",
             &ai_token,
-            vec![("accountId", account_info_account.id.as_str())],
+            vec![(
+                "accountId",
+                account_info_account.id.typed().unwrap().as_str(),
+            )],
         ),
     )
     .await;

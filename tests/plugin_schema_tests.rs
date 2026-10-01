@@ -197,7 +197,7 @@ async fn disabled_username_ignores_inputs_without_persisting_them()
             "name": "Core user", "email": "core@example.com", "password": "password123",
             "username": { "ignored": true }, "displayUsername": 42
         }))?),
-        HashMap::new(),
+        None,
     );
     let response = auth.handle_request(signup).await?;
     assert_eq!(response.status, 200);
@@ -216,7 +216,7 @@ async fn disabled_username_ignores_inputs_without_persisting_them()
         Some(serde_json::to_vec(&json!({
             "name": "Changed name", "username": "ignored_update", "displayUsername": []
         }))?),
-        HashMap::new(),
+        None,
     );
     assert_eq!(auth.handle_request(update).await?.status, 200);
     let user = auth

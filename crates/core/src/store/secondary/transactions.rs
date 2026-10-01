@@ -66,7 +66,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     async fn create_verification(
         &self,
         input: crate::CreateVerification,
-    ) -> AuthResult<S::Verification> {
+    ) -> AuthResult<crate::wire::VerificationView> {
         let verification = self
             .runtime
             .create_verification_in_transaction(input, Some(self.inner))
@@ -83,10 +83,28 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
         }
         Ok(verification)
     }
+    async fn create_verification_with_writer(
+        &self,
+        input: crate::CreateVerification,
+        writer: Option<crate::store::VerificationCreateWriter>,
+    ) -> AuthResult<crate::wire::VerificationView> {
+        self.inner
+            .create_verification_with_writer(input, writer)
+            .await
+    }
+    async fn update_verification(
+        &self,
+        identifier: &str,
+        update: crate::store::database_hooks::VerificationUpdate,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
+        self.runtime
+            .update_verification_in_transaction(identifier, update, Some(self.inner))
+            .await
+    }
     async fn get_verification_including_expired(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
         self.runtime
             .find_verification_in_transaction(identifier, Some(self.inner))
             .await
@@ -149,7 +167,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<'_, S> {
     async fn create_user(&self, input: CreateUser) -> AuthResult<S::User> {
         self.inner.create_user(input).await
     }
-    async fn create_account(&self, input: CreateAccount) -> AuthResult<S::Account> {
+    async fn create_account(&self, input: CreateAccount) -> AuthResult<crate::wire::AccountView> {
         self.inner.create_account(input).await
     }
     async fn create_session(&self, input: CreateSession) -> AuthResult<S::Session> {
@@ -169,10 +187,21 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
         &self,
         work: Box<TransactionWork<S>>,
     ) -> AuthResult<BoxedTransactionValue> {
+        if let Some(validation) = &self.schema_validation {
+            validation.check_runtime().await?;
+        }
         let runtime = self.clone();
         self.inner
             .transaction_boxed(Box::new(move |inner| {
-                Box::pin(async move { work(&Transaction { inner, runtime }).await })
+                Box::pin(async move {
+                    let validation = runtime.schema_validation.clone();
+                    let operation = async move { work(&Transaction { inner, runtime }).await };
+                    if let Some(validation) = validation {
+                        validation.in_transaction(operation).await
+                    } else {
+                        operation.await
+                    }
+                })
             }))
             .await
     }

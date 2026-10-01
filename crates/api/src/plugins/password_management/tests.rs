@@ -53,16 +53,19 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
     let _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: user.id.clone(),
-            account_id: user.id.clone(),
-            provider_id: "credential".to_string(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: Some(password_hash),
+            user_id: (user.id.clone()).into(),
+            account_id: (user.id.clone()).into(),
+            provider_id: ("credential".to_string()).into(),
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            password: (Some(password_hash))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -77,22 +80,32 @@ async fn create_test_context_with_oauth_only_user()
 
     let existing_accounts = ctx.database.get_user_accounts(&user.id).await.unwrap();
     for account in existing_accounts {
-        ctx.database.delete_account(&account.id).await.unwrap();
+        ctx.database
+            .delete_account(account.id.typed().unwrap())
+            .await
+            .unwrap();
     }
 
     let _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: user.id.clone(),
-            account_id: "google-account-id".to_string(),
-            provider_id: "google".to_string(),
-            access_token: Some("oauth-access-token".to_string()),
-            refresh_token: Some("oauth-refresh-token".to_string()),
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: Some("email profile".to_string()),
-            password: None,
+            user_id: (user.id.clone()).into(),
+            account_id: ("google-account-id".to_string()).into(),
+            provider_id: ("google".to_string()).into(),
+            access_token: (Some("oauth-access-token".to_string()))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token: (Some("oauth-refresh-token".to_string()))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: (Some("email profile".to_string()))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -108,9 +121,10 @@ async fn create_reset_token(
 ) -> String {
     let reset_token = uuid::Uuid::new_v4().simple().to_string();
     let create_verification = CreateVerification {
-        identifier: format!("reset-password:{}", reset_token),
-        value: user_id.to_string(),
-        expires_at: Utc::now() + Duration::hours(24),
+        identifier: (format!("reset-password:{}", reset_token)).into(),
+        value: (user_id.to_string()).into(),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
+        ..Default::default()
     };
     ctx.database
         .create_verification(create_verification)
@@ -210,7 +224,7 @@ async fn test_reset_password_success() {
     let stored_hash = accounts
         .iter()
         .find(|account| account.provider_id == "credential")
-        .and_then(|account| account.password.as_deref())
+        .and_then(|account| account.password.typed().unwrap().as_deref())
         .unwrap();
     assert!(
         plugin
@@ -282,7 +296,7 @@ async fn test_change_password_success() {
     let body = serde_json::json!({
         "currentPassword": "Password123!",
         "newPassword": "NewPassword123!",
-        "revokeOtherSessions": "false"
+        "revokeOtherSessions": false
     });
 
     let req = test_helpers::create_auth_request_no_query(
@@ -305,7 +319,7 @@ async fn test_change_password_success() {
     let stored_hash = accounts
         .iter()
         .find(|account| account.provider_id == "credential")
-        .and_then(|account| account.password.as_deref())
+        .and_then(|account| account.password.typed().unwrap().as_deref())
         .unwrap();
     assert!(
         plugin
@@ -324,7 +338,7 @@ async fn test_change_password_with_session_revocation() {
     let body = serde_json::json!({
         "currentPassword": "Password123!",
         "newPassword": "NewPassword123!",
-        "revokeOtherSessions": "true"
+        "revokeOtherSessions": true
     });
 
     let req = test_helpers::create_auth_request_no_query(
@@ -612,7 +626,7 @@ async fn test_reset_password_token_endpoint_redirects_with_callback_token() {
         "/reset-password/token".to_string(),
         HashMap::new(),
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = plugin
@@ -649,7 +663,7 @@ async fn test_reset_password_token_endpoint_with_callback() {
         "/reset-password/token".to_string(),
         HashMap::new(),
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = plugin
@@ -689,7 +703,7 @@ async fn test_reset_password_token_endpoint_invalid_token() {
         "/reset-password/token".to_string(),
         HashMap::new(),
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = plugin

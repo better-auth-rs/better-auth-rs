@@ -245,3 +245,45 @@ compatScenario("github unlink account removes the linked github account", async 
     after: ctx.snapshot(after),
   };
 });
+
+compatScenario("OAuth callback linking merges stored scopes without dropping prior grants", async (ctx) => {
+  const stored = "\ufefflegacy\ufeff, email, legacy, ,\u0085legacy";
+  const cases = [
+    { name: "union", code: "compat-code", stored, scopes: ["legacy", "email", "\u0085legacy", "openid", "profile"] },
+    { name: "missing", code: "compat-scope-missing", stored, scopes: ["legacy", "email", "\u0085legacy"] },
+    { name: "empty", code: "compat-scope-empty", stored: "", scopes: [] },
+    { name: "array", code: "compat-scope-array", stored, scopes: ["legacy", "email", "\u0085legacy", "audit"] },
+    { name: "new-empty", code: "compat-scope-missing", scopes: [] },
+    { name: "failed", code: "compat-code", stored, scopes: ["legacy", "email", "legacy", "\u0085legacy"] },
+  ];
+  const results = [];
+  for (const row of cases) {
+    const actor = ctx.actor(row.name);
+    const email = ctx.uniqueEmail(`scope-${row.name}`);
+    const sub = ctx.uniqueToken(`scope-${row.name}`);
+    await ctx.setOAuthRefreshMode(row.name === "failed" ? "error" : "success");
+    await ctx.setSocialProfile({ email, sub, name: "Scope User", emailVerified: true, idTokenValid: true });
+    const signup = await actor.client.signUp.email({ email, password: "password123", name: "Scope User" });
+    expect(signup.error).toBeNull();
+    if ("stored" in row) await ctx.seedOAuthAccount({ email, providerId: "google", accountId: sub, scope: row.stored });
+    const link = await actor.client.linkSocial({ provider: "google", callbackURL: "/settings", errorCallbackURL: "/failed" });
+    expect(link.error).toBeNull();
+    const state = extractState(link.data?.url);
+    const callback = await ctx.rawRequest({
+      actor: row.name,
+      path: `/api/auth/callback/google?code=${row.code}&state=${encodeURIComponent(state)}`,
+      redirect: "manual",
+    });
+    expect(callback.status).toBe(302);
+    const location = new URL(callback.location!, ctx.baseURL);
+    expect(location.pathname).toBe(row.name === "failed" ? "/failed" : "/settings");
+    expect(location.searchParams.get("error")).toBe(row.name === "failed" ? "invalid_code" : null);
+    const accounts = await actor.client.listAccounts();
+    expect(accounts.error).toBeNull();
+    const google = accounts.data?.filter((account) => account.providerId === "google");
+    expect(google).toHaveLength(1);
+    expect(google![0].scopes).toEqual(row.scopes);
+    results.push({ name: row.name, scopes: google![0].scopes, location: callback.location });
+  }
+  return results;
+});

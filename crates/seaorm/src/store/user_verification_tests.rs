@@ -49,7 +49,19 @@ async fn concurrent_email_proofs_preserve_new_owner_sessions_and_commit_cleanup_
             let store = Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database.clone()));
             let user = store.create_user(CreateUser::new().with_email("proof@example.com")).await?;
             let user_id = user.id().into_owned();
-            let _ = store.create_account(CreateAccount { user_id: user_id.clone(), account_id: user_id.clone(), provider_id: "credential".into(), password: Some("unproven".into()), access_token: None, refresh_token: None, id_token: None, access_token_expires_at: None, refresh_token_expires_at: None, scope: None }).await?;
+            let _ = store.create_account(CreateAccount {
+user_id: (user_id.clone()).into(),
+account_id: (user_id.clone()).into(),
+provider_id: "credential".into(),
+password: (Some("unproven".into())).into(),
+access_token: Default::default(),
+refresh_token: Default::default(),
+id_token: Default::default(),
+access_token_expires_at: Default::default(),
+refresh_token_expires_at: Default::default(),
+scope: Default::default(),
+..Default::default()
+}).await?;
             let _ = store.create_session(session(&user_id)).await?;
             let failing = SeaOrmStore::<BundledSchema>::new(config, database.clone()).hook(FailAfterVerification);
             assert!(matches!(failing.verify_user_and_revoke_unproven_access(&user_id).await, Err(better_auth_core::AuthError::Internal(message)) if message == "verification hook failed"));

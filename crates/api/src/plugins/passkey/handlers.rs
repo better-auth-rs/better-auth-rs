@@ -1,4 +1,4 @@
-use better_auth_core::entity::{AuthPasskey, AuthUser, AuthVerification};
+use better_auth_core::entity::{AuthPasskey, AuthUser};
 use better_auth_core::types::UpdatePasskeyAuthentication;
 use better_auth_core::wire::PasskeyView;
 use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification};
@@ -125,15 +125,16 @@ pub(super) async fn generate_register_options_core(
     let expires_at = Utc::now() + Duration::seconds(config.challenge_ttl_secs);
     let serialized_state = serde_json::to_string(&StoredRegistrationState {
         user: user.clone(),
-        context: req.query.get("context").cloned(),
+        context: req.query_string("context")?.map(str::to_owned),
         state: RegistrationChallenge { rs: state },
     })?;
     let _ = ctx
         .database
         .create_verification(CreateVerification {
-            identifier: token.clone(),
-            value: serialized_state,
-            expires_at,
+            identifier: (token.clone()).into(),
+            value: (serialized_state).into(),
+            expires_at: (expires_at).into(),
+            ..Default::default()
         })
         .await?;
 
@@ -222,9 +223,10 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     let _ = ctx
         .database
         .create_verification(CreateVerification {
-            identifier: token.clone(),
-            value: serde_json::to_string(&state)?,
-            expires_at,
+            identifier: (token.clone()).into(),
+            value: (serde_json::to_string(&state)?).into(),
+            expires_at: (expires_at).into(),
+            ..Default::default()
         })
         .await?;
 
@@ -272,10 +274,11 @@ pub(super) async fn verify_authentication_core(
         return response_message(400, "Challenge not found");
     };
 
-    let stored_state: StoredAuthenticationState = match serde_json::from_str(verification.value()) {
-        Ok(state) => state,
-        Err(_) => return response_message(400, "Challenge not found"),
-    };
+    let stored_state: StoredAuthenticationState =
+        match serde_json::from_str(&verification.value.display_string()?) {
+            Ok(state) => state,
+            Err(_) => return response_message(400, "Challenge not found"),
+        };
     let authentication: PublicKeyCredential = match serde_json::from_value(body.response.clone()) {
         Ok(authentication) => authentication,
         Err(_) => return passkey_authentication_failure(),

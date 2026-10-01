@@ -1,86 +1,144 @@
-use super::AccountView;
-use serde_json::{Map, Value, json};
+use crate::{AuthResult, SchemaValue};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
-const OPTIONAL_FIELDS: &[&str] = &[
-    "accessToken",
-    "refreshToken",
-    "idToken",
-    "accessTokenExpiresAt",
-    "refreshTokenExpiresAt",
-    "scope",
-    "password",
-];
-
-impl From<AccountView> for Map<String, Value> {
-    fn from(account: AccountView) -> Self {
-        let date = |value: chrono::DateTime<chrono::Utc>| {
-            value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-        };
-        let mut result = Map::from_iter([
-            ("id".into(), json!(account.id)),
-            ("accountId".into(), json!(account.account_id)),
-            ("providerId".into(), json!(account.provider_id)),
-            ("userId".into(), json!(account.user_id)),
-            ("createdAt".into(), json!(date(account.created_at))),
-            ("updatedAt".into(), json!(date(account.updated_at))),
-        ]);
-        for (name, value) in [
-            ("accessToken", json!(account.access_token)),
-            ("refreshToken", json!(account.refresh_token)),
-            ("idToken", json!(account.id_token)),
-            (
-                "accessTokenExpiresAt",
-                json!(account.access_token_expires_at.map(date)),
-            ),
-            (
-                "refreshTokenExpiresAt",
-                json!(account.refresh_token_expires_at.map(date)),
-            ),
-            ("scope", json!(account.scope)),
-        ] {
-            if account
-                .visible_fields
-                .as_ref()
-                .is_none_or(|fields| fields.contains(name))
-            {
-                let _ = result.insert(name.into(), value);
-            }
-        }
-        result
-    }
+/// A projected account returned by the adapter and trusted database hooks.
+/// Field readers must require a type only when an operation needs that type.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountView {
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub account_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub provider_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub access_token: SchemaValue<Option<String>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub refresh_token: SchemaValue<Option<String>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id_token: SchemaValue<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "SchemaValue::is_undefined",
+        serialize_with = "crate::schema_value::serialize_optional_date"
+    )]
+    pub access_token_expires_at: SchemaValue<Option<DateTime<Utc>>>,
+    #[serde(
+        default,
+        skip_serializing_if = "SchemaValue::is_undefined",
+        serialize_with = "crate::schema_value::serialize_optional_date"
+    )]
+    pub refresh_token_expires_at: SchemaValue<Option<DateTime<Utc>>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub scope: SchemaValue<Option<String>>,
+    // Account cookies serialize this view. Keep the password out of every implicit serialization.
+    #[serde(default, skip_serializing)]
+    pub password: SchemaValue<Option<String>>,
+    #[serde(
+        default,
+        skip_serializing_if = "SchemaValue::is_undefined",
+        serialize_with = "crate::schema_value::serialize_date"
+    )]
+    pub created_at: SchemaValue<DateTime<Utc>>,
+    #[serde(
+        default,
+        skip_serializing_if = "SchemaValue::is_undefined",
+        serialize_with = "crate::schema_value::serialize_date"
+    )]
+    pub updated_at: SchemaValue<DateTime<Utc>>,
+    #[serde(flatten, serialize_with = "serialize_additional_fields")]
+    pub additional_fields: indexmap::IndexMap<String, SchemaValue<Value>>,
 }
 
-impl TryFrom<Map<String, Value>> for AccountView {
-    type Error = serde_json::Error;
-    fn try_from(mut fields: Map<String, Value>) -> Result<Self, Self::Error> {
-        fn take<T: serde::de::DeserializeOwned>(
-            fields: &mut Map<String, Value>,
-            name: &str,
-        ) -> Result<T, serde_json::Error> {
-            serde_json::from_value(fields.remove(name).unwrap_or(Value::Null))
+fn serialize_additional_fields<S: serde::Serializer>(
+    fields: &indexmap::IndexMap<String, SchemaValue<Value>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut output = serializer.serialize_map(None)?;
+    for (name, value) in fields {
+        // Explicit native construction must not bypass the account cookie password boundary.
+        if name != "password" && !value.is_undefined() {
+            output.serialize_entry(name, value)?;
         }
-        let visible_fields = Some(
-            OPTIONAL_FIELDS
-                .iter()
-                .filter(|name| fields.contains_key(**name))
-                .map(|name| (*name).to_owned())
-                .collect(),
-        );
-        Ok(Self {
-            visible_fields,
-            id: take(&mut fields, "id")?,
-            account_id: take(&mut fields, "accountId")?,
-            provider_id: take(&mut fields, "providerId")?,
-            user_id: take(&mut fields, "userId")?,
-            access_token: take(&mut fields, "accessToken")?,
-            refresh_token: take(&mut fields, "refreshToken")?,
-            id_token: take(&mut fields, "idToken")?,
-            access_token_expires_at: take(&mut fields, "accessTokenExpiresAt")?,
-            refresh_token_expires_at: take(&mut fields, "refreshTokenExpiresAt")?,
-            scope: take(&mut fields, "scope")?,
-            password: take(&mut fields, "password")?,
-            created_at: take(&mut fields, "createdAt")?,
-            updated_at: take(&mut fields, "updatedAt")?,
-        })
+    }
+    output.end()
+}
+
+impl AccountView {
+    /// Read a complete trusted adapter projection, including the password when present.
+    /// Do not use this method to construct account cookies or public account-list responses.
+    pub fn internal_fields(&self) -> AuthResult<Map<String, Value>> {
+        let mut fields = serde_json::from_value::<Map<String, Value>>(serde_json::to_value(self)?)?;
+        if let Some(password) = self.password.json()? {
+            let _ = fields.insert("password".into(), password);
+        }
+        Ok(fields)
+    }
+
+    /// Preserve projected date values before JSON serialization loses invalid-date provenance.
+    pub fn from_adapter_fields(mut fields: indexmap::IndexMap<String, SchemaValue<Value>>) -> Self {
+        Self {
+            id: fields.shift_remove("id").unwrap_or_default().into_field(),
+            account_id: fields
+                .shift_remove("accountId")
+                .unwrap_or_default()
+                .into_field(),
+            provider_id: fields
+                .shift_remove("providerId")
+                .unwrap_or_default()
+                .into_field(),
+            user_id: fields
+                .shift_remove("userId")
+                .unwrap_or_default()
+                .into_field(),
+            access_token: fields
+                .shift_remove("accessToken")
+                .unwrap_or_default()
+                .into_field(),
+            refresh_token: fields
+                .shift_remove("refreshToken")
+                .unwrap_or_default()
+                .into_field(),
+            id_token: fields
+                .shift_remove("idToken")
+                .unwrap_or_default()
+                .into_field(),
+            access_token_expires_at: fields
+                .shift_remove("accessTokenExpiresAt")
+                .unwrap_or_default()
+                .into_field(),
+            refresh_token_expires_at: fields
+                .shift_remove("refreshTokenExpiresAt")
+                .unwrap_or_default()
+                .into_field(),
+            scope: fields
+                .shift_remove("scope")
+                .unwrap_or_default()
+                .into_field(),
+            password: fields
+                .shift_remove("password")
+                .unwrap_or_default()
+                .into_field(),
+            created_at: fields
+                .shift_remove("createdAt")
+                .unwrap_or_default()
+                .into_field(),
+            updated_at: fields
+                .shift_remove("updatedAt")
+                .unwrap_or_default()
+                .into_field(),
+            additional_fields: fields,
+        }
+    }
+
+    /// Decode an adapter result without validating a replacement field's default Rust type.
+    pub fn from_fields(fields: Map<String, Value>) -> AuthResult<Self> {
+        serde_json::from_value(Value::Object(fields)).map_err(Into::into)
     }
 }

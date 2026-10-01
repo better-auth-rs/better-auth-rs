@@ -10,8 +10,8 @@ use crate::plugins::helpers::{
 use better_auth_core::utils::password;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
-    AuthAccount, AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema,
-    AuthSession, AuthUser, CreateAccount, CreateUser, RequestMeta, UpdateAccount, UpdateUser,
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
+    AuthUser, CreateAccount, CreateUser, RequestMeta, UpdateAccount, UpdateUser,
 };
 use serde_json::json;
 
@@ -222,9 +222,11 @@ impl EmailOtpPlugin {
             let _ = ctx
                 .database
                 .update_account(
-                    &account.id(),
+                    account.id.typed()?,
                     UpdateAccount {
-                        password: Some(hash),
+                        password: (Some(hash))
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
                         ..Default::default()
                     },
                 )
@@ -233,16 +235,19 @@ impl EmailOtpPlugin {
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
-                    user_id: user.id().to_string(),
-                    account_id: user.id().to_string(),
-                    provider_id: "credential".to_owned(),
-                    password: Some(hash),
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
+                    user_id: (user.id().to_string()).into(),
+                    account_id: (user.id().to_string()).into(),
+                    provider_id: ("credential".to_owned()).into(),
+                    password: (Some(hash))
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    ..Default::default()
                 })
                 .await?;
         }

@@ -446,6 +446,8 @@ async fn configuration_client_compat() {
     for profile in [
         "api-error",
         "api-error-production",
+        "request-query-memory",
+        "request-query-sqlite",
         "trailing-slashes-default",
         "trailing-slashes-true",
         "trailing-slashes-false",
@@ -609,6 +611,7 @@ async fn configuration_client_compat() {
         "jwt-cache",
         "jwt-adapter",
         "openapi",
+        "account-verification-fields",
         "database-lifecycle",
         "database-lifecycle-cache",
         "database-lifecycle-database",
@@ -658,6 +661,8 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/last-login/"], profile).await;
         } else if matches!(profile, "api-error" | "api-error-production") {
             run_client_compat_profile(&["./tests/config/api-error/"], profile).await;
+        } else if profile.starts_with("request-query-") {
+            run_client_compat_profile(&["./tests/config/request-query/"], profile).await;
         } else if profile.starts_with("trailing-slashes-") {
             run_client_compat_profile(&["./tests/config/trailing-slashes/"], profile).await;
         } else if profile.starts_with("username-") {

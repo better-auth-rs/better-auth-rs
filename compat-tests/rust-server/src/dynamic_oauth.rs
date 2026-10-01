@@ -6,8 +6,8 @@ use better_auth::{
     },
 };
 use better_auth_core::{
-    AuthAccount, AuthRequest, AuthUser, BaseUrl, CreateUser, DynamicBaseUrl, HttpMethod,
-    TrustedValues, TrustedValuesResolver, middleware::RateLimitConfig,
+    AuthRequest, AuthUser, BaseUrl, CreateUser, DynamicBaseUrl, HttpMethod, TrustedValues,
+    TrustedValuesResolver, middleware::RateLimitConfig,
 };
 use better_auth_seaorm::{
     Database, SeaOrmStore,
@@ -112,9 +112,12 @@ pub async fn run() -> AuthResult<Value> {
         let stored = auth.store().get_verification_by_identifier(state).await?;
         let payload: Option<Value> = stored
             .as_ref()
-            .map(|row| serde_json::from_str(&better_auth_core::AuthVerification::value(row)))
+            .map(|row| {
+                serde_json::from_str(&row.value.display_string()?)
+                    .map_err(better_auth::AuthError::from)
+            })
             .transpose()?;
-        results.push(json!({"tenant":tenant,"status":response.status,"error":body.get("message"),"signedIn":body.get("token").is_some_and(|v|!v.is_null()),"accounts":accounts.iter().map(|row|json!({"providerId":row.provider_id(),"accountId":row.account_id(),"sameUser":row.user_id()==user.id()})).collect::<Vec<_>>(),"redirectURI":query.get("redirect_uri"),"statePersisted":stored.is_some(),"stateCallback":payload.as_ref().and_then(|p|p.get("callbackURL")),"stateBound":payload.as_ref().and_then(|p|p.get("oauthState")).and_then(Value::as_str)==Some(state.as_ref())}));
+        results.push(json!({"tenant":tenant,"status":response.status,"error":body.get("message"),"signedIn":body.get("token").is_some_and(|v|!v.is_null()),"accounts":accounts.iter().map(|row|json!({"providerId":row.provider_id,"accountId":row.account_id,"sameUser":row.user_id==user.id().as_ref()})).collect::<Vec<_>>(),"redirectURI":query.get("redirect_uri"),"statePersisted":stored.is_some(),"stateCallback":payload.as_ref().and_then(|p|p.get("callbackURL")),"stateBound":payload.as_ref().and_then(|p|p.get("oauthState")).and_then(Value::as_str)==Some(state.as_ref())}));
     }
     Ok(json!(results))
 }

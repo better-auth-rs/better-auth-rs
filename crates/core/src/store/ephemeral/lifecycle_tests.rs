@@ -20,18 +20,22 @@ impl DatabaseHooks<StatelessSchema> for UpdateHooks {
         self.observed
             .lock()
             .unwrap()
-            .push(data.password.clone().unwrap_or_default());
-        if data.scope.as_deref() == Some("cancel") {
+            .push(if data.password.is_undefined() {
+                String::new()
+            } else {
+                data.password.typed()?.clone().unwrap_or_default()
+            });
+        if data.scope == Some("cancel".to_owned()) {
             return Ok(DatabaseHookUpdate::Cancel);
         }
         Ok(DatabaseHookUpdate::Patch(if self.first {
             UpdateAccount {
-                password: Some("first-patch".into()),
+                password: (Some("first-patch".into())).into(),
                 ..Default::default()
             }
         } else {
             UpdateAccount {
-                scope: Some("second-patch".into()),
+                scope: (Some("second-patch".into())).into(),
                 ..Default::default()
             }
         }))
@@ -71,28 +75,35 @@ async fn account_update_hooks_receive_original_input_and_merge_independent_patch
             user_id: "owner".into(),
             account_id: "owner".into(),
             provider_id: "credential".into(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: None,
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();
     let updated = store
         .update_account(
-            &account.id,
+            account.id.typed().unwrap(),
             UpdateAccount {
-                password: Some("original".into()),
+                password: (Some("original".into())).into(),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(updated.password.as_deref(), Some("first-patch"));
-    assert_eq!(updated.scope.as_deref(), Some("second-patch"));
+    assert_eq!(
+        updated.password.typed().unwrap().as_deref(),
+        Some("first-patch")
+    );
+    assert_eq!(
+        updated.scope.typed().unwrap().as_deref(),
+        Some("second-patch")
+    );
     assert_eq!(
         *observed.lock().unwrap(),
         ["original", "original", "after-row", "after-row"]
@@ -114,9 +125,9 @@ async fn account_update_hooks_receive_original_input_and_merge_independent_patch
     assert!(
         store
             .update_account_optional(
-                &account.id,
+                account.id.typed().unwrap(),
                 UpdateAccount {
-                    scope: Some("cancel".into()),
+                    scope: (Some("cancel".into())).into(),
                     ..Default::default()
                 }
             )
@@ -177,22 +188,28 @@ async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
         .create_verification(CreateVerification {
             identifier: "once".into(),
             value: "old".into(),
-            expires_at: Utc::now() + chrono::Duration::minutes(1),
+            expires_at: (Utc::now() + chrono::Duration::minutes(1)).into(),
+            ..Default::default()
         })
         .await
         .unwrap();
-    store
+    let _ = store
         .lock()
         .unwrap()
         .verifications
-        .get_mut(&old.id)
+        .get_mut(old.id.typed().unwrap())
         .unwrap()
-        .created_at -= chrono::Duration::seconds(1);
+        .insert(
+            "createdAt".into(),
+            serde_json::to_value(*old.created_at.typed().unwrap() - chrono::Duration::seconds(1))
+                .unwrap(),
+        );
     let _ = store
         .create_verification(CreateVerification {
             identifier: "once".into(),
             value: "latest".into(),
-            expires_at: Utc::now() + chrono::Duration::minutes(1),
+            expires_at: (Utc::now() + chrono::Duration::minutes(1)).into(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -289,4 +306,122 @@ async fn missing_update_results_reach_hooks_before_strict_store_errors() {
         *hooks.0.lock().unwrap(),
         ["user", "session", "verification"]
     );
+}
+
+#[tokio::test]
+async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
+    let store = EphemeralStore::default();
+    let user = store.create_user(CreateUser::new()).await.unwrap();
+    let raw = serde_json::to_value(&user).unwrap();
+    for field in ["image", "banReason", "banExpires"] {
+        assert!(raw.get(field).is_none());
+    }
+    let member = crate::entity::MemberUserView::from_user(&user);
+    assert!(
+        serde_json::to_value(&member)
+            .unwrap()
+            .get("image")
+            .is_none()
+    );
+    let decoded: crate::entity::MemberUserView =
+        serde_json::from_value(serde_json::to_value(member).unwrap()).unwrap();
+    assert!(
+        serde_json::to_value(decoded)
+            .unwrap()
+            .get("image")
+            .is_none()
+    );
+
+    store
+        .update_user(
+            &user.id,
+            UpdateUser {
+                image: Some(Some("https://example.test/avatar".into())),
+                ban_reason: Some(Some("temporary".into())),
+                ban_expires: Some(Some(Utc::now())),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    store
+        .update_user(
+            &user.id,
+            UpdateUser {
+                image: Some(None),
+                ban_reason: Some(None),
+                ban_expires: Some(None),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let user = store
+        .update_user(
+            &user.id,
+            UpdateUser {
+                name: Some("renamed".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let raw = serde_json::to_value(&user).unwrap();
+    for field in ["image", "banReason", "banExpires"] {
+        assert_eq!(raw.get(field), Some(&serde_json::Value::Null));
+    }
+    let member = crate::entity::MemberUserView::from_user(&user);
+    assert_eq!(
+        serde_json::to_value(member).unwrap().get("image"),
+        Some(&serde_json::Value::Null)
+    );
+
+    let session = store
+        .create_session(CreateSession {
+            user_id: user.id,
+            expires_at: Utc::now() + chrono::Duration::days(1),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+        })
+        .await
+        .unwrap();
+    let raw = serde_json::to_value(SessionView::from(&session)).unwrap();
+    for field in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
+        assert!(raw.get(field).is_none());
+    }
+    store
+        .update_session_with_writer(
+            &session.token,
+            SessionUpdate {
+                impersonated_by: Some(Some("administrator".into())),
+                active_organization_id: Some(Some("organization".into())),
+                active_team_id: Some(Some("team".into())),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .update_session_with_writer(
+            &session.token,
+            SessionUpdate {
+                impersonated_by: Some(None),
+                active_organization_id: Some(None),
+                active_team_id: Some(None),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let session = store.get_session(&session.token).await.unwrap().unwrap();
+    let raw = serde_json::to_value(SessionView::from(&session)).unwrap();
+    for field in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
+        assert_eq!(raw.get(field), Some(&serde_json::Value::Null));
+    }
 }

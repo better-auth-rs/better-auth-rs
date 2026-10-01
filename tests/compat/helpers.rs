@@ -441,7 +441,12 @@ pub fn get_with_auth_and_query(path: &str, token: &str, query: Vec<(&str, &str)>
         .headers
         .insert("origin".to_string(), "http://localhost:3000".to_string());
     for (k, v) in query {
-        let _ = req.query.insert(k.to_string(), v.to_string());
+        let _ = req
+            .query
+            .get_or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert(k.to_string(), serde_json::Value::from(v.to_string()));
     }
     req
 }

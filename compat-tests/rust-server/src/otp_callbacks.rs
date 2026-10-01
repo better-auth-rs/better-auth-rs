@@ -1,12 +1,21 @@
-use std::sync::{Arc, Mutex};
+use super::TestSchema;
 use axum::{Json, Router, routing::post};
-use better_auth::{AuthError, AuthResult, plugins::{email_otp::{EmailOtpCallbacks, EmailOtpPlugin}, endpoint_context::EndpointContext, phone_number::{PhoneNumberCallbacks, PhoneNumberPlugin}}};
+use better_auth::{
+    AuthError, AuthResult,
+    plugins::{
+        email_otp::{EmailOtpCallbacks, EmailOtpPlugin},
+        endpoint_context::EndpointContext,
+        phone_number::{PhoneNumberCallbacks, PhoneNumberPlugin},
+    },
+};
 use better_auth_core::{AuthPlugin, AuthUser};
 use serde_json::{Value, json};
-use super::TestSchema;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
-pub(super) struct OtpCallbacksFixture { events: Arc<Mutex<Vec<Value>>> }
+pub(super) struct OtpCallbacksFixture {
+    events: Arc<Mutex<Vec<Value>>>,
+}
 impl OtpCallbacksFixture {
     fn event(&self, name: &str, data: Value, endpoint: &EndpointContext<'_, TestSchema>) {
         let request = endpoint.request;
@@ -20,13 +29,23 @@ impl OtpCallbacksFixture {
         }));
     }
     fn fail(endpoint: &EndpointContext<'_, TestSchema>, name: &str) -> AuthResult<()> {
-        if endpoint.request.and_then(|req| req.headers.get("x-callback-fail")).map(String::as_str) == Some(name) {
-            return Err(AuthError::Upstream { status:400, code:"CALLBACK_REJECTED", message:"Callback rejected" });
+        if endpoint
+            .request
+            .and_then(|req| req.headers.get("x-callback-fail"))
+            .map(String::as_str)
+            == Some(name)
+        {
+            return Err(AuthError::Upstream {
+                status: 400,
+                code: "CALLBACK_REJECTED",
+                message: "Callback rejected",
+            });
         }
         Ok(())
     }
     pub(super) fn email(&self, profile: &str) -> impl AuthPlugin<TestSchema> {
-        let generate = self.clone(); let send = self.clone();
+        let generate = self.clone();
+        let send = self.clone();
         EmailOtpPlugin::new().send_verification_on_sign_up(true)
             .override_default_email_verification(profile == "otp-callbacks-override")
             .change_email(true)
@@ -46,7 +65,10 @@ impl OtpCallbacksFixture {
                 }))
     }
     pub(super) fn phone(&self) -> impl AuthPlugin<TestSchema> {
-        let send = self.clone(); let reset = self.clone(); let verify = self.clone(); let verified = self.clone();
+        let send = self.clone();
+        let reset = self.clone();
+        let verify = self.clone();
+        let verified = self.clone();
         PhoneNumberPlugin::new().sign_up_on_verification(|phone| format!("{phone}@phone.example.com"))
             .require_verification(true)
             .callbacks(PhoneNumberCallbacks::<TestSchema>::default()
@@ -71,13 +93,23 @@ impl OtpCallbacksFixture {
                     Self::fail(endpoint,"verified")
                 }) }))
     }
-    pub(super) async fn reset(&self) { self.events.lock().unwrap().clear(); }
+    pub(super) async fn reset(&self) {
+        self.events.lock().unwrap().clear();
+    }
     pub(super) fn router(&self) -> Router {
-        let fixture=self.clone();
-        Router::new().route("/__test/otp-callbacks",post(move |Json(body):Json<Value>| { let fixture=fixture.clone();async move {
-            let mut events=fixture.events.lock().unwrap();
-            if body["action"]=="clear" { events.clear(); }
-            Json(json!(&*events))
-        }}))
+        let fixture = self.clone();
+        Router::new().route(
+            "/__test/otp-callbacks",
+            post(move |Json(body): Json<Value>| {
+                let fixture = fixture.clone();
+                async move {
+                    let mut events = fixture.events.lock().unwrap();
+                    if body["action"] == "clear" {
+                        events.clear();
+                    }
+                    Json(json!(&*events))
+                }
+            }),
+        )
     }
 }

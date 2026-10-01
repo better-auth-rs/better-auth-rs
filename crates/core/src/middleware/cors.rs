@@ -243,7 +243,7 @@ mod tests {
             "/sign-in/email".to_string(),
             headers,
             None,
-            HashMap::new(),
+            None,
         )
     }
 
@@ -255,7 +255,7 @@ mod tests {
             "/get-session".to_string(),
             headers,
             None,
-            HashMap::new(),
+            None,
         )
     }
 
@@ -369,7 +369,7 @@ mod tests {
             "/get-session".to_string(),
             HashMap::new(),
             None,
-            HashMap::new(),
+            None,
         );
 
         assert!(mw.before_request(&req).await.unwrap().is_none());

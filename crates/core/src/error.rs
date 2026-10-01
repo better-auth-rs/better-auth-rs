@@ -24,6 +24,9 @@ impl std::fmt::Display for ApiErrorResponse {
 /// matching the better-auth OpenAPI spec: `{ "message": "..." }`.
 #[derive(Error, Debug)]
 pub enum AuthError {
+    /// Runtime schema failures reject the host entry point before endpoint error handling.
+    #[error(transparent)]
+    SchemaCheck(std::sync::Arc<crate::store::schema::SchemaCheckError>),
     /// Preserve an endpoint's complete error body and repeated response headers.
     #[error("{0}")]
     Response(ApiErrorResponse),
@@ -183,7 +186,8 @@ impl AuthError {
             | Self::UnprocessableEntity(_)
             | Self::RateLimited
             | Self::NotImplemented(_) => true,
-            Self::Config(_)
+            Self::SchemaCheck(_)
+            | Self::Config(_)
             | Self::Database(_)
             | Self::Serialization(_)
             | Self::Plugin { .. }
@@ -237,7 +241,8 @@ impl AuthError {
             // 500
             #[cfg(feature = "redis-cache")]
             Self::Redis(_) => 500,
-            Self::Config(_)
+            Self::SchemaCheck(_)
+            | Self::Config(_)
             | Self::Database(_)
             | Self::Serialization(_)
             | Self::Plugin { .. }

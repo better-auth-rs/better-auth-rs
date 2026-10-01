@@ -427,10 +427,10 @@ pub(crate) async fn list_keys_core(
 
     let total = views.len();
     if let Some(offset) = query.offset {
-        views = views.split_off(offset.min(views.len()));
+        views = views.split_off(offset.min(views.len() as u64) as usize);
     }
     if let Some(limit) = query.limit {
-        views.truncate(limit);
+        views.truncate(limit.min(views.len() as u64) as usize);
     }
     plugin.maybe_delete_expired(ctx).await;
     Ok(ListKeysResponse {

@@ -22,9 +22,12 @@ pub(crate) fn routes() -> Vec<AuthRoute> {
         AuthRoute::post("/organization/set-active-team", "set_active_team"),
         AuthRoute::post("/organization/add-team-member", "add_team_member"),
         AuthRoute::post("/organization/remove-team-member", "remove_team_member"),
-        AuthRoute::get("/organization/list-teams", "list_teams"),
-        AuthRoute::get("/organization/list-user-teams", "list_user_teams"),
-        AuthRoute::get("/organization/list-team-members", "list_team_members"),
+        AuthRoute::get("/organization/list-teams", "list_teams")
+            .query_validator(crate::plugins::query_input::organization_id),
+        AuthRoute::get("/organization/list-user-teams", "list_user_teams")
+            .query_validator(crate::plugins::query_input::user_teams),
+        AuthRoute::get("/organization/list-team-members", "list_team_members")
+            .query_validator(crate::plugins::query_input::team_members),
     ]
 }
 
@@ -372,13 +375,9 @@ pub(crate) async fn handle_team_request(
             )?
         }
         (HttpMethod::Get, "/organization/list-teams") => {
-            let org = resolve_organization_id(
-                req.query.get("organizationId").map(String::as_str),
-                None,
-                &session,
-                ctx,
-            )
-            .await?;
+            let org =
+                resolve_organization_id(req.query_string("organizationId")?, None, &session, ctx)
+                    .await?;
             if ctx.database.get_member(&org, &user.id()).await?.is_none() {
                 return Err(AuthError::forbidden(
                     "You are not allowed to access this organization as an owner",
@@ -436,15 +435,13 @@ pub(crate) async fn handle_team_request(
         }
         (HttpMethod::Get, "/organization/list-user-teams") => {
             let target = req
-                .query
-                .get("userId")
+                .query_string("userId")?
                 .filter(|id| !id.is_empty())
-                .map(String::as_str)
                 .unwrap_or(&user.id);
-            let explicit_org = req.query.get("organizationId").filter(|id| !id.is_empty());
-            let org = explicit_org
-                .map(String::as_str)
-                .or(session.active_organization_id());
+            let explicit_org = req
+                .query_string("organizationId")?
+                .filter(|id| !id.is_empty());
+            let org = explicit_org.or(session.active_organization_id());
             if target != user.id || explicit_org.is_some() {
                 let org = org.ok_or_else(|| AuthError::bad_request("No active organization"))?;
                 if ctx.database.get_member(org, &user.id()).await?.is_none() {
@@ -493,10 +490,8 @@ pub(crate) async fn handle_team_request(
         }
         (HttpMethod::Get, "/organization/list-team-members") => {
             let team_id = req
-                .query
-                .get("teamId")
+                .query_string("teamId")?
                 .filter(|id| !id.is_empty())
-                .map(String::as_str)
                 .or(session.active_team_id())
                 .ok_or_else(|| AuthError::bad_request("You do not have an active team"))?;
             let team = ctx

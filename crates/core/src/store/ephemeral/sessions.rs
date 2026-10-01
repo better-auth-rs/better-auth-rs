@@ -199,12 +199,18 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             };
             let cookie_session = if let [team_id] = team_ids.as_slice() {
                 session.active_team_id = Some((*team_id).to_owned());
+                if let Some(fields) = &mut session.visible_fields {
+                    let _ = fields.insert("activeTeamId".into());
+                }
                 session.updated_at = Utc::now();
                 Some(session.clone())
             } else {
                 None
             };
             session.active_organization_id = Some(organization_id);
+            if let Some(fields) = &mut session.visible_fields {
+                let _ = fields.insert("activeOrganizationId".into());
+            }
             session.updated_at = Utc::now();
             let _ = state.sessions.insert(session.token.clone(), session);
             Ok((member_output, cookie_session))
@@ -267,7 +273,19 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         let now = Utc::now();
         let token = format!("session_{}", uuid::Uuid::new_v4());
         let session = SessionView {
-            visible_fields: None,
+            visible_fields: Some(
+                [
+                    ("impersonatedBy", create_session.impersonated_by.is_some()),
+                    (
+                        "activeOrganizationId",
+                        create_session.active_organization_id.is_some(),
+                    ),
+                ]
+                .into_iter()
+                .filter(|(_, present)| *present)
+                .map(|(name, _)| name.to_owned())
+                .collect(),
+            ),
             id: uuid::Uuid::new_v4().to_string(),
             expires_at: create_session.expires_at,
             token: token.clone(),

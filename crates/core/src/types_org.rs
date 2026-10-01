@@ -184,7 +184,9 @@ impl Invitation {
                     crate::organization_fields::numeric_filter(&value)
                 }
             }
-            SchemaValue::Dynamic(Value::Object(_)) | SchemaValue::Undefined => None,
+            SchemaValue::Dynamic(Value::Object(_))
+            | SchemaValue::Undefined
+            | SchemaValue::InvalidDate => None,
         };
         // Upstream compares the replacement value with a Date, which coerces to milliseconds.
         Ok(timestamp.is_some_and(|value| value < Utc::now().timestamp_millis() as f64))

@@ -10,6 +10,8 @@ use super::providers::OAuthTokenSet;
 use super::resolved::ResolvedProvider;
 use super::token::{AuthorizationCodeRequest, TokenAuthentication, TokenGrantType, TokenRequest};
 
+use crate::plugins::helpers::oauth_scope_whitespace;
+
 pub(super) async fn refresh_tokens_via_provider(
     provider: &ResolvedProvider,
     refresh_token: &str,
@@ -159,11 +161,15 @@ pub(super) fn parse_token_response(value: Value) -> AuthResult<OAuthTokenSet> {
             .map(Option::flatten)
     };
     let scopes = match value.get("scope") {
-        Some(Value::String(scope)) => scope.split_whitespace().map(str::to_owned).collect(),
+        Some(Value::String(scope)) => scope
+            .split(oauth_scope_whitespace)
+            .filter(|scope| !scope.is_empty())
+            .map(str::to_owned)
+            .collect(),
         Some(Value::Array(scopes)) => scopes
             .iter()
             .filter_map(Value::as_str)
-            .map(str::trim)
+            .map(|scope| scope.trim_matches(oauth_scope_whitespace))
             .filter(|scope| !scope.is_empty())
             .map(str::to_owned)
             .collect(),

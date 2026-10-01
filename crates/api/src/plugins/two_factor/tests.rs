@@ -27,16 +27,19 @@ pub(super) async fn create_test_context_with_credential_user(
     _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: user.id.clone(),
-            account_id: user.id.clone(),
-            provider_id: "credential".to_string(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: Some(password_hash),
+            user_id: (user.id.clone()).into(),
+            account_id: (user.id.clone()).into(),
+            provider_id: ("credential".to_string()).into(),
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            password: (Some(password_hash))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -133,7 +136,7 @@ async fn test_begin_sign_in_challenge_sets_pending_cookie_and_remember_choice() 
         .await
         .unwrap()
         .expect("challenge should persist a pending verification");
-    assert_eq!(verification.value(), user.id);
+    assert_eq!(verification.value, user.id);
 }
 
 #[tokio::test]

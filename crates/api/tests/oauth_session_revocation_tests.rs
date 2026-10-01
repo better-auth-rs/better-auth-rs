@@ -11,7 +11,7 @@ use better_auth_api::plugins::oauth::{
     OAuthUserInfoRequest, OAuthUserInfoResponse,
 };
 use better_auth_api::{OAuthPlugin, SessionManagementPlugin};
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::session::SessionRead;
 use better_auth_core::store::AuthStore;
 use better_auth_core::utils::cookie_utils::sign_cookie_value;
@@ -62,16 +62,17 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
         .unwrap();
     let account = store
         .create_account(CreateAccount {
-            user_id: user.id().to_string(),
-            account_id: "provider-subject".to_string(),
-            provider_id: "provider".to_string(),
-            access_token: Some("provider-access".to_string()),
-            refresh_token: Some("provider-refresh".to_string()),
-            access_token_expires_at: Some(Utc::now() + Duration::hours(1)),
-            refresh_token_expires_at: None,
-            id_token: None,
-            scope: Some("openid,email".to_string()),
-            password: None,
+            user_id: (user.id().to_string()).into(),
+            account_id: ("provider-subject".to_string()).into(),
+            provider_id: ("provider".to_string()).into(),
+            access_token: (Some("provider-access".to_string())).into(),
+            refresh_token: (Some("provider-refresh".to_string())).into(),
+            access_token_expires_at: (Some(Utc::now() + Duration::hours(1))).into(),
+            refresh_token_expires_at: Default::default(),
+            id_token: Default::default(),
+            scope: (Some("openid,email".to_string())).into(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -83,7 +84,7 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
     Fixture {
         ctx,
         user_id: user.id().to_string(),
-        account_id: account.id().to_string(),
+        account_id: account.id.typed().unwrap().to_string(),
         token: session.token().to_string(),
     }
 }
@@ -142,7 +143,13 @@ fn request(path: &str, account_id: &str, cookie: &str) -> AuthRequest {
     if path == "/account-info" {
         let _ = request
             .query
-            .insert("accountId".to_string(), account_id.to_string());
+            .get_or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert(
+                "accountId".to_string(),
+                serde_json::Value::from(account_id.to_string()),
+            );
     } else {
         let _ = request
             .headers
@@ -301,7 +308,7 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
         .update_account(
             &fixture.account_id,
             UpdateAccount {
-                access_token_expires_at: Some(Utc::now() - Duration::seconds(1)),
+                access_token_expires_at: (Some(Utc::now() - Duration::seconds(1))).into(),
                 ..Default::default()
             },
         )
@@ -348,11 +355,21 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
         .await
         .unwrap();
     assert_eq!(
-        accounts[0].access_token().as_deref(),
+        accounts[0]
+            .access_token
+            .typed()
+            .unwrap()
+            .as_deref()
+            .as_deref(),
         Some("provider-access")
     );
     assert_eq!(
-        accounts[0].refresh_token().as_deref(),
+        accounts[0]
+            .refresh_token
+            .typed()
+            .unwrap()
+            .as_deref()
+            .as_deref(),
         Some("provider-refresh")
     );
 }
@@ -383,9 +400,13 @@ async fn sign_out_preserves_stored_id_token_and_revokes_session() {
             .update_account(
                 &fixture.account_id,
                 UpdateAccount {
-                    access_token: encrypted.access_token,
-                    refresh_token: encrypted.refresh_token,
-                    id_token: Some(stored_id_token.clone()),
+                    access_token: (encrypted.access_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    refresh_token: (encrypted.refresh_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    id_token: (Some(stored_id_token.clone())).into(),
                     ..Default::default()
                 },
             )
@@ -445,6 +466,9 @@ async fn sign_out_preserves_stored_id_token_and_revokes_session() {
             .await
             .unwrap();
         assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0].id_token(), Some(stored_id_token.as_str()));
+        assert_eq!(
+            accounts[0].id_token.typed().unwrap().as_deref(),
+            Some(stored_id_token.as_str())
+        );
     }
 }

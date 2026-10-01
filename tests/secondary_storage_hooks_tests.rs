@@ -6,8 +6,7 @@
 
 use async_trait::async_trait;
 use better_auth::prelude::{
-    AuthSession, AuthUser, AuthVerification, CreateAccount, CreateSession, CreateUser,
-    CreateVerification,
+    AuthSession, AuthUser, CreateAccount, CreateSession, CreateUser, CreateVerification,
 };
 use better_auth::store::{MemoryCacheAdapter, SecondaryStorage, transaction};
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
@@ -89,12 +88,15 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        verification: &Verification,
+        verification: &better_auth_core::wire::VerificationView,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(
             self.cache
-                .get(&format!("verification:{}", verification.identifier()))
+                .get(&format!(
+                    "verification:{}",
+                    verification.identifier.typed()?
+                ))
                 .await?
                 .is_some()
         );
@@ -171,11 +173,12 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
         .create_verification(CreateVerification {
             identifier: "first".into(),
             value: "original".into(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
+            ..Default::default()
         })
         .await
         .unwrap();
-    assert_eq!(verification.value(), "hook-value");
+    assert_eq!(verification.value, "hook-value");
     assert_eq!(
         *hooks.events.lock().unwrap(),
         [
@@ -216,7 +219,8 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
             .create_verification(CreateVerification {
                 identifier: "cancelled".into(),
                 value: "original".into(),
-                expires_at: Utc::now() + Duration::hours(1),
+                expires_at: (Utc::now() + Duration::hours(1)).into(),
+                ..Default::default()
             })
             .await
             .is_err()
@@ -397,16 +401,17 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
         let _ = auth
             .store()
             .create_account(CreateAccount {
-                user_id: user.id.clone(),
-                account_id: user.id.clone(),
+                user_id: (user.id.clone()).into(),
+                account_id: (user.id.clone()).into(),
                 provider_id: "credential".into(),
-                password: Some("unproven".into()),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
+                password: (Some("unproven".into())).into(),
+                access_token: Default::default(),
+                refresh_token: Default::default(),
+                id_token: Default::default(),
+                access_token_expires_at: Default::default(),
+                refresh_token_expires_at: Default::default(),
+                scope: Default::default(),
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -673,16 +678,17 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     let _ = auth
         .store()
         .create_account(CreateAccount {
-            user_id: user.id.clone(),
-            account_id: user.id.clone(),
+            user_id: (user.id.clone()).into(),
+            account_id: (user.id.clone()).into(),
             provider_id: "credential".into(),
-            password: Some("unproven".into()),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
+            password: (Some("unproven".into())).into(),
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();

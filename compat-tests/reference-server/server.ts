@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { routeAccountHttpOutput } from "./account-http-output";
+import { routeAccountVerificationFields } from "./account-verification-fields";
+import { routeVerificationDateOutput } from "./verification-date-output";
 import { createDynamicContextFixture } from "./dynamic-context";
 import { runOpenApi } from "./openapi";
 import { createOAuthPopupFixture } from "./oauth-popup";
@@ -23,6 +26,7 @@ import { createLastLoginFixture } from "./last-login";
 import { createUsernameFixture } from "./username-options";
 import { createTrailingSlashesFixture } from "./trailing-slashes";
 import { createApiErrorFixture } from "./api-error";
+import { createRequestQueryFixture } from "./request-query";
 import { createDispatchErrorsFixture } from "./dispatch-errors";
 import { createIdentityContextFixture } from "./identity-context";
 import { createRateLimitFixture } from "./rate-limit-options";
@@ -127,6 +131,9 @@ const lastLoginFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("last-log
   : undefined;
 const apiErrorFixture = ["api-error", "api-error-production"].includes(process.env.COMPAT_PROFILE ?? "")
   ? createApiErrorFixture(`http://localhost:${PORT}`) : null;
+const requestQueryFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("request-query-")
+  ? await createRequestQueryFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`)
+  : undefined;
 const trailingSlashesFixture = (process.env.COMPAT_PROFILE ?? "").startsWith("trailing-slashes-")
   ? createTrailingSlashesFixture(process.env.COMPAT_PROFILE!, `http://localhost:${PORT}`)
   : undefined;
@@ -308,13 +315,16 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       );
     }
 
+    const code = new URLSearchParams(await request.text()).get("code");
+    const scope = code === "compat-scope-missing" ? undefined : code === "compat-scope-empty" ? "" :
+      code === "compat-scope-array" ? [" \ufeffaudit\ufeff ", " email ", "", 42, "\u0085legacy"] : "openid email profile";
     return jsonResponse({
       access_token: "google-access-token",
       refresh_token: "google-refresh-token",
       id_token: "google-id-token",
       expires_in: 3600,
       refresh_token_expires_in: 7200,
-      scope: "openid email profile",
+      scope,
       token_type: "Bearer",
     });
   }
@@ -655,7 +665,16 @@ async function resetDatabaseState() {
 const server = Bun.serve({
   port: PORT,
   async fetch(request) {
+    if (process.env.COMPAT_PROFILE === "account-verification-fields") {
+      const handled = await routeVerificationDateOutput(request) ?? await routeAccountVerificationFields(request) ?? await routeAccountHttpOutput(request);
+      if (handled) return handled;
+      const path = new URL(request.url).pathname;
+      if (path === "/__test/reset-state") return Response.json({ success: true });
+      if (["/health", "/__health"].includes(path)) return Response.json({ status: "ok" });
+      return new Response(null, {status: 404});
+    }
     if (apiErrorFixture) return apiErrorFixture.handle(request);
+    if (requestQueryFixture) return requestQueryFixture.handle(request);
     if (trailingSlashesFixture) return trailingSlashesFixture.handle(request);
     if (usernameFixture) return usernameFixture.handle(request);
     if (jwtAdapterFixture) return jwtAdapterFixture.handle(request);

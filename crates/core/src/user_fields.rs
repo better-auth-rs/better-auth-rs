@@ -7,6 +7,7 @@ use std::sync::Arc;
 mod adapter;
 mod organization;
 mod output;
+mod record;
 mod user_record;
 
 /// Synchronous field transform. `None` represents undefined; `Some(Value::Null)` represents null.
@@ -73,6 +74,19 @@ pub struct UserFieldConfig {
     pub input_transform: Option<UserFieldTransform>,
     /// Transform a stored value when constructing a user view.
     pub output_transform: Option<UserFieldTransform>,
+}
+
+impl std::fmt::Debug for UserFieldConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("UserFieldConfig")
+            .field("field_type", &self.field_type)
+            .field("required", &self.required)
+            .field("input", &self.input)
+            .field("returned", &self.returned)
+            .field("field_name", &self.field_name)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for UserFieldConfig {

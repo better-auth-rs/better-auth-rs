@@ -1,7 +1,5 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use better_auth_core::{
-    AuthContext, AuthError, AuthResult, AuthSchema, AuthVerification, CreateVerification,
-};
+use better_auth_core::{AuthContext, AuthError, AuthResult, AuthSchema, CreateVerification};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use rand::Rng;
@@ -170,9 +168,10 @@ impl EmailOtpPlugin {
             .store_code(&otp, ctx.config.encryption_secret())
             .await?;
         let input = CreateVerification {
-            identifier: identifier.to_owned(),
-            value: format!("{stored}:0"),
-            expires_at: Utc::now() + self.config.expires_in,
+            identifier: (identifier.to_owned()).into(),
+            value: (format!("{stored}:0")).into(),
+            expires_at: (Utc::now() + self.config.expires_in).into(),
+            ..Default::default()
         };
         let _ = match endpoint.transaction {
             Some(transaction) => transaction.create_verification(input).await?,
@@ -194,8 +193,8 @@ impl EmailOtpPlugin {
                 .get_verification_including_expired(&identifier)
                 .await?
         {
-            let (stored, attempts) = split(existing.value());
-            if existing.expires_at() >= Utc::now()
+            let (stored, attempts) = split(existing.value.typed()?);
+            if existing.expires_at.is_after_or_equal(Utc::now())
                 && attempts < self.attempts()
                 && let Some(otp) = self
                     .recover(stored, ctx.config.encryption_secret())
@@ -227,7 +226,7 @@ impl EmailOtpPlugin {
             .await?;
         if existing
             .as_ref()
-            .is_some_and(|row| row.expires_at() < Utc::now())
+            .is_some_and(|row| row.expires_at.is_before(Utc::now()))
         {
             ctx.database
                 .delete_verification_by_identifier(identifier)
@@ -242,7 +241,7 @@ impl EmailOtpPlugin {
             existing
         }
         .ok_or_else(invalid_otp)?;
-        let (stored, attempts) = split(record.value());
+        let (stored, attempts) = split(record.value.typed()?);
         if attempts >= self.attempts() {
             if !consume {
                 ctx.database
@@ -260,9 +259,10 @@ impl EmailOtpPlugin {
                 let _ = ctx
                     .database
                     .create_verification(CreateVerification {
-                        identifier: identifier.to_owned(),
-                        value,
-                        expires_at: record.expires_at(),
+                        identifier: (identifier.to_owned()).into(),
+                        value: (value).into(),
+                        expires_at: record.expires_at.clone(),
+                        ..Default::default()
                     })
                     .await?;
             } else {

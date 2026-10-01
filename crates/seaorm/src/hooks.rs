@@ -160,7 +160,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_account(
         &self,
-        account: &S::Account,
+        account: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -179,7 +179,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_update_account(
         &self,
-        account: Option<&S::Account>,
+        account: Option<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -188,7 +188,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_delete_account(
         &self,
-        account: &S::Account,
+        account: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let _ = (account, ctx);
@@ -197,7 +197,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_delete_account(
         &self,
-        account: &S::Account,
+        account: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -215,7 +215,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_verification(
         &self,
-        verification: &S::Verification,
+        verification: &better_auth_core::wire::VerificationView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (verification, ctx);
@@ -224,7 +224,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_delete_verification(
         &self,
-        verification: &S::Verification,
+        verification: &better_auth_core::wire::VerificationView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let _ = (verification, ctx);
@@ -243,7 +243,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_update_verification(
         &self,
-        verification: Option<&S::Verification>,
+        verification: Option<&better_auth_core::wire::VerificationView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (verification, ctx);
@@ -252,7 +252,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_delete_verification(
         &self,
-        verification: &S::Verification,
+        verification: &better_auth_core::wire::VerificationView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (verification, ctx);

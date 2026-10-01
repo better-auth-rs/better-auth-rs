@@ -457,17 +457,13 @@ pub async fn handle_role_request(
             )?
         }
         (HttpMethod::Get, "/organization/list-roles" | "/organization/get-role") => {
-            let selector: RoleSelector = serde_json::from_value(serde_json::to_value(&req.query)?)?;
+            let selector: RoleSelector =
+                serde_json::from_value(req.query.clone().unwrap_or_else(|| serde_json::json!({})))?;
             let action = if req.path().ends_with("list-roles") {
                 "list"
             } else {
                 "read"
             };
-            if action == "read"
-                && let Some(message) = selector_error(&selector, "query")
-            {
-                return validation(&message);
-            }
             let (organization_id, _) = authorize_member(
                 req,
                 selector.organization_id.as_deref(),
@@ -490,6 +486,9 @@ pub async fn handle_role_request(
                     .collect::<AuthResult<Vec<_>>>()?;
                 AuthResponse::json(200, &roles)?
             } else {
+                if req.query.is_none() {
+                    return Err(AuthError::internal("Role lookup requires a query object"));
+                }
                 let mut role = select_role(&selector, &organization_id, ctx).await?;
                 role.permission = super::super::native_json::permission(&role.permission)?.into();
                 AuthResponse::json(200, &role)?

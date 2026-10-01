@@ -12,10 +12,10 @@ struct FailChallengeDeletion;
 impl better_auth_seaorm::SeaOrmHooks<TestSchema> for FailChallengeDeletion {
     async fn before_delete_verification(
         &self,
-        verification: &<TestSchema as better_auth_core::AuthSchema>::Verification,
+        verification: &better_auth_core::wire::VerificationView,
         _ctx: &better_auth_seaorm::SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<better_auth_seaorm::HookControl> {
-        if verification.identifier() == "failure-challenge" {
+        if verification.identifier == "failure-challenge" {
             return Err(AuthError::Database(better_auth_core::DatabaseError::Query(
                 "injected challenge deletion failure".into(),
             )));
@@ -51,7 +51,8 @@ async fn challenge_database_failures_preserve_upstream_errors_and_cookie_expiry(
             .create_verification(CreateVerification {
                 identifier: identifier.into(),
                 value: value.into(),
-                expires_at: Utc::now() + Duration::minutes(5),
+                expires_at: (Utc::now() + Duration::minutes(5)).into(),
+                ..Default::default()
             })
             .await
             .unwrap();

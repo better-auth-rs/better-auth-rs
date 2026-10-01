@@ -44,7 +44,7 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        _: &Verification,
+        _: &better_auth_core::wire::VerificationView,
         context: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(context.tx.is_none());

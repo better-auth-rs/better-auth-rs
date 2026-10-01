@@ -157,6 +157,10 @@ impl UserView {
                 .iter()
                 .filter(|(plugin, _)| metadata.get(*plugin).and_then(Value::as_bool) == Some(true))
                 .flat_map(|(_, fields)| fields.iter().map(|name| (*name).to_owned()))
+                .filter(|name| {
+                    user.field_presence()
+                        .is_none_or(|fields| fields.contains(name))
+                })
                 .chain(
                     ["name", "email", "image"]
                         .into_iter()

@@ -98,9 +98,15 @@ impl EphemeralStore {
                 user.banned = banned;
             }
             if let Some(ban_reason) = update.ban_reason {
+                if let Some(fields) = &mut user.visible_fields {
+                    let _ = fields.insert("banReason".into());
+                }
                 user.ban_reason = ban_reason;
             }
             if let Some(ban_expires) = update.ban_expires {
+                if let Some(fields) = &mut user.visible_fields {
+                    let _ = fields.insert("banExpires".into());
+                }
                 user.ban_expires = ban_expires;
             }
             if let Some(two_factor_enabled) = update.two_factor_enabled {
@@ -184,6 +190,8 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     ("name", create_user.name.is_some()),
                     ("email", create_user.email.is_some()),
                     ("image", create_user.image.is_some()),
+                    ("banReason", create_user.ban_reason.is_some()),
+                    ("banExpires", create_user.ban_expires.is_some()),
                 ]
                 .into_iter()
                 .filter(|(_, present)| *present)
@@ -198,8 +206,6 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                         "twoFactorEnabled",
                         "role",
                         "banned",
-                        "banReason",
-                        "banExpires",
                     ]
                     .into_iter()
                     .map(str::to_owned),
@@ -335,9 +341,12 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         Ok(Some(user))
     }
 
-    async fn list_users(&self, _params: ListUsersParams) -> AuthResult<(Vec<UserView>, usize)> {
+    async fn list_users(&self, mut params: ListUsersParams) -> AuthResult<(Vec<UserView>, usize)> {
+        let _ = params
+            .limit
+            .get_or_insert(self.config.advanced.database.default_find_many_limit as f64);
         let users: Vec<_> = self.lock()?.users.values().cloned().collect();
-        let (users, total) = crate::user_query::apply_list_users(users, &_params);
+        let (users, total) = crate::user_query::apply_list_users(users, &params);
         Ok((
             users
                 .into_iter()

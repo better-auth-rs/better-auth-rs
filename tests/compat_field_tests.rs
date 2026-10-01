@@ -40,26 +40,32 @@ async fn test_all_responses_use_camel_case() {
     let account_info_account = auth
         .store()
         .create_account(CreateAccount {
-            user_id: signup_body["user"]["id"]
+            user_id: (signup_body["user"]["id"]
                 .as_str()
                 .expect("sign-up should return user id")
-                .to_string(),
-            account_id: "mock-account-id".to_string(),
-            provider_id: "mock".to_string(),
-            access_token: Some("mock-access-token".to_string()),
-            refresh_token: Some("mock-refresh-token".to_string()),
-            id_token: None,
-            access_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-            refresh_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
-            scope: Some("openid,email,profile".to_string()),
-            password: None,
+                .to_string())
+            .into(),
+            account_id: ("mock-account-id".to_string()).into(),
+            provider_id: ("mock".to_string()).into(),
+            access_token: (Some("mock-access-token".to_string())).into(),
+            refresh_token: (Some("mock-refresh-token".to_string())).into(),
+            id_token: Default::default(),
+            access_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(1))).into(),
+            refresh_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(2)))
+                .into(),
+            scope: (Some("openid,email,profile".to_string())).into(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .expect("account-info test account should be created");
     let account_info_req = get_with_auth_and_query(
         "/account-info",
         &token,
-        vec![("accountId", account_info_account.id.as_str())],
+        vec![(
+            "accountId",
+            account_info_account.id.typed().unwrap().as_str(),
+        )],
     );
 
     let mut all_violations = Vec::new();
@@ -130,19 +136,22 @@ async fn test_response_type_signatures() {
     let account_info_account = auth
         .store()
         .create_account(CreateAccount {
-            user_id: signup_body["user"]["id"]
+            user_id: (signup_body["user"]["id"]
                 .as_str()
                 .expect("sign-up should return user id")
-                .to_string(),
-            account_id: "mock-account-id".to_string(),
-            provider_id: "mock".to_string(),
-            access_token: Some("mock-access-token".to_string()),
-            refresh_token: Some("mock-refresh-token".to_string()),
-            id_token: None,
-            access_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-            refresh_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(2)),
-            scope: Some("openid,email,profile".to_string()),
-            password: None,
+                .to_string())
+            .into(),
+            account_id: ("mock-account-id".to_string()).into(),
+            provider_id: ("mock".to_string()).into(),
+            access_token: (Some("mock-access-token".to_string())).into(),
+            refresh_token: (Some("mock-refresh-token".to_string())).into(),
+            id_token: Default::default(),
+            access_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(1))).into(),
+            refresh_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(2)))
+                .into(),
+            scope: (Some("openid,email,profile".to_string())).into(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .expect("account-info test account should be created");
@@ -151,7 +160,10 @@ async fn test_response_type_signatures() {
         get_with_auth_and_query(
             "/account-info",
             &token,
-            vec![("accountId", account_info_account.id.as_str())],
+            vec![(
+                "accountId",
+                account_info_account.id.typed().unwrap().as_str(),
+            )],
         ),
     )
     .await;

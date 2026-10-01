@@ -2,59 +2,63 @@ use super::hooks::CommittedWrite;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, VerificationUpdate};
 
-impl VerificationUpdate {
-    fn apply(self, row: &mut VerificationView) {
-        macro_rules! fields {
-            ($($field:ident),* $(,)?) => {$(if let Some(value) = self.$field { row.$field = value; })*};
-        }
-        fields!(id, identifier, value, expires_at, created_at);
-        row.updated_at = self.updated_at.unwrap_or_else(Utc::now);
-    }
-}
-
 impl EphemeralStore {
     pub(super) async fn update_verification_with_hooks(
         &self,
         identifier: &str,
         mut update: VerificationUpdate,
-    ) -> AuthResult<()> {
+    ) -> AuthResult<Option<VerificationView>> {
         let original = update.clone();
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
             match hook.before_update_verification(&original, &context).await? {
                 DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(()),
+                DatabaseHookUpdate::Cancel => return Ok(None),
                 DatabaseHookUpdate::Patch(patch) => update.merge(patch),
             }
         }
-        let row = (|| -> AuthResult<Option<VerificationView>> {
+        let patch = self
+            .config
+            .verification
+            .field_schema()
+            .record_storage_fields_for_adapter(update.fields()?, false, true, |_| true)?;
+        let record = {
             let mut state = self.lock()?;
-            let Some(position) = state
-                .verifications
-                .values()
-                .position(|row| row.identifier == identifier)
-            else {
-                return Ok(None);
-            };
-            let (_, mut row) = state
-                .verifications
-                .shift_remove_index(position)
-                .ok_or_else(|| {
-                    AuthError::internal("Ephemeral verification position changed while locked")
-                })?;
-            update.apply(&mut row);
-            let _ = state
-                .verifications
-                .shift_insert(position, row.id.clone(), row.clone());
-            Ok(Some(row))
-        })()?;
-        self.after(CommittedWrite::VerificationUpdated(row)).await
+            let position = state.verifications.values().position(|row| {
+                self.verification_field(row, "identifier")
+                    == Some(&Value::String(identifier.to_owned()))
+            });
+            if let Some(position) = position {
+                let (_, mut record) = state
+                    .verifications
+                    .shift_remove_index(position)
+                    .ok_or_else(|| {
+                        AuthError::internal("Verification position changed while locked")
+                    })?;
+                record.extend(patch);
+                let id = crate::SchemaValue::<String>::from_json(record.get("id").cloned())
+                    .display_string()?;
+                let _ = state
+                    .verifications
+                    .shift_insert(position, id, record.clone());
+                Some(record)
+            } else {
+                None
+            }
+        };
+        let record = record
+            .as_ref()
+            .map(|record| self.output_verification(record))
+            .transpose()?;
+        self.after(CommittedWrite::VerificationUpdated(record.clone()))
+            .await?;
+        Ok(record)
     }
 
     pub(super) async fn delete_verifications_with_hooks(
         &self,
-        predicate: impl Fn(&VerificationView) -> bool + Send + Sync,
+        predicate: impl Fn(&Map<String, Value>) -> bool + Send + Sync,
         many: bool,
     ) -> AuthResult<usize> {
         let rows: Vec<_> = self
@@ -65,6 +69,15 @@ impl EphemeralStore {
             .take(if many { usize::MAX } else { 1 })
             .cloned()
             .collect();
+        // Single and batch delete both catch snapshot output errors; only batch still deletes on an empty snapshot.
+        let rows = rows
+            .iter()
+            .map(|row| self.output_verification(row))
+            .collect::<AuthResult<Vec<_>>>()
+            .unwrap_or_default();
+        if !many && rows.is_empty() {
+            return Ok(0);
+        }
         let transaction = EphemeralTransaction { store: self };
         let context = self.hook_context(&transaction);
         for row in &rows {
@@ -110,14 +123,16 @@ impl EphemeralStore {
         }
         let consumed = {
             let mut state = self.lock()?;
-            let Some(consumed) = state.verifications.shift_remove(&snapshot.id) else {
+            let Some(consumed) = state.verifications.shift_remove(snapshot.id.typed()?) else {
                 return Ok(None);
             };
-            state
-                .verifications
-                .retain(|_, row| row.identifier != identifier);
             consumed
         };
+        let consumed = self.output_verification(&consumed)?;
+        self.lock()?.verifications.retain(|_, row| {
+            self.verification_field(row, "identifier")
+                != Some(&Value::String(identifier.to_owned()))
+        });
         self.after(CommittedWrite::VerificationDeleted(consumed.clone()))
             .await?;
         Ok(Some(consumed))

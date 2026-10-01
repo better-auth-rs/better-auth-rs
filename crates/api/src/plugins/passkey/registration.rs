@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, CreatePasskey, CreateSession,
-    entity::{AuthUser, AuthVerification},
+    entity::AuthUser,
     store::AuthTransaction,
     wire::{PasskeyView, UserView},
 };
@@ -76,7 +76,7 @@ pub(super) async fn resolve_user<S: AuthSchema>(
     let user = resolver
         .resolve(
             PasskeyEndpoint::new(ctx, req, &Value::Null, &users),
-            req.query.get("context").map(String::as_str),
+            req.query_string("context")?,
         )
         .await
         .map_err(generation_error)?;
@@ -168,7 +168,9 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     else {
         return response_message(400, "Challenge not found");
     };
-    let Ok(state) = serde_json::from_str::<StoredRegistrationState>(challenge.value()) else {
+    let Ok(state) =
+        serde_json::from_str::<StoredRegistrationState>(&challenge.value.display_string()?)
+    else {
         return response_message(400, "Challenge not found");
     };
     // Optional sessions are read after consuming the challenge, as in the upstream handler.

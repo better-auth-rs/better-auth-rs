@@ -2,7 +2,7 @@
 
 use better_auth_core::{
     AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, AuthVerification, BeforeRequestAction, HttpMethod, OAuthStateStrategy,
+    AuthSchema, BeforeRequestAction, HttpMethod, OAuthStateStrategy,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -134,8 +134,10 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
     }
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::get("/callback/{id}/oauth-proxy", "oauthProxyCompletion"),
-            AuthRoute::get("/oauth-proxy-callback", "oauthProxyCallback"),
+            AuthRoute::get("/callback/{id}/oauth-proxy", "oauthProxyCompletion")
+                .query_validator(crate::plugins::query_input::proxy),
+            AuthRoute::get("/oauth-proxy-callback", "oauthProxyCallback")
+                .query_validator(crate::plugins::query_input::proxy),
         ]
     }
     async fn on_request(
@@ -316,7 +318,7 @@ impl OAuthProxyPlugin {
                     .get_verification_by_identifier(&original_state)
                     .await?
                     .ok_or_else(|| AuthError::internal("OAuth proxy state was not persisted"))?;
-                verification.value().to_owned()
+                verification.value.typed()?.clone()
             }
             OAuthStateStrategy::Cookie => {
                 let name = state::state_cookie_name(&ctx.config);
@@ -365,16 +367,50 @@ impl OAuthProxyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<Option<AuthResponse>> {
-        let mut params = req.query.clone();
+        let mut raw = req
+            .query
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        // The proxy before hook uses safeParse and leaves invalid input for endpoint validation.
         if req.method() == &HttpMethod::Post
             && let Some(bytes) = &req.body
         {
-            let body = serde_json::from_slice::<std::collections::HashMap<String, String>>(bytes)
-                .unwrap_or_else(|_| url::form_urlencoded::parse(bytes).into_owned().collect());
-            for (key, value) in body {
-                let _ = params.entry(key).or_insert(value);
+            let body = req.body_as_json::<serde_json::Value>().unwrap_or_else(|_| {
+                serde_json::Value::Object(
+                    url::form_urlencoded::parse(bytes)
+                        .map(|(key, value)| {
+                            (
+                                key.into_owned(),
+                                serde_json::Value::String(value.into_owned()),
+                            )
+                        })
+                        .collect(),
+                )
+            });
+            if let Some(body) = body.as_object() {
+                for (key, value) in body {
+                    let _ = raw.entry(key.clone()).or_insert_with(|| value.clone());
+                }
             }
         }
+        let Some(state) = raw
+            .get("state")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+        else {
+            return Ok(None);
+        };
+        let Ok(query) = crate::plugins::query_input::strings(
+            Some(raw.into()),
+            false,
+            &[("code", false), ("error", false), ("user", false)],
+        ) else {
+            return Ok(None);
+        };
+        let mut params = crate::plugins::query_input::string_map(&query)?;
+        let _ = params.insert("state".to_owned(), state);
         let Some(state) = params.get("state") else {
             return Ok(None);
         };
@@ -521,7 +557,7 @@ impl OAuthProxyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let Some(callback) = req.query.get("callbackURL") else {
+        let Some(callback) = req.query_string("callbackURL")? else {
             return Ok(json_body::validation_error(
                 "[query.callbackURL] Invalid input: expected string, received undefined",
             ));
@@ -534,7 +570,10 @@ impl OAuthProxyPlugin {
             .clone()
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| format!("{}/error", ctx.base_url().trim_end_matches('/')));
-        let Some(encrypted) = req.query.get("profile").filter(|value| !value.is_empty()) else {
+        let Some(encrypted) = req
+            .query_string("profile")?
+            .filter(|value| !value.is_empty())
+        else {
             return redirect_error(&default_error, "missing_profile", None);
         };
         let plain = match symmetric::decrypt(self.encryption_key(ctx), encrypted) {
@@ -562,7 +601,14 @@ impl OAuthProxyPlugin {
                 .database
                 .consume_verification_by_identifier(&profile.state)
                 .await?
-                .and_then(|verification| OAuthStatePayload::parse(verification.value()).ok()),
+                .map(|verification| {
+                    verification
+                        .value
+                        .display_string()
+                        .map(|value| OAuthStatePayload::parse(&value).ok())
+                })
+                .transpose()?
+                .flatten(),
             OAuthStateStrategy::Cookie => {
                 state::get_cookie(req, &state::state_cookie_name(&ctx.config))
                     .and_then(|value| {

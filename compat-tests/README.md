@@ -211,3 +211,12 @@ The `dynamic-context` profile passes nine paired scenarios for request URL resol
 ### Trailing slashes and HTTP response hooks
 
 The `trailing-slashes-default`, `trailing-slashes-true`, and `trailing-slashes-false` profiles run four paired scenarios each. They cover GET/POST route shapes, declared trailing slashes, dynamic endpoint templates, consecutive slashes, base-path boundaries, disabled-path precedence, original Request URLs, body errors, early replies, mutable response-hook chains, and replacement stopping. Query coverage uses single values; repeated query values remain a separate contract.
+
+
+The `request-query-memory` and `request-query-sqlite` profiles cover raw HTTP duplicate parameters, native omitted/null/mixed-array input, validated handler scope, and unchanged before/after hook input. The profiles also execute actual Session, Admin, and Organization routes. Array filter tests use real rows and authenticated sessions, and session tests distinguish stale cookie data from an authoritative read.
+
+
+The same request-query profiles verify unknown-key removal, optional account-selection unions, API-key numeric coercion, passkey registration queries, and actual member/user pagination. SQLite rejects fractional SQL pagination; the implicit memory adapter follows JavaScript slice semantics. Body cases inspect real password hashing, verification senders, database hooks, and session deletion. They compare JSON, form, native, and native-with-Request calls, including delayed before-hook changes and body-before-query error order.
+
+
+The request-query profiles each run 30 scenarios. Account and user body cases also verify validation before authentication, strict account selection, empty session-token acceptance, and actual email updates and session revocation. HTTP origin checks retain their earlier rejection boundary. Endpoint hooks see raw input; database hooks see the validated projection. The reference fixture captures original request bytes before dispatch because endpoints can consume the Request stream.

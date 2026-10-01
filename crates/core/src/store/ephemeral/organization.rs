@@ -367,55 +367,99 @@ impl MemberStore for EphemeralStore {
             }
         };
         if let (Some(field), Some(expected)) = (&params.filter_field, &params.filter_value) {
+            let operator = params.filter_operator.as_deref().unwrap_or("eq");
+            if matches!(operator, "in" | "not_in") && !expected.is_array() {
+                return Err(AuthError::internal("Value must be an array"));
+            }
+            let field_type = schema
+                .additional_fields
+                .get(field)
+                .map(|field| &field.field_type);
+            let convert = |expected: &Value| -> Value {
+                match (field_type, expected) {
+                    (Some(UserFieldType::Number), Value::String(value)) => {
+                        crate::organization_fields::numeric_filter(value)
+                            .map_or_else(|| expected.clone(), |number| json!(number))
+                    }
+                    (Some(UserFieldType::Boolean), Value::String(value)) => {
+                        Value::Bool(value == "true")
+                    }
+                    _ => expected.clone(),
+                }
+            };
+            let expected = if let Some(values) = expected.as_array() {
+                // The adapter converts number arrays only when every input is a numeric string.
+                if matches!(field_type, Some(UserFieldType::Number))
+                    && values.iter().all(|value| {
+                        value
+                            .as_str()
+                            .and_then(crate::organization_fields::numeric_filter)
+                            .is_some()
+                    })
+                {
+                    Value::Array(values.iter().map(convert).collect())
+                } else {
+                    expected.clone()
+                }
+            } else {
+                convert(expected)
+            };
             members.retain(|member| {
                 let Some(actual) = value(member, field) else {
                     return true;
                 };
+                if matches!(operator, "in" | "not_in") {
+                    let contains = expected.as_array().is_some_and(|values| {
+                        values.iter().any(|expected| {
+                            if actual.is_number() && expected.is_number() {
+                                actual.as_f64() == expected.as_f64()
+                            } else {
+                                &actual == expected
+                            }
+                        })
+                    });
+                    return if operator == "in" {
+                        contains
+                    } else {
+                        !contains
+                    };
+                }
                 if actual.is_null() {
                     return false;
                 }
                 let expected = if field == "createdAt" {
-                    match chrono::DateTime::parse_from_rfc3339(expected) {
-                        Ok(date) => date.with_timezone(&Utc).to_rfc3339(),
-                        Err(_) => return false,
+                    match expected
+                        .as_str()
+                        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                    {
+                        Some(date) => Value::String(date.with_timezone(&Utc).to_rfc3339()),
+                        None => return false,
                     }
                 } else {
                     expected.clone()
                 };
-                let field_type = schema
-                    .additional_fields
-                    .get(field)
-                    .map(|field| &field.field_type);
-                let number = matches!(field_type, Some(UserFieldType::Number))
-                    .then(|| crate::organization_fields::numeric_filter(&expected))
-                    .flatten();
-                let ordering = if let Some(number) = number
-                    && let Some(actual) = actual.as_f64()
-                {
-                    actual
-                        .partial_cmp(&number)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                } else {
-                    let expected = if matches!(field_type, Some(UserFieldType::Boolean)) {
-                        Value::Bool(expected == "true")
-                    } else {
-                        Value::String(expected.clone())
-                    };
-                    compare_member_values(&actual, &expected)
-                };
-                match params.filter_operator.as_deref().unwrap_or("eq") {
+                let ordering = compare_member_values(&actual, &expected);
+                match operator {
                     "eq" => ordering.is_eq(),
                     "ne" => !ordering.is_eq(),
-                    "contains" => {
-                        let expected = if matches!(field_type, Some(UserFieldType::Boolean)) {
-                            (expected == "true").to_string()
-                        } else {
-                            number.map_or(expected, |number| number.to_string())
+                    "contains" | "starts_with" | "ends_with" => {
+                        let display = |value: &Value| {
+                            value.as_f64().map_or_else(
+                                || {
+                                    value
+                                        .as_str()
+                                        .map_or_else(|| value.to_string(), str::to_owned)
+                                },
+                                crate::schema_value::number_string,
+                            )
                         };
-                        actual
-                            .as_str()
-                            .map_or_else(|| actual.to_string(), str::to_owned)
-                            .contains(&expected)
+                        let actual = display(&actual);
+                        let expected = display(&expected);
+                        match operator {
+                            "starts_with" => actual.starts_with(&expected),
+                            "ends_with" => actual.ends_with(&expected),
+                            _ => actual.contains(&expected),
+                        }
                     }
                     "gt" => ordering.is_gt(),
                     "gte" => !ordering.is_lt(),
@@ -437,10 +481,8 @@ impl MemberStore for EphemeralStore {
         }
         let total = members.len();
         Ok((
-            members
+            crate::query::paginate_memory(members, params.limit, params.offset)
                 .into_iter()
-                .skip(params.offset.unwrap_or(0))
-                .take(params.limit.unwrap_or(usize::MAX))
                 .map(|member| self.output_member(member))
                 .collect::<AuthResult<Vec<_>>>()?,
             total,
@@ -796,7 +838,7 @@ mod query_tests {
         params.filter_value = None;
         params.sort_by = Some("score".into());
         params.sort_direction = Some("desc".into());
-        params.limit = Some(1);
+        params.limit = Some(1.0);
         let (members, total) = store.query_organization_members(&params).await?;
         assert_eq!(total, 2);
         assert_eq!(members[0].user_id, "second");

@@ -294,7 +294,17 @@ where
             .await
     }
 
-    async fn list_users(&self, params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {
+    async fn list_users(&self, mut params: ListUsersParams) -> AuthResult<(Vec<S::User>, usize)> {
+        let _ = params
+            .limit
+            .get_or_insert(self.config.advanced.database.default_find_many_limit as f64);
+        let (limit, offset) = super::pagination::sql_pagination(
+            self.connection().get_database_backend(),
+            params.limit,
+            params.offset,
+        )?;
+        params.limit = limit.map(|value| value as f64);
+        params.offset = offset.map(|value| value as f64);
         let models = <S::User as SeaOrmUserModel>::Entity::find()
             .all(self.connection())
             .await

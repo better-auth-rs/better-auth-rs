@@ -35,7 +35,10 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
-        vec![AuthRoute::get("/oauth-popup/start", "oauth_popup_start")]
+        vec![
+            AuthRoute::get("/oauth-popup/start", "oauth_popup_start")
+                .query_validator(crate::plugins::query_input::popup),
+        ]
     }
 
     async fn on_request(
@@ -138,14 +141,25 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
 async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthResult<AuthResponse> {
     let missing: Vec<_> = ["provider", "popupOrigin"]
         .into_iter()
-        .filter(|field| !req.query.contains_key(*field))
+        .filter(|field| {
+            req.query
+                .as_ref()
+                .and_then(|query| query.get(*field))
+                .is_none()
+        })
         .map(|field| json_body::invalid_type(&format!("query.{field}"), "string", None))
         .collect();
     if !missing.is_empty() {
         return Ok(json_body::validation_error(&missing.join("; ")));
     }
-    let provider_name = req.query.get("provider").cloned().unwrap_or_default();
-    let origin = req.query.get("popupOrigin").cloned().unwrap_or_default();
+    let provider_name = req
+        .query_string("provider")?
+        .map(str::to_owned)
+        .unwrap_or_default();
+    let origin = req
+        .query_string("popupOrigin")?
+        .map(str::to_owned)
+        .unwrap_or_default();
     if !better_auth_core::config::extract_origin(&origin)
         .is_some_and(|origin| ctx.is_origin_trusted(&origin))
     {
@@ -155,14 +169,17 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
             message: "Invalid origin",
         });
     }
-    let nonce = req.query.get("popupNonce").cloned().unwrap_or_default();
+    let nonce = req
+        .query_string("popupNonce")?
+        .map(str::to_owned)
+        .unwrap_or_default();
     let mut response = AuthResponse::new(302);
     for (field, code) in [
         ("callbackURL", "invalid_callback_url"),
         ("errorCallbackURL", "invalid_error_callback_url"),
         ("newUserCallbackURL", "invalid_new_user_callback_url"),
     ] {
-        if let Some(value) = req.query.get(field).filter(|value| !value.is_empty())
+        if let Some(value) = req.query_string(field)?.filter(|value| !value.is_empty())
             && !ctx.is_redirect_target_trusted(value)
         {
             completion::render(
@@ -198,31 +215,27 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
         return Ok(response);
     };
     let callback = req
-        .query
-        .get("callbackURL")
+        .query_string("callbackURL")?
         .filter(|value| !value.is_empty())
-        .cloned()
+        .map(str::to_owned)
         .unwrap_or_else(|| handlers::auth_base_url(ctx));
     let scopes = req
-        .query
-        .get("scopes")
+        .query_string("scopes")?
         .filter(|value| !value.is_empty())
         .map(|scopes| scopes.split(',').map(str::to_owned).collect::<Vec<_>>());
-    let additional =
-        StateExtras::popup_entries(req.query.get("additionalData").map(String::as_str));
+    let additional = StateExtras::popup_entries(req.query_string("additionalData")?);
     let request = handlers::FlowStartRequest {
         redirect_base: None,
         anonymous_user_id: None,
         provider_name: &provider_name,
         provider,
         callback_url: &callback,
-        new_user_callback_url: req.query.get("newUserCallbackURL").cloned(),
-        error_callback_url: req.query.get("errorCallbackURL").cloned(),
+        new_user_callback_url: req.query_string("newUserCallbackURL")?.map(str::to_owned),
+        error_callback_url: req.query_string("errorCallbackURL")?.map(str::to_owned),
         scopes: scopes.as_deref(),
         additional_params: None,
         login_hint: None,
-        request_sign_up: (req.query.get("requestSignUp").map(String::as_str) == Some("true"))
-            .then_some(true),
+        request_sign_up: (req.query_string("requestSignUp")? == Some("true")).then_some(true),
         additional_data: additional,
         link: None,
         disable_redirect: false,

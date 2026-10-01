@@ -605,7 +605,7 @@ async fn test_axum_change_password() {
     let change_data = json!({
         "currentPassword": "password123",
         "newPassword": "newpassword123",
-        "revokeOtherSessions": "false"
+        "revokeOtherSessions": false
     });
 
     let request = Request::builder()
@@ -640,7 +640,7 @@ async fn test_axum_change_password_with_revocation() {
     let change_data = json!({
         "currentPassword": "password123",
         "newPassword": "newpassword123",
-        "revokeOtherSessions": "true"
+        "revokeOtherSessions": true
     });
 
     let request = Request::builder()
@@ -1434,7 +1434,7 @@ async fn test_axum_complete_workflow() {
     let change_data = json!({
         "currentPassword": "password123",
         "newPassword": "newpassword123",
-        "revokeOtherSessions": "false"
+        "revokeOtherSessions": false
     });
 
     let request = Request::builder()

@@ -21,10 +21,17 @@ where
     ) -> AuthResult<Option<usize>> {
         let user_id = S::Account::parse_user_id(user_id)?;
         let condition = S::Account::user_id_column().eq(user_id);
-        let snapshot = <S::Account as SeaOrmAccountModel>::Entity::find()
-            .filter(condition.clone())
-            .all(db)
-            .await;
+        let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
+            <S::Account as SeaOrmAccountModel>::Entity::find()
+                .filter(condition.clone())
+                .all(db)
+                .await
+                .map_err(map_db_err)?
+                .iter()
+                .map(|row| self.output_account(row, db))
+                .collect()
+        }
+        .await;
         // Match the upstream snapshot-only catch; hook and write errors still propagate.
         let accounts = snapshot.unwrap_or_default();
         let context = self.hook_context(tx);

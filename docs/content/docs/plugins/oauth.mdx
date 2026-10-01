@@ -210,6 +210,8 @@ When the OAuth callback completes:
 
 Direct ID-token `/link-social` requests refresh an account already owned by the session user, including when new account linking is disabled. Omitted access and refresh tokens preserve stored values; explicit empty strings clear them. Another owner's account returns `409 SOCIAL_ACCOUNT_ALREADY_LINKED`. New links enforce the verified-email and matching-email policies before writing the account.
 
+Authorization-code callbacks merge scopes when linking an existing account. Stored scopes retain their order; new scopes append after trimming and removing duplicates. A provider response without scopes preserves the stored grants. New accounts retain an empty scope string when the token exchange returns no scopes.
+
 With `account.account_linking.update_user_info_on_link`, direct linking also updates the name, image, and permitted additional user fields. The provider cannot replace the user's email or verification status. Better Auth 1.7.6 logs and ignores errors from this profile synchronization after the account write; account write errors still propagate. Account creation errors return `417 LINKING_FAILED`, including an after-create hook error after the row was written. Direct linking does not wrap these operations in a transaction or invoke `validate_user_info`.
 
 A before-create or before-update account hook can cancel its own write. Direct linking still synchronizes the user profile and returns success, matching upstream's null account result. Errors from nested hook operations remain errors.

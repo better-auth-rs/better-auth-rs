@@ -196,16 +196,19 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
 
                 let _ = tx
                     .create_account(CreateAccount {
-                        user_id: user.id().to_string(),
-                        account_id: user.id().to_string(),
-                        provider_id: "credential".to_string(),
-                        access_token: None,
-                        refresh_token: None,
-                        id_token: None,
-                        access_token_expires_at: None,
-                        refresh_token_expires_at: None,
-                        scope: None,
-                        password: Some(password_hash.clone()),
+                        user_id: (user.id().to_string()).into(),
+                        account_id: (user.id().to_string()).into(),
+                        provider_id: ("credential".to_string()).into(),
+                        access_token: Default::default(),
+                        refresh_token: Default::default(),
+                        id_token: Default::default(),
+                        access_token_expires_at: Default::default(),
+                        refresh_token_expires_at: Default::default(),
+                        scope: Default::default(),
+                        password: (Some(password_hash.clone()))
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
+                        ..Default::default()
                     })
                     .await?;
 

@@ -69,16 +69,17 @@ async fn username_login_only_sends_verification_when_required_and_propagates_del
         let _ = auth
             .store()
             .create_account(better_auth_core::CreateAccount {
-                user_id: user.id().into_owned(),
-                account_id: user.id().into_owned(),
+                user_id: (user.id().into_owned()).into(),
+                account_id: (user.id().into_owned()).into(),
                 provider_id: "credential".into(),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: Some("fixture:Password123!".into()),
+                access_token: Default::default(),
+                refresh_token: Default::default(),
+                id_token: Default::default(),
+                access_token_expires_at: Default::default(),
+                refresh_token_expires_at: Default::default(),
+                scope: Default::default(),
+                password: (Some("fixture:Password123!".into())).into(),
+                ..Default::default()
             })
             .await
             .unwrap();

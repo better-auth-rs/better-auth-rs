@@ -3,9 +3,9 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use better_auth_core::utils::password::{hash_password, verify_password};
 use better_auth_core::wire::UserView;
 use better_auth_core::{
-    AuthAccount, AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema,
-    AuthSession, AuthUser, AuthVerification, CreateAccount, CreateUser, CreateVerification,
-    RequestMeta, UpdateAccount, UpdateUser,
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
+    AuthUser, CreateAccount, CreateUser, CreateVerification, RequestMeta, UpdateAccount,
+    UpdateUser,
 };
 use chrono::{Duration, Utc};
 use rand::Rng;
@@ -179,13 +179,15 @@ impl PhoneNumberPlugin {
         let _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier,
-                value: if with_attempts {
+                identifier: (identifier).into(),
+                value: (if with_attempts {
                     format!("{code}:0")
                 } else {
                     code.clone()
-                },
-                expires_at: Utc::now() + Duration::seconds(self.expires_in),
+                })
+                .into(),
+                expires_at: (Utc::now() + Duration::seconds(self.expires_in)).into(),
+                ..Default::default()
             })
             .await?;
         Ok(code)
@@ -201,13 +203,13 @@ impl PhoneNumberPlugin {
             .get_verification_including_expired(identifier)
             .await?
             .ok_or_else(|| error(400, "OTP_NOT_FOUND", "OTP not found"))?;
-        if existing.expires_at() < Utc::now() {
+        if existing.expires_at.is_before(Utc::now()) {
             ctx.database
                 .delete_verification_by_identifier(identifier)
                 .await?;
             return Err(error(400, "OTP_EXPIRED", "OTP expired"));
         }
-        if attempts(existing.value()) >= self.allowed_attempts {
+        if attempts(existing.value.typed()?) >= self.allowed_attempts {
             ctx.database
                 .delete_verification_by_identifier(identifier)
                 .await?;
@@ -218,18 +220,24 @@ impl PhoneNumberPlugin {
             .consume_verification_by_identifier(identifier)
             .await?
             .ok_or_else(|| error(400, "INVALID_OTP", "Invalid OTP"))?;
-        let count = attempts(consumed.value());
+        let count = attempts(consumed.value.typed()?);
         if count >= self.allowed_attempts {
             return Err(error(403, "TOO_MANY_ATTEMPTS", "Too many attempts"));
         }
-        let expected = consumed.value().split(':').next().unwrap_or_default();
+        let expected = consumed
+            .value
+            .typed()?
+            .split(':')
+            .next()
+            .unwrap_or_default();
         if expected != code {
             let _ = ctx
                 .database
                 .create_verification(CreateVerification {
-                    identifier: identifier.to_owned(),
-                    value: format!("{expected}:{}", count + 1),
-                    expires_at: consumed.expires_at(),
+                    identifier: (identifier.to_owned()).into(),
+                    value: (format!("{expected}:{}", count + 1)).into(),
+                    expires_at: consumed.expires_at.clone(),
+                    ..Default::default()
                 })
                 .await?;
             return Err(error(400, "INVALID_OTP", "Invalid OTP"));
@@ -475,8 +483,13 @@ impl PhoneNumberPlugin {
         let account = get_credential_account(ctx, user.id())
             .await?
             .ok_or_else(invalid_credentials)?;
+        if account.password.is_absent() {
+            return Err(error(401, "UNEXPECTED_ERROR", "Unexpected error"));
+        }
         let hash = account
-            .password()
+            .password
+            .typed()?
+            .as_deref()
             .ok_or_else(|| error(401, "UNEXPECTED_ERROR", "Unexpected error"))?;
         match verify_password(ctx.password_policy.hasher.as_ref(), password, hash).await {
             Err(AuthError::InvalidCredentials) => return Err(invalid_credentials()),
@@ -593,9 +606,11 @@ impl PhoneNumberPlugin {
             let _ = ctx
                 .database
                 .update_account(
-                    &account.id(),
+                    account.id.typed()?,
                     UpdateAccount {
-                        password: Some(hash),
+                        password: (Some(hash))
+                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                            .unwrap_or_default(),
                         ..Default::default()
                     },
                 )
@@ -604,16 +619,19 @@ impl PhoneNumberPlugin {
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
-                    user_id: user.id().into_owned(),
-                    account_id: user.id().into_owned(),
+                    user_id: (user.id().into_owned()).into(),
+                    account_id: (user.id().into_owned()).into(),
                     provider_id: "credential".into(),
-                    password: Some(hash),
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
+                    password: (Some(hash))
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    ..Default::default()
                 })
                 .await?;
         }

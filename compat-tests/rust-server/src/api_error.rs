@@ -247,10 +247,7 @@ async fn run(base_url: &str, input: Value) -> AuthResult<Value> {
             options.request = Some(req);
         }
         if let Some(query) = input["nativeQuery"].as_object() {
-            options.query = query
-                .iter()
-                .map(|(key, value)| (key.clone(), value.as_str().unwrap().to_owned()))
-                .collect();
+            options.query = Some(Value::Object(query.clone()));
         }
         auth.call_endpoint(method, endpoint, options).await
     } else {

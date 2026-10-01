@@ -4,6 +4,20 @@ use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, Sess
 
 impl SessionUpdate {
     fn apply(self, session: &mut SessionView) {
+        if let Some(fields) = &mut session.visible_fields {
+            for (name, supplied) in [
+                ("impersonatedBy", self.impersonated_by.is_some()),
+                (
+                    "activeOrganizationId",
+                    self.active_organization_id.is_some(),
+                ),
+                ("activeTeamId", self.active_team_id.is_some()),
+            ] {
+                if supplied {
+                    let _ = fields.insert(name.into());
+                }
+            }
+        }
         macro_rules! fields {
             ($($field:ident),* $(,)?) => {$(if let Some(value) = self.$field { session.$field = value; })*};
         }

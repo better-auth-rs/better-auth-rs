@@ -1,0 +1,18 @@
+{
+  "account": {
+    "modelName": "app_accounts",
+    "fields": { "providerId": "provider_name", "accountId": "provider_subject" },
+    "additionalFields": {
+      "label": { "type": "string", "required": false, "fieldName": "account_label" },
+      "scope": { "type": "number", "required": false, "fieldName": "scope_number" }
+    }
+  },
+  "verification": {
+    "modelName": "app_verifications",
+    "fields": { "identifier": "lookup_key" },
+    "additionalFields": {
+      "label": { "type": "string", "required": false, "fieldName": "verification_label" },
+      "value": { "type": "number", "required": true, "fieldName": "numeric_value" }
+    }
+  }
+}

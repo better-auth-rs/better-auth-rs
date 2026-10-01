@@ -73,7 +73,7 @@ async fn test_virtual_session_creates_no_db_session() {
         "/update-user".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     // Call before_request -- should return InjectSession
@@ -86,7 +86,7 @@ async fn test_virtual_session_creates_no_db_session() {
         BeforeRequestAction::Respond(_) => {
             panic!("Expected InjectSession, got Respond");
         }
-        BeforeRequestAction::ReplaceBody(_) => {
+        BeforeRequestAction::ReplaceBody(_) | BeforeRequestAction::MergeContext(_) => {
             panic!("Expected InjectSession, got ReplaceBody");
         }
     }
@@ -129,7 +129,7 @@ async fn test_virtual_session_on_get_session() {
         "/get-session".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let action = plugin.before_request(&req, &ctx).await.unwrap();
@@ -148,7 +148,7 @@ async fn test_virtual_session_on_get_session() {
         BeforeRequestAction::InjectSession { .. } => {
             panic!("Expected Respond for /get-session, got InjectSession");
         }
-        BeforeRequestAction::ReplaceBody(_) => {
+        BeforeRequestAction::ReplaceBody(_) | BeforeRequestAction::MergeContext(_) => {
             panic!("Expected Respond for /get-session, got ReplaceBody");
         }
     }
@@ -463,7 +463,7 @@ async fn test_before_request_disabled_returns_none() {
         "/get-session".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let action = plugin.before_request(&req, &ctx).await.unwrap();

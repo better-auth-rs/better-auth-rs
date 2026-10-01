@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser, AuthVerification};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::utils::password as password_utils;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
@@ -131,19 +131,16 @@ pub(crate) async fn delete_user_core(
         .filter(|password| !password.is_empty())
     {
         ctx.password_policy.validate_max_length(password)?;
-        let account = ctx
-            .database
-            .get_user_accounts(&user.id())
+        let stored_hash = super::super::helpers::get_credential_password_hash(ctx, user)
             .await?
-            .into_iter()
-            .find(|account| account.provider_id() == "credential" && account.password().is_some())
             .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
-        let stored_hash = account
-            .password()
-            .ok_or_else(|| AuthError::bad_request("Credential account not found"))?;
-        password_utils::verify_password(ctx.password_policy.hasher.as_ref(), password, stored_hash)
-            .await
-            .map_err(|_| AuthError::bad_request("Invalid password"))?;
+        password_utils::verify_password(
+            ctx.password_policy.hasher.as_ref(),
+            password,
+            &stored_hash,
+        )
+        .await
+        .map_err(|_| AuthError::bad_request("Invalid password"))?;
     }
 
     if let Some(token) = body.token.as_deref().filter(|token| !token.is_empty()) {
@@ -165,11 +162,13 @@ pub(crate) async fn delete_user_core(
         let _ = ctx
             .database
             .create_verification(better_auth_core::CreateVerification {
-                identifier: format!("delete-account-{token}"),
-                value: user.id.to_owned(),
-                expires_at: Utc::now()
+                identifier: (format!("delete-account-{token}")).into(),
+                value: (user.id.to_owned()).into(),
+                expires_at: (Utc::now()
                     .checked_add_signed(expires_in)
-                    .ok_or_else(|| AuthError::config("Delete token expiry is out of range"))?,
+                    .ok_or_else(|| AuthError::config("Delete token expiry is out of range"))?)
+                .into(),
+                ..Default::default()
             })
             .await?;
         let url = format!(
@@ -217,7 +216,7 @@ pub(crate) async fn delete_user_callback_core(
         .consume_verification_by_identifier(&format!("delete-account-{token}"))
         .await?
         .ok_or_else(|| AuthError::not_found("Invalid token"))?;
-    if verification.value() != current_user.id {
+    if verification.value != current_user.id {
         return Err(AuthError::not_found("Invalid token"));
     }
     perform_user_deletion(current_user, req, config, ctx).await?;
@@ -238,7 +237,7 @@ async fn perform_user_deletion(
     }
     ctx.database.delete_user_sessions(&user.id).await?;
     for account in ctx.database.get_user_accounts(&user.id).await? {
-        ctx.database.delete_account(&account.id()).await?;
+        ctx.database.delete_account(account.id.typed()?).await?;
     }
     ctx.database.delete_user(&user.id).await?;
     // Queue revocation before the application hook so error responses also clear credentials.

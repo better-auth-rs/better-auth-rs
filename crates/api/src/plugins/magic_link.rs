@@ -5,8 +5,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use async_trait::async_trait;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    AuthUser, AuthVerification, CreateUser, CreateVerification, RequestMeta,
-    middleware::EndpointRateLimit,
+    AuthUser, CreateUser, CreateVerification, RequestMeta, middleware::EndpointRateLimit,
 };
 use chrono::{Duration, Utc};
 use rand::Rng;
@@ -83,7 +82,7 @@ better_auth_core::impl_auth_plugin! {
     MagicLinkPlugin, "magic-link";
     routes {
         post "/sign-in/magic-link" => handle_send, "signInWithMagicLink";
-        get "/magic-link/verify" => handle_verify, "verifyMagicLink";
+        get "/magic-link/verify" => handle_verify, "verifyMagicLink", query = crate::plugins::query_input::magic_link;
     }
     extra {
         fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
@@ -164,12 +163,14 @@ impl MagicLinkPlugin {
         let _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier: stored,
-                value: serde_json::to_string(&Proof {
+                identifier: (stored).into(),
+                value: (serde_json::to_string(&Proof {
                     email: body.email.clone(),
                     name: body.name.clone(),
-                })?,
-                expires_at: Utc::now() + lifetime,
+                })?)
+                .into(),
+                expires_at: (Utc::now() + lifetime).into(),
+                ..Default::default()
             })
             .await?;
         let mut url = Url::parse(ctx.base_url())
@@ -227,7 +228,7 @@ impl MagicLinkPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let Some(token) = req.query.get("token") else {
+        let Some(token) = req.query_string("token")? else {
             return Ok(super::json_body::validation_error(
                 "[query.token] Invalid input: expected string, received undefined",
             ));
@@ -249,7 +250,7 @@ impl MagicLinkPlugin {
         else {
             return Ok(error_redirect(error_callback, "INVALID_TOKEN"));
         };
-        let proof: Proof = serde_json::from_str(value.value())?;
+        let proof: Proof = serde_json::from_str(&value.value.display_string()?)?;
         let existing = ctx.database.get_user_by_email(&proof.email).await?;
         let is_new_user = existing.is_none();
         let user = match existing {
@@ -313,7 +314,7 @@ impl MagicLinkPlugin {
         let issued = issue_user_session(ctx, &user.id(), meta.ip_address, meta.user_agent)
             .await
             .map_err(SessionIssueError::into_auth_error)?;
-        let response = if req.query.get("callbackURL").is_none_or(String::is_empty) {
+        let response = if req.query_string("callbackURL")?.is_none_or(str::is_empty) {
             AuthResponse::json(
                 200,
                 &serde_json::json!({ "token": issued.session.token(), "session": ctx.session_view(&issued.session).await?, "user": ctx.user_view(&issued.user)? }),
@@ -345,10 +346,8 @@ fn callback_url<S: AuthSchema>(
     default: &str,
 ) -> AuthResult<Url> {
     let value = req
-        .query
-        .get(key)
+        .query_string(key)?
         .filter(|value| !value.is_empty())
-        .map(String::as_str)
         .unwrap_or(default);
     let decoded = urlencoding::decode(value)
         .map_err(|error| AuthError::bad_request(format!("Invalid callback URL: {error}")))?;

@@ -53,7 +53,12 @@ async fn device_limits_respect_base_paths_overrides_and_disable()
             let _ = request
                 .headers
                 .insert("x-forwarded-for".into(), format!("192.0.2.{}", case + 1));
-            let _ = request.query.insert("user_code".into(), "UNKNOWN".into());
+            let _ = request
+                .query
+                .get_or_insert_with(|| serde_json::json!({}))
+                .as_object_mut()
+                .unwrap()
+                .insert("user_code".into(), serde_json::Value::from("UNKNOWN"));
             let response = auth.handle_request(request).await?;
             assert_eq!(response.status, if index < allowed { 400 } else { 429 });
         }

@@ -32,7 +32,7 @@ enum Command {
         #[arg(short, long, value_delimiter = ',', value_parser = parse_plugin)]
         plugins: Vec<String>,
 
-        /// Read Organization table, column, and additional field definitions from JSON.
+        /// Read table, column, and supported additional field definitions from JSON.
         #[arg(long)]
         schema_config: Option<PathBuf>,
 

@@ -9,7 +9,7 @@ mod users;
 mod verifications;
 
 use super::{AuthStore, SecondaryStorage};
-use crate::entity::{AuthSession, AuthVerification};
+use crate::entity::AuthSession;
 use crate::plugin::MetadataMap;
 use crate::{AuthConfig, AuthError, AuthResult, AuthSchema};
 use chrono::{DateTime, Utc};
@@ -23,6 +23,7 @@ pub struct SecondaryStore<S: AuthSchema> {
     storage: Option<Arc<dyn SecondaryStorage>>,
     config: Arc<AuthConfig>,
     metadata: MetadataMap,
+    schema_validation: Option<super::schema::SchemaValidation>,
 }
 
 impl<S: AuthSchema> Clone for SecondaryStore<S> {
@@ -32,6 +33,7 @@ impl<S: AuthSchema> Clone for SecondaryStore<S> {
             storage: self.storage.clone(),
             config: self.config.clone(),
             metadata: self.metadata.clone(),
+            schema_validation: self.schema_validation.clone(),
         }
     }
 }
@@ -44,9 +46,9 @@ impl<S: AuthSchema> SecondaryStore<S> {
         config: Arc<AuthConfig>,
         metadata: MetadataMap,
     ) -> AuthResult<Self> {
-        if !S::Session::SUPPORTS_RUNTIME_HYDRATION || !S::Verification::SUPPORTS_RUNTIME_HYDRATION {
+        if !S::Session::SUPPORTS_RUNTIME_HYDRATION {
             return Err(AuthError::config(
-                "Secondary storage requires AuthSession and AuthVerification runtime hydration; derive AuthEntity or implement from_runtime_fields",
+                "Secondary storage requires AuthSession runtime hydration; derive AuthEntity or implement from_runtime_fields",
             ));
         }
         Ok(Self {
@@ -54,6 +56,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             storage: Some(storage),
             config,
             metadata,
+            schema_validation: None,
         })
     }
 
@@ -68,7 +71,17 @@ impl<S: AuthSchema> SecondaryStore<S> {
             storage: None,
             config,
             metadata,
+            schema_validation: None,
         }
+    }
+
+    /// Attach this auth instance's explicit and automatic schema check.
+    pub fn with_schema_validation(
+        mut self,
+        validation: Option<super::schema::SchemaValidation>,
+    ) -> Self {
+        self.schema_validation = validation;
+        self
     }
 
     fn database_sessions(&self) -> bool {

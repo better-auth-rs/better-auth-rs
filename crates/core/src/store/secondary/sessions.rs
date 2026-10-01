@@ -53,6 +53,11 @@ impl<S: AuthSchema> SecondaryStore<S> {
             ]
             .into_iter()
             .filter(|(plugin, _)| self.metadata.get(*plugin).and_then(Value::as_bool) == Some(true))
+            .filter(|(_, field)| {
+                session
+                    .field_presence()
+                    .is_none_or(|fields| fields.contains(*field))
+            })
             .map(|(_, field)| field.to_owned())
             .collect(),
         );

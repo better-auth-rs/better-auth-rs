@@ -82,10 +82,10 @@ better_auth_core::impl_auth_plugin! {
     AdminPlugin, "admin";
     routes {
         post "/admin/set-role" => handle_set_role, "admin_set_role";
-        get  "/admin/get-user" => handle_get_user, "admin_get_user";
+        get  "/admin/get-user" => handle_get_user, "admin_get_user", query = crate::plugins::query_input::get_user;
         post "/admin/create-user" => handle_create_user, "admin_create_user";
         post "/admin/update-user" => handle_update_user, "admin_update_user";
-        get  "/admin/list-users" => handle_list_users, "admin_list_users";
+        get  "/admin/list-users" => handle_list_users, "admin_list_users", query = crate::plugins::query_input::list_users;
         post "/admin/list-user-sessions" => handle_list_user_sessions, "admin_list_user_sessions";
         post "/admin/ban-user" => handle_ban_user, "admin_ban_user";
         post "/admin/unban-user" => handle_unban_user, "admin_unban_user";
@@ -175,7 +175,10 @@ impl AdminPlugin {
         let (user, _session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "get", MESSAGE_GET_USER)?;
         let query = GetUserQuery {
-            id: req.query.get("id").cloned().unwrap_or_default(),
+            id: req
+                .query_string("id")?
+                .map(str::to_owned)
+                .unwrap_or_default(),
         };
         query
             .validate()
@@ -228,19 +231,16 @@ impl AdminPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "list", MESSAGE_LIST_USERS)?;
-        let query = ListUsersQueryParams {
-            limit: req.query.get("limit").and_then(|value| value.parse().ok()),
-            offset: req.query.get("offset").and_then(|value| value.parse().ok()),
-            search_field: req.query.get("searchField").cloned(),
-            search_value: req.query.get("searchValue").cloned(),
-            search_operator: req.query.get("searchOperator").cloned(),
-            sort_by: req.query.get("sortBy").cloned(),
-            sort_direction: req.query.get("sortDirection").cloned(),
-            filter_field: req.query.get("filterField").cloned(),
-            filter_value: req.query.get("filterValue").cloned(),
-            filter_operator: req.query.get("filterOperator").cloned(),
-        };
-        let response = list_users_core(&query, ctx).await?;
+        let query: ListUsersQueryParams = crate::plugins::query_input::parse(&req.query)?;
+        // The upstream admin endpoint catches list/count/projection failures.
+        let response = list_users_core(&query, ctx)
+            .await
+            .unwrap_or_else(|_| ListUsersResponse {
+                users: Vec::new(),
+                total: 0,
+                limit: None,
+                offset: None,
+            });
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 

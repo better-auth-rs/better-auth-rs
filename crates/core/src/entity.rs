@@ -69,6 +69,10 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
 
 /// Trait representing a session entity.
 pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Optional field presence for runtime records; database models expose every mapped column.
+    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
+        None
+    }
     /// Resolve an application field alias to the model's serialized key.
     fn serialized_field_name(name: &str) -> &str {
         name
@@ -297,17 +301,26 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 /// This is a concrete framework type (not generic) used to project
 /// user fields into member responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    into = "serde_json::Map<String, serde_json::Value>",
+    try_from = "serde_json::Map<String, serde_json::Value>"
+)]
 pub struct MemberUserView {
+    /// Optional field presence inherited from the source user.
+    pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: String,
     pub email: Option<String>,
     pub name: Option<String>,
     pub image: Option<String>,
 }
 
+mod member_user_view;
+
 impl MemberUserView {
     /// Construct from any type implementing [`AuthUser`].
     pub fn from_user(user: &impl AuthUser) -> Self {
         Self {
+            visible_fields: user.field_presence().cloned(),
             id: user.id().to_string(),
             email: user.email().map(|s| s.to_string()),
             name: user.name().map(|s| s.to_string()),

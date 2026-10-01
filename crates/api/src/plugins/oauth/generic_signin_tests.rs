@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use better_auth_core::{
-    AuthAccount, AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    AuthUser, HttpMethod, UpdateUser, wire::UserView,
+    AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthUser,
+    HttpMethod, UpdateUser, wire::UserView,
 };
 use serde_json::{Value, json};
 
@@ -79,10 +79,21 @@ async fn sign_in(
         .1
         .into_owned();
     let mut callback = AuthRequest::new(HttpMethod::Get, "/callback/generic");
-    let _ = callback.query.insert("state".to_owned(), state);
     let _ = callback
         .query
-        .insert("code".to_owned(), "test-code".to_owned());
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert("state".to_owned(), serde_json::Value::from(state));
+    let _ = callback
+        .query
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "code".to_owned(),
+            serde_json::Value::from("test-code".to_owned()),
+        );
     plugin.on_request(&callback, ctx).await.unwrap().unwrap()
 }
 
@@ -277,9 +288,12 @@ async fn verified_email_change_preserves_the_user_account_and_allows_sign_in() {
         .unwrap();
     assert_eq!(accounts.len(), 1);
     let account = accounts.first().unwrap();
-    assert_eq!(account.id(), original_account.id());
-    assert_eq!(account.account_id(), "stable-subject");
-    assert_eq!(account.user_id(), updated_user.id());
+    assert_eq!(account.id, original_account.id);
+    assert_eq!(account.account_id, "stable-subject");
+    assert_eq!(
+        account.user_id.typed().unwrap().as_str(),
+        updated_user.id().as_ref()
+    );
     assert_eq!(
         ctx.session_manager()
             .list_user_sessions(&updated_user.id())

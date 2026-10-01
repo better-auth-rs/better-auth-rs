@@ -117,9 +117,10 @@ impl SiwePlugin {
         let _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier: format!("siwe:{nonce}"),
-                value: nonce.clone(),
-                expires_at: Utc::now() + Duration::minutes(15),
+                identifier: (format!("siwe:{nonce}")).into(),
+                value: (nonce.clone()).into(),
+                expires_at: (Utc::now() + Duration::minutes(15)).into(),
+                ..Default::default()
             })
             .await?;
         Ok(AuthResponse::json(200, &json!({"nonce":nonce}))?)
@@ -294,9 +295,10 @@ impl SiwePlugin {
                 let reserved = ctx
                     .database
                     .reserve_verification_value(CreateVerification {
-                        identifier: identifier.clone(),
-                        value: address.clone(),
-                        expires_at: Utc::now() + Duration::minutes(1),
+                        identifier: (identifier.clone()).into(),
+                        value: (address.clone()).into(),
+                        expires_at: (Utc::now() + Duration::minutes(1)).into(),
+                        ..Default::default()
                     })
                     .await;
                 let reserved = match reserved {
@@ -362,16 +364,17 @@ impl SiwePlugin {
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
-                    user_id: user.id().into_owned(),
+                    user_id: (user.id().into_owned()).into(),
                     provider_id: "siwe".into(),
-                    account_id: format!("{address}:{chain_id}"),
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
-                    password: None,
+                    account_id: (format!("{address}:{chain_id}")).into(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    password: Default::default(),
+                    ..Default::default()
                 })
                 .await?;
         }

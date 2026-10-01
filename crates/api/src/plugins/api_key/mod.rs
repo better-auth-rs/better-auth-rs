@@ -724,10 +724,9 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let id = req
-            .query
-            .get("id")
+            .query_string("id")?
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
-        let config_id = req.query.get("configId").map(String::as_str);
+        let config_id = req.query_string("configId")?;
         let response = get_key_core(id, config_id, user.id(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -738,10 +737,7 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
-        let query = match ListKeysQuery::from_request(req) {
-            Ok(query) => query,
-            Err(response) => return Ok(response),
-        };
+        let query = ListKeysQuery::from_request(req)?;
         let response = list_keys_core(user.id(), &query, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -792,10 +788,10 @@ better_auth_core::impl_auth_plugin! {
     ApiKeyPlugin, "api-key";
     routes {
         post "/api-key/create"                    => handle_create,             "api_key_create";
-        get  "/api-key/get"                       => handle_get,                "api_key_get";
+        get  "/api-key/get"                       => handle_get,                "api_key_get", query = crate::plugins::query_input::api_key_get;
         post "/api-key/update"                    => handle_update,             "api_key_update";
         post "/api-key/delete"                    => handle_delete,             "api_key_delete";
-        get  "/api-key/list"                      => handle_list,               "api_key_list";
+        get  "/api-key/list"                      => handle_list,               "api_key_list", query = crate::plugins::query_input::api_key_list;
     }
     extra {
         fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {

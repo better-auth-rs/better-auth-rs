@@ -61,8 +61,8 @@ impl PasskeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let passkey_name = req.query.get("name").map(|s| s.as_str());
-        let authenticator_attachment = req.query.get("authenticatorAttachment").map(|s| s.as_str());
+        let passkey_name = req.query_string("name")?;
+        let authenticator_attachment = req.query_string("authenticatorAttachment")?;
         if authenticator_attachment
             .is_some_and(|value| !matches!(value, "platform" | "cross-platform"))
         {
@@ -192,7 +192,7 @@ impl PasskeyPlugin {
 better_auth_core::impl_auth_plugin! {
     PasskeyPlugin, "passkey";
     routes {
-        get  "/passkey/generate-register-options"      => handle_generate_register_options,      "passkey_generate_register_options";
+        get  "/passkey/generate-register-options"      => handle_generate_register_options,      "passkey_generate_register_options", query = crate::plugins::query_input::passkey_registration;
         post "/passkey/verify-registration"            => handle_verify_registration,            "passkey_verify_registration";
         get  "/passkey/generate-authenticate-options"  => handle_generate_authenticate_options,  "passkey_generate_authenticate_options";
         post "/passkey/verify-authentication"          => handle_verify_authentication,          "passkey_verify_authentication";

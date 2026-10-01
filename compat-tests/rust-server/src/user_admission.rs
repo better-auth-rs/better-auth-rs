@@ -11,7 +11,7 @@ use better_auth::plugins::{
     user_admission::{UserValidationData, UserValidationRejection, ValidateUserInfo},
 };
 use better_auth::{AuthBuilder, AuthError, AuthResult, BetterAuth};
-use better_auth_core::{AuthAccount, AuthUser, CreateUser, PasswordHasher, UpdateUser};
+use better_auth_core::{AuthUser, CreateUser, PasswordHasher, UpdateUser};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 #[derive(Default)]
@@ -155,7 +155,7 @@ impl UserAdmissionFixture {
             let accounts=match &user{Some(user)=>auth.store().get_user_accounts(&user.id()).await?,None=>vec![]};
             let audit=auth.store().get_user_by_email("admission-audit@example.com").await?.is_some();
             let state=fixture.state.lock().unwrap();
-            Ok::<_,AuthError>(Json(json!({"events":state.events,"magicURL":state.magic_url,"exists":user.is_some(),"auditExists":audit,"accounts":accounts.iter().map(|account|json!({"providerId":account.provider_id(),"accessToken":account.access_token()})).collect::<Vec<_>>()})))
+            Ok::<_,AuthError>(Json(json!({"events":state.events,"magicURL":state.magic_url,"exists":user.is_some(),"auditExists":audit,"accounts":accounts.iter().map(|account|json!({"providerId":account.provider_id,"accessToken":account.access_token})).collect::<Vec<_>>()})))
         }}))
     }
 }

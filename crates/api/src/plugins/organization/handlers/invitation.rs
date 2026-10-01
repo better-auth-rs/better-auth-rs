@@ -758,7 +758,7 @@ pub async fn handle_get_invitation(
             AuthError::Unauthenticated => AuthError::authentication_failed("Not authenticated"),
             error => error,
         })?;
-    let query = parse_query::<GetInvitationQuery>(&req.query);
+    let query = crate::plugins::query_input::parse::<GetInvitationQuery>(&req.query)?;
     match get_invitation_core(&query, &user, config, ctx).await? {
         Some(response) => Ok(AuthResponse::json(200, &response)?),
         None => Ok(AuthResponse::json(
@@ -773,7 +773,7 @@ pub async fn handle_list_invitations(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let query = parse_query::<ListInvitationsQuery>(&req.query);
+    let query = crate::plugins::query_input::parse::<ListInvitationsQuery>(&req.query)?;
     let invitations = list_invitations_core(&query, &user, &session, ctx).await?;
     Ok(AuthResponse::json(200, &invitations)?)
 }
@@ -842,14 +842,6 @@ pub async fn handle_cancel_invitation(
     };
     let response = cancel_invitation_core(&body, &user, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
-}
-
-fn parse_query<T: Default + serde::de::DeserializeOwned>(
-    query: &std::collections::HashMap<String, String>,
-) -> T {
-    let json_value =
-        serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
-    serde_json::from_value(json_value).unwrap_or_default()
 }
 
 #[cfg(test)]

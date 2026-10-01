@@ -142,9 +142,9 @@ pub(crate) struct ListUsersResponse<U: Serialize> {
     pub users: Vec<U>,
     pub total: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<usize>,
+    pub limit: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub offset: Option<usize>,
+    pub offset: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -166,8 +166,16 @@ pub(crate) struct PermissionResponse {
 /// Query parameters for `list_users`.
 #[derive(Debug, Default, Deserialize)]
 pub(crate) struct ListUsersQueryParams {
-    pub limit: Option<usize>,
-    pub offset: Option<usize>,
+    #[serde(
+        default,
+        deserialize_with = "better_auth_core::query::optional_nonzero_number"
+    )]
+    pub limit: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "better_auth_core::query::optional_nonzero_number"
+    )]
+    pub offset: Option<f64>,
     #[serde(rename = "searchField")]
     pub search_field: Option<String>,
     #[serde(rename = "searchValue")]
@@ -181,7 +189,7 @@ pub(crate) struct ListUsersQueryParams {
     #[serde(rename = "filterField")]
     pub filter_field: Option<String>,
     #[serde(rename = "filterValue")]
-    pub filter_value: Option<String>,
+    pub filter_value: Option<serde_json::Value>,
     #[serde(rename = "filterOperator")]
     pub filter_operator: Option<String>,
 }

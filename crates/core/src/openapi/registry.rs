@@ -103,6 +103,22 @@ impl OpenApiRegistry {
                 .or_default()
                 .insert(key.clone(), project_field(key, field, false));
         }
+        for (model, fields) in [
+            ("account", &adapter_config.account.additional_fields),
+            (
+                "verification",
+                &adapter_config.verification.additional_fields,
+            ),
+        ] {
+            // Preserve the omitted verification component for secondary-only storage.
+            if let Some(model) = models.get_mut(model) {
+                model.extend(
+                    fields
+                        .iter()
+                        .map(|(key, field)| (key.clone(), project_field(key, field, false))),
+                );
+            }
+        }
         if database_rate_limit {
             for model in catalog
                 .models(None)

@@ -353,14 +353,16 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
     _ = ctx
         .database
         .create_verification(CreateVerification {
-            identifier,
-            value: format!("{}:0", stored_otp),
-            expires_at: Utc::now()
+            identifier: (identifier).into(),
+            value: (format!("{}:0", stored_otp)).into(),
+            expires_at: (Utc::now()
                 + if config.otp_period.is_zero() {
                     Duration::minutes(3)
                 } else {
                     config.otp_period
-                },
+                })
+            .into(),
+            ..Default::default()
         })
         .await?;
 
@@ -401,7 +403,7 @@ pub(super) async fn verify_otp_core(
         return Err(AuthError::bad_request("OTP has expired"));
     };
 
-    let value = verification.value();
+    let value = verification.value.typed()?;
     let mut parts = value.split(':');
     let stored_otp = parts.next().unwrap_or_default();
     let attempts = parts
@@ -427,13 +429,14 @@ pub(super) async fn verify_otp_core(
 
     if !is_valid {
         let next_value = format!("{}:{}", stored_otp, attempts + 1);
-        let expires_at = verification.expires_at();
+        let expires_at = verification.expires_at.clone();
         _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier,
-                value: next_value,
+                identifier: (identifier).into(),
+                value: (next_value).into(),
                 expires_at,
+                ..Default::default()
             })
             .await?;
         if let Some(factor) = &factor {

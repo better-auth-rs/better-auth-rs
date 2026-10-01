@@ -93,7 +93,7 @@ mod tests {
             "/sign-up/email".to_string(),
             HashMap::new(),
             Some(vec![0u8; body_size]),
-            HashMap::new(),
+            None,
         )
     }
 
@@ -132,7 +132,7 @@ mod tests {
             "/get-session".to_string(),
             HashMap::new(),
             None,
-            HashMap::new(),
+            None,
         );
         assert!(mw.before_request(&req).await.unwrap().is_none());
     }

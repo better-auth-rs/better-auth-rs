@@ -199,13 +199,9 @@ async fn convert_axum_request(
     // Get path
     let path = parts.uri.path().to_string();
 
-    // Convert query parameters
-    let mut query = HashMap::new();
-    if let Some(query_str) = parts.uri.query() {
-        for (key, value) in url::form_urlencoded::parse(query_str.as_bytes()) {
-            let _ = query.insert(key.to_string(), value.to_string());
-        }
-    }
+    let query = Some(better_auth_core::query::parse_url_query(
+        parts.uri.query().unwrap_or_default(),
+    ));
 
     // Bound the body read at the caller-configured limit. `BodyLimitMiddleware`
     // runs on the already-buffered `AuthRequest` and only sees `Content-Length`,

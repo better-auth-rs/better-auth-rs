@@ -1,8 +1,8 @@
 //! Concrete auth types for API responses and framework callbacks.
 //!
 //! These types decouple JSON response shapes from app-owned SeaORM entities.
-//! Each view implements its corresponding `Auth*` entity trait, allowing it
-//! to be used in trait-generic framework code (hooks, helpers).
+//! Account and verification views retain adapter replacement types and field omission.
+//! Persistence traits describe application models; runtime readers consume projected views.
 
 use crate::SchemaValue;
 use chrono::{DateTime, Utc};
@@ -10,12 +10,14 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::borrow::Cow;
 
 use crate::entity::{
-    AuthAccount, AuthApiKey, AuthInvitation, AuthOrganization, AuthPasskey, AuthSession, AuthUser,
-    AuthVerification,
+    AuthApiKey, AuthInvitation, AuthOrganization, AuthPasskey, AuthSession, AuthUser,
 };
 use crate::types::InvitationStatus;
 
 mod account_view;
+mod verification_view;
+pub use account_view::AccountView;
+pub use verification_view::VerificationView;
 
 /// Public user response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -120,63 +122,6 @@ pub struct SessionView {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
-/// Public account response shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(
-    into = "serde_json::Map<String, serde_json::Value>",
-    try_from = "serde_json::Map<String, serde_json::Value>"
-)]
-pub struct AccountView {
-    /// Present optional fields for process-local records and decoded snapshots.
-    #[serde(skip)]
-    pub visible_fields: Option<std::collections::BTreeSet<String>>,
-    pub id: String,
-    #[serde(rename = "accountId")]
-    pub account_id: String,
-    #[serde(rename = "providerId")]
-    pub provider_id: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
-    #[serde(rename = "accessToken")]
-    pub access_token: Option<String>,
-    #[serde(rename = "refreshToken")]
-    pub refresh_token: Option<String>,
-    #[serde(rename = "idToken")]
-    pub id_token: Option<String>,
-    #[serde(rename = "accessTokenExpiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub access_token_expires_at: Option<DateTime<Utc>>,
-    #[serde(rename = "refreshTokenExpiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub refresh_token_expires_at: Option<DateTime<Utc>>,
-    pub scope: Option<String>,
-    #[serde(skip_serializing)]
-    pub password: Option<String>,
-    #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Public verification response shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct VerificationView {
-    pub id: String,
-    pub identifier: String,
-    pub value: String,
-    #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub expires_at: DateTime<Utc>,
-    #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
-}
-
 impl<T: AuthUser> From<&T> for UserView {
     fn from(user: &T) -> Self {
         Self {
@@ -207,7 +152,7 @@ impl<T: AuthUser> From<&T> for UserView {
 impl<T: AuthSession> From<&T> for SessionView {
     fn from(session: &T) -> Self {
         Self {
-            visible_fields: None,
+            visible_fields: session.field_presence().cloned(),
             id: session.id().into_owned(),
             expires_at: session.expires_at(),
             token: session.token().to_owned(),
@@ -288,40 +233,6 @@ impl SessionView {
     }
 }
 
-impl<T: AuthAccount> From<&T> for AccountView {
-    fn from(account: &T) -> Self {
-        Self {
-            visible_fields: account.field_presence().cloned(),
-            id: account.id().into_owned(),
-            account_id: account.account_id().to_owned(),
-            provider_id: account.provider_id().to_owned(),
-            user_id: account.user_id().into_owned(),
-            access_token: account.access_token().map(str::to_owned),
-            refresh_token: account.refresh_token().map(str::to_owned),
-            id_token: account.id_token().map(str::to_owned),
-            access_token_expires_at: account.access_token_expires_at(),
-            refresh_token_expires_at: account.refresh_token_expires_at(),
-            scope: account.scope().map(str::to_owned),
-            password: account.password().map(str::to_owned),
-            created_at: account.created_at(),
-            updated_at: account.updated_at(),
-        }
-    }
-}
-
-impl<T: AuthVerification> From<&T> for VerificationView {
-    fn from(verification: &T) -> Self {
-        Self {
-            id: verification.id().into_owned(),
-            identifier: verification.identifier().to_owned(),
-            value: verification.value().to_owned(),
-            expires_at: verification.expires_at(),
-            created_at: verification.created_at(),
-            updated_at: verification.updated_at(),
-        }
-    }
-}
-
 impl AuthUser for UserView {
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         self.visible_fields.as_ref()
@@ -399,6 +310,9 @@ impl AuthUser for UserView {
 }
 
 impl AuthSession for SessionView {
+    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
+        self.visible_fields.as_ref()
+    }
     fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
         Some(&self.additional_fields)
     }
@@ -451,79 +365,6 @@ impl AuthSession for SessionView {
     }
     fn active(&self) -> bool {
         self.active
-    }
-}
-
-impl AuthAccount for AccountView {
-    fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
-        self.visible_fields.as_ref()
-    }
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
-    }
-    fn account_id(&self) -> &str {
-        &self.account_id
-    }
-    fn provider_id(&self) -> &str {
-        &self.provider_id
-    }
-    fn user_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.user_id)
-    }
-    fn access_token(&self) -> Option<&str> {
-        self.access_token.as_deref()
-    }
-    fn refresh_token(&self) -> Option<&str> {
-        self.refresh_token.as_deref()
-    }
-    fn id_token(&self) -> Option<&str> {
-        self.id_token.as_deref()
-    }
-    fn access_token_expires_at(&self) -> Option<DateTime<Utc>> {
-        self.access_token_expires_at
-    }
-    fn refresh_token_expires_at(&self) -> Option<DateTime<Utc>> {
-        self.refresh_token_expires_at
-    }
-    fn scope(&self) -> Option<&str> {
-        self.scope.as_deref()
-    }
-    fn password(&self) -> Option<&str> {
-        self.password.as_deref()
-    }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
-    }
-}
-
-impl AuthVerification for VerificationView {
-    const SUPPORTS_RUNTIME_HYDRATION: bool = true;
-    fn from_runtime_fields(
-        fields: serde_json::Map<String, serde_json::Value>,
-    ) -> crate::AuthResult<Self> {
-        Ok(serde_json::from_value(serde_json::Value::Object(fields))?)
-    }
-
-    fn id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.id)
-    }
-    fn identifier(&self) -> &str {
-        &self.identifier
-    }
-    fn value(&self) -> &str {
-        &self.value
-    }
-    fn expires_at(&self) -> DateTime<Utc> {
-        self.expires_at
-    }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
     }
 }
 
@@ -771,8 +612,8 @@ mod tests {
     #[test]
     fn user_view_serializes_camel_case() {
         let user = UserView {
-            additional_fields: Default::default(),
             visible_fields: None,
+            additional_fields: Default::default(),
             id: "user-1".to_string(),
             name: Some("Ada".to_string()),
             email: Some("ada@example.com".to_string()),
@@ -828,20 +669,20 @@ mod tests {
     #[test]
     fn account_view_omits_password_on_serialize() {
         let account = AccountView {
-            visible_fields: None,
-            id: "acc-1".to_string(),
-            account_id: "account-id".to_string(),
-            provider_id: "credential".to_string(),
-            user_id: "user-1".to_string(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: Some("$2a$hash".to_string()),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            additional_fields: Default::default(),
+            id: "acc-1".to_string().into(),
+            account_id: "account-id".to_string().into(),
+            provider_id: "credential".to_string().into(),
+            user_id: "user-1".to_string().into(),
+            access_token: None.into(),
+            refresh_token: None.into(),
+            id_token: None.into(),
+            access_token_expires_at: None.into(),
+            refresh_token_expires_at: None.into(),
+            scope: None.into(),
+            password: Some("$2a$hash".to_string()).into(),
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
         };
 
         let json = serde_json::to_value(&account).expect("serialize account view");

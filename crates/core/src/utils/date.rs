@@ -40,6 +40,22 @@ pub fn normalize_components(
         .map(|date| date.and_utc())
 }
 
+/// Parse adapter date strings, including the JSON reviver's calendar overflow rules.
+pub fn parse_adapter_date(text: &str) -> Option<DateTime<Utc>> {
+    crate::utils::json::parse_json_date(text)
+        .or_else(|| {
+            DateTime::parse_from_rfc3339(text)
+                .ok()
+                .map(|date| date.with_timezone(&Utc))
+        })
+        .or_else(|| {
+            chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
+                .ok()?
+                .and_hms_opt(0, 0, 0)
+                .map(|date| date.and_utc())
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount,
     CreateVerification, UpdateAccount, UpdateUser,
@@ -321,12 +321,30 @@ pub(super) async fn complete_link_social(
         .await
         .map_err(|error| error.to_string())?
     {
-        if existing_account.user_id() != link.user_id {
+        if existing_account.user_id != link.user_id {
             return Err("account_already_linked_to_different_user"
                 .to_string()
                 .into());
         }
 
+        let stored_scope = if existing_account.scope.is_truthy()? {
+            existing_account
+                .scope
+                .typed()?
+                .as_deref()
+                .unwrap_or_default()
+        } else {
+            ""
+        };
+        let merged_scope = stored_scope
+            .split(',')
+            .chain(tokens.scopes.iter().map(String::as_str))
+            .map(|scope| scope.trim_matches(crate::plugins::helpers::oauth_scope_whitespace))
+            .filter(|scope| !scope.is_empty())
+            .collect::<indexmap::IndexSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .join(",");
         let token_bundle = encrypt_token_set(
             ctx,
             tokens.access_token.clone(),
@@ -338,14 +356,30 @@ pub(super) async fn complete_link_social(
         let _ = ctx
             .database
             .update_account(
-                &existing_account.id(),
+                existing_account
+                    .id
+                    .typed()
+                    .map_err(|error| error.to_string())?,
                 UpdateAccount {
-                    access_token: token_bundle.access_token,
-                    refresh_token: token_bundle.refresh_token,
-                    id_token: token_bundle.id_token,
-                    access_token_expires_at: tokens.access_token_expires_at,
-                    refresh_token_expires_at: tokens.refresh_token_expires_at,
-                    scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
+                    provider_id: provider_name.to_owned().into(),
+                    access_token: (token_bundle.access_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    refresh_token: (token_bundle.refresh_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    id_token: (token_bundle.id_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    access_token_expires_at: (tokens.access_token_expires_at)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    scope: ((!merged_scope.is_empty()).then_some(merged_scope))
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
                     ..Default::default()
                 },
             )
@@ -367,16 +401,27 @@ pub(super) async fn complete_link_social(
     let _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: link.user_id.clone(),
-            account_id: user_info.id.clone(),
-            provider_id: provider_name.to_string(),
-            access_token: token_bundle.access_token,
-            refresh_token: token_bundle.refresh_token,
-            id_token: token_bundle.id_token,
-            access_token_expires_at: tokens.access_token_expires_at,
-            refresh_token_expires_at: tokens.refresh_token_expires_at,
-            scope: (!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")),
-            password: None,
+            user_id: (link.user_id.clone()).into(),
+            account_id: (user_info.id.clone()).into(),
+            provider_id: (provider_name.to_string()).into(),
+            access_token: (token_bundle.access_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token: (token_bundle.refresh_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            id_token: (token_bundle.id_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            access_token_expires_at: (tokens.access_token_expires_at)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            scope: Some(tokens.scopes.join(",")).into(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .map_err(|_| "unable_to_link_account".to_string())?;
@@ -549,7 +594,7 @@ async fn link_with_id_token_core(
         .get_account(&body.provider, &response.user.id)
         .await?
     {
-        if account.user_id() != current_user.id() {
+        if account.user_id != current_user.id().as_ref() {
             return Err(AuthError::Upstream {
                 status: 409,
                 code: "SOCIAL_ACCOUNT_ALREADY_LINKED",
@@ -565,11 +610,17 @@ async fn link_with_id_token_core(
         let _ = ctx
             .database
             .update_account_optional(
-                &account.id(),
+                account.id.typed()?,
                 UpdateAccount {
-                    access_token: tokens.access_token,
-                    refresh_token: tokens.refresh_token,
-                    id_token: tokens.id_token,
+                    access_token: (tokens.access_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    refresh_token: (tokens.refresh_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    id_token: (tokens.id_token)
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
                     ..Default::default()
                 },
             )
@@ -618,16 +669,23 @@ async fn link_with_id_token_core(
         let _ = ctx
             .database
             .create_account_optional(CreateAccount {
-                user_id: current_user.id().to_string(),
-                provider_id: body.provider.clone(),
-                account_id: response.user.id.clone(),
-                access_token: token_bundle.access_token,
-                refresh_token: token_bundle.refresh_token,
-                id_token: token_bundle.id_token,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: None,
+                user_id: (current_user.id().to_string()).into(),
+                provider_id: (body.provider.clone()).into(),
+                account_id: (response.user.id.clone()).into(),
+                access_token: (token_bundle.access_token)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                refresh_token: (token_bundle.refresh_token)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                id_token: (token_bundle.id_token)
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                access_token_expires_at: Default::default(),
+                refresh_token_expires_at: Default::default(),
+                scope: Default::default(),
+                password: Default::default(),
+                ..Default::default()
             })
             .await?;
         Ok::<_, AuthError>(())
@@ -847,9 +905,10 @@ pub(super) async fn store_oauth_flow(
         let _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier: flow.state.clone(),
-                value: serde_json::to_string(&flow.payload)?,
-                expires_at: Utc::now() + Duration::minutes(10),
+                identifier: (flow.state.clone()).into(),
+                value: (serde_json::to_string(&flow.payload)?).into(),
+                expires_at: (Utc::now() + Duration::minutes(10)).into(),
+                ..Default::default()
             })
             .await?;
     }

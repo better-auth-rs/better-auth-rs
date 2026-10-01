@@ -8,6 +8,7 @@ pub(super) fn metadata(
     let raw = match value {
         SchemaValue::Typed(Some(value)) => Value::String(value.to_string()),
         SchemaValue::Dynamic(value) => value,
+        SchemaValue::InvalidDate => Value::Null,
         SchemaValue::Typed(None) | SchemaValue::Undefined => return Ok(SchemaValue::Undefined),
     };
     if !is_truthy(&raw) || (create && !raw.is_string()) {

@@ -12,6 +12,7 @@ use better_auth_core::utils::password::PasswordHasher;
 use super::StatusResponse;
 
 pub(super) mod handlers;
+mod request;
 pub(super) mod types;
 
 #[cfg(test)]
@@ -127,11 +128,17 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for PasswordManagementPlugin
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::post("/request-password-reset", "request_password_reset"),
-            AuthRoute::post("/reset-password", "reset_password"),
-            AuthRoute::get("/reset-password/{token}", "reset_password_token"),
-            AuthRoute::post("/change-password", "change_password"),
-            AuthRoute::post("/verify-password", "verify_password"),
+            AuthRoute::post("/request-password-reset", "request_password_reset")
+                .body_validator(request::request_reset_body),
+            AuthRoute::post("/reset-password", "reset_password")
+                .body_validator(request::reset_body)
+                .query_validator(crate::plugins::query_input::reset_password),
+            AuthRoute::get("/reset-password/{token}", "reset_password_token")
+                .query_validator(crate::plugins::query_input::reset_password_token),
+            AuthRoute::post("/change-password", "change_password")
+                .body_validator(request::change_body),
+            AuthRoute::post("/verify-password", "verify_password")
+                .body_validator(request::verify_body),
         ]
     }
 
@@ -171,10 +178,7 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: RequestPasswordResetRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body = request::request_reset(req)?;
         let response = request_password_reset_core(&body, &self.config, req, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -184,12 +188,9 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let mut body: ResetPasswordRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let mut body = request::reset(req)?;
         if body.token.as_deref().is_none_or(str::is_empty) {
-            body.token = req.query.get("token").cloned();
+            body.token = req.query_string("token")?.map(str::to_owned);
         }
         let response = reset_password_core(&body, req, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
@@ -200,10 +201,7 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: ChangePasswordRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body = request::change(req)?;
 
         // Get current user from session
         let user = self
@@ -231,10 +229,7 @@ impl PasswordManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body: VerifyPasswordRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body = request::verify(req)?;
 
         let user = self.get_current_user(req, ctx).await?;
         let Some(user) = user else {
@@ -255,7 +250,7 @@ impl PasswordManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let query = ResetPasswordTokenQuery {
-            callback_url: req.query.get("callbackURL").cloned(),
+            callback_url: req.query_string("callbackURL")?.map(str::to_owned),
         };
         match reset_password_token_core(token, &query, ctx).await? {
             ResetPasswordTokenResult::Redirect(url) => {

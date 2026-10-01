@@ -79,43 +79,46 @@ pub(crate) struct SocialSignInResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct AccessTokenResponse {
-    #[serde(rename = "accessToken")]
-    pub access_token: Option<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub access_token: better_auth_core::SchemaValue<Option<String>>,
     #[serde(
-        rename = "accessTokenExpiresAt",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined",
+        serialize_with = "better_auth_core::schema_value::serialize_optional_date"
     )]
-    pub access_token_expires_at: Option<String>,
+    pub access_token_expires_at:
+        better_auth_core::SchemaValue<Option<chrono::DateTime<chrono::Utc>>>,
     pub scopes: Vec<String>,
-    #[serde(rename = "idToken", skip_serializing_if = "Option::is_none")]
-    pub id_token: Option<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub id_token: better_auth_core::SchemaValue<Option<String>>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct RefreshTokenResponse {
-    #[serde(rename = "accessToken")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub access_token: Option<String>,
-    #[serde(rename = "accessTokenExpiresAt")]
-    pub access_token_expires_at: Option<String>,
-    #[serde(rename = "refreshToken")]
-    pub refresh_token: Option<String>,
     #[serde(
-        rename = "refreshTokenExpiresAt",
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::utils::date::serialize_option"
     )]
-    pub refresh_token_expires_at: better_auth_core::SchemaValue<Option<String>>,
+    pub access_token_expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub refresh_token: String,
+    #[serde(
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined",
+        serialize_with = "better_auth_core::schema_value::serialize_optional_date"
+    )]
+    pub refresh_token_expires_at:
+        better_auth_core::SchemaValue<Option<chrono::DateTime<chrono::Utc>>>,
     #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
     pub scope: better_auth_core::SchemaValue<Option<String>>,
-    #[serde(
-        rename = "idToken",
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
-    )]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
     pub id_token: better_auth_core::SchemaValue<Option<String>>,
-    #[serde(rename = "providerId")]
-    pub provider_id: String,
-    #[serde(rename = "accountId", skip_serializing_if = "Option::is_none")]
-    pub account_id: Option<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub provider_id: better_auth_core::SchemaValue<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub account_id: better_auth_core::SchemaValue<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,10 +139,12 @@ pub(crate) struct AccountInfoUser {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AccountInfoAccount {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    pub provider_id: String,
-    pub account_id: String,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub id: better_auth_core::SchemaValue<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub provider_id: better_auth_core::SchemaValue<String>,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    pub account_id: better_auth_core::SchemaValue<String>,
 }
 
 #[derive(Debug, Serialize)]

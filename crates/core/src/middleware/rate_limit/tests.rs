@@ -5,13 +5,7 @@ use std::{collections::HashMap as StdHashMap, time::Duration};
 fn make_request(path: &str, ip: &str) -> AuthRequest {
     let mut headers = StdHashMap::new();
     headers.insert("x-forwarded-for".to_string(), ip.to_string());
-    AuthRequest::from_parts(
-        HttpMethod::Post,
-        path.to_string(),
-        headers,
-        None,
-        StdHashMap::new(),
-    )
+    AuthRequest::from_parts(HttpMethod::Post, path.to_string(), headers, None, None)
 }
 
 #[tokio::test]

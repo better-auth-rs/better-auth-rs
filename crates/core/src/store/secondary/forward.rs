@@ -20,33 +20,40 @@ impl<S: AuthSchema> RateLimitStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
-    async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account> {
+    async fn create_account(
+        &self,
+        create_account: CreateAccount,
+    ) -> AuthResult<crate::wire::AccountView> {
         self.inner.create_account(create_account).await
     }
     async fn create_account_optional(
         &self,
         create_account: CreateAccount,
-    ) -> AuthResult<Option<S::Account>> {
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.create_account_optional(create_account).await
     }
     async fn get_account(
         &self,
         provider: &str,
         provider_account_id: &str,
-    ) -> AuthResult<Option<S::Account>> {
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.get_account(provider, provider_account_id).await
     }
-    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<S::Account>> {
+    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>> {
         self.inner.get_user_accounts(user_id).await
     }
-    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<S::Account> {
+    async fn update_account(
+        &self,
+        id: &str,
+        update: UpdateAccount,
+    ) -> AuthResult<crate::wire::AccountView> {
         self.inner.update_account(id, update).await
     }
     async fn update_account_optional(
         &self,
         id: &str,
         update: UpdateAccount,
-    ) -> AuthResult<Option<S::Account>> {
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.update_account_optional(id, update).await
     }
     async fn delete_account(&self, id: &str) -> AuthResult<()> {

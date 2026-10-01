@@ -17,6 +17,8 @@ cargo run --locked -p better-auth-cli -- generate --plugins organization --schem
 export BETTER_AUTH_FIELD_ATTRIBUTES_SCHEMA="$schema_dir/field_attributes_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --rate-limit-database --schema-config compat-tests/schema-consumer/rate-limit-schema.json --output "$schema_dir/rate_limit_schema.rs"
 export BETTER_AUTH_RATE_LIMIT_SCHEMA="$schema_dir/rate_limit_schema.rs"
+cargo run --locked -p better-auth-cli -- generate --schema-config compat-tests/schema-consumer/account-verification-schema.json --output "$schema_dir/account_verification_schema.rs"
+export BETTER_AUTH_ACCOUNT_VERIFICATION_SCHEMA="$schema_dir/account_verification_schema.rs"
 cargo fmt --manifest-path compat-tests/schema-consumer/Cargo.toml -- --check
 cargo clippy --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --all-targets -- -D warnings
 cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml

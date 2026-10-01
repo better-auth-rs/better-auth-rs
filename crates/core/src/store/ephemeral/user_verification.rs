@@ -15,13 +15,7 @@ impl EphemeralStore {
         if user.email_verified {
             return Ok(Some(user));
         }
-        let accounts: Vec<_> = self
-            .lock()?
-            .accounts
-            .values()
-            .filter(|row| row.user_id == user_id)
-            .cloned()
-            .collect();
+        let accounts = self.get_user_accounts(user_id).await?;
         let sessions = if database_sessions {
             self.get_user_sessions(user_id).await?
         } else {
@@ -59,7 +53,11 @@ impl EphemeralStore {
             .await?;
         {
             let mut state = self.lock()?;
-            state.accounts.retain(|_, row| row.user_id != user_id);
+            let schema = self.config.account.field_schema();
+            state.accounts.retain(|_, row| {
+                row.get(schema.record_storage_key("userId"))
+                    != Some(&Value::String(user_id.to_owned()))
+            });
             if database_sessions {
                 state.sessions.retain(|_, row| row.user_id != user_id);
             }

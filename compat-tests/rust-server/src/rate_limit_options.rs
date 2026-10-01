@@ -22,8 +22,11 @@ use better_auth_core::{
 };
 use better_auth_seaorm::{
     Database, SeaOrmStore,
-    sea_orm::{self, ConnectionTrait, EntityTrait, QueryOrder},
-    store::{__private_test_support::bundled_schema::BundledSchema, entities::rate_limit},
+    sea_orm::{self, EntityTrait, QueryOrder},
+    store::{
+        __private_test_support::{bundled_schema::BundledSchema, migrator},
+        entities::rate_limit,
+    },
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -301,11 +304,7 @@ pub async fn router(base_url: &str) -> AuthResult<Router> {
     let database = Database::connect("sqlite::memory:")
         .await
         .map_err(database_error)?;
-    let _ = database
-        .execute(
-            &sea_orm::Schema::new(database.get_database_backend())
-                .create_table_from_entity(rate_limit::Entity),
-        )
+    migrator::run_migrations(&database)
         .await
         .map_err(database_error)?;
     let trace = Arc::new(Mutex::new(Trace::default()));

@@ -47,6 +47,7 @@ pub(crate) async fn get_active_member_core(
 
 pub(crate) async fn list_members_core(
     query: &ListMembersQuery,
+    config: &OrganizationConfig,
     user: &impl AuthUser,
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -70,7 +71,7 @@ pub(crate) async fn list_members_core(
 
     let member_params = ListOrganizationMembersParams {
         organization_id: org_id,
-        limit: query.limit.map(|limit| limit.min(100)).or(Some(50)),
+        limit: query.limit.or(Some(config.member_list_limit() as f64)),
         offset: query.offset,
         sort_by: query.sort_by.clone(),
         sort_direction: query.sort_direction.clone(),
@@ -424,11 +425,12 @@ pub async fn handle_get_active_member(
 /// Handle list members request
 pub async fn handle_list_members(
     req: &AuthRequest,
+    config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let query = parse_query::<ListMembersQuery>(&req.query);
-    let response = list_members_core(&query, &user, &session, ctx).await?;
+    let query = crate::plugins::query_input::parse::<ListMembersQuery>(&req.query)?;
+    let response = list_members_core(&query, config, &user, &session, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -438,7 +440,7 @@ pub async fn handle_get_active_member_role(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let query = parse_query::<GetActiveMemberRoleQuery>(&req.query);
+    let query = crate::plugins::query_input::parse::<GetActiveMemberRoleQuery>(&req.query)?;
     let response = get_active_member_role_core(&query, &user, &session, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -479,13 +481,4 @@ pub async fn handle_update_member_role(
         result => result?,
     };
     Ok(AuthResponse::json(200, &response)?)
-}
-
-/// Helper function to parse query parameters into a struct
-fn parse_query<T: Default + serde::de::DeserializeOwned>(
-    query: &std::collections::HashMap<String, String>,
-) -> T {
-    let json_value =
-        serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
-    serde_json::from_value(json_value).unwrap_or_default()
 }

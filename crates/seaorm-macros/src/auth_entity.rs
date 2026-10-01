@@ -8,6 +8,8 @@ use syn::{
 #[path = "organization_model.rs"]
 mod organization_model;
 use organization_model::generate as gen_organization_model;
+#[path = "adapter_record.rs"]
+mod adapter_record;
 #[path = "plugin_model.rs"]
 mod plugin_model;
 #[path = "runtime_hydration.rs"]
@@ -157,18 +159,27 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             let Some(ident) = &field.ident else {
                 continue;
             };
-            if all_known.iter().any(|known| ident == known)
-                && ident != "username"
-                && ident != "display_username"
-            {
-                continue;
-            }
             let name = serde_serialized_name(&field.attrs, "rename")?.unwrap_or_else(|| {
                 rule.as_ref().map_or_else(
                     || ident.to_string(),
                     |rule| rule.apply_to_field(&ident.to_string()),
                 )
             });
+            let column = format_ident!(
+                "{}",
+                serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
+            );
+            let mut column_aliases = runtime_hydration::field_aliases(&ident.to_string(), &name);
+            column_aliases.sort();
+            column_aliases.dedup();
+            field_columns.push(quote! { #(#column_aliases)|* => Ok(Column::#column), });
+            if role != EntityRole::Session
+                && all_known.iter().any(|known| ident == known)
+                && ident != "username"
+                && ident != "display_username"
+            {
+                continue;
+            }
             let mut aliases = if matches!(role, EntityRole::Session) {
                 runtime_hydration::field_aliases(&ident.to_string(), &name)
             } else {
@@ -189,14 +200,9 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     #core_root::serde_json::from_value(value)?,
                 ),
             });
-            let column = format_ident!(
-                "{}",
-                serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
-            );
             json_columns.push(quote! {
                 #(#aliases)|* => matches!(#seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(), #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary),
             });
-            field_columns.push(quote! { #(#aliases)|* => Ok(Column::#column), });
         }
         let methods = quote! {
             fn native_json_field(name: &str) -> bool {
@@ -216,7 +222,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         Err(error) => return error.to_compile_error(),
     };
 
-    let hydration = if matches!(role, EntityRole::Session | EntityRole::Verification) {
+    let hydration = if matches!(role, EntityRole::Session) {
         match runtime_hydration::generate(
             input,
             fields,
@@ -250,9 +256,9 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             &field_methods,
             (&seaorm_root, &core_root),
         ),
-        EntityRole::Account => gen_account(ident, &extra_not_set, &seaorm_root, &core_root),
-        EntityRole::Verification => {
-            gen_verification(ident, &hydration, &extra_not_set, &seaorm_root, &core_root)
+        role @ (EntityRole::Account | EntityRole::Verification) => {
+            adapter_record::generate(input, fields, role, &seaorm_root, &core_root)
+                .unwrap_or_else(syn::Error::into_compile_error)
         }
         role @ (EntityRole::ApiKey
         | EntityRole::DeviceCode
@@ -743,169 +749,6 @@ fn gen_session(
 
             #set_active_org
             #set_active_team
-        }
-    }
-}
-
-fn gen_account(
-    ident: &Ident,
-    extras: &[TokenStream],
-    seaorm_root: &TokenStream,
-    core_root: &TokenStream,
-) -> TokenStream {
-    // Account has no plugin-optional fields — all are core.
-    quote! {
-        impl #core_root::entity::AuthAccount for #ident {
-            fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
-            fn account_id(&self) -> &str { &self.account_id }
-            fn provider_id(&self) -> &str { &self.provider_id }
-            fn user_id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.user_id) }
-            fn access_token(&self) -> Option<&str> { self.access_token.as_deref() }
-            fn refresh_token(&self) -> Option<&str> { self.refresh_token.as_deref() }
-            fn id_token(&self) -> Option<&str> { self.id_token.as_deref() }
-            fn access_token_expires_at(&self) -> Option<#seaorm_root::sea_orm::entity::prelude::DateTimeUtc> { self.access_token_expires_at }
-            fn refresh_token_expires_at(&self) -> Option<#seaorm_root::sea_orm::entity::prelude::DateTimeUtc> { self.refresh_token_expires_at }
-            fn scope(&self) -> Option<&str> { self.scope.as_deref() }
-            fn password(&self) -> Option<&str> { self.password.as_deref() }
-            fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
-            fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
-        }
-
-        impl #seaorm_root::SeaOrmAccountModel for #ident {
-            type Id = ::std::string::String;
-            type UserId = ::std::string::String;
-            type Entity = Entity;
-            type ActiveModel = ActiveModel;
-            type Column = Column;
-
-            fn id_column() -> Self::Column { Column::Id }
-            fn provider_id_column() -> Self::Column { Column::ProviderId }
-            fn account_id_column() -> Self::Column { Column::AccountId }
-            fn user_id_column() -> Self::Column { Column::UserId }
-            fn created_at_column() -> Self::Column { Column::CreatedAt }
-            fn parse_id(id: &str) -> #core_root::AuthResult<Self::Id> {
-                Ok(id.to_string())
-            }
-            fn parse_user_id(user_id: &str) -> #core_root::AuthResult<Self::UserId> {
-                Ok(user_id.to_string())
-            }
-
-            fn new_active(
-                id: ::std::option::Option<Self::Id>,
-                create_account: #core_root::types::CreateAccount,
-                now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) -> Self::ActiveModel {
-                Self::ActiveModel {
-                    id: #seaorm_root::sea_orm::ActiveValue::Set(
-                        id.unwrap_or_else(|| #core_root::uuid::Uuid::new_v4().to_string())
-                    ),
-                    account_id: #seaorm_root::sea_orm::ActiveValue::Set(create_account.account_id),
-                    provider_id: #seaorm_root::sea_orm::ActiveValue::Set(create_account.provider_id),
-                    user_id: #seaorm_root::sea_orm::ActiveValue::Set(create_account.user_id),
-                    access_token: #seaorm_root::sea_orm::ActiveValue::Set(create_account.access_token),
-                    refresh_token: #seaorm_root::sea_orm::ActiveValue::Set(create_account.refresh_token),
-                    id_token: #seaorm_root::sea_orm::ActiveValue::Set(create_account.id_token),
-                    access_token_expires_at: #seaorm_root::sea_orm::ActiveValue::Set(create_account.access_token_expires_at),
-                    refresh_token_expires_at: #seaorm_root::sea_orm::ActiveValue::Set(create_account.refresh_token_expires_at),
-                    scope: #seaorm_root::sea_orm::ActiveValue::Set(create_account.scope),
-                    password: #seaorm_root::sea_orm::ActiveValue::Set(create_account.password),
-                    created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
-                    updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
-                    #(#extras,)*
-                }
-            }
-
-            fn apply_update(
-                active: &mut Self::ActiveModel,
-                update: #core_root::types::UpdateAccount,
-                now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) {
-                if let ::std::option::Option::Some(access_token) = update.access_token {
-                    active.access_token = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(access_token));
-                }
-                if let ::std::option::Option::Some(refresh_token) = update.refresh_token {
-                    active.refresh_token = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(refresh_token));
-                }
-                if let ::std::option::Option::Some(id_token) = update.id_token {
-                    active.id_token = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(id_token));
-                }
-                if let ::std::option::Option::Some(access_token_expires_at) = update.access_token_expires_at {
-                    active.access_token_expires_at = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(access_token_expires_at));
-                }
-                if let ::std::option::Option::Some(refresh_token_expires_at) = update.refresh_token_expires_at {
-                    active.refresh_token_expires_at = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(refresh_token_expires_at));
-                }
-                if let ::std::option::Option::Some(scope) = update.scope {
-                    active.scope = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(scope));
-                }
-                if let ::std::option::Option::Some(password) = update.password {
-                    active.password = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(password));
-                }
-                active.updated_at = #seaorm_root::sea_orm::ActiveValue::Set(now);
-            }
-        }
-    }
-}
-
-fn gen_verification(
-    ident: &Ident,
-    hydration: &TokenStream,
-    extras: &[TokenStream],
-    seaorm_root: &TokenStream,
-    core_root: &TokenStream,
-) -> TokenStream {
-    let updates = ["id", "identifier", "value", "expires_at", "created_at", "updated_at"].into_iter().map(|name| {
-        let field = format_ident!("{name}");
-        quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
-    });
-    // Verification has no plugin-optional fields.
-    quote! {
-        impl #core_root::entity::AuthVerification for #ident {
-            #hydration
-            fn id(&self) -> ::std::borrow::Cow<'_, str> { ::std::borrow::Cow::Borrowed(&self.id) }
-            fn identifier(&self) -> &str { &self.identifier }
-            fn value(&self) -> &str { &self.value }
-            fn expires_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.expires_at }
-            fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
-            fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
-        }
-
-        impl #seaorm_root::SeaOrmVerificationModel for #ident {
-            fn apply_update(active: &mut Self::ActiveModel, update: #seaorm_root::VerificationUpdate) -> #core_root::AuthResult<()> {
-                #(#updates)*
-                Ok(())
-            }
-            type Id = ::std::string::String;
-            type Entity = Entity;
-            type ActiveModel = ActiveModel;
-            type Column = Column;
-
-            fn id_column() -> Self::Column { Column::Id }
-            fn identifier_column() -> Self::Column { Column::Identifier }
-            fn value_column() -> Self::Column { Column::Value }
-            fn expires_at_column() -> Self::Column { Column::ExpiresAt }
-            fn created_at_column() -> Self::Column { Column::CreatedAt }
-            fn parse_id(id: &str) -> #core_root::AuthResult<Self::Id> {
-                Ok(id.to_string())
-            }
-
-            fn new_active(
-                id: ::std::option::Option<Self::Id>,
-                verification: #core_root::types::CreateVerification,
-                now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) -> Self::ActiveModel {
-                Self::ActiveModel {
-                    id: #seaorm_root::sea_orm::ActiveValue::Set(
-                        id.unwrap_or_else(|| #core_root::uuid::Uuid::new_v4().to_string())
-                    ),
-                    identifier: #seaorm_root::sea_orm::ActiveValue::Set(verification.identifier),
-                    value: #seaorm_root::sea_orm::ActiveValue::Set(verification.value),
-                    expires_at: #seaorm_root::sea_orm::ActiveValue::Set(verification.expires_at),
-                    created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
-                    updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
-                    #(#extras,)*
-                }
-            }
         }
     }
 }

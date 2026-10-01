@@ -1,3 +1,4 @@
+pub use crate::types_account::{CreateAccount, CreateVerification, UpdateAccount};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -41,11 +42,13 @@ pub struct AuthRequest {
     pub path: String,
     pub headers: HashMap<String, String>,
     pub body: Option<Vec<u8>>,
-    pub query: HashMap<String, String>,
+    /// Raw endpoint query. Native omission remains distinct from null and an empty object.
+    pub query: Option<serde_json::Value>,
     url: Option<url::Url>,
     base_relative_path: bool,
     original_request: Option<std::sync::Arc<AuthRequest>>,
     pub(crate) parsed_http_body: Option<crate::http_body::ParsedHttpBody>,
+    pub(crate) endpoint_body: Option<crate::endpoint_input::EndpointBody>,
     /// Session authenticated by a trusted plugin hook for the current request.
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
     /// Cookie updates from session middleware, shared by normalized request clones.
@@ -331,41 +334,6 @@ pub struct CreateSession {
     pub active_organization_id: Option<String>,
 }
 
-/// Account creation data
-#[derive(Debug, Clone)]
-pub struct CreateAccount {
-    pub user_id: String,
-    pub account_id: String,
-    pub provider_id: String,
-    pub access_token: Option<String>,
-    pub refresh_token: Option<String>,
-    pub id_token: Option<String>,
-    pub access_token_expires_at: Option<DateTime<Utc>>,
-    pub refresh_token_expires_at: Option<DateTime<Utc>>,
-    pub scope: Option<String>,
-    pub password: Option<String>,
-}
-
-/// Account update data (for refreshing OAuth tokens)
-#[derive(Debug, Clone, Default)]
-pub struct UpdateAccount {
-    pub access_token: Option<String>,
-    pub refresh_token: Option<String>,
-    pub id_token: Option<String>,
-    pub access_token_expires_at: Option<DateTime<Utc>>,
-    pub refresh_token_expires_at: Option<DateTime<Utc>>,
-    pub scope: Option<String>,
-    pub password: Option<String>,
-}
-
-/// Verification token creation data
-#[derive(Debug, Clone)]
-pub struct CreateVerification {
-    pub identifier: String,
-    pub value: String,
-    pub expires_at: DateTime<Utc>,
-}
-
 impl CreateUser {
     pub fn new() -> Self {
         Self {
@@ -432,11 +400,12 @@ impl AuthRequest {
             path: path.into(),
             headers: HashMap::new(),
             body: None,
-            query: HashMap::new(),
+            query: None,
             url: None,
             base_relative_path: false,
             original_request: None,
             parsed_http_body: None,
+            endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -454,7 +423,7 @@ impl AuthRequest {
         path: String,
         headers: HashMap<String, String>,
         body: Option<Vec<u8>>,
-        query: HashMap<String, String>,
+        query: Option<serde_json::Value>,
     ) -> Self {
         Self {
             method,
@@ -466,6 +435,7 @@ impl AuthRequest {
             base_relative_path: false,
             original_request: None,
             parsed_http_body: None,
+            endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),
@@ -473,6 +443,11 @@ impl AuthRequest {
             new_session: Default::default(),
             session_snapshot: Default::default(),
         }
+    }
+
+    /// Read a scalar query field without collapsing arrays or null into omission.
+    pub fn query_string(&self, name: &str) -> Result<Option<&str>, AuthResponse> {
+        crate::query::string_field(self.query.as_ref(), name)
     }
 
     pub fn method(&self) -> &HttpMethod {
@@ -666,7 +641,9 @@ impl AuthRequest {
     }
 
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {
-        if let Some(body) = self.parsed_http_body() {
+        if let Some(body) = self.projected_body() {
+            serde_json::from_value(body.clone().unwrap_or_else(|| serde_json::json!({})))
+        } else if let Some(body) = self.parsed_http_body() {
             serde_json::from_value(body.clone())
         } else if let Some(body) = &self.body {
             serde_json::from_slice(body)
@@ -905,15 +882,15 @@ pub struct ValidationErrorResponse<'a> {
 /// Parameters for listing users (admin endpoint).
 #[derive(Debug, Clone, Default)]
 pub struct ListUsersParams {
-    pub limit: Option<usize>,
-    pub offset: Option<usize>,
+    pub limit: Option<f64>,
+    pub offset: Option<f64>,
     pub search_field: Option<String>,
     pub search_value: Option<String>,
     pub search_operator: Option<String>,
     pub sort_by: Option<String>,
     pub sort_direction: Option<String>,
     pub filter_field: Option<String>,
-    pub filter_value: Option<String>,
+    pub filter_value: Option<serde_json::Value>,
     pub filter_operator: Option<String>,
 }
 
@@ -944,7 +921,7 @@ mod tests {
             "/login".into(),
             headers,
             Some(b"{}".to_vec()),
-            HashMap::new(),
+            None,
         );
         assert_eq!(req.method(), &HttpMethod::Post);
         assert_eq!(req.header("host"), Some(&"localhost".to_string()));
@@ -959,11 +936,12 @@ mod tests {
             path: "/test".into(),
             headers: HashMap::new(),
             body: Some(br#"{"name":"test"}"#.to_vec()),
-            query: HashMap::new(),
+            query: None,
             url: None,
             base_relative_path: false,
             original_request: None,
             parsed_http_body: None,
+            endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
             server_context: Default::default(),

@@ -136,3 +136,23 @@ pub struct AuthContext<S: AuthSchema> {
 | `email_provider()` | Returns the email provider or an error if none configured |
 | `set_metadata(key, value)` | Store plugin-specific metadata |
 | `get_metadata(key)` | Retrieve plugin-specific metadata |
+
+
+### Raw and validated endpoint queries
+
+`AuthRequest.query` and native `EndpointInput.query` use `Option<serde_json::Value>`. `None` preserves omitted native input. `Some(Value::Null)` preserves explicit null. HTTP requests use an object, and repeated URL query names become ordered arrays. Bracketed names remain literal names.
+
+Register a pure validator with `AuthRoute::query_validator` when an endpoint has a query schema. The shared dispatcher runs all before hooks before query validation. Endpoint middleware and the handler receive the validated query in a separate request scope. After hooks receive the original query, including unknown fields, even when validation fails. The original HTTP Request URL and body bytes remain available to callbacks.
+
+Native query input is independent of an optional original Request. Supplying an original Request does not import the Request URL query. Use `Some(serde_json::json!({...}))` for explicit native query input.
+
+
+### Body validation and before-hook input changes
+
+`AuthRoute::body_validator` receives decoded endpoint input and returns `ValidatedBody`. The result contains the exact JSON projection for callbacks and a typed value for the handler. Read the typed value with `AuthRequest::validated_body`; use `input_body` to read the endpoint projection. The dispatcher validates body before query, after all before hooks and before endpoint middleware. After hooks retain the original endpoint input when validation returns an API error.
+
+The `impl_auth_plugin!` route declaration accepts `body = validator` and `query = validator` after the handler name. These validators use the same shared dispatch boundary as the `AuthRoute` builder methods.
+
+`BeforeRequestAction::MergeContext` returns an `EndpointInputPatch` for body or query. The dispatcher accumulates these changes and applies them after every before hook completes. Object fields merge recursively, arrays replace previous arrays, and null patch values leave existing input unchanged. Use `ReplaceBody` only when the plugin must replace raw bytes immediately for subsequent hooks. Validated input never changes the original Request bytes.
+
+The shared body boundary currently covers email signup/sign-in, password reset requests and completion, password changes and verification, sign-out, and OAuth callbacks. Other plugin handlers retain their existing parsers until their route schemas are migrated.

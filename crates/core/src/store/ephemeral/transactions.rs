@@ -35,6 +35,22 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction<'_> {
     async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {
         self.store.create_verification(input).await
     }
+    async fn create_verification_with_writer(
+        &self,
+        input: CreateVerification,
+        writer: Option<crate::store::VerificationCreateWriter>,
+    ) -> AuthResult<VerificationView> {
+        self.store
+            .create_verification_with_writer(input, writer)
+            .await
+    }
+    async fn update_verification(
+        &self,
+        identifier: &str,
+        update: crate::store::database_hooks::VerificationUpdate,
+    ) -> AuthResult<Option<VerificationView>> {
+        self.store.update_verification(identifier, update).await
+    }
     async fn get_verification_including_expired(
         &self,
         identifier: &str,

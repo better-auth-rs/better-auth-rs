@@ -82,6 +82,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             better_auth_core::SchemaValue::Typed(value) => value,
             better_auth_core::SchemaValue::Dynamic(value) => Some(value),
             better_auth_core::SchemaValue::Undefined => None,
+            better_auth_core::SchemaValue::InvalidDate => Some(serde_json::Value::Null),
         };
         if !overridden_metadata {
             active.set(

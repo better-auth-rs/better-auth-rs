@@ -6,6 +6,7 @@ use std::pin::Pin;
 pub mod cache;
 mod capabilities;
 mod runtime;
+pub mod schema;
 pub use runtime::RuntimeStore;
 pub mod database_hooks;
 mod ephemeral;
@@ -48,6 +49,11 @@ pub struct SessionUpdateWriter<S: AuthSchema> {
     >,
 }
 
+/// Write a projected verification to secondary storage before database after hooks are queued.
+/// The write is immediate inside a transaction; database rollback does not undo secondary storage.
+pub type VerificationCreateWriter =
+    Box<dyn FnOnce(crate::wire::VerificationView) -> TypedTransactionFuture<'static, ()> + Send>;
+
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
     /// Queue an effect in write order. Run it after commit, discard it on rollback,
@@ -65,12 +71,33 @@ pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
     async fn create_verification(
         &self,
         verification: CreateVerification,
-    ) -> AuthResult<S::Verification>;
+    ) -> AuthResult<crate::wire::VerificationView>;
+    /// Run a verification create lifecycle, then its secondary write, then queue database after hooks.
+    async fn create_verification_with_writer(
+        &self,
+        verification: CreateVerification,
+        writer: Option<VerificationCreateWriter>,
+    ) -> AuthResult<crate::wire::VerificationView> {
+        if writer.is_some() {
+            return Err(AuthError::config(
+                "The store must support ordered verification creation",
+            ));
+        }
+        self.create_verification(verification).await
+    }
+
+    /// Update adapter fields and return the projection produced after the write.
+    async fn update_verification(
+        &self,
+        identifier: &str,
+        update: database_hooks::VerificationUpdate,
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
+
     /// Read the latest verification, including expired values, inside the active transaction.
     async fn get_verification_including_expired(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>>;
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
     /// Delete expired verification records inside the active transaction.
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
     /// Run session creation hooks before creating a session outside the database.
@@ -100,7 +127,10 @@ pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
 
     async fn create_passkey(&self, passkey: CreatePasskey) -> AuthResult<Passkey>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<S::User>;
-    async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
+    async fn create_account(
+        &self,
+        create_account: CreateAccount,
+    ) -> AuthResult<crate::wire::AccountView>;
     async fn create_session(&self, create_session: CreateSession) -> AuthResult<S::Session>;
     /// Defer secondary session writes until commit, after the session's database after hooks.
     /// Database-only adapters can use the ordinary transaction creation path.
@@ -337,29 +367,36 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait AccountStore<S: AuthSchema>: Send + Sync {
-    async fn create_account(&self, create_account: CreateAccount) -> AuthResult<S::Account>;
+    async fn create_account(
+        &self,
+        create_account: CreateAccount,
+    ) -> AuthResult<crate::wire::AccountView>;
     /// Create an account, returning `None` when its own before-create hook cancels the write.
     /// Hook errors, including errors from nested writes, remain errors.
     async fn create_account_optional(
         &self,
         create_account: CreateAccount,
-    ) -> AuthResult<Option<S::Account>> {
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.create_account(create_account).await.map(Some)
     }
     async fn get_account(
         &self,
         provider: &str,
         provider_account_id: &str,
-    ) -> AuthResult<Option<S::Account>>;
-    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<S::Account>>;
-    async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<S::Account>;
+    ) -> AuthResult<Option<crate::wire::AccountView>>;
+    async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>>;
+    async fn update_account(
+        &self,
+        id: &str,
+        update: UpdateAccount,
+    ) -> AuthResult<crate::wire::AccountView>;
     /// Update an account, returning `None` when its own before-update hook cancels the write.
     /// Stores without cancellable hooks may use the default implementation.
     async fn update_account_optional(
         &self,
         id: &str,
         update: UpdateAccount,
-    ) -> AuthResult<Option<S::Account>> {
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.update_account(id, update).await.map(Some)
     }
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
@@ -367,6 +404,27 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait VerificationStore<S: AuthSchema>: Send + Sync {
+    /// Run a verification create lifecycle, then its secondary write, then queue database after hooks.
+    async fn create_verification_with_writer(
+        &self,
+        verification: CreateVerification,
+        writer: Option<VerificationCreateWriter>,
+    ) -> AuthResult<crate::wire::VerificationView> {
+        if writer.is_some() {
+            return Err(AuthError::config(
+                "The store must support ordered verification creation",
+            ));
+        }
+        self.create_verification(verification).await
+    }
+
+    /// Update adapter fields and return the projection produced after the write.
+    async fn update_verification(
+        &self,
+        identifier: &str,
+        update: database_hooks::VerificationUpdate,
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
+
     /// Reserve an identifier with the upstream deterministic SHA-256 primary key.
     async fn reserve_verification_value(
         &self,
@@ -376,7 +434,7 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
         use sha2::{Digest, Sha256};
         let id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(format!(
             "reserve:{}",
-            verification.identifier
+            verification.identifier.display_string()?
         )));
         self.reserve_verification(&id, verification).await
     }
@@ -391,7 +449,7 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     /// Run creation hooks after secondary storage contains the verification.
     async fn after_create_runtime_verification(
         &self,
-        _verification: &S::Verification,
+        _verification: &crate::wire::VerificationView,
     ) -> AuthResult<()> {
         Ok(())
     }
@@ -406,7 +464,7 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     async fn get_verification_including_expired(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>>;
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
     /// Update every record matching an identifier without consuming the verification.
     async fn update_verification_by_identifier(
         &self,
@@ -419,34 +477,37 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     async fn create_verification(
         &self,
         verification: CreateVerification,
-    ) -> AuthResult<S::Verification>;
+    ) -> AuthResult<crate::wire::VerificationView>;
     async fn get_verification(
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<S::Verification>>;
-    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<S::Verification>>;
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
+    async fn get_verification_by_value(
+        &self,
+        value: &str,
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
     async fn get_verification_by_identifier(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>>;
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
     async fn consume_verification(
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<S::Verification>>;
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
     /// Atomically consume the newest record and delete every record for the identifier.
     /// Expired records are consumed but return `None`; only one concurrent caller succeeds.
     async fn consume_verification_by_identifier(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>>;
+    ) -> AuthResult<Option<crate::wire::VerificationView>>;
     /// Atomically consume the latest row and invalidate all rows for the identifier, including expired rows.
     /// Runtime storage uses the raw expiry to invalidate migrated cache entries before rejecting expired values.
     async fn consume_verification_including_expired(
         &self,
         _identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
         Err(crate::AuthError::config(
             "The store must support raw atomic verification consumption for runtime storage",
         ))
@@ -461,9 +522,9 @@ pub struct ListOrganizationMembersParams {
     /// Organization id whose members should be listed.
     pub organization_id: String,
     /// Maximum number of members to return.
-    pub limit: Option<usize>,
+    pub limit: Option<f64>,
     /// Number of matching members to skip before returning rows.
-    pub offset: Option<usize>,
+    pub offset: Option<f64>,
     /// Client-visible field name used for sorting.
     pub sort_by: Option<String>,
     /// Sort direction (`asc` or `desc`).
@@ -471,7 +532,7 @@ pub struct ListOrganizationMembersParams {
     /// Client-visible field name used for filtering.
     pub filter_field: Option<String>,
     /// Filter value paired with `filter_field`.
-    pub filter_value: Option<String>,
+    pub filter_value: Option<serde_json::Value>,
     /// Filter operator (`eq`, `ne`, `contains`, `gt`, `gte`, `lt`, `lte`).
     pub filter_operator: Option<String>,
 }

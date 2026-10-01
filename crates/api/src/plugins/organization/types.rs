@@ -5,30 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
 
-fn deserialize_optional_usize_from_string<'de, D>(
-    deserializer: D,
-) -> Result<Option<usize>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Value {
-        Number(usize),
-        String(String),
-    }
-
-    let value = Option::<Value>::deserialize(deserializer)?;
-    match value {
-        None => Ok(None),
-        Some(Value::Number(number)) => Ok(Some(number)),
-        Some(Value::String(string)) => string
-            .parse::<usize>()
-            .map(Some)
-            .map_err(serde::de::Error::custom),
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(untagged)]
 pub enum NullableStringField {
@@ -172,9 +148,9 @@ pub struct GetFullOrganizationQuery {
     #[serde(
         default,
         rename = "membersLimit",
-        deserialize_with = "deserialize_optional_usize_from_string"
+        deserialize_with = "better_auth_core::query::optional_nonzero_number"
     )]
-    pub members_limit: Option<usize>,
+    pub members_limit: Option<f64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
@@ -224,10 +200,16 @@ pub struct ListMembersQuery {
     pub organization_id: Option<String>,
     #[serde(rename = "organizationSlug")]
     pub organization_slug: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_optional_usize_from_string")]
-    pub limit: Option<usize>,
-    #[serde(default, deserialize_with = "deserialize_optional_usize_from_string")]
-    pub offset: Option<usize>,
+    #[serde(
+        default,
+        deserialize_with = "better_auth_core::query::optional_nonzero_number"
+    )]
+    pub limit: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "better_auth_core::query::optional_nonzero_number"
+    )]
+    pub offset: Option<f64>,
     #[serde(rename = "sortBy")]
     pub sort_by: Option<String>,
     #[serde(rename = "sortDirection")]
@@ -235,7 +217,7 @@ pub struct ListMembersQuery {
     #[serde(rename = "filterField")]
     pub filter_field: Option<String>,
     #[serde(rename = "filterValue")]
-    pub filter_value: Option<String>,
+    pub filter_value: Option<serde_json::Value>,
     #[serde(rename = "filterOperator")]
     pub filter_operator: Option<String>,
 }
@@ -587,8 +569,8 @@ mod tests {
         }))
         .expect("number limit should deserialize");
 
-        assert_eq!(string_limit.members_limit, Some(1));
-        assert_eq!(number_limit.members_limit, Some(2));
+        assert_eq!(string_limit.members_limit, Some(1.0));
+        assert_eq!(number_limit.members_limit, Some(2.0));
     }
 }
 

@@ -144,7 +144,7 @@ async fn test_revoke_session_integration() {
         "/revoke-session".to_string(),
         headers,
         Some(revoke_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -218,9 +218,10 @@ async fn test_reset_password_integration() {
 
     let reset_token = format!("reset_{}", Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: format!("reset-password:{}", reset_token),
-        value: user_id_from_email(&auth, "integration@test.com").await,
-        expires_at: Utc::now() + Duration::hours(24),
+        identifier: (format!("reset-password:{}", reset_token)).into(),
+        value: (user_id_from_email(&auth, "integration@test.com").await).into(),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
+        ..Default::default()
     };
     auth.store()
         .create_verification(create_verification)
@@ -243,7 +244,7 @@ async fn test_reset_password_integration() {
         "/reset-password".to_string(),
         headers,
         Some(reset_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -269,7 +270,7 @@ async fn test_change_password_integration() {
             serde_json::json!({
                 "currentPassword": "password123",
                 "newPassword": "NewPassword123!",
-                "revokeOtherSessions": "false"
+                "revokeOtherSessions": false
             }),
             &session_token,
         ),
@@ -295,7 +296,7 @@ async fn test_change_password_with_revocation_integration() {
             serde_json::json!({
                 "currentPassword": "password123",
                 "newPassword": "NewPassword123!",
-                "revokeOtherSessions": "true"
+                "revokeOtherSessions": true
             }),
             &session_token,
         ),
@@ -322,9 +323,10 @@ async fn test_reset_password_token_integration() {
 
     let reset_token = format!("reset_{}", Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: format!("reset-password:{}", reset_token),
-        value: user_id_from_email(&auth, "integration@test.com").await,
-        expires_at: Utc::now() + Duration::hours(24),
+        identifier: (format!("reset-password:{}", reset_token)).into(),
+        value: (user_id_from_email(&auth, "integration@test.com").await).into(),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
+        ..Default::default()
     };
     auth.store()
         .create_verification(create_verification)
@@ -339,10 +341,10 @@ async fn test_reset_password_token_integration() {
         format!("/reset-password/{}", reset_token),
         HashMap::new(),
         None,
-        HashMap::from([(
+        Some(serde_json::json!(HashMap::from([(
             "callbackURL".to_string(),
             "http://localhost:3000/reset".to_string(),
-        )]),
+        )]))),
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -373,9 +375,11 @@ async fn test_ok_endpoint() {
 async fn test_error_endpoint() {
     let auth = create_test_auth_memory().await;
 
-    let request =
-        get_request("/error").with_url("http://localhost:3000/api/auth/error".parse().unwrap());
-    let (status, response_data) = send_request(&auth, request).await;
+    let (status, response_data) = send_request(
+        &auth,
+        get_request("/error").with_url("http://localhost:3000/api/auth/error".parse().unwrap()),
+    )
+    .await;
     assert_eq!(status, 200);
     let html = response_data.as_str().unwrap_or_default();
     let text = html_text_content(html);
@@ -406,7 +410,7 @@ async fn test_get_session_post_requires_defer_session_refresh() {
         "/get-session".to_string(),
         headers,
         Some(b"{}".to_vec()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -437,7 +441,7 @@ async fn test_delete_user_post_method() {
         "/delete-user".to_string(),
         headers,
         Some(b"{}".to_vec()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -490,7 +494,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -523,7 +527,7 @@ async fn test_set_password_already_has_password() {
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -551,7 +555,7 @@ async fn test_set_password_unauthenticated() {
         "/set-password".to_string(),
         headers,
         Some(set_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -593,7 +597,7 @@ async fn test_revoke_other_sessions_integration() {
         "/revoke-other-sessions".to_string(),
         headers,
         Some(b"{}".to_vec()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -636,7 +640,7 @@ async fn test_cookie_based_auth() {
         "/get-session".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -673,7 +677,7 @@ async fn test_bearer_takes_precedence_over_cookie() {
         "/get-session".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -703,7 +707,7 @@ async fn test_unauthorized_password_operations() {
         "/change-password".to_string(),
         headers,
         Some(change_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -733,7 +737,7 @@ async fn test_change_email_success() {
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -777,7 +781,7 @@ async fn test_change_email_duplicate() {
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -803,7 +807,7 @@ async fn test_change_email_unauthenticated() {
         "/change-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -824,9 +828,10 @@ async fn test_delete_user_callback_success() {
     // Create a deletion verification token
     let token = format!("delete_{}", uuid::Uuid::new_v4());
     let create_verification = CreateVerification {
-        identifier: format!("delete-account-{}", token),
-        value: user_id.clone(),
-        expires_at: Utc::now() + Duration::hours(24),
+        identifier: (format!("delete-account-{}", token)).into(),
+        value: (user_id.clone()).into(),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
+        ..Default::default()
     };
     auth.store()
         .create_verification(create_verification)
@@ -848,7 +853,7 @@ async fn test_delete_user_callback_success() {
             headers
         },
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -888,7 +893,7 @@ async fn test_delete_user_callback_invalid_token() {
             headers
         },
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -916,7 +921,7 @@ async fn test_list_accounts_empty() {
         "/list-accounts".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -940,16 +945,17 @@ async fn test_list_accounts_with_account() {
 
     // Create an account for the user
     let create_account = CreateAccount {
-        account_id: "12345".to_string(),
-        provider_id: "google".to_string(),
-        user_id: user_id.clone(),
-        access_token: Some("access_token".to_string()),
-        refresh_token: None,
-        id_token: None,
-        access_token_expires_at: None,
-        refresh_token_expires_at: None,
-        scope: Some("email,profile".to_string()),
-        password: None,
+        account_id: ("12345".to_string()).into(),
+        provider_id: ("google".to_string()).into(),
+        user_id: (user_id.clone()).into(),
+        access_token: (Some("access_token".to_string())).into(),
+        refresh_token: Default::default(),
+        id_token: Default::default(),
+        access_token_expires_at: Default::default(),
+        refresh_token_expires_at: Default::default(),
+        scope: (Some("email,profile".to_string())).into(),
+        password: Default::default(),
+        ..Default::default()
     };
     auth.store().create_account(create_account).await.unwrap();
 
@@ -964,7 +970,7 @@ async fn test_list_accounts_with_account() {
         "/list-accounts".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -999,16 +1005,17 @@ async fn test_unlink_account_success() {
     // Create two accounts
     for provider in &["google", "github"] {
         let create_account = CreateAccount {
-            account_id: format!("id_{}", provider),
-            provider_id: provider.to_string(),
-            user_id: user_id.clone(),
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: None,
+            account_id: (format!("id_{}", provider)).into(),
+            provider_id: (provider.to_string()).into(),
+            user_id: (user_id.clone()).into(),
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            password: Default::default(),
+            ..Default::default()
         };
         auth.store().create_account(create_account).await.unwrap();
     }
@@ -1037,7 +1044,7 @@ async fn test_unlink_account_success() {
         "/unlink-account".to_string(),
         headers,
         Some(unlink_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1086,16 +1093,17 @@ async fn test_unlink_last_account_fails() {
 
     // Add one account
     let create_account = CreateAccount {
-        account_id: "id_google".to_string(),
-        provider_id: "google".to_string(),
-        user_id: user.id.clone(),
-        access_token: None,
-        refresh_token: None,
-        id_token: None,
-        access_token_expires_at: None,
-        refresh_token_expires_at: None,
-        scope: None,
-        password: None,
+        account_id: ("id_google".to_string()).into(),
+        provider_id: ("google".to_string()).into(),
+        user_id: (user.id.clone()).into(),
+        access_token: Default::default(),
+        refresh_token: Default::default(),
+        id_token: Default::default(),
+        access_token_expires_at: Default::default(),
+        refresh_token_expires_at: Default::default(),
+        scope: Default::default(),
+        password: Default::default(),
+        ..Default::default()
     };
     let account = auth.store().create_account(create_account).await.unwrap();
 
@@ -1115,7 +1123,7 @@ async fn test_unlink_last_account_fails() {
         "/unlink-account".to_string(),
         headers,
         Some(unlink_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1136,7 +1144,7 @@ async fn test_list_accounts_unauthenticated() {
         "/list-accounts".to_string(),
         HashMap::new(),
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1612,7 +1620,7 @@ async fn test_sign_up_with_username_and_sign_in() {
         "/sign-up/email".to_string(),
         headers.clone(),
         Some(signup_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1634,7 +1642,7 @@ async fn test_sign_up_with_username_and_sign_in() {
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1672,7 +1680,7 @@ async fn test_sign_in_username_wrong_password() {
         "/sign-up/email".to_string(),
         headers.clone(),
         Some(signup_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     auth.handle_request(request).await.unwrap();
@@ -1688,7 +1696,7 @@ async fn test_sign_in_username_wrong_password() {
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1717,7 +1725,7 @@ async fn test_sign_in_username_nonexistent() {
         "/sign-in/username".to_string(),
         headers,
         Some(signin_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1753,7 +1761,7 @@ async fn create_api_key(
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1812,7 +1820,7 @@ async fn test_api_key_create_with_options() {
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1848,7 +1856,7 @@ async fn test_api_key_get() {
         "/api-key/get".to_string(),
         headers,
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1886,7 +1894,7 @@ async fn test_api_key_list() {
         "/api-key/list".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1926,7 +1934,7 @@ async fn test_api_key_update() {
         "/api-key/update".to_string(),
         headers,
         Some(update_body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -1990,7 +1998,7 @@ async fn test_api_key_delete() {
         "/api-key/delete".to_string(),
         headers,
         Some(delete_body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2009,7 +2017,7 @@ async fn test_api_key_delete() {
         "/api-key/list".to_string(),
         headers2,
         None,
-        HashMap::new(),
+        None,
     );
 
     let list_response = auth.handle_request(list_request).await.unwrap();
@@ -2037,7 +2045,7 @@ async fn test_api_key_create_unauthenticated() {
         "/api-key/create".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2058,7 +2066,7 @@ async fn test_api_key_list_unauthenticated() {
         "/api-key/list".to_string(),
         HashMap::new(),
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2090,7 +2098,7 @@ async fn test_api_key_get_other_users_key() {
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
@@ -2109,7 +2117,7 @@ async fn test_api_key_get_other_users_key() {
         "/api-key/get".to_string(),
         headers2,
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = auth.handle_request(get_request).await.unwrap();
@@ -2141,7 +2149,7 @@ async fn test_api_key_delete_other_users_key() {
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
@@ -2160,7 +2168,7 @@ async fn test_api_key_delete_other_users_key() {
         "/api-key/delete".to_string(),
         headers2,
         Some(delete_body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(delete_request).await.unwrap();
@@ -2192,7 +2200,7 @@ async fn test_api_key_update_other_users_key() {
         "/sign-up/email".to_string(),
         headers,
         Some(signup_data.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
@@ -2214,7 +2222,7 @@ async fn test_api_key_update_other_users_key() {
         "/api-key/update".to_string(),
         headers2,
         Some(update_body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(update_request).await.unwrap();
@@ -2238,7 +2246,7 @@ async fn test_api_key_list_empty() {
         "/api-key/list".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     );
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2266,7 +2274,7 @@ async fn test_api_key_get_missing_id() {
         "/api-key/get".to_string(),
         headers,
         None,
-        HashMap::new(),
+        None,
     ); // no 'id' param
 
     let response = auth.handle_request(request).await.unwrap();
@@ -2293,7 +2301,7 @@ async fn test_api_key_get_nonexistent() {
         "/api-key/get".to_string(),
         headers,
         None,
-        query,
+        Some(serde_json::json!(query)),
     );
 
     let response = auth.handle_request(request).await.unwrap();

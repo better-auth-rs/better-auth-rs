@@ -5,8 +5,7 @@ use uuid::Uuid;
 use better_auth_core::utils::password::{self as password_utils};
 use better_auth_core::wire::UserView;
 use better_auth_core::{
-    AuthAccount, AuthContext, AuthError, AuthResult, AuthUser, AuthVerification, CreateAccount,
-    RequestMeta, UpdateAccount,
+    AuthContext, AuthError, AuthResult, AuthUser, CreateAccount, RequestMeta, UpdateAccount,
 };
 
 use crate::plugins::helpers::{
@@ -72,9 +71,10 @@ pub(crate) async fn request_password_reset_core(
     let _ = ctx
         .database
         .create_verification(better_auth_core::CreateVerification {
-            identifier: format!("reset-password:{}", reset_token),
-            value: user.id().to_string(),
-            expires_at,
+            identifier: (format!("reset-password:{}", reset_token)).into(),
+            value: (user.id().to_string()).into(),
+            expires_at: (expires_at).into(),
+            ..Default::default()
         })
         .await?;
 
@@ -126,7 +126,7 @@ pub(crate) async fn reset_password_core(
         .consume_verification_by_identifier(&format!("reset-password:{}", token))
         .await?
         .ok_or_else(|| AuthError::bad_request("Invalid token"))?;
-    let user_id = verification.value().to_string();
+    let user_id = verification.value.typed()?.clone();
 
     let user = ctx
         .database
@@ -142,9 +142,11 @@ pub(crate) async fn reset_password_core(
         let _ = ctx
             .database
             .update_account(
-                &account.id(),
+                account.id.typed()?,
                 UpdateAccount {
-                    password: Some(password_hash),
+                    password: (Some(password_hash))
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
                     ..Default::default()
                 },
             )
@@ -153,16 +155,19 @@ pub(crate) async fn reset_password_core(
         let _ = ctx
             .database
             .create_account(CreateAccount {
-                user_id: user_id.clone(),
-                account_id: user_id.clone(),
-                provider_id: "credential".to_string(),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: Some(password_hash),
+                user_id: (user_id.clone()).into(),
+                account_id: (user_id.clone()).into(),
+                provider_id: ("credential".to_string()).into(),
+                access_token: Default::default(),
+                refresh_token: Default::default(),
+                id_token: Default::default(),
+                access_token_expires_at: Default::default(),
+                refresh_token_expires_at: Default::default(),
+                scope: Default::default(),
+                password: (Some(password_hash))
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                ..Default::default()
             })
             .await?;
     }
@@ -206,7 +211,7 @@ pub(crate) async fn reset_password_token_core(
 
     if verification
         .as_ref()
-        .is_none_or(|verification| verification.expires_at() < Utc::now())
+        .is_none_or(|verification| verification.expires_at.is_before(Utc::now()))
     {
         return Ok(ResetPasswordTokenResult::Redirect(build_redirect_url(
             ctx.base_url(),
@@ -266,9 +271,11 @@ pub(crate) async fn change_password_core(
     let _ = ctx
         .database
         .update_account(
-            &credential_account.id(),
+            credential_account.id.typed()?,
             UpdateAccount {
-                password: Some(password_hash),
+                password: (Some(password_hash))
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
                 ..Default::default()
             },
         )

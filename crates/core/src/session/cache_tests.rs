@@ -319,7 +319,13 @@ async fn valid_cache_survives_revocation_until_authoritative_read() {
     // Zod coerces every non-empty query string, including "false", to true.
     bypass
         .query
-        .insert("disableCookieCache".into(), "false".into());
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "disableCookieCache".into(),
+            serde_json::Value::from("false"),
+        );
     assert!(
         manager
             .resolve(&bypass, SessionRead::Cached)
@@ -381,7 +387,12 @@ async fn disable_refresh_and_dont_remember_do_not_extend_expiry() {
         .await
         .unwrap();
     let mut query = request(&data.session.token, &manager.config);
-    query.query.insert("disableRefresh".into(), "true".into());
+    query
+        .query
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert("disableRefresh".into(), serde_json::Value::from("true"));
     let mut remembered = request(&data.session.token, &manager.config);
     remembered
         .headers

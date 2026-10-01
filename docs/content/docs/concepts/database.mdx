@@ -149,7 +149,7 @@ better-auth-rs generate --plugins organization --schema-config organization-sche
 
 The configuration accepts `organization`, `member`, `invitation`, `team`, `teamMember`, and `organizationRole`. Each model supports `modelName` and `fields` mappings. Core field keys use upstream camelCase names. Rust core fields retain their snake_case names. The `user`, `session`, `account`, and `verification` entries also support table and column mappings, including fields from enabled plugins. Primary key names remain `id`.
 
-All Organization models except `teamMember` support `additionalFields`. Supported types are `string`, `number`, `boolean`, `date`, `json`, `string[]`, `number[]`, and string arrays that define enum values. Array fields use transparent typed JSON wrappers. Enum fields use `String` storage; the CLI does not generate enum validation. Omitted or true `required` generates a nonnullable column and field. `required: false` generates a nullable column and an `Option` field. Organization role fields always remain nullable because upstream makes these fields optional when constructing the role update endpoint.
+Account, Verification, and all Organization models except `teamMember` support `additionalFields` in the CLI schema configuration. Supported types are `string`, `number`, `boolean`, `date`, `json`, `string[]`, `number[]`, and string arrays that define enum values. Array fields use transparent typed JSON wrappers. Enum fields use `String` storage; the CLI does not generate enum validation. Omitted or true `required` generates a nonnullable column and field. `required: false` generates a nullable column and an `Option` field. Organization role fields always remain nullable because upstream makes these fields optional when constructing the role update endpoint.
 
 An additional field with a built-in public name, such as `name`, `logo`, or `createdAt`, replaces that field's generated type and nullability. Omitted or true `required` generates a nonnullable column; organization role fields remain nullable. A built-in override also replaces its `fields` mapping: `fieldName` selects the SQL column and Serde serialization name, and omitting `fieldName` restores the default column. Its `unique`, `index`, and `references` settings replace the original single-column indexes and foreign key; necessary composite identity constraints remain. The adapter owns `id`; an additional-field declaration does not change its type, column, or primary key.
 
@@ -239,6 +239,8 @@ The canonical worked example is [`examples/postgres_usage.rs`](../../../../examp
 - additional required app fields on the user table
 - Better Auth mounted on top of the same `DatabaseConnection`
 
+See [Account and Verification Fields](/docs/concepts/account-verification-fields) for runtime policies, storage projections, and handwritten adapter migration.
+
 ## Account Hook Cancellation
 
 `AccountStore::create_account_optional` and `update_account_optional` return `None` when a database hook cancels that account write. Hook errors remain errors, including errors from nested writes. The strict `create_account` and `update_account` methods retain their existing cancellation error behavior. Custom stores with cancellable hooks must implement the optional methods; their default implementations wrap successful strict results in `Some`.
@@ -277,4 +279,26 @@ Adapters used with secondary sessions must implement `SessionStore::update_sessi
 
 `SessionStore::delete_sessions` deletes a token list through one batch lifecycle. `end_sessions` expires only its live rows and preserves database records. Multi-session uses these capabilities instead of repeated single-session deletion. With secondary storage, token deletions start together before the database batch and leave active-session indices unchanged. The first cache error prevents the database batch while pending cache deletions continue. Custom adapters must implement both batch capabilities when these paths are used; default implementations return configuration errors.
 
-`AuthEntity` generates runtime hydration for custom session and verification models. The application retains typed model fields and does not need to deserialize the user model. Handwritten model implementations must provide the corresponding runtime hydration methods before enabling secondary storage. See [Secondary Storage](/docs/concepts/secondary-storage) for fallback rules and `VerificationIdentifierConfig` migration behavior.
+`AuthEntity` generates runtime hydration for custom session models. The application retains typed model fields and does not need to deserialize the user model. Handwritten session models must provide runtime hydration before enabling secondary storage. Account and Verification persistence models instead produce `AccountView` and `VerificationView` through their `record` methods; secondary verification storage uses `VerificationView` directly. See [Secondary Storage](/docs/concepts/secondary-storage) for fallback rules and `VerificationIdentifierConfig` migration behavior.
+
+## Runtime schema validation
+
+SeaORM stores backed by SQLite, PostgreSQL or MySQL validate the configured physical tables before HTTP request hooks, native endpoints and outer transactions. PostgreSQL resolves unqualified entity tables through the effective connection search path. MySQL inspects the current database. Enable SeaORM's `sqlx-mysql` feature in the application to connect to MySQL. Initialization logs failures without rejecting the auth context. A disabled HTTP path returns its 404 before validation. Direct adapter CRUD does not run preflight.
+
+The check reports missing tables, missing columns and extra required columns that inserts do not write. It does not validate SQL types, expected nullability, indexes or foreign keys. `AuthError::SchemaCheck` preserves structured `SchemaFinding` values. Configuration errors in entity mappings remain configuration errors.
+
+Set `config.advanced.database.validate_schema = Some(false)` to disable automatic validation. `auth.context().database.schema_validation()` still exposes the explicit check. Adapters without introspection log a warning only when validation is explicitly enabled.
+
+Each auth build has an independent cached verdict. Concurrent calls share one check. Successful checks and schema mismatches remain cached; driver errors can retry. Store clones share only the invalidation revision. After an application migration with actual schema changes, call `store.invalidate_schema_check()`, including after a partially failed migration. Call this on the original SeaORM store or a clone created before building auth. Separately constructed stores need separate invalidation, even if they share a SQLx pool. The adapter does not poll for DDL or automatically detect direct SQL changes. A migration with no changes need not invalidate.
+
+`AuthEntity` provides physical core-field mappings automatically. Handwritten models must implement `field_column` for every core and configured field. Use the existing typed `Column` values so `column_name` remains authoritative. If a handwritten `new_active` supplies extra application columns outside field policies, declare only those columns through `extra_insert_columns`:
+
+```rust,ignore
+fn extra_insert_columns() -> Vec<Column> {
+    vec![Column::TenantId, Column::Locale]
+}
+```
+
+Leave the default empty list when inserts do not supply extra columns. Do not declare every entity column: an unconfigured required column must still fail preflight.
+
+Custom database adapters can implement `RuntimeStore::schema_check` using `SchemaInspector` and the typed physical `SchemaTable` descriptors. The descriptor supports migration-disabled tables and merges logical models that share a physical table. It does not use OpenAPI documentation as persistence metadata.

@@ -4,7 +4,6 @@ extern crate self as better_auth_seaorm;
 
 mod config;
 mod conversions;
-mod entity;
 mod error;
 mod reference_id;
 pub use reference_id::ReferenceId;

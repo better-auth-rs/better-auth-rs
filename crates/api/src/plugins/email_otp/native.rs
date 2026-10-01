@@ -1,6 +1,6 @@
 use super::{EmailOtpConfig, EmailOtpPlugin, EmailOtpType};
 use crate::plugins::endpoint_context::EndpointContext;
-use better_auth_core::{AuthContext, AuthError, AuthResult, AuthSchema, AuthVerification};
+use better_auth_core::{AuthContext, AuthError, AuthResult, AuthSchema};
 
 /// Trusted server operations using the registered Email OTP plugin configuration.
 /// These methods have no HTTP routes and never send email.
@@ -73,10 +73,10 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                 let Some(record) = record else {
                     return Ok(None);
                 };
-                if record.expires_at() < chrono::Utc::now() {
+                if record.expires_at.is_before(chrono::Utc::now()) {
                     return Ok(None);
                 }
-                let (stored, _) = super::otp::split(record.value());
+                let (stored, _) = super::otp::split(record.value.typed()?);
                 self.plugin
                     .recover(stored, context.config.encryption_secret())
                     .await?

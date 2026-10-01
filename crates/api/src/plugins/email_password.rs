@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use validator::{Validate, ValidateEmail};
 
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod, RequestMeta};
@@ -70,13 +69,10 @@ impl std::fmt::Debug for EmailPasswordConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SignUpRequest {
-    #[validate(length(min = 1, message = "Name is required"))]
     name: String,
-    #[validate(email(message = "Invalid email address"))]
     email: String,
-    #[validate(length(min = 1, message = "Password is required"))]
     password: String,
     image: Option<String>,
     #[serde(rename = "callbackURL")]
@@ -87,7 +83,7 @@ pub(crate) struct SignUpRequest {
     additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SignInRequest {
     email: String,
     password: String,
@@ -208,26 +204,7 @@ impl EmailPasswordPlugin {
         let endpoint_body: serde_json::Value = req
             .body_as_json()
             .map_err(|error| AuthError::bad_request(format!("Invalid JSON: {error}")))?;
-        let parsed_body = endpoint_body.clone();
-        if let Some(value) = parsed_body.get("rememberMe")
-            && !value.is_boolean()
-        {
-            return Err(
-                super::json_body::validation_error(&super::json_body::invalid_type(
-                    "body.rememberMe",
-                    "boolean",
-                    Some(value),
-                ))
-                .into(),
-            );
-        }
-        let mut signup_req_source = req.clone();
-        signup_req_source.body = Some(serde_json::to_vec(&parsed_body)?);
-        let signup_req: SignUpRequest =
-            match better_auth_core::validate_request_body(&signup_req_source) {
-                Ok(v) => v,
-                Err(resp) => return Ok(resp),
-            };
+        let signup_req = request::sign_up(req)?;
         request::form_csrf(req, ctx).await?;
 
         let response = sign_up_core(&signup_req, endpoint_body, &self.config, req, ctx).await?;
@@ -242,7 +219,7 @@ impl EmailPasswordPlugin {
     ) -> AuthResult<AuthResponse> {
         let signin_req = request::sign_in(req)?;
         request::form_csrf(req, ctx).await?;
-        if !signin_req.email.validate_email() {
+        if !super::json_body::valid_email(&signin_req.email)? {
             return Err(AuthError::bad_request("Invalid email"));
         }
 
@@ -309,12 +286,8 @@ async fn load_credential_password_hash(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<String> {
-    ctx.database
-        .get_user_accounts(&user.id())
+    super::helpers::get_credential_password_hash(ctx, user)
         .await?
-        .into_iter()
-        .find(|account| account.provider_id() == "credential" && account.password().is_some())
-        .and_then(|account| account.password().map(str::to_string))
         .ok_or(AuthError::InvalidCredentials)
 }
 
@@ -593,6 +566,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         let mut routes = vec![
             AuthRoute::post("/sign-in/email", "sign_in_email")
+                .body_validator(request::sign_in_body)
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
         ];
         if self.config.username {
@@ -605,10 +579,12 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
 
         if self.config.enable_signup {
             routes.push(
-                AuthRoute::post("/sign-up/email", "sign_up_email").allowed_media_types(&[
-                    "application/x-www-form-urlencoded",
-                    "application/json",
-                ]),
+                AuthRoute::post("/sign-up/email", "sign_up_email")
+                    .body_validator(request::sign_up_body)
+                    .allowed_media_types(&[
+                        "application/x-www-form-urlencoded",
+                        "application/json",
+                    ]),
             );
         }
 
@@ -707,7 +683,7 @@ mod tests {
             "/sign-up/email".to_string(),
             HashMap::new(),
             Some(body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         )
     }
 
@@ -822,8 +798,8 @@ mod tests {
             .await
             .unwrap()
             .into_iter()
-            .find(|account| account.provider_id() == "credential")
-            .and_then(|account| account.password().map(str::to_string))
+            .find(|account| account.provider_id == "credential")
+            .and_then(|account| account.password.typed().unwrap().clone())
             .expect("credential account should store hashed password");
         assert_eq!(stored_hash, "hashed:Password123!");
 
@@ -837,7 +813,7 @@ mod tests {
             "/sign-in/email".to_string(),
             HashMap::new(),
             Some(signin_body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let response = plugin.handle_sign_in(&signin_req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
@@ -852,7 +828,7 @@ mod tests {
             "/sign-in/email".to_string(),
             HashMap::new(),
             Some(bad_body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let err = plugin.handle_sign_in(&bad_req, &ctx).await.unwrap_err();
         assert_eq!(err.to_string(), AuthError::InvalidCredentials.to_string());
@@ -897,7 +873,7 @@ mod tests {
             "/sign-up/email".to_string(),
             HashMap::new(),
             Some(signup_body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let signup_response = plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
         assert_eq!(signup_response.status, 200);
@@ -913,7 +889,7 @@ mod tests {
             "/sign-in/username".to_string(),
             HashMap::from([("content-type".into(), "application/json".into())]),
             Some(signin_body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let signin_response = plugin
             .handle_sign_in_username(&signin_req, &ctx)
@@ -950,7 +926,7 @@ mod tests {
             "/is-username-available".to_string(),
             HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let response = plugin
             .handle_is_username_available(&req, &ctx)
@@ -981,7 +957,7 @@ mod tests {
             "/sign-up/email".to_string(),
             HashMap::new(),
             Some(signup_body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let resp = plugin.handle_sign_up(&signup_req, &ctx).await.unwrap();
         assert_eq!(resp.status, 200);
@@ -992,7 +968,7 @@ mod tests {
             "/is-username-available".to_string(),
             HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let response = plugin
             .handle_is_username_available(&req, &ctx)
@@ -1017,7 +993,7 @@ mod tests {
             "/is-username-available".to_string(),
             HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let response = plugin
             .handle_is_username_available(&req, &ctx)
@@ -1043,7 +1019,7 @@ mod tests {
             "/is-username-available".to_string(),
             HashMap::from([("content-type".into(), "application/json".into())]),
             Some(body.to_string().into_bytes()),
-            HashMap::new(),
+            None,
         );
         let response = plugin
             .handle_is_username_available(&req, &ctx)

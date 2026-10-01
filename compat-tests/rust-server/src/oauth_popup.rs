@@ -10,8 +10,8 @@ use better_auth::plugins::oauth::{GenericOAuthConfig, OAuthPlugin};
 use better_auth::seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks};
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::{
-    AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, AuthVerification,
-    CreateVerification, HttpMethod, OAuthStateStrategy,
+    AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, CreateVerification, HttpMethod,
+    OAuthStateStrategy,
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -41,7 +41,10 @@ impl OAuthPopupFixture {
         if !self.enabled {
             return;
         }
-        config.trusted_origins = better_auth_core::TrustedValues::merge(vec![config.trusted_origins.clone(), vec!["https://embed.example".into()].into()]);
+        config.trusted_origins = better_auth_core::TrustedValues::merge(vec![
+            config.trusted_origins.clone(),
+            vec!["https://embed.example".into()].into(),
+        ]);
         config.session.bearer = Some(Default::default());
         config.account.store_state_strategy = Some(if profile == "oauth-popup-cookie" {
             OAuthStateStrategy::Cookie
@@ -90,7 +93,7 @@ impl OAuthPopupFixture {
             .route("/__test/oauth-popup", post(move |Json(body): Json<Value>| {
                 let fixture = control.clone(); let auth = auth.clone(); async move {
                     { let mut state = fixture.state.lock().unwrap(); if let Some(fail) = body.get("stateFailure").and_then(Value::as_bool) { state.fail = fail; } if body.get("clear") == Some(&Value::Bool(true)) { state.events.clear(); } }
-                    let value = if let Some(state) = body.get("state").and_then(Value::as_str) { auth.store().get_verification_by_identifier(state).await?.map(|record| record.value().to_owned()) } else { None };
+                    let value = if let Some(state) = body.get("state").and_then(Value::as_str) { auth.store().get_verification_by_identifier(state).await?.map(|record| record.value.typed().cloned()).transpose()? } else { None };
                     let events = fixture.state.lock().unwrap().events.clone();
                     Ok::<_, AuthError>(Json(json!({ "events": events, "value": value })))
                 }
@@ -130,7 +133,11 @@ impl AuthPlugin<TestSchema> for OAuthPopupFixture {
         {
             return Ok(None);
         }
-        let mode = req.query.get("mode").map(String::as_str);
+        let mode = req
+            .query
+            .as_ref()
+            .and_then(|query| query.get("mode"))
+            .and_then(serde_json::Value::as_str);
         if mode == Some("plain") {
             return Ok(Some(AuthResponse::json(200, &json!({ "ordinary": true }))?));
         }
@@ -139,8 +146,9 @@ impl AuthPlugin<TestSchema> for OAuthPopupFixture {
             .with_header(
                 "Location",
                 req.query
-                    .get("target")
-                    .map(String::as_str)
+                    .as_ref()
+                    .and_then(|query| query.get("target"))
+                    .and_then(serde_json::Value::as_str)
                     .unwrap_or("/done"),
             );
         if mode == Some("token") {

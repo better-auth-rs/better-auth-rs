@@ -21,7 +21,8 @@ async fn email_claim_reservations_have_one_winner_and_can_be_released()
     let claim = CreateVerification {
         identifier: "siwe-email-claim-owner@example.com".into(),
         value: "wallet-address".into(),
-        expires_at: Utc::now() + chrono::Duration::minutes(1),
+        expires_at: (Utc::now() + chrono::Duration::minutes(1)).into(),
+        ..Default::default()
     };
     let barrier = Arc::new(Barrier::new(8));
     let mut tasks = JoinSet::new();
@@ -42,11 +43,11 @@ async fn email_claim_reservations_have_one_winner_and_can_be_released()
     }
     assert_eq!(winners, 1);
     let reservation = store
-        .consume_verification_by_identifier(&claim.identifier)
+        .consume_verification_by_identifier(claim.identifier.typed()?)
         .await?
         .ok_or_else(|| std::io::Error::other("winning reservation must persist"))?;
-    assert_eq!(reservation.id(), "deterministic-claim");
-    assert_eq!(reservation.value(), claim.value);
+    assert_eq!(reservation.id, "deterministic-claim");
+    assert_eq!(reservation.value, claim.value);
     assert!(
         store
             .reserve_verification("deterministic-claim", claim)
@@ -60,7 +61,7 @@ async fn email_claim_reservations_have_one_winner_and_can_be_released()
 impl crate::hooks::SeaOrmHooks<BundledSchema> for RejectVerificationHook {
     async fn before_delete_verification(
         &self,
-        _verification: &<BundledSchema as better_auth_core::AuthSchema>::Verification,
+        _verification: &better_auth_core::wire::VerificationView,
         _ctx: &crate::hooks::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<crate::hooks::HookControl> {
         Ok(self.0)
@@ -68,7 +69,7 @@ impl crate::hooks::SeaOrmHooks<BundledSchema> for RejectVerificationHook {
 
     async fn after_delete_verification(
         &self,
-        _verification: &<BundledSchema as better_auth_core::AuthSchema>::Verification,
+        _verification: &better_auth_core::wire::VerificationView,
         ctx: &crate::hooks::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(ctx.tx.is_none());
@@ -87,7 +88,8 @@ async fn consume_hooks_preserve_cancellation_and_do_not_restore_committed_creden
         .create_verification(CreateVerification {
             identifier: "hook-credential".into(),
             value: "user-id".into(),
-            expires_at: Utc::now() + chrono::Duration::hours(1),
+            expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+            ..Default::default()
         })
         .await?;
     let cancelled = SeaOrmStore::<BundledSchema>::new(config.clone(), database.clone())
@@ -146,7 +148,8 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                     .create_verification(CreateVerification {
                         identifier: "one-use".into(),
                         value: value.into(),
-                        expires_at: Utc::now() + chrono::Duration::hours(1),
+                        expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+                        ..Default::default()
                     })
                     .await?;
             }
@@ -163,7 +166,7 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
             let mut values = Vec::new();
             while let Some(result) = tasks.join_next().await {
                 if let Some(record) = result?? {
-                    values.push(record.value().to_owned());
+                    values.push(record.value.typed().unwrap().clone());
                 }
             }
             let consumed_again = store.consume_verification_by_identifier("one-use").await?;
@@ -172,7 +175,8 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                     .create_verification(CreateVerification {
                         identifier: "expired-latest".into(),
                         value: value.into(),
-                        expires_at: Utc::now() + chrono::Duration::seconds(seconds),
+                        expires_at: (Utc::now() + chrono::Duration::seconds(seconds)).into(),
+                        ..Default::default()
                     })
                     .await?;
             }

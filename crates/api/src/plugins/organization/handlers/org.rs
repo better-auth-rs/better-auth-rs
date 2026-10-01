@@ -429,8 +429,10 @@ pub(crate) async fn get_full_organization_core(
 
     let members_limit = query
         .members_limit
-        .filter(|limit| *limit > 0)
-        .or(Some(config.member_list_limit()));
+        .filter(|limit| *limit != 0.0 && !limit.is_nan())
+        .or(Some(
+            ctx.config.advanced.database.default_find_many_limit as f64,
+        ));
     let member_params = ListOrganizationMembersParams {
         organization_id: org_id.clone(),
         limit: members_limit,
@@ -759,13 +761,13 @@ pub async fn handle_get_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let nonempty = |key: &str| req.query.get(key).filter(|value| !value.is_empty());
-    let organization = if let Some(slug) = nonempty("organizationSlug") {
+    let nonempty = |key: &str| {
+        req.query_string(key)
+            .map(|value| value.filter(|value| !value.is_empty()))
+    };
+    let organization = if let Some(slug) = nonempty("organizationSlug")? {
         ctx.database.get_organization_by_slug(slug).await?
-    } else if let Some(id) = nonempty("organizationId")
-        .map(String::as_str)
-        .or(session.active_organization_id())
-    {
+    } else if let Some(id) = nonempty("organizationId")?.or(session.active_organization_id()) {
         ctx.database.get_organization_by_id(id).await?
     } else {
         return Ok(AuthResponse::json(200, &serde_json::Value::Null)?);
@@ -799,7 +801,7 @@ pub async fn handle_get_full_organization(
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
     let (user, session) = require_session(req, ctx).await?;
-    let query = parse_query::<GetFullOrganizationQuery>(&req.query);
+    let query = crate::plugins::query_input::parse::<GetFullOrganizationQuery>(&req.query)?;
     let response = get_full_organization_core(&query, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
@@ -845,15 +847,6 @@ pub async fn handle_leave_organization(
     };
     let response = leave_organization_core(&body, &user, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
-}
-
-/// Helper function to parse query parameters into a struct
-fn parse_query<T: Default + serde::de::DeserializeOwned>(
-    query: &std::collections::HashMap<String, String>,
-) -> T {
-    let json_value =
-        serde_json::to_value(query).unwrap_or(serde_json::Value::Object(Default::default()));
-    serde_json::from_value(json_value).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -1035,7 +1028,7 @@ mod tests {
             &GetFullOrganizationQuery {
                 organization_id: Some(organization.id.clone()),
                 organization_slug: None,
-                members_limit: Some(1),
+                members_limit: Some(1.0),
             },
             &user,
             &session,

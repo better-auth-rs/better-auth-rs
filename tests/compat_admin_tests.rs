@@ -521,7 +521,15 @@ async fn test_admin_endpoints_require_authentication() {
 
     // get-user without auth
     let mut req = get_request("/admin/get-user");
-    let _ = req.query.insert("id".to_string(), "some-id".to_string());
+    let _ = req
+        .query
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "id".to_string(),
+            serde_json::Value::from("some-id".to_string()),
+        );
     let (status, _) = send_request(&auth, req).await;
     assert_eq!(status, 401, "get-user without auth should get 401");
 

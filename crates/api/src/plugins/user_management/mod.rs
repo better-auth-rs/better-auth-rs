@@ -9,6 +9,7 @@ use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 pub(super) mod handlers;
+mod request;
 pub(super) mod types;
 
 #[cfg(test)]
@@ -257,10 +258,7 @@ impl UserManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (mut user, session) = ctx.require_session(req).await?;
-        let body: ChangeEmailRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body = request::change_email(req)?;
         let response = change_email_core(&body, &user, &self.config, ctx).await?;
         if !user.email_verified && self.config.change_email.update_without_verification {
             user.email = Some(body.new_email.to_lowercase());
@@ -283,10 +281,7 @@ impl UserManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, session) = ctx.require_session(req).await?;
         let user = ctx.user_view(&user)?;
-        let body: DeleteUserRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
-        };
+        let body = request::delete_user(req)?;
         let response = delete_user_core(&body, &user, &session, req, &self.config, ctx).await?;
         let mut response = AuthResponse::json(200, &response)?;
         for (name, value) in req.take_response_headers()? {
@@ -313,8 +308,8 @@ impl UserManagementPlugin {
             })?;
         let user = ctx.user_view(&user)?;
         let query: TokenQuery = serde_json::from_value(serde_json::json!({
-            "token": req.query.get("token").cloned(),
-            "callbackURL": req.query.get("callbackURL").cloned(),
+            "token": req.query_string("token")?.map(str::to_owned),
+            "callbackURL": req.query_string("callbackURL")?.map(str::to_owned),
         }))
         .map_err(|_| AuthError::bad_request("Verification token is required"))?;
         let response =
@@ -351,14 +346,20 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for UserManagementPlugin {
     fn routes(&self) -> Vec<AuthRoute> {
         let mut routes = Vec::new();
         if self.config.change_email.enabled {
-            routes.push(AuthRoute::post("/change-email", "change_email"));
+            routes.push(
+                AuthRoute::post("/change-email", "change_email")
+                    .body_validator(request::change_email_body),
+            );
         }
         if self.config.delete_user.enabled {
-            routes.push(AuthRoute::post("/delete-user", "delete_user"));
-            routes.push(AuthRoute::get(
-                "/delete-user/callback",
-                "delete_user_callback",
-            ));
+            routes.push(
+                AuthRoute::post("/delete-user", "delete_user")
+                    .body_validator(request::delete_user_body),
+            );
+            routes.push(
+                AuthRoute::get("/delete-user/callback", "delete_user_callback")
+                    .query_validator(crate::plugins::query_input::verify_email),
+            );
         }
         routes
     }

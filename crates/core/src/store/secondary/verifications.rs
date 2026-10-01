@@ -1,6 +1,6 @@
-use super::{SecondaryStore, decode, object, ttl};
-use crate::entity::AuthVerification;
+use super::{SecondaryStore, decode, object};
 use crate::store::VerificationStore;
+use crate::store::{VerificationCreateWriter, database_hooks::VerificationUpdate};
 use crate::types::CreateVerification;
 use crate::wire::VerificationView;
 use crate::{AuthError, AuthResult, AuthSchema};
@@ -12,51 +12,53 @@ impl<S: AuthSchema> SecondaryStore<S> {
         &self,
         mut input: CreateVerification,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
-    ) -> AuthResult<S::Verification> {
+    ) -> AuthResult<VerificationView> {
+        input = input.with_timestamps(Utc::now());
         input.identifier = self
             .config
             .verification
             .store_identifier
-            .process(&input.identifier)
+            .process(input.identifier.typed()?)
             .await?
-            .0;
-        let identifier = input.identifier.clone();
-        let verification = if self.database_verifications() {
-            match transaction {
-                Some(transaction) => transaction.create_verification(input).await?,
-                None => self.inner.create_verification(input).await?,
-            }
-        } else {
-            match transaction {
+            .0
+            .into();
+        let identifier = input.identifier.typed()?.clone();
+        if self.database_verifications() {
+            let writer = self.verification_writer(identifier);
+            return match transaction {
                 Some(transaction) => {
                     transaction
-                        .before_create_runtime_verification(&mut input)
-                        .await?
+                        .create_verification_with_writer(input, writer)
+                        .await
                 }
                 None => {
                     self.inner
-                        .before_create_runtime_verification(&mut input)
-                        .await?
+                        .create_verification_with_writer(input, writer)
+                        .await
                 }
+            };
+        }
+        match transaction {
+            Some(transaction) => {
+                transaction
+                    .before_create_runtime_verification(&mut input)
+                    .await?
             }
-            let now = Utc::now();
-            S::Verification::from_runtime_fields(object(serde_json::to_value(
-                VerificationView {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    identifier: input.identifier,
-                    value: input.value,
-                    expires_at: input.expires_at,
-                    created_at: now,
-                    updated_at: now,
-                },
-            )?)?)?
-        };
+            None => {
+                self.inner
+                    .before_create_runtime_verification(&mut input)
+                    .await?
+            }
+        }
+        // Secondary-only creation keeps the hook input: no generated ID or adapter field policies.
+        let verification = VerificationView::from_fields(input.fields()?)?;
         self.cache_verification(&identifier, &verification).await?;
-        if !self.database_verifications() && transaction.is_none() {
+        if transaction.is_none() {
             self.inner
                 .after_create_runtime_verification(&verification)
                 .await?;
         }
+
         Ok(verification)
     }
 
@@ -64,7 +66,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         &self,
         identifier: &str,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<VerificationView>> {
         let identifiers = self.verification_identifiers(identifier).await?;
         for candidate in &identifiers {
             if let Some(cached) = self.cached_verification(candidate).await? {
@@ -101,19 +103,78 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(found)
     }
 
+    fn verification_writer(&self, identifier: String) -> Option<VerificationCreateWriter> {
+        let _ = self.storage.as_ref()?;
+        let runtime = self.clone();
+        Some(Box::new(move |record| {
+            Box::pin(async move { runtime.cache_verification(&identifier, &record).await })
+        }))
+    }
+
+    pub(super) async fn update_verification_in_transaction(
+        &self,
+        identifier: &str,
+        update: VerificationUpdate,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<Option<VerificationView>> {
+        let identifier = self
+            .config
+            .verification
+            .store_identifier
+            .process(identifier)
+            .await?
+            .0;
+        if let Some(cached) = self.cached_verification(&identifier).await? {
+            let old_expiry = cached.expires_at.clone();
+            let mut fields = cached.fields()?;
+            fields.extend(update.fields()?);
+            let record = VerificationView::from_fields(fields)?;
+            // Upstream uses a nullish fallback for TTL while preserving the null in the cached JSON.
+            let expiry = if record.expires_at.is_undefined()
+                || record.expires_at.json()? == Some(serde_json::Value::Null)
+            {
+                &old_expiry
+            } else {
+                &record.expires_at
+            };
+            let seconds = expiry.converted_cache_ttl(Utc::now())?;
+            if seconds > 0 {
+                self.secondary()?
+                    .set(
+                        &format!("verification:{identifier}"),
+                        &serde_json::to_string(&record)?,
+                        Some(seconds),
+                    )
+                    .await?;
+            }
+            if !self.database_verifications() {
+                return Ok(Some(record));
+            }
+        }
+        if self.database_verifications() {
+            match transaction {
+                Some(transaction) => transaction.update_verification(&identifier, update).await,
+                None => self.inner.update_verification(&identifier, update).await,
+            }
+        } else {
+            Ok(Some(VerificationView::from_fields(update.fields()?)?))
+        }
+    }
+
     async fn cache_verification(
         &self,
         identifier: &str,
-        verification: &S::Verification,
+        verification: &VerificationView,
     ) -> AuthResult<()> {
-        let seconds = ttl(verification.expires_at());
-        if let Some(storage) = &self.storage
-            && seconds > 0
-        {
+        let Some(storage) = &self.storage else {
+            return Ok(());
+        };
+        let seconds = verification.expires_at.cache_ttl(Utc::now())?;
+        if seconds > 0 {
             storage
                 .set(
                     &format!("verification:{identifier}"),
-                    &serde_json::to_string(&VerificationView::from(verification))?,
+                    &serde_json::to_string(verification)?,
                     Some(seconds),
                 )
                 .await?;
@@ -121,12 +182,12 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(())
     }
 
-    async fn cached_verification(&self, identifier: &str) -> AuthResult<Option<S::Verification>> {
+    async fn cached_verification(&self, identifier: &str) -> AuthResult<Option<VerificationView>> {
         let Some(storage) = &self.storage else {
             return Ok(None);
         };
         decode(storage.get(&format!("verification:{identifier}")).await?)
-            .map(|value| S::Verification::from_runtime_fields(object(value)?))
+            .map(|value| VerificationView::from_fields(object(value)?))
             .transpose()
     }
 
@@ -172,30 +233,52 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
             .config
             .verification
             .store_identifier
-            .process(&input.identifier)
+            .process(input.identifier.typed()?)
             .await?
-            .0;
-        let identifier = input.identifier.clone();
+            .0
+            .into();
+        let identifier = input.identifier.typed()?.clone();
+        // Reservation caches the original four fields; the adapter result is not reused here.
+        let cache = VerificationView::from_fields(serde_json::Map::from_iter([
+            ("id".into(), serde_json::Value::String(id.to_owned())),
+            (
+                "identifier".into(),
+                serde_json::Value::String(identifier.clone()),
+            ),
+            (
+                "value".into(),
+                input.value.json()?.unwrap_or(serde_json::Value::Null),
+            ),
+            (
+                "expiresAt".into(),
+                input.expires_at.json()?.unwrap_or(serde_json::Value::Null),
+            ),
+        ]))?;
         let inserted = self.inner.reserve_verification(id, input).await?;
-        if inserted
-            && let Some(record) = self
-                .inner
-                .get_verification_including_expired(&identifier)
-                .await?
-        {
-            self.cache_verification(&identifier, &record).await?;
+        if inserted {
+            self.cache_verification(&identifier, &cache).await?;
         }
         Ok(inserted)
     }
 
-    async fn create_verification(&self, input: CreateVerification) -> AuthResult<S::Verification> {
+    async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {
         self.create_verification_in_transaction(input, None).await
+    }
+
+    async fn create_verification_with_writer(
+        &self,
+        input: CreateVerification,
+        writer: Option<VerificationCreateWriter>,
+    ) -> AuthResult<VerificationView> {
+        self.inner
+            .create_verification_with_writer(input, writer)
+            .await
     }
 
     async fn get_verification_including_expired(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<VerificationView>> {
         self.find_verification_in_transaction(identifier, None)
             .await
     }
@@ -203,25 +286,26 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     async fn get_verification_by_identifier(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
-        Ok(self
-            .get_verification_including_expired(identifier)
-            .await?
-            .filter(|value| value.expires_at() > Utc::now()))
+    ) -> AuthResult<Option<VerificationView>> {
+        let record = self.get_verification_including_expired(identifier).await?;
+        match record {
+            Some(record) if record.expires_at.is_after(Utc::now()) => Ok(Some(record)),
+            _ => Ok(None),
+        }
     }
 
     async fn get_verification(
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<VerificationView>> {
         Ok(self
             .get_verification_by_identifier(identifier)
             .await?
-            .filter(|record| record.value() == value))
+            .filter(|record| record.value == value))
     }
 
-    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<S::Verification>> {
+    async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
         if self.database_verifications() {
             self.inner.get_verification_by_value(value).await
         } else {
@@ -231,36 +315,31 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
         }
     }
 
+    async fn update_verification(
+        &self,
+        identifier: &str,
+        update: VerificationUpdate,
+    ) -> AuthResult<Option<VerificationView>> {
+        self.update_verification_in_transaction(identifier, update, None)
+            .await
+    }
+
     async fn update_verification_by_identifier(
         &self,
         identifier: &str,
         value: Option<String>,
         expires_at: Option<DateTime<Utc>>,
     ) -> AuthResult<()> {
-        let identifier = self
-            .config
-            .verification
-            .store_identifier
-            .process(identifier)
-            .await?
-            .0;
-        if let Some(cached) = self.cached_verification(&identifier).await? {
-            let mut record = VerificationView::from(&cached);
-            if let Some(value) = &value {
-                record.value.clone_from(value);
-            }
-            if let Some(expires_at) = expires_at {
-                record.expires_at = expires_at;
-            }
-            let record =
-                S::Verification::from_runtime_fields(object(serde_json::to_value(record)?)?)?;
-            self.cache_verification(&identifier, &record).await?;
-        }
-        if self.database_verifications() {
-            self.inner
-                .update_verification_by_identifier(&identifier, value, expires_at)
-                .await?;
-        }
+        let _ = self
+            .update_verification(
+                identifier,
+                VerificationUpdate {
+                    value: value.map(Into::into).unwrap_or_default(),
+                    expires_at: expires_at.map(Into::into).unwrap_or_default(),
+                    ..Default::default()
+                },
+            )
+            .await?;
         Ok(())
     }
 
@@ -288,7 +367,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     async fn consume_verification_including_expired(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<VerificationView>> {
         let identifiers = self.verification_identifiers(identifier).await?;
         if self.database_verifications() {
             for identifier in &identifiers {
@@ -311,11 +390,9 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
             ) else {
                 continue;
             };
-            let valid_expiry = value
-                .get("expiresAt")
-                .cloned()
-                .and_then(|value| serde_json::from_value::<DateTime<Utc>>(value).ok());
-            if valid_expiry.is_none() {
+            let mut record = VerificationView::from_fields(object(value)?)?;
+            record.expires_at = record.expires_at.converted_date();
+            if matches!(record.expires_at, crate::SchemaValue::InvalidDate) {
                 continue;
             }
             for other in identifiers.iter().filter(|other| *other != identifier) {
@@ -323,7 +400,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
                     .delete(&format!("verification:{other}"))
                     .await?;
             }
-            return Ok(Some(S::Verification::from_runtime_fields(object(value)?)?));
+            return Ok(Some(record));
         }
         Ok(None)
     }
@@ -331,18 +408,21 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     async fn consume_verification_by_identifier(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
-        Ok(self
+    ) -> AuthResult<Option<VerificationView>> {
+        let record = self
             .consume_verification_including_expired(identifier)
-            .await?
-            .filter(|value| value.expires_at() >= Utc::now()))
+            .await?;
+        match record {
+            Some(record) if !record.expires_at.is_before(Utc::now()) => Ok(Some(record)),
+            _ => Ok(None),
+        }
     }
 
     async fn consume_verification(
         &self,
         identifier: &str,
         value: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<VerificationView>> {
         if self.database_verifications() {
             for candidate in self.verification_identifiers(identifier).await? {
                 if let Some(consumed) = self.inner.consume_verification(&candidate, value).await? {
@@ -361,7 +441,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
         Ok(self
             .consume_verification_by_identifier(identifier)
             .await?
-            .filter(|record| record.value() == value))
+            .filter(|record| record.value == value))
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {

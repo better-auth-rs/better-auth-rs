@@ -222,20 +222,51 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 adapter_fields,
             ));
 
+        let rate_limit_config = self.rate_limit_config.unwrap_or_default();
+        let schema_check =
+            store.schema_check(&better_auth_core::store::schema::SchemaConfiguration {
+                config: adapter_config.clone(),
+                plugins: self.plugins.iter().map(|plugin| plugin.name()).collect(),
+                metadata: init_parts.metadata.clone(),
+                secondary_storage: init_parts.secondary_storage.is_some(),
+                database_rate_limit: rate_limit_config.storage
+                    == Some(better_auth_core::middleware::RateLimitStorageKind::Database),
+            })?;
+        let schema_validation =
+            schema_check.map(|check| better_auth_core::store::schema::SchemaValidation {
+                check,
+                runtime_enabled: config.advanced.database.validate_schema != Some(false),
+            });
+        if schema_validation.is_none() {
+            match config.advanced.database.validate_schema {
+                Some(true) => tracing::warn!(
+                    "The database adapter does not support runtime schema validation"
+                ),
+                None => tracing::debug!(
+                    "The database adapter does not support runtime schema validation"
+                ),
+                Some(false) => {}
+            }
+        }
+
         let store: Arc<dyn AuthStore<S>> = if let Some(secondary) = &init_parts.secondary_storage {
-            Arc::new(better_auth_core::store::secondary::SecondaryStore::new(
-                store,
-                secondary.clone(),
-                adapter_config.clone(),
-                init_parts.metadata.clone(),
-            )?)
+            Arc::new(
+                better_auth_core::store::secondary::SecondaryStore::new(
+                    store,
+                    secondary.clone(),
+                    adapter_config.clone(),
+                    init_parts.metadata.clone(),
+                )?
+                .with_schema_validation(schema_validation.clone()),
+            )
         } else {
             Arc::new(
                 better_auth_core::store::secondary::SecondaryStore::without_secondary(
                     store,
                     adapter_config.clone(),
                     init_parts.metadata.clone(),
-                ),
+                )
+                .with_schema_validation(schema_validation.clone()),
             )
         };
 
@@ -247,9 +278,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 .map(|plugin| plugin.openapi())
                 .collect::<AuthResult<Vec<_>>>()?,
             init_parts.secondary_storage.is_some(),
-            self.rate_limit_config.as_ref().is_some_and(|config| {
-                config.storage == Some(better_auth_core::RateLimitStorageKind::Database)
-            }),
+            rate_limit_config.storage == Some(better_auth_core::RateLimitStorageKind::Database),
         )?;
         init_parts.extensions.insert(openapi);
 
@@ -263,10 +292,12 @@ impl<S: AuthSchema> AuthBuilder<S> {
         context.email_verification_policy = init_parts.email_verification_policy;
         let context = Arc::new(context);
         init_parts.runtime.bind(&context)?;
+        if let Some(validation) = &schema_validation {
+            validation.start();
+        }
         let session_manager = context.session_manager();
 
         let body_limit = self.body_limit_config.unwrap_or_default();
-        let rate_limit_config = self.rate_limit_config.unwrap_or_default();
         let mut plugin_limits = Vec::new();
         for plugin in &self.plugins {
             plugin_limits.extend(plugin.rate_limits()?);
@@ -350,8 +381,12 @@ impl<S: AuthSchema> BetterAuth<S> {
         // before_request hooks may inject this during dispatch.
         let url = req.url().cloned();
         let mounted = req.base_relative_path().is_some();
-        let mut req =
-            AuthRequest::from_parts(req.method, req.path, req.headers, req.body, req.query);
+        let query = req.query.or_else(|| {
+            Some(better_auth_core::query::parse_url_query(
+                url.as_ref().and_then(|url| url.query()).unwrap_or_default(),
+            ))
+        });
+        let mut req = AuthRequest::from_parts(req.method, req.path, req.headers, req.body, query);
         if mounted {
             req = req.with_base_relative_path();
         }
@@ -405,6 +440,9 @@ impl<S: AuthSchema> BetterAuth<S> {
                 AuthResponse::text(404, "Not Found")
                     .with_header("content-type", "text/plain;charset=UTF-8"),
             ));
+        }
+        if let Some(validation) = context.database.schema_validation() {
+            validation.check_runtime().await?;
         }
         if let Some(response) = middleware::run_before(&self.http_middlewares, req).await? {
             return Ok(Some(response));
@@ -524,10 +562,15 @@ impl<S: AuthSchema> BetterAuth<S> {
         } else {
             req.clone()
         };
+        let raw_body = internal_req.input_body()?;
+        internal_req.set_endpoint_body(
+            better_auth_core::endpoint_input::ValidatedBody::unvalidated(raw_body),
+        );
         update_request_hook_context(&internal_req)?;
 
         // Run plugin before_request hooks (e.g. API-key → session emulation)
         // Plugins now see the normalised (base_path-stripped) path.
+        let mut input_patch = better_auth_core::endpoint_input::EndpointInputPatch::default();
         for plugin in &self.plugins {
             let action = match plugin.before_request(&internal_req, context).await {
                 Ok(action) => action,
@@ -541,9 +584,14 @@ impl<S: AuthSchema> BetterAuth<S> {
                             .merge(internal_req.take_response_headers()?);
                         return Ok(response);
                     }
+                    BeforeRequestAction::MergeContext(patch) => input_patch.merge(patch),
                     BeforeRequestAction::ReplaceBody(body) => {
                         internal_req.body = Some(body.clone());
                         req.body = Some(body);
+                        let raw_body = internal_req.input_body()?;
+                        internal_req.set_endpoint_body(
+                            better_auth_core::endpoint_input::ValidatedBody::unvalidated(raw_body),
+                        );
                         update_request_hook_context(&internal_req)?;
                     }
                     BeforeRequestAction::InjectSession { session } => {
@@ -553,7 +601,44 @@ impl<S: AuthSchema> BetterAuth<S> {
             }
         }
 
-        let mut response = match self.execute_endpoint(&internal_req, context).await {
+        if http && internal_req.original_request().is_none() {
+            internal_req = internal_req.with_original_request(req.clone());
+        }
+        input_patch.apply(&mut internal_req)?;
+        update_request_hook_context(&internal_req)?;
+        let route = self
+            .plugins
+            .iter()
+            .flat_map(|plugin| plugin.routes())
+            .find(|route| route.matches(internal_req.method(), internal_req.path()));
+        let input = (|| -> AuthResult<_> {
+            let body = match route.as_ref().and_then(|route| route.body_validator) {
+                Some(validate) => validate(&internal_req)?,
+                None => better_auth_core::endpoint_input::ValidatedBody::unvalidated(
+                    internal_req.input_body()?,
+                ),
+            };
+            let query = match route.as_ref().and_then(|route| route.query_validator) {
+                Some(validate) => validate(internal_req.query.clone())?,
+                None => internal_req.query.clone(),
+            };
+            let mut request = internal_req.clone();
+            request.set_endpoint_body(body);
+            request.query = query;
+            Ok(request)
+        })();
+        let result = match input {
+            Ok(request) => {
+                better_auth_core::endpoint_input::with_validated_input(
+                    request.input_body()?,
+                    request.query.clone(),
+                    self.execute_endpoint(&request, context),
+                )
+                .await
+            }
+            Err(error) => Err(error),
+        };
+        let mut response = match result {
             Ok(response) => response,
             Err(error) if error.is_api_error() => error.to_auth_response(),
             Err(error) => return Err(error),

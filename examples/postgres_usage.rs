@@ -8,8 +8,8 @@ use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::prelude::{
-    AuthAccount, AuthRequest, AuthResponse, AuthSession, AuthUser, AuthVerification, CreateAccount,
-    CreateSession, CreateUser, CreateVerification, HttpMethod, UpdateAccount, UpdateUser,
+    AuthAccount, AuthRequest, AuthResponse, AuthSession, AuthUser, AuthVerification, CreateSession,
+    CreateUser, HttpMethod, UpdateUser,
 };
 use better_auth::seaorm::sea_orm;
 use better_auth::seaorm::sea_orm::entity::prelude::*;
@@ -131,6 +131,33 @@ mod user {
     }
 
     impl SeaOrmUserModel for Model {
+        fn field_column(name: &str) -> AuthResult<Column> {
+            match name {
+                "id" => Ok(Column::Id),
+                "name" => Ok(Column::Name),
+                "email" => Ok(Column::Email),
+                "email_verified" | "emailVerified" => Ok(Column::EmailVerified),
+                "image" => Ok(Column::Image),
+                "username" => Ok(Column::Username),
+                "display_username" | "displayUsername" => Ok(Column::DisplayUsername),
+                "two_factor_enabled" | "twoFactorEnabled" => Ok(Column::TwoFactorEnabled),
+                "role" => Ok(Column::Role),
+                "banned" => Ok(Column::Banned),
+                "ban_reason" | "banReason" => Ok(Column::BanReason),
+                "ban_expires" | "banExpires" => Ok(Column::BanExpires),
+                "metadata" => Ok(Column::Metadata),
+                "created_at" | "createdAt" => Ok(Column::CreatedAt),
+                "updated_at" | "updatedAt" => Ok(Column::UpdatedAt),
+                "tenant_id" | "tenantId" => Ok(Column::TenantId),
+                "locale" => Ok(Column::Locale),
+                _ => Err(AuthError::config(format!("Unknown model field: {name}"))),
+            }
+        }
+
+        fn extra_insert_columns() -> Vec<Column> {
+            vec![Column::TenantId, Column::Locale]
+        }
+
         type Id = i32;
         type Entity = Entity;
         type ActiveModel = ActiveModel;
@@ -303,6 +330,25 @@ mod session {
     }
 
     impl SeaOrmSessionModel for Model {
+        fn field_column(name: &str) -> AuthResult<Column> {
+            match name {
+                "id" => Ok(Column::Id),
+                "expires_at" | "expiresAt" => Ok(Column::ExpiresAt),
+                "token" => Ok(Column::Token),
+                "created_at" | "createdAt" => Ok(Column::CreatedAt),
+                "updated_at" | "updatedAt" => Ok(Column::UpdatedAt),
+                "ip_address" | "ipAddress" => Ok(Column::IpAddress),
+                "user_agent" | "userAgent" => Ok(Column::UserAgent),
+                "user_id" | "userId" => Ok(Column::UserId),
+                "impersonated_by" | "impersonatedBy" => Ok(Column::ImpersonatedBy),
+                "active_organization_id" | "activeOrganizationId" => {
+                    Ok(Column::ActiveOrganizationId)
+                }
+                "active" => Ok(Column::Active),
+                _ => Err(AuthError::config(format!("Unknown model field: {name}"))),
+            }
+        }
+
         fn apply_update(
             active: &mut Self::ActiveModel,
             update: better_auth::seaorm::SessionUpdate,
@@ -506,91 +552,160 @@ mod account {
 
     impl SeaOrmAccountModel for Model {
         type Id = i32;
-        type UserId = i32;
         type Entity = Entity;
         type ActiveModel = ActiveModel;
         type Column = Column;
-
+        type UserId = i32;
         fn id_column() -> Self::Column {
             Column::Id
         }
-
         fn provider_id_column() -> Self::Column {
             Column::ProviderId
         }
-
         fn account_id_column() -> Self::Column {
             Column::AccountId
         }
-
         fn user_id_column() -> Self::Column {
             Column::UserId
         }
-
         fn created_at_column() -> Self::Column {
             Column::CreatedAt
         }
-
         fn parse_id(id: &str) -> AuthResult<Self::Id> {
             id.parse()
                 .map_err(|_| AuthError::bad_request("Invalid account id"))
         }
-
-        fn parse_user_id(user_id: &str) -> AuthResult<Self::UserId> {
-            user_id
-                .parse()
+        fn parse_user_id(id: &str) -> AuthResult<Self::UserId> {
+            id.parse()
                 .map_err(|_| AuthError::bad_request("Invalid account user id"))
         }
-
-        fn new_active(
-            id: Option<Self::Id>,
-            create_account: CreateAccount,
-            now: DateTime<Utc>,
-        ) -> Self::ActiveModel {
-            let user_id = create_account
-                .user_id
-                .parse()
-                .expect("account user ids come from validated auth user identifiers");
-            ActiveModel {
-                id: id.map_or(NotSet, Set),
-                account_id: Set(create_account.account_id),
-                provider_id: Set(create_account.provider_id),
-                user_id: Set(user_id),
-                access_token: Set(create_account.access_token),
-                refresh_token: Set(create_account.refresh_token),
-                id_token: Set(create_account.id_token),
-                access_token_expires_at: Set(create_account.access_token_expires_at),
-                refresh_token_expires_at: Set(create_account.refresh_token_expires_at),
-                scope: Set(create_account.scope),
-                password: Set(create_account.password),
-                created_at: Set(now),
-                updated_at: Set(now),
+        fn field_column(name: &str) -> AuthResult<Column> {
+            match name {
+                "id" => Ok(Column::Id),
+                "account_id" | "accountId" => Ok(Column::AccountId),
+                "provider_id" | "providerId" => Ok(Column::ProviderId),
+                "user_id" | "userId" => Ok(Column::UserId),
+                "access_token" | "accessToken" => Ok(Column::AccessToken),
+                "refresh_token" | "refreshToken" => Ok(Column::RefreshToken),
+                "id_token" | "idToken" => Ok(Column::IdToken),
+                "access_token_expires_at" | "accessTokenExpiresAt" => {
+                    Ok(Column::AccessTokenExpiresAt)
+                }
+                "refresh_token_expires_at" | "refreshTokenExpiresAt" => {
+                    Ok(Column::RefreshTokenExpiresAt)
+                }
+                "scope" => Ok(Column::Scope),
+                "password" => Ok(Column::Password),
+                "created_at" | "createdAt" => Ok(Column::CreatedAt),
+                "updated_at" | "updatedAt" => Ok(Column::UpdatedAt),
+                _ => Err(AuthError::config(format!(
+                    "Unknown application field: {name}"
+                ))),
             }
         }
-
-        fn apply_update(active: &mut Self::ActiveModel, update: UpdateAccount, now: DateTime<Utc>) {
-            if let Some(access_token) = update.access_token {
-                active.access_token = Set(Some(access_token));
+        fn native_json_field(_name: &str) -> bool {
+            false
+        }
+        fn new_active(
+            id: Option<Self::Id>,
+            fields: serde_json::Map<String, serde_json::Value>,
+        ) -> AuthResult<Self::ActiveModel> {
+            let mut active = <ActiveModel as Default>::default();
+            active.id = id.map_or(NotSet, Set);
+            Self::apply_fields(&mut active, fields)?;
+            Ok(active)
+        }
+        fn apply_fields(
+            active: &mut Self::ActiveModel,
+            fields: serde_json::Map<String, serde_json::Value>,
+        ) -> AuthResult<()> {
+            for (name, value) in fields {
+                match Self::field_column(&name)? {
+                    Column::Id => {
+                        active.id = Set(Self::parse_id(
+                            &better_auth::SchemaValue::<String>::from_json(Some(value))
+                                .display_string()?,
+                        )?)
+                    }
+                    Column::AccountId => active.account_id = Set(serde_json::from_value(value)?),
+                    Column::ProviderId => active.provider_id = Set(serde_json::from_value(value)?),
+                    Column::UserId => {
+                        active.user_id = Set(Self::parse_user_id(
+                            &better_auth::SchemaValue::<String>::from_json(Some(value))
+                                .display_string()?,
+                        )?)
+                    }
+                    Column::AccessToken => {
+                        active.access_token = Set(serde_json::from_value(value)?)
+                    }
+                    Column::RefreshToken => {
+                        active.refresh_token = Set(serde_json::from_value(value)?)
+                    }
+                    Column::IdToken => active.id_token = Set(serde_json::from_value(value)?),
+                    Column::AccessTokenExpiresAt => {
+                        active.access_token_expires_at = Set(serde_json::from_value(value)?)
+                    }
+                    Column::RefreshTokenExpiresAt => {
+                        active.refresh_token_expires_at = Set(serde_json::from_value(value)?)
+                    }
+                    Column::Scope => active.scope = Set(serde_json::from_value(value)?),
+                    Column::Password => active.password = Set(serde_json::from_value(value)?),
+                    Column::CreatedAt => active.created_at = Set(serde_json::from_value(value)?),
+                    Column::UpdatedAt => active.updated_at = Set(serde_json::from_value(value)?),
+                }
             }
-            if let Some(refresh_token) = update.refresh_token {
-                active.refresh_token = Set(Some(refresh_token));
+            Ok(())
+        }
+        fn record(
+            &self,
+            fields: &better_auth::config::UserConfig,
+            native_json: bool,
+            native_dates: bool,
+        ) -> AuthResult<better_auth::wire::AccountView> {
+            let mut storage = serde_json::Map::new();
+            for (logical, field) in &fields.additional_fields {
+                if logical == "id" {
+                    continue;
+                }
+                let key = field.field_name.as_deref().unwrap_or(logical);
+                let value = match Self::field_column(key)? {
+                    Column::Id => serde_json::to_value(&self.id)?,
+                    Column::AccountId => serde_json::to_value(&self.account_id)?,
+                    Column::ProviderId => serde_json::to_value(&self.provider_id)?,
+                    Column::UserId => serde_json::to_value(&self.user_id)?,
+                    Column::AccessToken => serde_json::to_value(&self.access_token)?,
+                    Column::RefreshToken => serde_json::to_value(&self.refresh_token)?,
+                    Column::IdToken => serde_json::to_value(&self.id_token)?,
+                    Column::AccessTokenExpiresAt => {
+                        better_auth_core::utils::date::serialize_option(
+                            &self.access_token_expires_at,
+                            serde_json::value::Serializer,
+                        )?
+                    }
+                    Column::RefreshTokenExpiresAt => {
+                        better_auth_core::utils::date::serialize_option(
+                            &self.refresh_token_expires_at,
+                            serde_json::value::Serializer,
+                        )?
+                    }
+                    Column::Scope => serde_json::to_value(&self.scope)?,
+                    Column::Password => serde_json::to_value(&self.password)?,
+                    Column::CreatedAt => better_auth_core::utils::date::serialize(
+                        &self.created_at,
+                        serde_json::value::Serializer,
+                    )?,
+                    Column::UpdatedAt => better_auth_core::utils::date::serialize(
+                        &self.updated_at,
+                        serde_json::value::Serializer,
+                    )?,
+                };
+                let _ = storage.insert(key.to_owned(), value);
             }
-            if let Some(id_token) = update.id_token {
-                active.id_token = Set(Some(id_token));
-            }
-            if let Some(access_token_expires_at) = update.access_token_expires_at {
-                active.access_token_expires_at = Set(Some(access_token_expires_at));
-            }
-            if let Some(refresh_token_expires_at) = update.refresh_token_expires_at {
-                active.refresh_token_expires_at = Set(Some(refresh_token_expires_at));
-            }
-            if let Some(scope) = update.scope {
-                active.scope = Set(Some(scope));
-            }
-            if let Some(password) = update.password {
-                active.password = Set(Some(password));
-            }
-            active.updated_at = Set(now);
+            let mut core = serde_json::Map::new();
+            let _ = core.insert("id".into(), serde_json::Value::String(self.id.to_string()));
+            Ok(better_auth::wire::AccountView::from_adapter_fields(
+                fields.record_output_fields(core, &storage, native_json, native_dates)?,
+            ))
         }
     }
 }
@@ -642,74 +757,111 @@ mod verification {
     }
 
     impl SeaOrmVerificationModel for Model {
-        fn apply_update(
-            active: &mut Self::ActiveModel,
-            update: better_auth::seaorm::VerificationUpdate,
-        ) -> AuthResult<()> {
-            if let Some(id) = update.id {
-                active.id = Set(Self::parse_id(&id)?);
-            }
-            if let Some(value) = update.identifier {
-                active.identifier = Set(value);
-            }
-            if let Some(value) = update.value {
-                active.value = Set(value);
-            }
-            if let Some(value) = update.expires_at {
-                active.expires_at = Set(value);
-            }
-            if let Some(value) = update.created_at {
-                active.created_at = Set(value);
-            }
-            if let Some(value) = update.updated_at {
-                active.updated_at = Set(value);
-            }
-            Ok(())
-        }
-
         type Id = i32;
         type Entity = Entity;
         type ActiveModel = ActiveModel;
         type Column = Column;
-
         fn id_column() -> Self::Column {
             Column::Id
         }
-
         fn identifier_column() -> Self::Column {
             Column::Identifier
         }
-
         fn value_column() -> Self::Column {
             Column::Value
         }
-
         fn expires_at_column() -> Self::Column {
             Column::ExpiresAt
         }
-
         fn created_at_column() -> Self::Column {
             Column::CreatedAt
         }
-
         fn parse_id(id: &str) -> AuthResult<Self::Id> {
             id.parse()
                 .map_err(|_| AuthError::bad_request("Invalid verification id"))
         }
-
+        fn field_column(name: &str) -> AuthResult<Column> {
+            match name {
+                "id" => Ok(Column::Id),
+                "identifier" => Ok(Column::Identifier),
+                "value" => Ok(Column::Value),
+                "expires_at" | "expiresAt" => Ok(Column::ExpiresAt),
+                "created_at" | "createdAt" => Ok(Column::CreatedAt),
+                "updated_at" | "updatedAt" => Ok(Column::UpdatedAt),
+                _ => Err(AuthError::config(format!(
+                    "Unknown application field: {name}"
+                ))),
+            }
+        }
+        fn native_json_field(_name: &str) -> bool {
+            false
+        }
         fn new_active(
             id: Option<Self::Id>,
-            verification: CreateVerification,
-            now: DateTime<Utc>,
-        ) -> Self::ActiveModel {
-            ActiveModel {
-                id: id.map_or(NotSet, Set),
-                identifier: Set(verification.identifier),
-                value: Set(verification.value),
-                expires_at: Set(verification.expires_at),
-                created_at: Set(now),
-                updated_at: Set(now),
+            fields: serde_json::Map<String, serde_json::Value>,
+        ) -> AuthResult<Self::ActiveModel> {
+            let mut active = <ActiveModel as Default>::default();
+            active.id = id.map_or(NotSet, Set);
+            Self::apply_fields(&mut active, fields)?;
+            Ok(active)
+        }
+        fn apply_fields(
+            active: &mut Self::ActiveModel,
+            fields: serde_json::Map<String, serde_json::Value>,
+        ) -> AuthResult<()> {
+            for (name, value) in fields {
+                match Self::field_column(&name)? {
+                    Column::Id => {
+                        active.id = Set(Self::parse_id(
+                            &better_auth::SchemaValue::<String>::from_json(Some(value))
+                                .display_string()?,
+                        )?)
+                    }
+                    Column::Identifier => active.identifier = Set(serde_json::from_value(value)?),
+                    Column::Value => active.value = Set(serde_json::from_value(value)?),
+                    Column::ExpiresAt => active.expires_at = Set(serde_json::from_value(value)?),
+                    Column::CreatedAt => active.created_at = Set(serde_json::from_value(value)?),
+                    Column::UpdatedAt => active.updated_at = Set(serde_json::from_value(value)?),
+                }
             }
+            Ok(())
+        }
+        fn record(
+            &self,
+            fields: &better_auth::config::UserConfig,
+            native_json: bool,
+            native_dates: bool,
+        ) -> AuthResult<better_auth::wire::VerificationView> {
+            let mut storage = serde_json::Map::new();
+            for (logical, field) in &fields.additional_fields {
+                if logical == "id" {
+                    continue;
+                }
+                let key = field.field_name.as_deref().unwrap_or(logical);
+                let value = match Self::field_column(key)? {
+                    Column::Id => serde_json::to_value(&self.id)?,
+                    Column::Identifier => serde_json::to_value(&self.identifier)?,
+                    Column::Value => serde_json::to_value(&self.value)?,
+                    Column::ExpiresAt => better_auth_core::utils::date::serialize(
+                        &self.expires_at,
+                        serde_json::value::Serializer,
+                    )?,
+                    Column::CreatedAt => better_auth_core::utils::date::serialize(
+                        &self.created_at,
+                        serde_json::value::Serializer,
+                    )?,
+                    Column::UpdatedAt => better_auth_core::utils::date::serialize(
+                        &self.updated_at,
+                        serde_json::value::Serializer,
+                    )?,
+                };
+                let _ = storage.insert(key.to_owned(), value);
+            }
+            let mut core = serde_json::Map::new();
+            let _ = core.insert("id".into(), serde_json::Value::String(self.id.to_string()));
+            Ok(better_auth::wire::VerificationView::from_adapter_fields(
+                fields.record_output_fields(core, &storage, native_json, native_dates)?,
+            ))
         }
     }
 }
@@ -940,7 +1092,7 @@ async fn send(
         path.to_string(),
         headers,
         body.map(|b| b.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
 
     auth.handle_request(request).await

@@ -55,7 +55,10 @@ where
                 .filter(S::Account::user_id_column().eq(S::Account::parse_user_id(user_id)?))
                 .all(&tx)
                 .await
-                .map_err(map_db_err)?;
+                .map_err(map_db_err)?
+                .iter()
+                .map(|row| self.output_account(row, &tx))
+                .collect::<AuthResult<Vec<_>>>()?;
             let sessions = if database_sessions {
                 <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(S::Session::user_id_column().eq(S::Session::parse_user_id(user_id)?))

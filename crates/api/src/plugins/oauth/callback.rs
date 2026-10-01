@@ -1,7 +1,6 @@
 use better_auth_core::utils::url::append_query_params;
 use std::collections::HashMap;
 
-use better_auth_core::entity::AuthVerification;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult};
 
 use super::handlers::{
@@ -38,38 +37,16 @@ pub(super) async fn handle_callback(
 
     let mut merged = HashMap::new();
     if req.method() == &better_auth_core::HttpMethod::Post {
-        if let Some(body) = &req.body
-            && !body.is_empty()
-        {
-            let body_text = String::from_utf8(body.clone()).map_err(|error| {
-                AuthError::bad_request(format!("Invalid callback body: {error}"))
-            })?;
-            let parsed_body =
-                serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&body_text)
-                    .ok()
-                    .map(|body| {
-                        body.into_iter()
-                            .filter_map(|(key, value)| match value {
-                                serde_json::Value::String(value) => Some((key, value)),
-                                serde_json::Value::Null => None,
-                                other => Some((key, other.to_string())),
-                            })
-                            .collect::<std::collections::HashMap<String, String>>()
-                    })
-                    .or_else(|| {
-                        Some(
-                            url::form_urlencoded::parse(body_text.as_bytes())
-                                .into_owned()
-                                .collect::<std::collections::HashMap<String, String>>(),
-                        )
-                    })
-                    .ok_or_else(|| AuthError::bad_request("Invalid callback request"))?;
-            merged.extend(parsed_body);
+        if let Some(body) = req.validated_body::<HashMap<String, String>>() {
+            merged.extend(body.clone());
+        } else {
+            let body = parse_body(req)?;
+            merged.extend(crate::plugins::query_input::string_map(&body)?);
         }
 
         // Match the TS callback route: POST body seeds the redirect, but
         // explicit query parameters win over conflicting body fields.
-        merged.extend(req.query.clone());
+        merged.extend(crate::plugins::query_input::string_map(&req.query)?);
 
         let mut params = url::form_urlencoded::Serializer::new(String::new());
         let mut pairs: Vec<_> = merged.iter().collect();
@@ -85,7 +62,7 @@ pub(super) async fn handle_callback(
         )));
     }
 
-    let merged = req.query.clone();
+    let merged = crate::plugins::query_input::string_map(&req.query)?;
 
     let error = merged.get("error").cloned();
     let state_param =
@@ -155,7 +132,7 @@ pub(super) async fn handle_callback(
                 }
             };
 
-            let payload = match OAuthStatePayload::parse(verification.value()) {
+            let payload = match OAuthStatePayload::parse(&verification.value.display_string()?) {
                 Ok(payload) => payload,
                 Err(_) => {
                     return Ok(redirect_response(&append_query_params(
@@ -377,4 +354,53 @@ pub(super) async fn handle_callback(
         .await?;
     let response = redirect_response(&redirect_target);
     Ok(response)
+}
+
+fn parse_body(req: &AuthRequest) -> AuthResult<Option<serde_json::Value>> {
+    let body = req.input_body()?;
+    let Some(body) = body else {
+        return Ok(None);
+    };
+    let object = body.as_object().ok_or_else(|| {
+        better_auth_core::AuthError::from(crate::plugins::json_body::validation_error(
+            &crate::plugins::json_body::invalid_type("body", "object", Some(&body)),
+        ))
+    })?;
+    let mut output = serde_json::Map::new();
+    let mut errors = Vec::new();
+    for name in [
+        "code",
+        "error",
+        "device_id",
+        "error_description",
+        "state",
+        "user",
+        "iss",
+    ] {
+        match object.get(name) {
+            Some(value @ serde_json::Value::String(_)) => {
+                let _ = output.insert(name.to_owned(), value.clone());
+            }
+            None => {}
+            value => errors.push(crate::plugins::json_body::invalid_type(
+                &format!("body.{name}"),
+                "string",
+                value,
+            )),
+        }
+    }
+    if !errors.is_empty() {
+        return Err(crate::plugins::json_body::validation_error(&errors.join("; ")).into());
+    }
+    Ok(Some(serde_json::Value::Object(output)))
+}
+
+pub(super) fn body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let projection = parse_body(req)?;
+    let typed = crate::plugins::query_input::string_map(&projection)?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        projection, typed,
+    ))
 }

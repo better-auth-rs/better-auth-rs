@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use better_auth_core::entity::{AuthAccount, AuthSession};
+use better_auth_core::entity::AuthSession;
 use better_auth_core::{AuthContext, AuthRequest, AuthResponse, AuthResult};
 use url::Url;
 
@@ -44,11 +44,42 @@ pub(crate) async fn handle_sign_out(
             return Ok(response);
         }
     };
-    accounts.sort_by_key(|account| std::cmp::Reverse(account.updated_at()));
+    accounts.retain(|account| {
+        config.providers.iter().any(|(name, provider)| {
+            account.provider_id == name.as_str() && provider.config.end_session_endpoint.is_some()
+        })
+    });
+    let mut date_error = None;
+    accounts.sort_by(|left, right| {
+        if date_error.is_some() {
+            return std::cmp::Ordering::Equal;
+        }
+        match right.updated_at.date_milliseconds().and_then(|right| {
+            left.updated_at
+                .date_milliseconds()
+                .map(|left| (right, left))
+        }) {
+            // JavaScript Array.sort treats a NaN comparator result as zero.
+            Ok((right, left)) => right
+                .partial_cmp(&left)
+                .unwrap_or(std::cmp::Ordering::Equal),
+            Err(error) => {
+                date_error = Some(error);
+                std::cmp::Ordering::Equal
+            }
+        }
+    });
+    if let Some(error) = date_error {
+        tracing::error!(%error, "Failed to create provider logout URL");
+        return Ok(response);
+    }
     let mut seen = HashSet::new();
     for account in accounts {
-        let provider_id = account.provider_id();
-        let Some(provider) = config.providers.get(provider_id) else {
+        let Some((provider_id, provider)) = config
+            .providers
+            .iter()
+            .find(|(name, _)| account.provider_id == name.as_str())
+        else {
             continue;
         };
         if !seen.insert(provider_id.to_owned()) {
@@ -57,9 +88,14 @@ pub(crate) async fn handle_sign_out(
         if provider.config.end_session_endpoint.is_none() {
             continue;
         }
+        let id_token = if account.id_token.is_truthy()? {
+            Some(account.id_token.display_string()?)
+        } else {
+            None
+        };
         let Some(url) = end_session_url(
             &provider.config,
-            account.id_token(),
+            id_token.as_deref(),
             &body,
             &super::handlers::auth_base_url(ctx),
         ) else {

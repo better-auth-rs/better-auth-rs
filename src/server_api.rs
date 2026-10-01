@@ -22,8 +22,8 @@ pub struct EndpointInput {
     pub headers: Option<HashMap<String, String>>,
     /// JSON input subject to the endpoint's schema.
     pub body: Option<Value>,
-    /// Endpoint query parameters.
-    pub query: HashMap<String, String>,
+    /// Raw endpoint query. Omission does not import query parameters from `request`.
+    pub query: Option<Value>,
 }
 
 impl<S: AuthSchema> BetterAuth<S> {

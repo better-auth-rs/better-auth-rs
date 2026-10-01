@@ -12,9 +12,7 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::store::AccountStore;
-use better_auth_core::{
-    AuthAccount, AuthSchema, AuthUser, CreateAccount, UpdateAccount, UpdateUser,
-};
+use better_auth_core::{AuthSchema, AuthUser, CreateAccount, UpdateAccount, UpdateUser};
 use better_auth_seaorm::hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -172,17 +170,30 @@ impl OAuthLinkIdTokenFixture {
             let secret=auth.config().encryption_secret();
             if body["seed"]==true { if let Some(user)=&user {
                 let account_id=fixture.state.lock().unwrap().provider["id"].as_str().unwrap().to_owned();
-                let _=auth.store().create_account(CreateAccount { user_id:user.id().into_owned(), provider_id:"google".into(), account_id, access_token:maybe_encrypt(Some("seed-access".into()),true,secret)?, refresh_token:maybe_encrypt(Some("seed-refresh".into()),true,secret)?, id_token:Some("seed-id".into()), scope:Some("seed-scope".into()), access_token_expires_at:None, refresh_token_expires_at:None, password:None }).await?;
+                let _=auth.store().create_account(CreateAccount {
+user_id: (user.id().into_owned()).into(),
+provider_id: "google".into(),
+account_id: (account_id).into(),
+access_token: (maybe_encrypt(Some("seed-access".into()),true,secret)?).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+refresh_token: (maybe_encrypt(Some("seed-refresh".into()),true,secret)?).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+id_token: (Some("seed-id".into())).into(),
+scope: (Some("seed-scope".into())).into(),
+access_token_expires_at: Default::default(),
+refresh_token_expires_at: Default::default(),
+password: Default::default(),
+..Default::default()
+}).await?;
             }}
             let accounts=match &user { Some(user)=>auth.store().get_user_accounts(&user.id()).await?, None=>vec![] };
-            let account=accounts.iter().find(|account|account.provider_id()=="google");
+            let account=accounts.iter().find(|account|account.provider_id=="google");
             let account=account.map(|account| {
-                let access=maybe_decrypt(account.access_token(),true,secret)?;
-                let refresh=maybe_decrypt(account.refresh_token(),true,secret)?;
-                Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=account.access_token()),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token(),"scope":account.scope(),"accessTokenExpiresAt":account.access_token_expires_at()}))
+                let raw_access = account.access_token.typed()?.as_deref();
+                let access=maybe_decrypt(raw_access,true,secret)?;
+                let refresh=maybe_decrypt(account.refresh_token.typed()?.as_deref(),true,secret)?;
+                Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=raw_access),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token.typed()?.as_deref(),"scope":account.scope.typed()?.as_deref(),"accessTokenExpiresAt":*account.access_token_expires_at.typed()?}))
             }).transpose()?;
             let state=fixture.state.lock().unwrap();
-            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id()=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.department,"internalCode":user.internal_code})),"account":account})))
+            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name(),"email":user.email(),"emailVerified":user.email_verified(),"image":user.image(),"department":user.department,"internalCode":user.internal_code})),"account":account})))
         }}))
     }
 }
@@ -211,7 +222,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
         {
             let mut input = account.clone();
             input.provider_id = "nested-cancel".into();
-            input.account_id.push_str(".nested");
+            input.account_id = format!("{}.nested", input.account_id.typed()?).into();
             let store = better_auth_seaorm::SeaOrmStore::<TestSchema>::new(
                 ctx.config.clone(),
                 ctx.db.clone(),
@@ -223,7 +234,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn after_create_account(
         &self,
-        _: &<TestSchema as AuthSchema>::Account,
+        _: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("account.create.after", ctx)
@@ -243,7 +254,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn after_update_account(
         &self,
-        _: Option<&<TestSchema as AuthSchema>::Account>,
+        _: Option<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("account.update.after", ctx)

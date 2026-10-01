@@ -38,22 +38,7 @@ pub struct SessionUpdate {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
-/// Partial verification values supplied to update hooks.
-#[derive(Clone, Default)]
-pub struct VerificationUpdate {
-    /// Replacement record ID.
-    pub id: Option<String>,
-    /// Replacement verification identifier.
-    pub identifier: Option<String>,
-    /// Replacement verification value.
-    pub value: Option<String>,
-    /// Replacement expiration time.
-    pub expires_at: Option<DateTime<Utc>>,
-    /// Replacement creation time.
-    pub created_at: Option<DateTime<Utc>>,
-    /// Replacement modification time.
-    pub updated_at: Option<DateTime<Utc>>,
-}
+pub use crate::types_account::VerificationUpdate;
 
 impl UpdateUser {
     /// Merge supplied fields without replacing fields omitted from the patch.
@@ -82,24 +67,6 @@ impl UpdateUser {
     }
 }
 
-impl UpdateAccount {
-    /// Merge supplied fields without replacing fields omitted from the patch.
-    pub fn merge(&mut self, patch: Self) {
-        macro_rules! fields {
-            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
-        }
-        fields!(
-            access_token,
-            refresh_token,
-            id_token,
-            access_token_expires_at,
-            refresh_token_expires_at,
-            scope,
-            password
-        );
-    }
-}
-
 impl SessionUpdate {
     /// Merge supplied fields and shallow-merge application fields.
     pub fn merge(&mut self, patch: Self) {
@@ -120,16 +87,6 @@ impl SessionUpdate {
             active_team_id
         );
         self.additional_fields.extend(patch.additional_fields);
-    }
-}
-
-impl VerificationUpdate {
-    /// Merge supplied fields without replacing fields omitted from the patch.
-    pub fn merge(&mut self, patch: Self) {
-        macro_rules! fields {
-            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
-        }
-        fields!(id, identifier, value, expires_at, created_at, updated_at);
     }
 }
 
@@ -225,7 +182,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed account creation.
     async fn after_create_account(
         &self,
-        _data: &S::Account,
+        _data: &crate::wire::AccountView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -241,7 +198,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed account update.
     async fn after_update_account(
         &self,
-        _data: Option<&S::Account>,
+        _data: Option<&crate::wire::AccountView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -249,7 +206,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Cancel an account deletion before storage changes.
     async fn before_delete_account(
         &self,
-        _data: &S::Account,
+        _data: &crate::wire::AccountView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         Ok(DatabaseHookControl::Continue)
@@ -257,7 +214,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed account deletion.
     async fn after_delete_account(
         &self,
-        _data: &S::Account,
+        _data: &crate::wire::AccountView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -323,7 +280,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed verification creation.
     async fn after_create_verification(
         &self,
-        _data: &S::Verification,
+        _data: &crate::wire::VerificationView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -339,7 +296,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed verification update.
     async fn after_update_verification(
         &self,
-        _data: Option<&S::Verification>,
+        _data: Option<&crate::wire::VerificationView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -347,7 +304,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Cancel a verification deletion before storage changes.
     async fn before_delete_verification(
         &self,
-        _data: &S::Verification,
+        _data: &crate::wire::VerificationView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         Ok(DatabaseHookControl::Continue)
@@ -355,7 +312,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed verification deletion.
     async fn after_delete_verification(
         &self,
-        _data: &S::Verification,
+        _data: &crate::wire::VerificationView,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())

@@ -111,9 +111,10 @@ pub(super) async fn create_trust_device_cookie_header(
     _ = ctx
         .database
         .create_verification(CreateVerification {
-            identifier: identifier.clone(),
-            value: user.id().to_string(),
-            expires_at,
+            identifier: (identifier.clone()).into(),
+            value: (user.id().to_string()).into(),
+            expires_at: (expires_at).into(),
+            ..Default::default()
         })
         .await?;
     create_signed_cookie_header(

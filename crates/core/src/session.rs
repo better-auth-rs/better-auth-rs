@@ -160,6 +160,11 @@ impl<S: AuthSchema> SessionManager<S> {
                     .and_then(serde_json::Value::as_bool)
                     == Some(true)
             })
+            .filter(|(_, name)| {
+                session
+                    .field_presence()
+                    .is_none_or(|fields| fields.contains(*name))
+            })
             .map(|(_, name)| name.to_owned())
             .collect(),
         );
@@ -306,6 +311,26 @@ impl<S: AuthSchema> SessionManager<S> {
 
     /// Resolve an HTTP session and queue any cookie updates on the request.
     pub async fn resolve(
+        &self,
+        req: &AuthRequest,
+        read: SessionRead,
+    ) -> AuthResult<SessionResolution> {
+        let raw = if req.path() == "/get-session" {
+            req.query.clone()
+        } else {
+            Some(
+                req.query
+                    .as_ref()
+                    .filter(|value| value.is_object())
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({})),
+            )
+        };
+        let query = crate::query::session_query(raw)?;
+        crate::query::with_validated_query(query, self.resolve_inner(req, read)).await
+    }
+
+    async fn resolve_inner(
         &self,
         req: &AuthRequest,
         read: SessionRead,
@@ -734,7 +759,10 @@ impl<S: AuthSchema> SessionManager<S> {
 }
 
 fn query_flag(req: &AuthRequest, name: &str) -> bool {
-    req.query.get(name).is_some_and(|value| !value.is_empty())
+    req.query
+        .as_ref()
+        .and_then(|query| query.get(name))
+        .is_some_and(crate::user_fields::is_truthy)
 }
 
 fn failed_session_update() -> AuthError {

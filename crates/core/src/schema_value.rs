@@ -1,5 +1,7 @@
 //! Values whose storage type can be replaced by an application schema.
 
+mod date;
+
 use crate::{AuthError, AuthResult};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned};
 use serde_json::Value;
@@ -11,6 +13,8 @@ pub enum SchemaValue<T> {
     Typed(T),
     /// A value supplied by a replacement schema or transform.
     Dynamic(Value),
+    /// An invalid JavaScript date. Serialize as null but retain NaN date operations.
+    InvalidDate,
     /// The adapter omitted the field.
     #[default]
     Undefined,
@@ -22,6 +26,7 @@ impl<T> SchemaValue<T> {
         match self {
             Self::Typed(value) => SchemaValue::Typed(transform(value)),
             Self::Dynamic(value) => SchemaValue::Dynamic(value),
+            Self::InvalidDate => SchemaValue::InvalidDate,
             Self::Undefined => SchemaValue::Undefined,
         }
     }
@@ -34,8 +39,8 @@ impl<T> SchemaValue<T> {
     pub fn typed(&self) -> AuthResult<&T> {
         match self {
             Self::Typed(value) => Ok(value),
-            Self::Dynamic(_) | Self::Undefined => Err(AuthError::internal(
-                "The organization field does not have the type required by this operation",
+            Self::Dynamic(_) | Self::InvalidDate | Self::Undefined => Err(AuthError::internal(
+                "The schema field does not have the type required by this operation",
             )),
         }
     }
@@ -60,6 +65,17 @@ impl PartialEq<&str> for SchemaValue<String> {
     }
 }
 
+impl SchemaValue<Value> {
+    /// Decode a projected JSON field while preserving non-JSON date and omission provenance.
+    pub fn into_field<T: DeserializeOwned>(self) -> SchemaValue<T> {
+        match self {
+            Self::Typed(value) | Self::Dynamic(value) => SchemaValue::from_json(Some(value)),
+            Self::InvalidDate => SchemaValue::InvalidDate,
+            Self::Undefined => SchemaValue::Undefined,
+        }
+    }
+}
+
 impl<T: DeserializeOwned> SchemaValue<T> {
     /// Preserve the adapter value, including a replacement type or an omitted field.
     pub fn from_json(value: Option<Value>) -> Self {
@@ -74,6 +90,17 @@ impl<T: DeserializeOwned> SchemaValue<T> {
 }
 
 impl<T: Serialize> SchemaValue<T> {
+    /// Evaluate an endpoint's truthy guard without decoding a replacement field's default type.
+    pub fn is_truthy(&self) -> AuthResult<bool> {
+        if matches!(self, Self::InvalidDate) {
+            return Ok(true);
+        }
+        Ok(self
+            .json()?
+            .as_ref()
+            .is_some_and(crate::user_fields::is_truthy))
+    }
+
     /// Return the field's JSON value without replacing omission with null.
     pub fn json(&self) -> AuthResult<Option<Value>> {
         if self.is_undefined() {
@@ -85,6 +112,9 @@ impl<T: Serialize> SchemaValue<T> {
 
     /// Apply JavaScript string conversion for upstream template-literal fields.
     pub fn display_string(&self) -> AuthResult<String> {
+        if matches!(self, Self::InvalidDate) {
+            return Ok("Invalid Date".to_owned());
+        }
         fn display(value: &Value) -> AuthResult<String> {
             Ok(match value {
                 Value::String(value) => value.clone(),
@@ -153,7 +183,7 @@ impl<T: Serialize> Serialize for SchemaValue<T> {
         match self {
             Self::Typed(value) => value.serialize(serializer),
             Self::Dynamic(value) => value.serialize(serializer),
-            Self::Undefined => serializer.serialize_unit(),
+            Self::InvalidDate | Self::Undefined => serializer.serialize_unit(),
         }
     }
 }

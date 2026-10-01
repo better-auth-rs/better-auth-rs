@@ -222,7 +222,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
     }
     async fn before_delete_account(
         &self,
-        _: &S::Account,
+        _: &better_auth_core::wire::AccountView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.before("account.before");
@@ -230,7 +230,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Hooks {
     }
     async fn after_delete_account(
         &self,
-        _: &S::Account,
+        _: &better_auth_core::wire::AccountView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after("account.after")
@@ -269,7 +269,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn before_delete_account(
         &self,
-        _: &S::Account,
+        _: &better_auth_core::wire::AccountView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         self.before("account.before");
@@ -277,7 +277,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_delete_account(
         &self,
-        _: &S::Account,
+        _: &better_auth_core::wire::AccountView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.after("account.after")
@@ -392,16 +392,17 @@ async fn check_transaction<S: AuthSchema>(
     let user_id = user.id().into_owned();
     let _ = store
         .create_account(CreateAccount {
-            user_id: user_id.clone(),
+            user_id: (user_id.clone()).into(),
             provider_id: "mock".into(),
             account_id: "mock".into(),
-            password: None,
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
+            password: Default::default(),
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();

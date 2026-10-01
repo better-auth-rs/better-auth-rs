@@ -425,7 +425,7 @@ impl DeviceAuthorizationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let Some(user_code) = req.query.get("user_code").cloned() else {
+        let Some(user_code) = req.query_string("user_code")?.map(str::to_owned) else {
             return device_error_response(400, "invalid_request", INVALID_REQUEST);
         };
 
@@ -598,7 +598,7 @@ better_auth_core::impl_auth_plugin! {
     routes {
         post "/device/code" => handle_device_code, "device_code", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"];
         post "/device/token" => handle_device_token, "device_token";
-        get "/device" => handle_device_verify, "device_verify";
+        get "/device" => handle_device_verify, "device_verify", query = crate::plugins::query_input::device;
         post "/device/approve" => handle_device_approve, "device_approve";
         post "/device/deny" => handle_device_deny, "device_deny";
     }

@@ -16,10 +16,12 @@ mod organization_extensions;
 mod organization_models;
 mod organization_roles;
 mod organizations;
+mod pagination;
 mod passkeys;
 mod plugin_models;
 mod rate_limits;
 mod runtime;
+mod schema_preflight;
 mod session_delete;
 mod sessions;
 mod team_capacity;
@@ -69,6 +71,7 @@ pub struct SeaOrmStore<
 > {
     config: Arc<AuthConfig>,
     db: DatabaseConnection,
+    schema_revision: Arc<std::sync::atomic::AtomicU64>,
     hooks: Vec<Arc<dyn SeaOrmHooks<S>>>,
     organization_fields:
         Arc<std::sync::RwLock<better_auth_core::organization_fields::OrganizationFields>>,
@@ -82,6 +85,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         Self {
             config: self.config.clone(),
             db: self.db.clone(),
+            schema_revision: self.schema_revision.clone(),
             hooks: self.hooks.clone(),
             organization_fields: self.organization_fields.clone(),
             _schema: PhantomData,
@@ -95,6 +99,7 @@ impl<S: AuthSchema> SeaOrmStore<S> {
         Self {
             config: config.into(),
             db,
+            schema_revision: Default::default(),
             hooks: Vec::new(),
             organization_fields: Default::default(),
             _schema: PhantomData,
@@ -105,6 +110,15 @@ impl<S: AuthSchema> SeaOrmStore<S> {
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
+    /// Invalidate checks after application-owned schema changes, including partially failed migrations.
+    /// Clones of this store share invalidation; separately constructed stores do not.
+    /// Direct SQL does not trigger invalidation automatically.
+    pub fn invalidate_schema_check(&self) {
+        let _previous = self
+            .schema_revision
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+
     /// Bind application-owned organization models while retaining core auth models and hooks.
     pub fn with_organization_schema<T: crate::SeaOrmOrganizationSchema>(
         self,
@@ -112,6 +126,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         SeaOrmStore {
             config: self.config,
             db: self.db,
+            schema_revision: self.schema_revision,
             hooks: self.hooks,
             organization_fields: self.organization_fields,
             _schema: PhantomData,
@@ -123,6 +138,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         SeaOrmStore {
             config: self.config,
             db: self.db,
+            schema_revision: self.schema_revision,
             hooks: self.hooks,
             organization_fields: self.organization_fields,
             _schema: PhantomData,
@@ -226,13 +242,31 @@ where
     async fn create_verification(
         &self,
         input: better_auth_core::CreateVerification,
-    ) -> AuthResult<S::Verification> {
-        self.create_transaction_verification(input).await
+    ) -> AuthResult<better_auth_core::wire::VerificationView> {
+        self.create_transaction_verification(input, None).await
     }
+    async fn create_verification_with_writer(
+        &self,
+        input: better_auth_core::CreateVerification,
+        writer: Option<better_auth_core::store::VerificationCreateWriter>,
+    ) -> AuthResult<better_auth_core::wire::VerificationView> {
+        self.create_transaction_verification(input, writer).await
+    }
+
+    async fn update_verification(
+        &self,
+        identifier: &str,
+        update: better_auth_core::store::database_hooks::VerificationUpdate,
+    ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
+        self.store
+            .update_verification_with_connection(self.tx, Some((self.tx, self)), identifier, update)
+            .await
+    }
+
     async fn get_verification_including_expired(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<S::Verification>> {
+    ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
         self.store
             .find_verification_with_connection(self.tx, identifier)
             .await
@@ -326,12 +360,14 @@ where
     async fn create_account(
         &self,
         create_account: better_auth_core::CreateAccount,
-    ) -> AuthResult<S::Account> {
+    ) -> AuthResult<better_auth_core::wire::AccountView> {
         let record = self
             .store
             .create_account_in_tx((self.tx, self), create_account)
             .await?;
-        self.queue(transaction_hooks::Effect::AccountCreated(record.clone()))?;
+        self.queue(transaction_hooks::Effect::AccountCreated(Box::new(
+            record.clone(),
+        )))?;
         Ok(record)
     }
 

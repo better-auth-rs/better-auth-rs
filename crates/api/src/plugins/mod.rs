@@ -24,6 +24,7 @@ pub mod organization;
 pub mod passkey;
 pub mod password_management;
 pub mod phone_number;
+mod query_input;
 pub mod session_management;
 mod session_update;
 pub mod siwe;
@@ -164,7 +165,13 @@ pub(crate) mod test_helpers {
             headers.insert("authorization".to_string(), format!("Bearer {}", token));
         }
 
-        AuthRequest::from_parts(method, path.to_string(), headers, body, query)
+        AuthRequest::from_parts(
+            method,
+            path.to_string(),
+            headers,
+            body,
+            Some(serde_json::json!(query)),
+        )
     }
 
     pub fn create_auth_request_no_query(

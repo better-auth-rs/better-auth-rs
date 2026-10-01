@@ -137,7 +137,7 @@ fn fail(value: Option<&Value>) -> AuthResult<()> {
     }
 }
 fn event(name: &str, ctx: PasskeyEndpoint<'_>) -> Value {
-    json!({"event": name, "path": ctx.request.path, "hasRequest": true, "context": ctx.request.query.get("context")})
+    json!({"event": name, "path": ctx.request.path, "hasRequest": true, "context": ctx.request.query.as_ref().and_then(|query| query.get("context"))})
 }
 #[async_trait]
 impl PasskeyUserResolver for PasskeyOptions {

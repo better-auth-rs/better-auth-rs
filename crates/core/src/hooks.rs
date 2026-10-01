@@ -14,7 +14,7 @@ pub struct RequestHookContext {
     /// Values captured from the matched endpoint path.
     pub params: std::collections::HashMap<String, String>,
     pub headers: std::collections::HashMap<String, String>,
-    pub query: std::collections::HashMap<String, String>,
+    pub query: Option<serde_json::Value>,
     /// Parsed endpoint input. An absent request body remains absent.
     pub body: Option<serde_json::Value>,
     pub meta: RequestMeta,
@@ -50,13 +50,13 @@ pub async fn with_request_hook_context<T>(
 }
 
 /// Run a future with an explicit request hook context.
-pub async fn with_request_hook_context_value<T>(
+pub fn with_request_hook_context_value<T>(
     request_context: RequestHookContext,
     future: impl std::future::Future<Output = T>,
-) -> T {
-    REQUEST_HOOK_CONTEXT
-        .scope(std::cell::RefCell::new(request_context), future)
-        .await
+) -> impl std::future::Future<Output = T> {
+    // Validation nests another endpoint scope around the handler future.
+    // Keep that future off each scope's stack frame.
+    REQUEST_HOOK_CONTEXT.scope(std::cell::RefCell::new(request_context), Box::pin(future))
 }
 
 pub fn current_request_hook_context() -> Option<RequestHookContext> {
@@ -100,11 +100,7 @@ pub fn set_request_hook_route(path: &str, route: Option<&crate::AuthRoute>) {
 /// Refresh the active snapshot after HTTP parsing or body replacement.
 /// Preserve the matched route, trusted IP metadata, and HTTP error policy.
 pub fn update_request_hook_context(request: &AuthRequest) -> crate::AuthResult<()> {
-    let body = request
-        .body
-        .as_ref()
-        .map(|_| request.body_as_json())
-        .transpose()?;
+    let body = request.input_body()?;
     let _ = REQUEST_HOOK_CONTEXT.try_with(|context| {
         let mut context = context.borrow_mut();
         context.method = request.method.clone();

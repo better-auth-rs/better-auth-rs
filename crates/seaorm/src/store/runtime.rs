@@ -25,6 +25,13 @@ where
     S::Session: SeaOrmSessionModel,
     S::Verification: SeaOrmVerificationModel,
 {
+    fn schema_check(
+        &self,
+        config: &better_auth_core::store::schema::SchemaConfiguration,
+    ) -> AuthResult<Option<Arc<better_auth_core::store::schema::SchemaCheck>>> {
+        self.create_schema_check(config)
+    }
+
     fn with_runtime(
         &self,
         config: Arc<AuthConfig>,
@@ -150,7 +157,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_account(
         &self,
-        _data: &S::Account,
+        _data: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -177,7 +184,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_update_account(
         &self,
-        _data: Option<&S::Account>,
+        _data: Option<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -190,7 +197,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_delete_account(
         &self,
-        _data: &S::Account,
+        _data: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let context = DatabaseHookContext {
@@ -206,7 +213,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_delete_account(
         &self,
-        _data: &S::Account,
+        _data: &better_auth_core::wire::AccountView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -322,7 +329,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_verification(
         &self,
-        _data: &S::Verification,
+        _data: &better_auth_core::wire::VerificationView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -349,7 +356,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_update_verification(
         &self,
-        _data: Option<&S::Verification>,
+        _data: Option<&better_auth_core::wire::VerificationView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -362,7 +369,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_delete_verification(
         &self,
-        _data: &S::Verification,
+        _data: &better_auth_core::wire::VerificationView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         let context = DatabaseHookContext {
@@ -380,7 +387,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_delete_verification(
         &self,
-        _data: &S::Verification,
+        _data: &better_auth_core::wire::VerificationView,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {

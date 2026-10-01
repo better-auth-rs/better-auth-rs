@@ -7,10 +7,7 @@ use better_auth::plugins::user_management::{
 };
 use better_auth::plugins::{PasswordManagementPlugin, UserManagementPlugin};
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth};
-use better_auth_core::{
-    AuthAccount, AuthRequest, AuthVerification, CreateAccount, user_fields::UserFieldConfig,
-    wire::UserView,
-};
+use better_auth_core::{AuthRequest, CreateAccount, user_fields::UserFieldConfig, wire::UserView};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
@@ -130,8 +127,20 @@ impl AuthLifecycleFixture {
                         database.execute_raw(Statement::from_sql_and_values(database.get_database_backend(),"UPDATE sessions SET created_at = ? WHERE user_id = ?",vec![(Utc::now()-Duration::days(2)).into(),user_id.into()])).await.map_err(|error|AuthError::internal(error.to_string()))?;
                     }
                     if body["action"]=="add-account" {
-                        let account=auth.store().create_account(CreateAccount {user_id:user_id.into(),provider_id:"lifecycle".into(),account_id:"lifecycle-account".into(),access_token:None,refresh_token:None,id_token:None,access_token_expires_at:None,refresh_token_expires_at:None,scope:None,password:None}).await?;
-                        return Ok(json!({"accountId":account.id()}));
+                        let account=auth.store().create_account(CreateAccount {
+user_id: user_id.into(),
+provider_id: "lifecycle".into(),
+account_id: "lifecycle-account".into(),
+access_token: Default::default(),
+refresh_token: Default::default(),
+id_token: Default::default(),
+access_token_expires_at: Default::default(),
+refresh_token_expires_at: Default::default(),
+scope: Default::default(),
+password: Default::default(),
+..Default::default()
+}).await?;
+                        return Ok(json!({"accountId":account.id}));
                     }
                     let user=auth.store().get_user_by_id(user_id).await?;
                     let accounts=auth.store().get_user_accounts(user_id).await?;
@@ -139,7 +148,7 @@ impl AuthLifecycleFixture {
                     let verification=match token {Some(token)=>auth.store().get_verification_by_identifier(&format!("reset-password:{token}")).await?,None=>None};
                     let state=fixture.state.lock().unwrap();
                     Ok(json!({"events":state.events,"resetToken":state.reset_token,"deleteToken":state.delete_token,"userExists":user.is_some(),"accounts":accounts.len(),
-                        "resetLifetime":verification.map(|verification|((verification.expires_at()-verification.created_at()).num_milliseconds()+500)/1000)}))
+                        "resetLifetime":verification.map(|verification| Ok::<_,AuthError>(((*verification.expires_at.typed()? - *verification.created_at.typed()?).num_milliseconds()+500)/1000)).transpose()?}))
                 }.await;
                 match result {Ok(value)=>Json(value).into_response(),Err(error)=>(axum::http::StatusCode::INTERNAL_SERVER_ERROR,Json(json!({"error":error.to_string()}))).into_response()}
             }

@@ -27,20 +27,20 @@ impl DatabaseHooks<StatelessSchema> for AfterCreate {
 
 fn account(id: &str, password: &str) -> AccountView {
     AccountView {
-        visible_fields: None,
+        additional_fields: Default::default(),
         id: id.into(),
         account_id: id.into(),
         provider_id: "credential".into(),
         user_id: "owner".into(),
-        access_token: None,
-        refresh_token: None,
-        id_token: None,
-        access_token_expires_at: None,
-        refresh_token_expires_at: None,
-        scope: None,
-        password: Some(password.into()),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        access_token: None.into(),
+        refresh_token: None.into(),
+        id_token: None.into(),
+        access_token_expires_at: None.into(),
+        refresh_token_expires_at: None.into(),
+        scope: None.into(),
+        password: Some(password.into()).into(),
+        created_at: Utc::now().into(),
+        updated_at: Utc::now().into(),
     }
 }
 
@@ -52,12 +52,12 @@ fn merge_preserves_private_changes_and_concurrent_rows_without_resurrecting_dele
         ("removed".into(), account("removed", "before")),
     ]);
     let mut live = base.clone();
-    live.get_mut("untouched").unwrap().password = Some("concurrent".into());
+    live.get_mut("untouched").unwrap().password = Some("concurrent".into()).into();
     let _ = live.shift_remove("removed");
     let _ = live.insert("new-live".into(), account("new-live", "concurrent"));
     let mut working = base.clone();
-    working.get_mut("private").unwrap().password = Some("committed".into());
-    working.get_mut("removed").unwrap().password = Some("must-not-resurrect".into());
+    working.get_mut("private").unwrap().password = Some("committed".into()).into();
+    working.get_mut("removed").unwrap().password = Some("must-not-resurrect".into()).into();
     let _ = working.insert(
         "new-transaction".into(),
         account("new-transaction", "committed"),
@@ -69,8 +69,14 @@ fn merge_preserves_private_changes_and_concurrent_rows_without_resurrecting_dele
         serde_json::to_value(&working["private"]).unwrap()
     );
     merge_map(&mut live, &base, working);
-    assert_eq!(live["private"].password.as_deref(), Some("committed"));
-    assert_eq!(live["untouched"].password.as_deref(), Some("concurrent"));
+    assert_eq!(
+        live["private"].password.typed().unwrap().as_deref(),
+        Some("committed")
+    );
+    assert_eq!(
+        live["untouched"].password.typed().unwrap().as_deref(),
+        Some("concurrent")
+    );
     assert!(!live.contains_key("removed"));
     assert_eq!(
         live.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -90,8 +96,8 @@ fn merge_keeps_private_passkey_credential_updates() {
         device_type: "singleDevice".into(),
         backed_up: false,
         transports: None,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        created_at: Utc::now().into(),
+        updated_at: Utc::now().into(),
         aaguid: None,
         credential: "private-before".into(),
     };

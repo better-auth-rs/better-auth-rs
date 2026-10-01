@@ -196,8 +196,9 @@ impl CsrfMiddleware {
         let body = Self::request_body_map(req).unwrap_or_default();
         let query_callback = req
             .query
-            .get("callbackURL")
-            .map(|value| Value::String(value.clone()));
+            .as_ref()
+            .and_then(|query| query.get("callbackURL"))
+            .cloned();
         let callback = body
             .get("callbackURL")
             .filter(|value| Self::is_truthy(value))
@@ -319,13 +320,7 @@ mod tests {
         for (name, value) in extra_headers {
             headers.insert((*name).to_string(), (*value).to_string());
         }
-        AuthRequest::from_parts(
-            HttpMethod::Post,
-            path.to_string(),
-            headers,
-            None,
-            HashMap::new(),
-        )
+        AuthRequest::from_parts(HttpMethod::Post, path.to_string(), headers, None, None)
     }
 
     fn test_auth_config(trusted_origins: Vec<String>) -> Arc<AuthConfig> {

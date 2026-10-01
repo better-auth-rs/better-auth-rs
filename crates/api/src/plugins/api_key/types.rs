@@ -274,72 +274,21 @@ fn validate_prefix(prefix: &str) -> Result<(), validator::ValidationError> {
 }
 
 /// Query parameters accepted by `GET /api-key/list`.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ListKeysQuery {
     pub config_id: Option<String>,
     pub organization_id: Option<String>,
-    pub limit: Option<usize>,
-    pub offset: Option<usize>,
+    pub limit: Option<u64>,
+    pub offset: Option<u64>,
     pub sort_by: Option<String>,
     pub sort_direction: Option<String>,
 }
 
 impl ListKeysQuery {
-    pub(crate) fn from_request(req: &AuthRequest) -> Result<Self, AuthResponse> {
-        let number = |key: &str| -> Result<Option<usize>, AuthResponse> {
-            let Some(value) = req.query.get(key) else {
-                return Ok(None);
-            };
-            let parsed = if value.trim().is_empty() {
-                0.0
-            } else {
-                value
-                    .trim()
-                    .parse::<f64>()
-                    .map_err(|_| query_error(key, "Invalid input: expected number, received NaN"))?
-            };
-            if !parsed.is_finite() {
-                return Err(query_error(
-                    key,
-                    if parsed.is_nan() {
-                        "Invalid input: expected number, received NaN"
-                    } else {
-                        "Invalid input: expected number, received number"
-                    },
-                ));
-            }
-            if parsed.fract() != 0.0 {
-                return Err(query_error(
-                    key,
-                    "Invalid input: expected int, received number",
-                ));
-            }
-            if parsed < 0.0 {
-                return Err(query_error(key, "Too small: expected number to be >=0"));
-            }
-            Ok(Some(parsed as usize))
-        };
-        if let Some(direction) = req.query.get("sortDirection")
-            && !matches!(direction.as_str(), "asc" | "desc")
-        {
-            return Err(query_error(
-                "sortDirection",
-                "Invalid option: expected one of \"asc\"|\"desc\"",
-            ));
-        }
-        Ok(Self {
-            config_id: req.query.get("configId").cloned(),
-            organization_id: req.query.get("organizationId").cloned(),
-            limit: number("limit")?,
-            offset: number("offset")?,
-            sort_by: req.query.get("sortBy").cloned(),
-            sort_direction: req.query.get("sortDirection").cloned(),
-        })
+    pub(crate) fn from_request(req: &AuthRequest) -> better_auth_core::AuthResult<Self> {
+        crate::plugins::query_input::parse(&req.query)
     }
-}
-
-fn query_error(field: &str, message: &str) -> AuthResponse {
-    validation_response(&format!("query.{field}"), message)
 }
 
 fn validation_response(location: &str, message: &str) -> AuthResponse {
@@ -356,9 +305,9 @@ pub(crate) struct ListKeysResponse {
     pub api_keys: Vec<ApiKeyView>,
     pub total: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<usize>,
+    pub limit: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub offset: Option<usize>,
+    pub offset: Option<u64>,
 }
 
 /// Newly issued API key. The plaintext key is only returned during creation.

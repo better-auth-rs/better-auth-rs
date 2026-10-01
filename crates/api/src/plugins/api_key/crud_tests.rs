@@ -41,7 +41,7 @@ fn request(token: &str, path: &str, body: serde_json::Value) -> AuthRequest {
         path.to_string(),
         HashMap::from([("authorization".to_string(), format!("Bearer {token}"))]),
         Some(serde_json::to_vec(&body).unwrap()),
-        HashMap::new(),
+        None,
     )
 }
 
@@ -280,6 +280,11 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
 async fn list_rejects_invalid_pagination_instead_of_ignoring_it() {
     let (ctx, _, token) = context().await;
     let plugin = ApiKeyPlugin::builder().build();
+    let route = <ApiKeyPlugin as better_auth_core::AuthPlugin<TestSchema>>::routes(&plugin)
+        .into_iter()
+        .find(|route| route.path == "/api-key/list")
+        .unwrap();
+    let validate = route.query_validator.unwrap();
     for (field, value) in [
         ("limit", "-1"),
         ("offset", "1.5"),
@@ -287,8 +292,21 @@ async fn list_rejects_invalid_pagination_instead_of_ignoring_it() {
         ("sortDirection", "sideways"),
     ] {
         let mut req = request(&token, "/api-key/list", json!({}));
-        req.query.insert(field.to_string(), value.to_string());
-        let response = plugin.handle_list(&req, &ctx).await.unwrap();
+        req.query
+            .get_or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .unwrap()
+            .insert(
+                field.to_string(),
+                serde_json::Value::from(value.to_string()),
+            );
+        let response = match validate(req.query.clone()) {
+            Ok(query) => {
+                req.query = query;
+                plugin.handle_list(&req, &ctx).await.unwrap()
+            }
+            Err(error) => error.to_auth_response(),
+        };
         assert_eq!(response.status, 400);
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&response.body).unwrap()["code"],

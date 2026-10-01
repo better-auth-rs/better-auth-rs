@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthResult, CreateAccount, CreateSession, UpdateUser,
@@ -259,16 +259,19 @@ pub(crate) async fn create_user_core(
         let _ = ctx
             .database
             .create_account(CreateAccount {
-                user_id: user.id().to_string(),
-                account_id: user.id().to_string(),
-                provider_id: "credential".to_string(),
-                access_token: None,
-                refresh_token: None,
-                id_token: None,
-                access_token_expires_at: None,
-                refresh_token_expires_at: None,
-                scope: None,
-                password: Some(password_hash),
+                user_id: (user.id().to_string()).into(),
+                account_id: (user.id().to_string()).into(),
+                provider_id: ("credential".to_string()).into(),
+                access_token: Default::default(),
+                refresh_token: Default::default(),
+                id_token: Default::default(),
+                access_token_expires_at: Default::default(),
+                refresh_token_expires_at: Default::default(),
+                scope: Default::default(),
+                password: (Some(password_hash))
+                    .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                    .unwrap_or_default(),
+                ..Default::default()
             })
             .await?;
     }
@@ -449,8 +452,8 @@ pub(crate) async fn list_users_core(
             .map(|user| ctx.user_view(user))
             .collect::<AuthResult<_>>()?,
         total,
-        limit: query.limit.filter(|limit| *limit > 0),
-        offset: query.offset.filter(|offset| *offset > 0),
+        limit: query.limit,
+        offset: query.offset,
     })
 }
 
@@ -707,7 +710,7 @@ pub(crate) async fn remove_user_core(
 
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
     for account in &accounts {
-        ctx.database.delete_account(&account.id()).await?;
+        ctx.database.delete_account(account.id.typed()?).await?;
     }
 
     ctx.database.delete_user(&body.user_id).await?;
@@ -732,15 +735,17 @@ pub(crate) async fn set_user_password_core(
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
     if let Some(account) = accounts
         .iter()
-        .find(|account| account.provider_id() == "credential")
+        .find(|account| account.provider_id == "credential")
     {
         let account_update = better_auth_core::UpdateAccount {
-            password: Some(password_hash),
+            password: (Some(password_hash))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
             ..Default::default()
         };
         let _ = ctx
             .database
-            .update_account(&account.id(), account_update)
+            .update_account(account.id.typed()?, account_update)
             .await?;
     }
 

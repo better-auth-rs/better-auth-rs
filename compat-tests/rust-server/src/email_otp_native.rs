@@ -5,7 +5,6 @@ use better_auth::plugins::email_otp::{
     EmailOtpCallbacks, EmailOtpCodec, EmailOtpPlugin, EmailOtpStorage, EmailOtpType,
 };
 use better_auth::{AuthBuilder, AuthError, AuthResult, BetterAuth};
-use better_auth_core::AuthVerification;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 #[derive(Default, serde::Serialize)]
@@ -146,12 +145,15 @@ impl EmailOtpNativeFixture {
                     state["expiresAt"] = json!(
                         record
                             .as_ref()
-                            .map(|record| record.expires_at().to_rfc3339())
+                            .map(|record| record.expires_at.typed().map(|value| value.to_rfc3339()))
+                            .transpose()?
                     );
                     state["attempts"] = json!(
                         record
                             .as_ref()
-                            .and_then(|record| record.value().rsplit_once(':'))
+                            .map(|record| record.value.typed())
+                            .transpose()?
+                            .and_then(|value| value.rsplit_once(':'))
                             .and_then(|(_, attempts)| attempts.parse::<u32>().ok())
                     );
                     Ok(Json(state))

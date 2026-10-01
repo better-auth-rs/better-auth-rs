@@ -213,6 +213,9 @@ impl<S: AuthSchema> AuthContext<S> {
         Fut: Future<Output = AuthResult<T>> + Send,
         T: Send,
     {
+        if let Some(validation) = self.database.schema_validation() {
+            validation.check_runtime().await?;
+        }
         let context = self.initialize_request_context().await?;
         let resolved = if matches!(context.config.base_url, BaseUrl::Dynamic(_))
             && context.base_url().is_empty()

@@ -1,4 +1,4 @@
-use better_auth_core::entity::AuthAccount;
+use better_auth_core::SchemaValue;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, UpdateAccount,
 };
@@ -17,9 +17,26 @@ use super::types::{
     RefreshTokenResponse,
 };
 
+#[derive(Clone)]
 enum AccountSelection {
     Id(String),
     Cookie,
+}
+
+pub(super) fn account_body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let projection = req.input_body()?;
+    let selection =
+        AccountSelection::from_value(projection.clone().unwrap_or(serde_json::Value::Null))
+            .map_err(|message| {
+                AuthError::from(crate::plugins::json_body::validation_error(&format!(
+                    "[body] {message}"
+                )))
+            })?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        projection, selection,
+    ))
 }
 
 fn invalid_selection(location: &str, message: String) -> AuthResult<AuthResponse> {
@@ -34,17 +51,15 @@ fn invalid_selection(location: &str, message: String) -> AuthResult<AuthResponse
 
 impl AccountSelection {
     fn from_body(req: &AuthRequest) -> Result<Self, String> {
+        if let Some(selection) = req.validated_body::<Self>() {
+            return Ok(selection.clone());
+        }
         let value = req.body_as_json().map_err(|_| "Invalid input".to_owned())?;
         Self::from_value(value)
     }
 
     fn from_query(req: &AuthRequest) -> Result<Self, String> {
-        Self::from_value(serde_json::Value::Object(
-            req.query
-                .iter()
-                .map(|(key, value)| (key.clone(), serde_json::Value::String(value.clone())))
-                .collect(),
-        ))
+        Self::from_value(req.query.clone().unwrap_or(serde_json::Value::Null))
     }
 
     fn from_value(value: serde_json::Value) -> Result<Self, String> {
@@ -92,8 +107,8 @@ impl AccountSelection {
                 .get_user_accounts(user_id)
                 .await?
                 .iter()
-                .find(|account| account.id().as_ref() == account_id.as_str())
-                .map(AccountCookiePayload::from_account),
+                .find(|account| account.id == account_id.as_str())
+                .cloned(),
             Self::Cookie if ctx.config.account.store_account_cookie() => {
                 decode_account_cookie(req, &ctx.config)?.filter(|account| {
                     !ctx.store_capabilities().database || account.user_id == user_id
@@ -105,11 +120,106 @@ impl AccountSelection {
     }
 }
 
+fn provider_for<'a>(
+    config: &'a OAuthConfig,
+    account: &AccountCookiePayload,
+) -> AuthResult<&'a super::resolved::ResolvedProvider> {
+    if let Some((_, provider)) = config
+        .providers
+        .iter()
+        .find(|(name, _)| account.provider_id == name.as_str())
+    {
+        return Ok(provider);
+    }
+    Err(AuthError::bad_request(format!(
+        "Provider {} is not supported.",
+        account.provider_id.display_string()?
+    )))
+}
+
+fn parse_scopes(scope: &SchemaValue<Option<String>>) -> AuthResult<Vec<String>> {
+    if !scope.is_truthy()? {
+        return Ok(Vec::new());
+    }
+    let value = scope
+        .typed()?
+        .as_deref()
+        .ok_or_else(|| AuthError::internal("account.scope.split is not a function"))?;
+    Ok(crate::plugins::helpers::parse_stored_scopes(Some(value)))
+}
+
+fn date_value(
+    value: &SchemaValue<Option<chrono::DateTime<Utc>>>,
+) -> AuthResult<SchemaValue<chrono::DateTime<Utc>>> {
+    if matches!(value, SchemaValue::InvalidDate) {
+        return Ok(SchemaValue::InvalidDate);
+    }
+    Ok(SchemaValue::from_json(value.json()?))
+}
+
+fn decrypt_value(
+    value: &SchemaValue<Option<String>>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<SchemaValue<Option<String>>> {
+    if !ctx.config.account.encrypt_oauth_tokens || !value.is_truthy()? {
+        return Ok(value.clone());
+    }
+    Ok(maybe_decrypt(
+        value.typed()?.as_deref(),
+        true,
+        ctx.config.encryption_secret(),
+    )?
+    .into())
+}
+
+fn overlay_account(target: &mut AccountCookiePayload, source: AccountCookiePayload) {
+    if !source.id.is_undefined() {
+        target.id = source.id;
+    }
+    if !source.account_id.is_undefined() {
+        target.account_id = source.account_id;
+    }
+    if !source.provider_id.is_undefined() {
+        target.provider_id = source.provider_id;
+    }
+    if !source.user_id.is_undefined() {
+        target.user_id = source.user_id;
+    }
+    if !source.access_token.is_undefined() {
+        target.access_token = source.access_token;
+    }
+    if !source.refresh_token.is_undefined() {
+        target.refresh_token = source.refresh_token;
+    }
+    if !source.id_token.is_undefined() {
+        target.id_token = source.id_token;
+    }
+    if !source.access_token_expires_at.is_undefined() {
+        target.access_token_expires_at = source.access_token_expires_at;
+    }
+    if !source.refresh_token_expires_at.is_undefined() {
+        target.refresh_token_expires_at = source.refresh_token_expires_at;
+    }
+    if !source.scope.is_undefined() {
+        target.scope = source.scope;
+    }
+    if !source.password.is_undefined() {
+        target.password = source.password;
+    }
+    if !source.created_at.is_undefined() {
+        target.created_at = source.created_at;
+    }
+    if !source.updated_at.is_undefined() {
+        target.updated_at = source.updated_at;
+    }
+    target.additional_fields.extend(source.additional_fields);
+}
+
 async fn persist_tokens(
-    account: &mut AccountCookiePayload,
+    account: &AccountCookiePayload,
     tokens: &OAuthTokenSet,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<()> {
+) -> AuthResult<AccountCookiePayload> {
     let encrypted = encrypt_token_set(
         ctx,
         tokens.access_token.clone(),
@@ -117,75 +227,76 @@ async fn persist_tokens(
             .refresh_token
             .clone()
             .filter(|token| !token.is_empty()),
-        tokens.id_token.clone().filter(|token| !token.is_empty()),
+        None,
     )?;
     let update = UpdateAccount {
         access_token: encrypted
             .access_token
-            .or_else(|| account.access_token.clone()),
+            .map(|value| SchemaValue::Typed(Some(value)))
+            .unwrap_or_default(),
         refresh_token: encrypted
             .refresh_token
-            .or_else(|| account.refresh_token.clone()),
-        id_token: encrypted.id_token.or_else(|| account.id_token.clone()),
+            .map(|value| SchemaValue::Typed(Some(value)))
+            .unwrap_or_else(|| account.refresh_token.clone()),
+        id_token: tokens
+            .id_token
+            .clone()
+            .filter(|value| !value.is_empty())
+            .map(|value| SchemaValue::Typed(Some(value)))
+            .unwrap_or_else(|| account.id_token.clone()),
         access_token_expires_at: tokens
             .access_token_expires_at
-            .or(account.access_token_expires_at),
+            .map(|value| SchemaValue::Typed(Some(value)))
+            .unwrap_or_default(),
         refresh_token_expires_at: tokens
             .refresh_token_expires_at
-            .or(account.refresh_token_expires_at),
+            .map(|value| SchemaValue::Typed(Some(value)))
+            .unwrap_or_else(|| account.refresh_token_expires_at.clone()),
         ..Default::default()
     };
-    if let Some(id) = account.id.as_deref()
-        && let Some(updated) = ctx
-            .database
-            .update_account_optional(id, update.clone())
+    let updated = if account.id.is_truthy()? {
+        ctx.database
+            .update_account_optional(account.id.typed()?, update.clone())
             .await?
-    {
-        *account = AccountCookiePayload::from_account(&updated);
     } else {
-        account.access_token = update.access_token;
-        account.refresh_token = update.refresh_token;
-        account.id_token = update.id_token;
-        account.access_token_expires_at = update.access_token_expires_at;
-        account.refresh_token_expires_at = update.refresh_token_expires_at;
+        None
+    };
+    let mut cookie = account.clone();
+    if let Some(updated) = updated {
+        overlay_account(&mut cookie, updated);
+    } else {
+        cookie.access_token = update.access_token;
+        cookie.refresh_token = update.refresh_token;
+        cookie.id_token = update.id_token;
+        cookie.access_token_expires_at = update.access_token_expires_at;
+        cookie.refresh_token_expires_at = update.refresh_token_expires_at;
     }
-    Ok(())
+    Ok(cookie)
 }
 
 async fn valid_access_token(
-    account: &mut AccountCookiePayload,
+    account: &AccountCookiePayload,
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(AccessTokenResponse, Vec<String>)> {
-    let provider = config.providers.get(&account.provider_id).ok_or_else(|| {
-        AuthError::bad_request(format!(
-            "Provider {} is not supported.",
-            account.provider_id
-        ))
-    })?;
+    let provider = provider_for(config, account)?;
     async {
-        let encrypted = ctx.config.account.encrypt_oauth_tokens;
-        let expired = account.access_token_expires_at.is_some_and(|expires_at| {
-            expires_at.timestamp_millis() - Utc::now().timestamp_millis() < 5_000
-        });
+        let expired = account.access_token_expires_at.is_truthy()?
+            && date_value(&account.access_token_expires_at)?
+                .converted_date()
+                .is_before(Utc::now() + chrono::Duration::seconds(5));
         let mut cookies = Vec::new();
-        let new_tokens = if expired
-            && account
-                .refresh_token
-                .as_ref()
-                .is_some_and(|token| !token.is_empty())
-        {
-            let refresh_token = maybe_decrypt(
-                account.refresh_token.as_deref(),
-                encrypted,
-                ctx.config.encryption_secret(),
-            )?
-            .unwrap_or_default();
-            let tokens = refresh_tokens_via_provider(provider, &refresh_token, req).await?;
-            persist_tokens(account, &tokens, ctx).await?;
+        let new_tokens = if expired && account.refresh_token.is_truthy()? {
+            let value = decrypt_value(&account.refresh_token, ctx)?;
+            let refresh = value
+                .typed()?
+                .as_deref()
+                .ok_or_else(|| AuthError::internal("Refresh token is null"))?;
+            let tokens = refresh_tokens_via_provider(provider, refresh, req).await?;
+            let updated = persist_tokens(account, &tokens, ctx).await?;
             if ctx.config.account.store_account_cookie() {
-                cookies = create_account_cookie_headers(req, &ctx.config, account)?;
+                cookies = create_account_cookie_headers(req, &ctx.config, &updated)?;
             }
             Some(tokens)
         } else {
@@ -195,24 +306,48 @@ async fn valid_access_token(
             .as_ref()
             .and_then(|tokens| tokens.access_token.clone())
         {
-            Some(token) => token,
-            None => maybe_decrypt(
-                account.access_token.as_deref(),
-                encrypted,
-                ctx.config.encryption_secret(),
-            )?
-            .unwrap_or_default(),
+            Some(token) => SchemaValue::Typed(Some(token)),
+            None => {
+                let value = if account.access_token.is_absent() {
+                    SchemaValue::Typed(Some(String::new()))
+                } else {
+                    account.access_token.clone()
+                };
+                decrypt_value(&value, ctx)?
+            }
         };
+        let access_token_expires_at = if let Some(value) = new_tokens
+            .as_ref()
+            .and_then(|tokens| tokens.access_token_expires_at)
+        {
+            SchemaValue::Typed(Some(value))
+        } else if account.access_token_expires_at.is_truthy()? {
+            // getValidAccessToken converts strings but preserves other replacement output types.
+            match account.access_token_expires_at.json()? {
+                Some(serde_json::Value::String(_)) => date_value(&account.access_token_expires_at)?
+                    .converted_date()
+                    .map(Some),
+                _ => account.access_token_expires_at.clone(),
+            }
+        } else {
+            SchemaValue::Undefined
+        };
+        let id_token = new_tokens
+            .and_then(|tokens| tokens.id_token)
+            .map(|value| SchemaValue::Typed(Some(value)))
+            .unwrap_or_else(|| {
+                if account.id_token.is_absent() {
+                    SchemaValue::Undefined
+                } else {
+                    account.id_token.clone()
+                }
+            });
         Ok((
             AccessTokenResponse {
-                access_token: Some(access_token),
-                access_token_expires_at: account
-                    .access_token_expires_at
-                    .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
-                scopes: crate::plugins::helpers::parse_stored_scopes(account.scope.as_deref()),
-                id_token: new_tokens
-                    .and_then(|tokens| tokens.id_token)
-                    .or_else(|| account.id_token.clone()),
+                access_token,
+                access_token_expires_at,
+                scopes: parse_scopes(&account.scope)?,
+                id_token,
             },
             cookies,
         ))
@@ -239,8 +374,8 @@ pub(super) async fn handle_get_access_token(
         Err(message) => return invalid_selection("body", message),
     };
     let (_, session) = ctx.require_authoritative_session(req).await?;
-    let mut account = selection.resolve(req, &session.user_id, ctx).await?;
-    let (response, cookies) = valid_access_token(&mut account, config, req, ctx).await?;
+    let account = selection.resolve(req, &session.user_id, ctx).await?;
+    let (response, cookies) = valid_access_token(&account, config, req, ctx).await?;
     token_response(&response, cookies)
 }
 
@@ -254,49 +389,46 @@ pub(super) async fn handle_refresh_token(
         Err(message) => return invalid_selection("body", message),
     };
     let (_, session) = ctx.require_authoritative_session(req).await?;
-    let mut account = selection.resolve(req, &session.user_id, ctx).await?;
-    let provider = config.providers.get(&account.provider_id).ok_or_else(|| {
-        AuthError::bad_request(format!(
-            "Provider {} is not supported.",
-            account.provider_id
-        ))
-    })?;
-    let refresh_token = account
-        .refresh_token
-        .as_deref()
-        .filter(|token| !token.is_empty())
-        .map(str::to_owned)
-        .ok_or_else(|| AuthError::bad_request("Refresh token not found"))?;
+    let account = selection.resolve(req, &session.user_id, ctx).await?;
+    let provider = provider_for(config, &account)?;
+    if !account.refresh_token.is_truthy()? {
+        return Err(AuthError::bad_request("Refresh token not found"));
+    }
     async {
-        let refresh_token = maybe_decrypt(
-            Some(&refresh_token),
-            ctx.config.account.encrypt_oauth_tokens,
-            ctx.config.encryption_secret(),
-        )?
-        .unwrap_or_default();
-        let tokens = refresh_tokens_via_provider(provider, &refresh_token, req).await?;
-        persist_tokens(&mut account, &tokens, ctx).await?;
+        let decrypted = decrypt_value(&account.refresh_token, ctx)?;
+        let refresh_token = decrypted
+            .typed()?
+            .as_deref()
+            .ok_or_else(|| AuthError::internal("Refresh token is null"))?;
+        let tokens = refresh_tokens_via_provider(provider, refresh_token, req).await?;
+        let updated = persist_tokens(&account, &tokens, ctx).await?;
         let response = RefreshTokenResponse {
             access_token: tokens.access_token,
-            access_token_expires_at: tokens
-                .access_token_expires_at
-                .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
-            refresh_token: Some(tokens.refresh_token.unwrap_or(refresh_token)),
-            refresh_token_expires_at: account.optional(
-                "refreshTokenExpiresAt",
-                account
-                    .refresh_token_expires_at
-                    .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
-            ),
-            scope: account.optional("scope", account.scope.clone()),
-            id_token: account.optional("idToken", account.id_token.clone()),
+            access_token_expires_at: tokens.access_token_expires_at,
+            refresh_token: tokens
+                .refresh_token
+                .unwrap_or_else(|| refresh_token.to_owned()),
+            refresh_token_expires_at: tokens
+                .refresh_token_expires_at
+                .map(|value| SchemaValue::Typed(Some(value)))
+                .unwrap_or_else(|| account.refresh_token_expires_at.clone()),
+            scope: if updated.scope.is_absent() {
+                account.scope.clone()
+            } else {
+                updated.scope.clone()
+            },
+            id_token: tokens
+                .id_token
+                .filter(|token| !token.is_empty())
+                .map(|value| SchemaValue::Typed(Some(value)))
+                .unwrap_or_else(|| account.id_token.clone()),
             provider_id: account.provider_id.clone(),
             account_id: account.id.clone(),
         };
         let cookies = if matches!(selection, AccountSelection::Cookie)
             && ctx.config.account.store_account_cookie()
         {
-            create_account_cookie_headers(req, &ctx.config, &account)?
+            create_account_cookie_headers(req, &ctx.config, &updated)?
         } else {
             Vec::new()
         };
@@ -316,25 +448,40 @@ pub(super) async fn handle_account_info(
         Err(message) => return invalid_selection("query", message),
     };
     let (_, session) = ctx.require_authoritative_session(req).await?;
-    let mut account = selection.resolve(req, &session.user_id, ctx).await?;
+    let account = selection.resolve(req, &session.user_id, ctx).await?;
     let provider = config
         .providers
-        .get(&account.provider_id)
+        .iter()
+        .find(|(name, _)| account.provider_id == name.as_str())
+        .map(|(_, provider)| provider)
         .ok_or(AuthError::Upstream {
             status: 400,
             code: "PROVIDER_NOT_CONFIGURED",
             message: "Account is not associated with a configured social provider.",
         })?;
-    let (tokens, cookies) = valid_access_token(&mut account, config, req, ctx).await?;
+    let (tokens, cookies) = valid_access_token(&account, config, req, ctx).await?;
+    if !tokens.access_token.is_truthy()? {
+        return Err(AuthError::bad_request("Access token not found"));
+    }
     let access_token = tokens
         .access_token
+        .typed()?
+        .clone()
         .filter(|token| !token.is_empty())
         .ok_or_else(|| AuthError::bad_request("Access token not found"))?;
     let request = OAuthUserInfoRequest {
         access_token: Some(access_token),
-        access_token_expires_at: account.access_token_expires_at,
+        access_token_expires_at: if account.access_token_expires_at.is_absent() {
+            None
+        } else {
+            *account.access_token_expires_at.typed()?
+        },
         scopes: tokens.scopes,
-        id_token: tokens.id_token,
+        id_token: if tokens.id_token.is_absent() {
+            None
+        } else {
+            tokens.id_token.typed()?.clone()
+        },
         ..Default::default()
     };
     let (user, data) = if let Some(generic) = &provider.generic {

@@ -113,6 +113,8 @@ pub struct AuthConfig {
 /// Account-level configuration: linking, token encryption, sign-in behavior.
 #[derive(Debug, Clone)]
 pub struct AccountConfig {
+    /// Adapter fields, including schema replacements for built-in account fields.
+    pub additional_fields: indexmap::IndexMap<String, crate::user_fields::UserFieldConfig>,
     /// Update OAuth tokens on every sign-in (default: true)
     pub update_account_on_sign_in: bool,
     /// Account linking settings
@@ -162,6 +164,8 @@ pub enum OAuthStateStrategy {
 /// Verification persistence with secondary storage. Without secondary storage, the database remains authoritative.
 #[derive(Debug, Clone, Default)]
 pub struct VerificationConfig {
+    /// Adapter fields. Pure secondary storage does not apply these adapter policies.
+    pub additional_fields: indexmap::IndexMap<String, crate::user_fields::UserFieldConfig>,
     /// Identifier transformation with ordered prefix overrides and plain-data read migration.
     pub store_identifier: VerificationIdentifierConfig,
     /// Persist verification records in the database and use database atomic consumption.
@@ -389,6 +393,7 @@ impl AccountConfig {
 impl Default for AccountConfig {
     fn default() -> Self {
         Self {
+            additional_fields: Default::default(),
             update_account_on_sign_in: true,
             account_linking: AccountLinkingConfig::default(),
             encrypt_oauth_tokens: false,
@@ -527,6 +532,10 @@ pub struct CookieOverride {
 /// Database-related advanced options.
 #[derive(Debug, Clone)]
 pub struct AdvancedDatabaseConfig {
+    /// Validate physical tables and written columns at runtime unless explicitly disabled.
+    /// Omission reports unsupported adapters at debug level; explicit true reports a warning.
+    pub validate_schema: Option<bool>,
+
     /// Default `LIMIT` for "find many" queries.
     pub default_find_many_limit: usize,
 
@@ -589,6 +598,7 @@ impl Default for IpAddressConfig {
 impl Default for AdvancedDatabaseConfig {
     fn default() -> Self {
         Self {
+            validate_schema: None,
             default_find_many_limit: 100,
             use_number_id: false,
         }

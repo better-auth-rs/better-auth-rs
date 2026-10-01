@@ -6,8 +6,8 @@
 
 use async_trait::async_trait;
 use better_auth_core::{
-    AuthAccount, AuthConfig, AuthError, AuthResult, AuthSchema, AuthSession, AuthUser,
-    CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
+    AuthConfig, AuthError, AuthResult, AuthSchema, AuthSession, AuthUser, CreateAccount,
+    CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
     store::{AccountStore, SessionStore, UserStore, VerificationStore, transaction},
 };
 use better_auth_seaorm::{
@@ -23,7 +23,6 @@ use std::sync::{
 };
 
 type User = <BundledSchema as AuthSchema>::User;
-type Account = <BundledSchema as AuthSchema>::Account;
 type Session = <BundledSchema as AuthSchema>::Session;
 type Verification = <BundledSchema as AuthSchema>::Verification;
 
@@ -70,16 +69,19 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
         update: &UpdateAccount,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
-        assert_eq!(update.password.as_deref(), Some("requested"));
-        assert!(update.scope.is_none());
+        assert_eq!(
+            update.password.typed().unwrap().as_deref(),
+            Some("requested")
+        );
+        assert!(update.scope.is_undefined());
         Ok(DatabaseHookUpdate::Patch(if self.first {
             UpdateAccount {
-                scope: Some("first-scope".into()),
+                scope: (Some("first-scope".into())).into(),
                 ..Default::default()
             }
         } else {
             UpdateAccount {
-                password: Some("last-password".into()),
+                password: (Some("last-password".into())).into(),
                 ..Default::default()
             }
         }))
@@ -117,16 +119,23 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
         update: &VerificationUpdate,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
-        assert_eq!(update.value.as_deref(), Some("requested"));
-        assert!(update.identifier.is_none());
+        assert_eq!(
+            Some(update.value.typed().unwrap().as_str()),
+            Some("requested")
+        );
+        assert!(update.identifier.is_undefined());
         Ok(DatabaseHookUpdate::Patch(if self.first {
             VerificationUpdate {
-                identifier: Some("moved".into()),
+                identifier: (Some("moved".into()))
+                    .map(better_auth_core::SchemaValue::Typed)
+                    .unwrap_or_default(),
                 ..Default::default()
             }
         } else {
             VerificationUpdate {
-                value: Some("last-value".into()),
+                value: (Some("last-value".into()))
+                    .map(better_auth_core::SchemaValue::Typed)
+                    .unwrap_or_default(),
                 ..Default::default()
             }
         }))
@@ -143,7 +152,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn after_update_account(
         &self,
-        value: Option<&Account>,
+        value: Option<&better_auth_core::wire::AccountView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         if value.is_none() {
@@ -163,7 +172,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn after_update_verification(
         &self,
-        value: Option<&Verification>,
+        value: Option<&better_auth_core::wire::VerificationView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         if value.is_none() {
@@ -182,16 +191,17 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
         .unwrap();
     let account = store
         .create_account(CreateAccount {
-            user_id: user.id().into_owned(),
+            user_id: (user.id().into_owned()).into(),
             account_id: "patch-account".into(),
             provider_id: "credential".into(),
-            password: None,
-            access_token: None,
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
+            password: Default::default(),
+            access_token: Default::default(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -211,7 +221,8 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
             .create_verification(CreateVerification {
                 identifier: "original".into(),
                 value: value.into(),
-                expires_at: Utc::now() + chrono::Duration::hours(1),
+                expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -240,16 +251,22 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
     assert_eq!(updated.image(), Some("first-image"));
     let updated = store
         .update_account(
-            &account.id(),
+            account.id.typed().unwrap(),
             UpdateAccount {
-                password: Some("requested".into()),
+                password: (Some("requested".into())).into(),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(updated.password(), Some("last-password"));
-    assert_eq!(updated.scope(), Some("first-scope"));
+    assert_eq!(
+        updated.password.typed().unwrap().as_deref(),
+        Some("last-password")
+    );
+    assert_eq!(
+        updated.scope.typed().unwrap().as_deref(),
+        Some("first-scope")
+    );
     let updated = store
         .update_session_active_organization(session.token(), Some("requested"))
         .await
@@ -290,7 +307,7 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
             .update_account_optional(
                 "missing",
                 UpdateAccount {
-                    password: Some("requested".into()),
+                    password: (Some("requested".into())).into(),
                     ..Default::default()
                 }
             )

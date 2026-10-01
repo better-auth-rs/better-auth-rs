@@ -76,6 +76,8 @@ fn compare_string(lhs: &str, rhs: &str, operator: &str) -> bool {
         "gt" => lhs > rhs,
         "gte" => lhs >= rhs,
         "contains" => lhs.contains(rhs),
+        "starts_with" => lhs.starts_with(rhs),
+        "ends_with" => lhs.ends_with(rhs),
         _ => false,
     }
 }
@@ -101,28 +103,39 @@ fn compare_date(lhs: DateTime<Utc>, rhs: DateTime<Utc>, operator: &str) -> bool 
 }
 
 fn matches_filter(user: &impl AuthUser, params: &ListUsersParams) -> bool {
-    let Some(filter_value) = params.filter_value.as_deref() else {
+    let Some(filter_value) = params.filter_value.as_ref() else {
         return true;
     };
-
     let field = params.filter_field.as_deref().unwrap_or("email");
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
-
-    if let Some(value) = string_field(user, field) {
-        return compare_string(&value, filter_value, operator);
+    let matches = |expected: &serde_json::Value, operator: &str| {
+        if let Some(value) = string_field(user, field) {
+            return expected
+                .as_str()
+                .is_some_and(|expected| compare_string(&value, expected, operator));
+        }
+        if let Some(value) = bool_field(user, field) {
+            let expected = expected
+                .as_bool()
+                .or_else(|| expected.as_str().and_then(parse_bool));
+            return expected.is_some_and(|expected| compare_bool(value, expected, operator));
+        }
+        if let Some(value) = date_field(user, field) {
+            return expected
+                .as_str()
+                .and_then(parse_date)
+                .is_some_and(|expected| compare_date(value, expected, operator));
+        }
+        false
+    };
+    if matches!(operator, "in" | "not_in") {
+        let Some(values) = filter_value.as_array() else {
+            return false;
+        };
+        let present = values.iter().any(|expected| matches(expected, "eq"));
+        return if operator == "in" { present } else { !present };
     }
-
-    if let Some(value) = bool_field(user, field) {
-        return parse_bool(filter_value)
-            .is_some_and(|filter| compare_bool(value, filter, operator));
-    }
-
-    if let Some(value) = date_field(user, field) {
-        return parse_date(filter_value)
-            .is_some_and(|filter| compare_date(value, filter, operator));
-    }
-
-    false
+    matches(filter_value, operator)
 }
 
 fn compare_option_strings(lhs: Option<String>, rhs: Option<String>, direction: &str) -> Ordering {
@@ -150,35 +163,38 @@ pub fn apply_list_users<T: AuthUser + Clone>(
 ) -> (Vec<T>, usize) {
     users.retain(|user| matches_search(user, params) && matches_filter(user, params));
 
-    let sort_by = params.sort_by.as_deref().unwrap_or("createdAt");
-    let sort_direction = params.sort_direction.as_deref().unwrap_or("desc");
+    if let Some(sort_by) = params.sort_by.as_deref().filter(|value| !value.is_empty()) {
+        let sort_direction = params
+            .sort_direction
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .unwrap_or("asc");
 
-    users.sort_by(|lhs, rhs| match sort_by {
-        "id" | "_id" | "email" | "name" | "username" | "role" => compare_option_strings(
-            string_field(lhs, sort_by),
-            string_field(rhs, sort_by),
-            sort_direction,
-        ),
-        "createdAt" | "updatedAt" | "banExpires" => compare_option_dates(
-            date_field(lhs, sort_by),
-            date_field(rhs, sort_by),
-            sort_direction,
-        ),
-        "banned" => match sort_direction {
-            "asc" => bool_field(lhs, sort_by).cmp(&bool_field(rhs, sort_by)),
-            _ => bool_field(rhs, sort_by).cmp(&bool_field(lhs, sort_by)),
-        },
-        _ => compare_option_dates(
-            date_field(lhs, "createdAt"),
-            date_field(rhs, "createdAt"),
-            sort_direction,
-        ),
-    });
+        users.sort_by(|lhs, rhs| match sort_by {
+            "id" | "_id" | "email" | "name" | "username" | "role" => compare_option_strings(
+                string_field(lhs, sort_by),
+                string_field(rhs, sort_by),
+                sort_direction,
+            ),
+            "createdAt" | "updatedAt" | "banExpires" => compare_option_dates(
+                date_field(lhs, sort_by),
+                date_field(rhs, sort_by),
+                sort_direction,
+            ),
+            "banned" => match sort_direction {
+                "asc" => bool_field(lhs, sort_by).cmp(&bool_field(rhs, sort_by)),
+                _ => bool_field(rhs, sort_by).cmp(&bool_field(lhs, sort_by)),
+            },
+            _ => compare_option_dates(
+                date_field(lhs, "createdAt"),
+                date_field(rhs, "createdAt"),
+                sort_direction,
+            ),
+        });
+    }
 
     let total = users.len();
-    let offset = params.offset.unwrap_or(0);
-    let limit = params.limit.unwrap_or(total);
-    let paged = users.into_iter().skip(offset).take(limit).collect();
+    let paged = crate::query::paginate_memory(users, params.limit, params.offset);
 
     (paged, total)
 }

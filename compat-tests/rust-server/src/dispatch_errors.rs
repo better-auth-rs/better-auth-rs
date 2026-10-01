@@ -149,7 +149,8 @@ impl AuthPlugin<StatelessSchema> for Fixture {
             .create_verification(CreateVerification {
                 identifier: "fixture-write".into(),
                 value: "persisted".into(),
-                expires_at: chrono::Utc::now() + chrono::Duration::seconds(60),
+                expires_at: (chrono::Utc::now() + chrono::Duration::seconds(60)).into(),
+                ..Default::default()
             })
             .await?;
         Self::mutate(request, "endpoint")?;

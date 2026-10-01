@@ -91,9 +91,13 @@ impl AnonymousPlugin {
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         let mut session_request = req.clone();
-        let _ = session_request
+        let mut query = session_request
             .query
-            .insert("disableRefresh".into(), "true".into());
+            .take()
+            .and_then(|query| query.as_object().cloned())
+            .unwrap_or_default();
+        let _ = query.insert("disableRefresh".into(), serde_json::Value::Bool(true));
+        session_request.query = Some(query.into());
         let previous = ctx
             .session_manager()
             .resolve(
@@ -272,9 +276,13 @@ impl AnonymousPlugin {
             return Ok(());
         }
         let mut session_request = req.clone();
-        let _ = session_request
+        let mut query = session_request
             .query
-            .insert("disableRefresh".into(), "true".into());
+            .take()
+            .and_then(|query| query.as_object().cloned())
+            .unwrap_or_default();
+        let _ = query.insert("disableRefresh".into(), serde_json::Value::Bool(true));
+        session_request.query = Some(query.into());
         let previous = ctx
             .session_manager()
             .resolve(

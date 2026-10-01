@@ -249,17 +249,17 @@ impl SeaOrmHooks<Schema> for Events {
     }
     async fn before_delete_account(
         &self,
-        row: &account::Model,
+        row: &better_auth_core::wire::AccountView,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<HookControl> {
-        self.before_delete("account", &row.id).await
+        self.before_delete("account", row.id.typed()?).await
     }
     async fn after_delete_account(
         &self,
-        row: &account::Model,
+        row: &better_auth_core::wire::AccountView,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
-        self.after_delete("account", &row.id).await
+        self.after_delete("account", row.id.typed()?).await
     }
     async fn before_delete_session(
         &self,
@@ -430,16 +430,18 @@ impl Fixture {
                     account_id: id.into(),
                     provider_id: id.into(),
                     user_id: "u1".into(),
-                    password: None,
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
-                },
-                date(CREATED_AT),
-            );
+                    password: Default::default(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    ..Default::default()
+                }
+                .with_timestamps(date(CREATED_AT))
+                .fields()?,
+            )?;
             account.updated_at = Set(date(UPDATED_AT));
             let _ = account.insert(db).await.map_err(database_error)?;
         }

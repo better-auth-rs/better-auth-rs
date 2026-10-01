@@ -140,13 +140,20 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
         vec![
             AuthRoute::post("/sign-in/social", "social_sign_in"),
             AuthRoute::get("/callback/{id}", "oauth_callback")
+                .body_validator(callback::body)
+                .query_validator(crate::plugins::query_input::callback)
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
             AuthRoute::post("/callback/{id}", "oauth_callback_post")
+                .body_validator(callback::body)
+                .query_validator(crate::plugins::query_input::callback)
                 .allowed_media_types(&["application/x-www-form-urlencoded", "application/json"]),
             AuthRoute::post("/link-social", "link_social"),
-            AuthRoute::post("/get-access-token", "get_access_token"),
-            AuthRoute::post("/refresh-token", "refresh_token"),
-            AuthRoute::get("/account-info", "account_info"),
+            AuthRoute::post("/get-access-token", "get_access_token")
+                .body_validator(account::account_body),
+            AuthRoute::post("/refresh-token", "refresh_token")
+                .body_validator(account::account_body),
+            AuthRoute::get("/account-info", "account_info")
+                .query_validator(crate::plugins::query_input::account_selection),
         ]
     }
 

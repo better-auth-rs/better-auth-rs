@@ -1,6 +1,6 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::entity::{AuthAccount, AuthSession};
+use better_auth_core::entity::AuthSession;
 use better_auth_core::utils::cookie_utils::related_cookie_name;
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthPlugin, CreateSession, CreateUser, HttpMethod};
@@ -432,7 +432,13 @@ async fn test_set_user_password_updates_credential_account() {
     let user_id = json_body(&resp)["user"]["id"].as_str().unwrap().to_string();
 
     let before = ctx.database.get_user_accounts(&user_id).await.unwrap();
-    let old_password = before[0].password().unwrap().to_string();
+    let old_password = before[0]
+        .password
+        .typed()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone();
 
     let req = make_request(
         HttpMethod::Post,
@@ -447,7 +453,7 @@ async fn test_set_user_password_updates_credential_account() {
     assert_eq!(resp.status, 200);
 
     let after = ctx.database.get_user_accounts(&user_id).await.unwrap();
-    let new_password = after[0].password().unwrap().to_string();
+    let new_password = after[0].password.typed().unwrap().as_ref().unwrap().clone();
     assert_ne!(old_password, new_password);
 }
 

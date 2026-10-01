@@ -1,0 +1,30 @@
+---
+title: Account and Verification Fields
+description: Configure adapter fields without changing endpoint input schemas.
+---
+
+`AuthConfig.account.additional_fields` and `AuthConfig.verification.additional_fields` use `UserFieldConfig`. Configure defaults, update generators, input/output transforms, column mappings, and visibility on these ordered maps. The CLI accepts matching `account.additionalFields` and `verification.additionalFields` definitions through `--schema-config`.
+
+These definitions affect adapter writes and reads. They do not extend account or verification HTTP request schemas. A field that uses a built-in name replaces that built-in field's policy; the adapter retains ownership of `id`.
+
+## Database and Cache Order
+
+Database creation runs the before hooks, defaults and input transforms, the insert, and output transforms. Database hooks receive the resulting projection. An output-transform error happens after the insert. An enclosing database transaction can roll back that insert; a direct write remains stored.
+
+With verification database storage and secondary storage enabled, creation writes the cache after output transforms and before the after hook. Cache failure prevents the after hook. Verification updates first patch the existing cache, then execute database hooks and database field policies. Database failure does not undo that earlier cache update.
+
+Pure secondary verification storage keeps the raw hook input. It does not generate an adapter ID or execute adapter defaults, input transforms, output transforms, or returned-field filtering. A cache miss during an update returns the supplied partial patch without creating a cache record.
+
+`returned: false` filters account-list output. Internal account reads and trusted database hooks retain these fields. The account-list endpoint always excludes credential fields. `AccountView` serialization also excludes `password`, including account cookie serialization; trusted code can use `internal_fields()` when it needs the password.
+
+## Application Models and Runtime Views
+
+`AuthSchema::Account` and `AuthSchema::Verification` describe persistence models. Store methods and database hooks return `AccountView` and `VerificationView`. Their fields use `SchemaValue<T>` so a transform can return another type or omit a field without forcing that result back into the database model.
+
+Read `typed()?` only when an operation needs the default type. Use `json()?` to retain replacement values and omission. `SchemaValue::InvalidDate` serializes as JSON null while preserving an invalid date's comparison and cache-expiry behavior. A genuine null and an invalid date can therefore have different effects before serialization.
+
+`AuthEntity` implements `field_column`, `native_json_field`, `apply_fields`, and `record` for Account and Verification models. Rust field names, camelCase logical names, and Serde rename names resolve to the same column. A handwritten model must implement these methods and return an unvalidated runtime projection from `record`; do not deserialize transformed values back into the persistence model.
+
+Custom adapters must return the runtime views from AccountStore and VerificationStore methods. Implement `create_verification_with_writer` to place the runtime cache writer between adapter output and the after hook. A transaction must enqueue the after hook only after that writer succeeds. The default implementation rejects an installed writer rather than changing the write order.
+
+Creation and update inputs use `SchemaValue<T>` too. `Undefined` omits a field, `Typed(None)` supplies null for a nullable field, and `Dynamic` supplies a replacement value. Input `additional_fields` use logical public names; the adapter applies `field_name` once before binding columns.

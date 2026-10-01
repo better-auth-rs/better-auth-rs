@@ -59,7 +59,7 @@ pub(super) async fn reset_failures(
 pub(super) struct ChallengeAttempt {
     identifier: String,
     failures: usize,
-    expires_at: chrono::DateTime<Utc>,
+    expires_at: better_auth_core::SchemaValue<chrono::DateTime<Utc>>,
 }
 
 pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
@@ -84,7 +84,8 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
     }
     .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
     let attempts = consumed
-        .value()
+        .value
+        .display_string()?
         .parse::<usize>()
         .unwrap_or(CHALLENGE_ATTEMPT_LIMIT);
     if attempts >= CHALLENGE_ATTEMPT_LIMIT {
@@ -111,7 +112,7 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
     Ok(Some(ChallengeAttempt {
         identifier,
         failures: attempts,
-        expires_at: consumed.expires_at(),
+        expires_at: consumed.expires_at.clone(),
     }))
 }
 
@@ -122,9 +123,10 @@ pub(super) async fn finish_attempt(
 ) {
     if let Some(attempt) = attempt {
         let verification = CreateVerification {
-            identifier: attempt.identifier,
-            value: (attempt.failures + usize::from(failed)).to_string(),
+            identifier: (attempt.identifier).into(),
+            value: ((attempt.failures + usize::from(failed)).to_string()).into(),
             expires_at: attempt.expires_at,
+            ..Default::default()
         };
         // Upstream keeps the credential failure if rearming fails. The missing
         // counter invalidates the challenge on the next request.

@@ -73,7 +73,7 @@ better_auth_core::impl_auth_plugin! {
     EmailVerificationPlugin, "email-verification";
     routes {
         post "/send-verification-email" => handle_send_verification_email, "send_verification_email";
-        get "/verify-email" => handle_verify_email, "verify_email";
+        get "/verify-email" => handle_verify_email, "verify_email", query = crate::plugins::query_input::verify_email;
     }
     extra {
         async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
@@ -143,10 +143,9 @@ impl EmailVerificationPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let token = req
-            .query
-            .get("token")
+            .query_string("token")?
             .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
-        let callback_url = req.query.get("callbackURL").cloned();
+        let callback_url = req.query_string("callbackURL")?.map(str::to_owned);
 
         // Validate callbackURL against trusted origins, matching the TS
         // `originCheck` middleware applied to the verify-email endpoint.
@@ -158,7 +157,7 @@ impl EmailVerificationPlugin {
         }
 
         let query = VerifyEmailQuery {
-            token: token.clone(),
+            token: token.to_owned(),
             callback_url,
         };
 

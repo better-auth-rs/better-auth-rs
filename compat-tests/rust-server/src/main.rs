@@ -24,8 +24,9 @@ use better_auth::plugins::{
     UserManagementPlugin,
     email_verification::SendVerificationEmail,
     oauth::{
-        GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthIdTokenVerifier, OAuthProvider, OAuthRefreshTokenHandler, OAuthTokenSet,
-        OAuthUserInfo, OAuthUserInfoHandler, OAuthUserInfoRequest, OAuthUserInfoResponse,
+        GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthIdTokenVerifier, OAuthProvider,
+        OAuthRefreshTokenHandler, OAuthTokenSet, OAuthUserInfo, OAuthUserInfoHandler,
+        OAuthUserInfoRequest, OAuthUserInfoResponse,
     },
     organization::{
         InvitationEmail, OrganizationConfig, OrganizationTeamsConfig, SendInvitationEmail,
@@ -33,7 +34,7 @@ use better_auth::plugins::{
     password_management::SendResetPassword,
     user_management::SendChangeEmailConfirmation,
 };
-use better_auth::prelude::{AuthAccount, AuthUser, CreateAccount, CreateVerification};
+use better_auth::prelude::{AuthUser, CreateAccount, CreateVerification};
 use better_auth::wire::UserView;
 use better_auth::{AuthBuilder, AuthConfig};
 use better_auth_seaorm::sea_orm::{DatabaseConnection, DbErr, EntityTrait};
@@ -49,7 +50,10 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+mod account_http_output;
+mod account_verification_fields;
 mod admin_options;
+mod api_error;
 mod api_key_callbacks;
 mod api_key_storage;
 mod auth_lifecycle;
@@ -57,6 +61,7 @@ mod captcha;
 mod cookie_version;
 mod crypto;
 mod custom_session;
+mod database_lifecycle;
 mod device_generators;
 mod dispatch_errors;
 mod dynamic_context;
@@ -69,10 +74,9 @@ mod email_otp_transaction;
 mod http_body;
 mod identity_context;
 mod identity_routes;
-mod jwt_fixture;
 mod jwt_adapter;
+mod jwt_fixture;
 mod jwt_session;
-mod database_lifecycle;
 mod last_login;
 mod oauth_link_id_token;
 mod oauth_popup;
@@ -85,18 +89,19 @@ mod password_policy;
 mod password_security;
 mod plugin_schema;
 mod rate_limit_options;
+mod request_query;
 mod secondary_storage;
 mod session_fields;
 mod signup_enumeration;
 mod stateless;
 mod token_routes;
 mod trailing_slashes;
-mod api_error;
 mod two_factor_context;
 mod two_factor_options;
 mod user_admission;
 mod user_fields;
 mod username_options;
+mod verification_date_output;
 
 type TestSchema = user_fields::Schema;
 
@@ -655,12 +660,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let secret = "compat-test-only-key-not-real-minimum-32chars";
     let device_profile = std::env::var("COMPAT_PROFILE").unwrap_or_default();
-    if device_profile.starts_with("database-lifecycle") {
-        let app = database_lifecycle::router(&device_profile, &format!("http://localhost:{port}")).await?;
+    if device_profile == "account-verification-fields" {
+        let app = verification_date_output::router()
+            .merge(account_verification_fields::router())
+            .merge(account_http_output::router())
+            .route("/health", axum::routing::get(|| async { "ok" }))
+            .route("/__health", axum::routing::get(|| async { "ok" }))
+            .route(
+                "/__test/reset-state",
+                axum::routing::post(|| async { axum::Json(serde_json::json!({"success": true})) }),
+            );
         axum::serve(listener, app).await?;
         return Ok(());
     }
-    if matches!(device_profile.as_str(), "api-error" | "api-error-production") {
+    if device_profile.starts_with("database-lifecycle") {
+        let app = database_lifecycle::router(&device_profile, &format!("http://localhost:{port}"))
+            .await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if device_profile.starts_with("request-query-") {
+        let app =
+            request_query::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if matches!(
+        device_profile.as_str(),
+        "api-error" | "api-error-production"
+    ) {
         let app = api_error::router(&format!("http://localhost:{port}"));
         axum::serve(listener, app).await?;
         return Ok(());
@@ -672,7 +700,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if device_profile.starts_with("username-") {
-        let app = username_options::router(&device_profile, &format!("http://localhost:{port}")).await?;
+        let app =
+            username_options::router(&device_profile, &format!("http://localhost:{port}")).await?;
         axum::serve(listener, app).await?;
         return Ok(());
     }
@@ -681,7 +710,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if device_profile == "jwt-adapter" {
-        axum::serve(listener, jwt_adapter::router(&format!("http://localhost:{port}"))).await?;
+        axum::serve(
+            listener,
+            jwt_adapter::router(&format!("http://localhost:{port}")),
+        )
+        .await?;
         return Ok(());
     }
     if device_profile == "identity-context" {
@@ -692,7 +725,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
         return Ok(());
     }
-    if matches!(device_profile.as_str(), "dynamic-context" | "dynamic-native" | "dynamic-oauth") || device_profile.starts_with("dynamic-environment:") {
+    if matches!(
+        device_profile.as_str(),
+        "dynamic-context" | "dynamic-native" | "dynamic-oauth"
+    ) || device_profile.starts_with("dynamic-environment:")
+    {
         axum::serve(listener, dynamic_context::router()).await?;
         return Ok(());
     }
@@ -751,7 +788,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if device_profile.starts_with("oauth-proxy") {
         config.account.account_linking.update_user_info_on_link = true;
         if device_profile == "oauth-proxy-cookie" {
-            config.account.store_state_strategy = Some(better_auth::config::OAuthStateStrategy::Cookie);
+            config.account.store_state_strategy =
+                Some(better_auth::config::OAuthStateStrategy::Cookie);
         }
     }
 
@@ -795,14 +833,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     http_body::configure(&device_profile, &mut config);
     email_otp_transaction::EmailOtpTransactionFixture::configure(&device_profile, &mut config);
     oauth_link_id_token::OAuthLinkIdTokenFixture::configure(&device_profile, &mut config);
-    let oauth_popup_fixture =
-        oauth_popup::OAuthPopupFixture::new(&device_profile, config.base_url.as_static().unwrap_or(""));
+    let oauth_popup_fixture = oauth_popup::OAuthPopupFixture::new(
+        &device_profile,
+        config.base_url.as_static().unwrap_or(""),
+    );
     oauth_popup_fixture.configure(&device_profile, &mut config);
     let admin_options_fixture = admin_options::AdminOptionsFixture::default();
     admin_options_fixture.configure(&device_profile, &mut config);
     let captcha_fixture = captcha::CaptchaFixture::default();
     captcha_fixture.configure(&device_profile, &mut config);
-    let captcha_plugin = captcha_fixture.plugin(&device_profile, config.base_url.as_static().unwrap_or(""));
+    let captcha_plugin =
+        captcha_fixture.plugin(&device_profile, config.base_url.as_static().unwrap_or(""));
     let cookie_version_fixture = cookie_version::CookieVersionFixture::default();
     cookie_version_fixture.configure(&device_profile, &mut config);
     let cookie_version_router = cookie_version_fixture.router();
@@ -1706,10 +1747,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Err(error) = auth
                         .store()
                         .create_verification(CreateVerification {
-                            identifier: format!("reset-password:{}", body.token),
-                            value: user.id.to_string(),
-                            expires_at,
-                        })
+identifier: (format!("reset-password:{}", body.token)).into(),
+value: (user.id.to_string()).into(),
+expires_at: (expires_at).into(),
+..Default::default()
+})
                         .await
                     {
                         return (
@@ -1759,10 +1801,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Err(error) = auth
                         .store()
                         .create_verification(CreateVerification {
-                            identifier: format!("delete-account-{}", body.token),
-                            value: user.id.to_string(),
-                            expires_at,
-                        })
+identifier: (format!("delete-account-{}", body.token)).into(),
+value: (user.id.to_string()).into(),
+expires_at: (expires_at).into(),
+..Default::default()
+})
                         .await
                     {
                         return (
@@ -1811,8 +1854,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
 
                     for account in accounts {
-                        if account.provider_id() == "credential" {
-                            if let Err(error) = auth.store().delete_account(&account.id()).await {
+                        if account.provider_id == "credential" {
+                            if let Err(error) = async { auth.store().delete_account(account.id.typed()?).await }.await {
                                 return (
                                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                                     Json(serde_json::json!({ "message": error.to_string() })),
@@ -2017,10 +2060,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     };
                     for account in accounts {
-                        if account.provider_id() == provider_id
-                            && account.account_id() == account_id
+                        if account.provider_id == provider_id
+                            && account.account_id == account_id
                         {
-                            if let Err(error) = auth.store().delete_account(&account.id()).await {
+                            if let Err(error) = async { auth.store().delete_account(account.id.typed()?).await }.await {
                                 return (
                                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                                     Json(serde_json::json!({ "message": error.to_string() })),
@@ -2032,17 +2075,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let account = match auth
                         .store()
                         .create_account(CreateAccount {
-                            user_id: user.id.to_string(),
-                            account_id,
-                            provider_id,
-                            access_token: body.access_token,
-                            refresh_token: body.refresh_token,
-                            id_token: body.id_token,
-                            access_token_expires_at,
-                            refresh_token_expires_at,
-                            scope: body.scope,
-                            password: None,
-                        })
+user_id: (user.id.to_string()).into(),
+account_id: (account_id).into(),
+provider_id: (provider_id).into(),
+access_token: (body.access_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+refresh_token: (body.refresh_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+id_token: (body.id_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+access_token_expires_at: (access_token_expires_at).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+refresh_token_expires_at: (refresh_token_expires_at).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+scope: (body.scope).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+password: Default::default(),
+..Default::default()
+})
                         .await
                     {
                         Ok(account) => account,
@@ -2056,7 +2100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     (
                         axum::http::StatusCode::OK,
-                        Json(serde_json::json!({ "status": true, "accountId": account.id() })),
+                        Json(serde_json::json!({ "status": true, "accountId": account.id })),
                     )
                 }
             }),
@@ -2165,16 +2209,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     let google = form.get("client_id").is_some_and(|client| client == "google-client-id");
+                    let scope = match form.get("code").map(String::as_str) {
+                        Some("compat-scope-missing") => None,
+                        Some("compat-scope-empty") => Some(serde_json::json!("")),
+                        Some("compat-scope-array") => Some(serde_json::json!([" \u{feff}audit\u{feff} ", " email ", "", 42, "\u{85}legacy"])),
+                        _ => Some(serde_json::json!(if google { "openid email profile" } else { "openid,email,profile" })),
+                    };
+                    let mut tokens = serde_json::json!({
+                        "access_token": if google { "google-access-token" } else { "new-access-token" },
+                        "refresh_token": if google { "google-refresh-token" } else { "new-refresh-token" },
+                        "id_token": if google { "google-id-token" } else { "mock-id-token" },
+                        "expires_in": 3600,
+                        "refresh_token_expires_in": 7200,
+                    });
+                    if let Some(scope) = scope {
+                        tokens["scope"] = scope;
+                    }
                     (
                         axum::http::StatusCode::OK,
-                        Json(serde_json::json!({
-                            "access_token": if google { "google-access-token" } else { "new-access-token" },
-                            "refresh_token": if google { "google-refresh-token" } else { "new-refresh-token" },
-                            "id_token": if google { "google-id-token" } else { "mock-id-token" },
-                            "expires_in": 3600,
-                            "refresh_token_expires_in": 7200,
-                            "scope": if google { "openid email profile" } else { "openid,email,profile" },
-                        })),
+                        Json(tokens),
                     )
                 }
             }),

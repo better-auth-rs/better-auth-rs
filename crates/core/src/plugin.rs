@@ -34,6 +34,8 @@ pub enum BeforeRequestAction {
     Respond(AuthResponse),
     /// Replace the request body and continue with the remaining hooks.
     ReplaceBody(Vec<u8>),
+    /// Merge endpoint body/query after all before hooks; retain original Request bytes.
+    MergeContext(crate::endpoint_input::EndpointInputPatch),
     /// Inject a virtual session so downstream handlers see it as authenticated.
     InjectSession {
         session: Box<crate::wire::SessionView>,
@@ -157,6 +159,8 @@ macro_rules! impl_auth_plugin {
         routes {
             $( $method:ident $path:literal => $handler:ident, $op_id:literal
                 $(, allowed_media_types = [$($media_type:literal),* $(,)?])?
+                $(, body = $body:path)?
+                $(, query = $query:path)?
             );* $(;)?
         }
         $( extra { $($extra:tt)* } )?
@@ -168,7 +172,9 @@ macro_rules! impl_auth_plugin {
             fn routes(&self) -> Vec<$crate::AuthRoute> {
                 vec![
                     $( $crate::AuthRoute::new($crate::impl_auth_plugin!(@pat $method), $path, $op_id)
-                        $(.allowed_media_types(&[$($media_type),*]))?, )*
+                        $(.allowed_media_types(&[$($media_type),*]))?
+                        $(.body_validator($body))?
+                        $(.query_validator($query))?, )*
                 ]
             }
 
@@ -192,6 +198,12 @@ macro_rules! impl_auth_plugin {
     };
 }
 
+/// Validate a raw endpoint query without changing the original request.
+pub type QueryValidator = fn(Option<serde_json::Value>) -> AuthResult<Option<serde_json::Value>>;
+
+/// Validate a decoded body once and retain its typed handler input.
+pub type BodyValidator = fn(&AuthRequest) -> AuthResult<crate::endpoint_input::ValidatedBody>;
+
 /// Route definition for plugins
 #[derive(Debug, Clone)]
 pub struct AuthRoute {
@@ -205,6 +217,9 @@ pub struct AuthRoute {
     pub endpoint_key: Option<String>,
     /// HTTP media types accepted before endpoint middleware. Empty uses the JSON default.
     pub allowed_media_types: Vec<String>,
+    /// Query validation runs after before hooks and before endpoint middleware.
+    pub query_validator: Option<QueryValidator>,
+    pub body_validator: Option<BodyValidator>,
 }
 
 /// Initialization context passed to plugin setup.
@@ -282,6 +297,18 @@ impl AuthRoute {
         self
     }
 
+    /// Install a body validator. Body validation precedes query validation.
+    pub fn body_validator(mut self, validator: BodyValidator) -> Self {
+        self.body_validator = Some(validator);
+        self
+    }
+
+    /// Install a query validator for the endpoint handler and its middleware.
+    pub fn query_validator(mut self, validator: QueryValidator) -> Self {
+        self.query_validator = Some(validator);
+        self
+    }
+
     pub fn allowed_media_types(mut self, types: &[&str]) -> Self {
         self.allowed_media_types = types.iter().map(|value| (*value).to_owned()).collect();
         self
@@ -299,6 +326,8 @@ impl AuthRoute {
             openapi: None,
             endpoint_key: None,
             allowed_media_types: Vec::new(),
+            query_validator: None,
+            body_validator: None,
         }
     }
 

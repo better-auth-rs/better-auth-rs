@@ -470,9 +470,10 @@ pub async fn seed_rust_reset_password_token(
     let _ = auth
         .store()
         .create_verification(CreateVerification {
-            identifier: format!("reset-password:{token}"),
-            value: user_id,
-            expires_at,
+            identifier: (format!("reset-password:{token}")).into(),
+            value: (user_id).into(),
+            expires_at: (expires_at).into(),
+            ..Default::default()
         })
         .await
         .unwrap_or_else(|error| panic!("reset-password verification should be created: {error}"));
@@ -495,16 +496,29 @@ pub async fn seed_rust_oauth_account(auth: &TestAuth, user_id: &str, seed: &OAut
     let _ = auth
         .store()
         .create_account(CreateAccount {
-            user_id: user_id.to_string(),
-            account_id: seed.account_id.clone(),
-            provider_id: seed.provider_id.clone(),
-            access_token: seed.access_token.clone(),
-            refresh_token: seed.refresh_token.clone(),
-            id_token: seed.id_token.clone(),
-            access_token_expires_at,
-            refresh_token_expires_at,
-            scope: seed.scope.clone(),
-            password: None,
+            user_id: (user_id.to_string()).into(),
+            account_id: (seed.account_id.clone()).into(),
+            provider_id: (seed.provider_id.clone()).into(),
+            access_token: (seed.access_token.clone())
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token: (seed.refresh_token.clone())
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            id_token: (seed.id_token.clone())
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            access_token_expires_at: (access_token_expires_at)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token_expires_at: (refresh_token_expires_at)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            scope: (seed.scope.clone())
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap_or_else(|error| panic!("oauth account should be created: {error}"));

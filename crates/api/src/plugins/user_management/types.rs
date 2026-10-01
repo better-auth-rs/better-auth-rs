@@ -1,16 +1,14 @@
 use serde::Deserialize;
-use validator::Validate;
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct ChangeEmailRequest {
     #[serde(rename = "newEmail")]
-    #[validate(email(message = "Invalid email address"))]
     pub(crate) new_email: String,
     #[serde(rename = "callbackURL")]
     pub(crate) callback_url: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct DeleteUserRequest {
     #[serde(rename = "callbackURL")]
     pub(crate) callback_url: Option<String>,

@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 
 #[cfg(test)]
 use better_auth_core::config::AuthConfig;
@@ -32,10 +31,20 @@ pub struct SessionManagementConfig {
 }
 
 // Request structures for session endpoints
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 struct RevokeSessionRequest {
-    #[validate(length(min = 1, message = "Token is required"))]
     token: String,
+}
+
+fn revoke_session_body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (typed, projection) =
+        super::json_body::string_input::<RevokeSessionRequest>(req, &[("token", true)])?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        typed,
+    ))
 }
 
 #[derive(Debug, Serialize)]
@@ -54,14 +63,18 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
 
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
-            AuthRoute::get("/get-session", "get_session"),
+            AuthRoute::get("/get-session", "get_session")
+                .query_validator(better_auth_core::query::session_query),
             // Upstream declares `/get-session` as `method: ["GET", "POST"]`;
             // the POST form requires `session.defer_session_refresh`.
-            AuthRoute::post("/get-session", "get_session"),
-            AuthRoute::post("/sign-out", "sign_out"),
+            AuthRoute::post("/get-session", "get_session")
+                .query_validator(better_auth_core::query::session_query),
+            AuthRoute::post("/sign-out", "sign_out")
+                .body_validator(super::json_body::sign_out_body),
             AuthRoute::post("/update-session", "update_session"),
             AuthRoute::get("/list-sessions", "list_sessions"),
-            AuthRoute::post("/revoke-session", "revoke_session"),
+            AuthRoute::post("/revoke-session", "revoke_session")
+                .body_validator(revoke_session_body),
             AuthRoute::post("/revoke-sessions", "revoke_sessions"),
             AuthRoute::post("/revoke-other-sessions", "revoke_other_sessions"),
         ]
@@ -230,9 +243,9 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx.require_authoritative_session(req).await?;
 
-        let revoke_req: RevokeSessionRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
+        let revoke_req: RevokeSessionRequest = match req.validated_body::<RevokeSessionRequest>() {
+            Some(body) => body.clone(),
+            None => super::json_body::string_input(req, &[("token", true)])?.0,
         };
 
         let response = revoke_session_core(&user, &revoke_req.token, ctx).await?;

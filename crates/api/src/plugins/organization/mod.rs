@@ -313,11 +313,13 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             AuthRoute::post("/organization/update", "update_organization"),
             AuthRoute::post("/organization/delete", "delete_organization"),
             AuthRoute::get("/organization/list", "list_organizations"),
-            AuthRoute::get("/organization/get-organization", "get_organization"),
+            AuthRoute::get("/organization/get-organization", "get_organization")
+                .query_validator(crate::plugins::query_input::organization),
             AuthRoute::get(
                 "/organization/get-full-organization",
                 "get_full_organization",
-            ),
+            )
+            .query_validator(crate::plugins::query_input::full_organization),
             AuthRoute::post("/organization/check-slug", "check_slug"),
             AuthRoute::post("/organization/set-active", "set_active_organization"),
             AuthRoute::post("/organization/leave", "leave_organization"),
@@ -326,18 +328,23 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             AuthRoute::get(
                 "/organization/get-active-member-role",
                 "get_active_member_role",
-            ),
-            AuthRoute::get("/organization/list-members", "list_members"),
+            )
+            .query_validator(crate::plugins::query_input::active_member_role),
+            AuthRoute::get("/organization/list-members", "list_members")
+                .query_validator(crate::plugins::query_input::list_members),
             AuthRoute::post("/organization/remove-member", "remove_member"),
             AuthRoute::post("/organization/update-member-role", "update_member_role"),
             // Invitations
             AuthRoute::post("/organization/invite-member", "invite_member"),
-            AuthRoute::get("/organization/get-invitation", "get_invitation"),
-            AuthRoute::get("/organization/list-invitations", "list_invitations"),
+            AuthRoute::get("/organization/get-invitation", "get_invitation")
+                .query_validator(crate::plugins::query_input::invitation),
+            AuthRoute::get("/organization/list-invitations", "list_invitations")
+                .query_validator(crate::plugins::query_input::organization_id),
             AuthRoute::get(
                 "/organization/list-user-invitations",
                 "list_user_invitations",
-            ),
+            )
+            .query_validator(crate::plugins::query_input::user_invitations),
             AuthRoute::post("/organization/accept-invitation", "accept_invitation"),
             AuthRoute::post("/organization/reject-invitation", "reject_invitation"),
             AuthRoute::post("/organization/cancel-invitation", "cancel_invitation"),
@@ -356,7 +363,12 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
                 ("delete-role", HttpMethod::Post),
             ] {
                 routes.push(match method {
-                    HttpMethod::Get => AuthRoute::get(format!("/organization/{path}"), path),
+                    HttpMethod::Get => AuthRoute::get(format!("/organization/{path}"), path)
+                        .query_validator(if path == "get-role" {
+                            crate::plugins::query_input::organization_role
+                        } else {
+                            crate::plugins::query_input::organization_id
+                        }),
                     _ => AuthRoute::post(format!("/organization/{path}"), path),
                 });
             }
@@ -450,9 +462,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             (HttpMethod::Get, "/organization/get-active-member-role") => Ok(Some(
                 handlers::member::handle_get_active_member_role(req, ctx).await?,
             )),
-            (HttpMethod::Get, "/organization/list-members") => {
-                Ok(Some(handlers::member::handle_list_members(req, ctx).await?))
-            }
+            (HttpMethod::Get, "/organization/list-members") => Ok(Some(
+                handlers::member::handle_list_members(req, &self.config, ctx).await?,
+            )),
             (HttpMethod::Post, "/organization/remove-member") => Ok(Some(
                 handlers::member::handle_remove_member(req, ctx, &self.config).await?,
             )),

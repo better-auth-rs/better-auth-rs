@@ -771,7 +771,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
         "/send-verification-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
     let send_response = plugin
         .handle_send_verification_email(&send_req, &ctx)
@@ -1014,7 +1014,7 @@ async fn test_send_verification_email_already_verified_returns_error() {
         "/send-verification-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
     let err = plugin
         .handle_send_verification_email(&req, &ctx)
@@ -1046,7 +1046,7 @@ async fn test_send_verification_email_user_not_found() {
         "/send-verification-email".to_string(),
         headers,
         Some(body.to_string().into_bytes()),
-        HashMap::new(),
+        None,
     );
     let response = plugin
         .handle_send_verification_email(&req, &ctx)

@@ -8,7 +8,7 @@ use better_auth::plugins::{
     user_admission::{UserValidationData, UserValidationRejection, ValidateUserInfo},
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
-use better_auth_core::{AuthVerification, PasswordHasher};
+use better_auth_core::PasswordHasher;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
@@ -106,7 +106,7 @@ impl EmailOtpTransactionFixture {
                 Ok::<_, AuthError>(Json(json!({
                     "events":fixture.state.lock().unwrap().events,
                     "otp":otp,"userExists":exists,
-                    "identifierHashed":record.as_ref().map(|record|record.identifier()!=identifier),
+                    "identifierHashed":record.as_ref().map(|record|record.identifier!=identifier),
                 })))
             }
         }))

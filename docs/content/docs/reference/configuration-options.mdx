@@ -66,6 +66,8 @@ Refresh semantics:
 
 ## VerificationConfig
 
+`additional_fields: IndexMap<String, UserFieldConfig>` defines adapter field policies. Pure secondary verification storage does not execute these policies. See [Account and Verification Fields](/docs/concepts/account-verification-fields).
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `store_in_database` | `bool` | `false` | Keep database verification rows when secondary storage is installed |
@@ -126,6 +128,8 @@ The default password hasher uses Better Auth-compatible scrypt. These retained l
 | `parallelism` | `u32` | `1` | Degree of parallelism |
 
 ## AccountConfig
+
+`additional_fields: IndexMap<String, UserFieldConfig>` defines adapter field policies and account-list visibility. These policies do not add request fields to account endpoints. See [Account and Verification Fields](/docs/concepts/account-verification-fields).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|

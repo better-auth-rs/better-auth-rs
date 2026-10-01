@@ -2,19 +2,10 @@ use better_auth_core::{AuthError, AuthRequest, AuthResult};
 use serde_json::Value;
 
 use super::SignInRequest;
-use crate::plugins::json_body::{decode, invalid_type, type_name, validation_error};
+use crate::plugins::json_body::{invalid_type, type_name, validation_error};
 
-pub(super) fn sign_in(req: &AuthRequest) -> AuthResult<SignInRequest> {
-    let body = if let Some(body) = req.parsed_http_body() {
-        Some(body.clone())
-    } else {
-        req.body
-            .as_deref()
-            .filter(|body| !body.is_empty())
-            .map(decode)
-            .transpose()
-            .map_err(AuthError::from)?
-    };
+fn parse_sign_in(req: &AuthRequest) -> AuthResult<(SignInRequest, Value)> {
+    let body = req.input_body()?;
     let object = body.as_ref().and_then(Value::as_object).ok_or_else(|| {
         AuthError::from(validation_error(&invalid_type(
             "body",
@@ -23,6 +14,7 @@ pub(super) fn sign_in(req: &AuthRequest) -> AuthResult<SignInRequest> {
         )))
     })?;
     let mut issues = Vec::new();
+    let mut output = serde_json::Map::new();
     for (field, expected, required) in [
         ("email", "string", true),
         ("password", "string", true),
@@ -32,12 +24,35 @@ pub(super) fn sign_in(req: &AuthRequest) -> AuthResult<SignInRequest> {
         let value = object.get(field);
         if (required || value.is_some()) && type_name(value) != expected {
             issues.push(invalid_type(&format!("body.{field}"), expected, value));
+        } else if let Some(value) = value {
+            let _ = output.insert(field.to_owned(), value.clone());
         }
     }
     if !issues.is_empty() {
         return Err(validation_error(&issues.join("; ")).into());
     }
-    serde_json::from_value(Value::Object(object.clone())).map_err(AuthError::from)
+    let _ = output
+        .entry("rememberMe".to_owned())
+        .or_insert(Value::Bool(true));
+    let projection = Value::Object(output);
+    Ok((serde_json::from_value(projection.clone())?, projection))
+}
+
+pub(super) fn sign_in_body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (typed, projection) = parse_sign_in(req)?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        typed,
+    ))
+}
+
+pub(super) fn sign_in(req: &AuthRequest) -> AuthResult<SignInRequest> {
+    match req.validated_body::<SignInRequest>() {
+        Some(body) => Ok(body.clone()),
+        None => parse_sign_in(req).map(|(body, _)| body),
+    }
 }
 
 pub(super) async fn form_csrf(
@@ -55,4 +70,60 @@ pub(super) async fn form_csrf(
             .await?;
     }
     Ok(())
+}
+
+fn parse_sign_up(req: &AuthRequest) -> AuthResult<(super::SignUpRequest, Value)> {
+    let body = req.input_body()?;
+    let object = body.as_ref().and_then(Value::as_object).ok_or_else(|| {
+        AuthError::from(validation_error(&format!(
+            "{}; {}",
+            invalid_type("body", "object", body.as_ref()),
+            invalid_type("body", "record", body.as_ref())
+        )))
+    })?;
+    let mut errors = Vec::new();
+    for (field, expected, required) in [
+        ("name", "string", true),
+        ("email", "string", true),
+        ("password", "string", true),
+        ("image", "string", false),
+        ("callbackURL", "string", false),
+        ("rememberMe", "boolean", false),
+    ] {
+        let value = object.get(field);
+        if (required || value.is_some()) && type_name(value) != expected {
+            errors.push(invalid_type(&format!("body.{field}"), expected, value));
+        } else if let Some(Value::String(value)) = value {
+            if field == "email" && !crate::plugins::json_body::valid_email(value)? {
+                errors.push("[body.email] Invalid email address".to_owned());
+            }
+            if field == "password" && value.is_empty() {
+                errors.push(
+                    "[body.password] Too small: expected string to have >=1 characters".to_owned(),
+                );
+            }
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation_error(&errors.join("; ")).into());
+    }
+    let projection = Value::Object(object.clone());
+    Ok((serde_json::from_value(projection.clone())?, projection))
+}
+
+pub(super) fn sign_up_body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (typed, projection) = parse_sign_up(req)?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        typed,
+    ))
+}
+
+pub(super) fn sign_up(req: &AuthRequest) -> AuthResult<super::SignUpRequest> {
+    match req.validated_body::<super::SignUpRequest>() {
+        Some(body) => Ok(body.clone()),
+        None => parse_sign_up(req).map(|(body, _)| body),
+    }
 }

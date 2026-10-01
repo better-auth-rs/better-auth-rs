@@ -68,53 +68,105 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     config: &better_auth_core::user_fields::UserConfig,
     backend: DatabaseBackend,
 ) -> AuthResult<Select<Entity<M>>> {
-    let (Some(field), Some(value)) = (
-        params.filter_field.as_deref(),
-        params.filter_value.as_deref(),
-    ) else {
+    use better_auth_core::user_fields::UserFieldType;
+    use serde_json::Value;
+    let (Some(field), Some(value)) = (params.filter_field.as_deref(), params.filter_value.as_ref())
+    else {
         return Ok(query);
     };
     let Some(column) = member_column::<M>(field, config) else {
         return Ok(query);
     };
     let column = member_expression(column, field, config, backend);
+    let field_type = config
+        .additional_fields
+        .get(field)
+        .map(|field| &field.field_type);
+    let convert = |value: &Value, number_strings: bool| -> sea_orm::Value {
+        match value {
+            Value::String(value)
+                if number_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
+            {
+                (value == "true").into()
+            }
+            Value::String(value)
+                if number_strings && matches!(field_type, Some(UserFieldType::Number)) =>
+            {
+                better_auth_core::organization_fields::numeric_filter(value)
+                    .map_or_else(|| value.as_str().into(), Into::into)
+            }
+            Value::String(value) => value.as_str().into(),
+            Value::Bool(value) => (*value).into(),
+            Value::Number(value) => {
+                if let Some(value) = value.as_i64() {
+                    value.into()
+                } else if let Some(value) = value.as_u64() {
+                    value.into()
+                } else {
+                    value.as_f64().into()
+                }
+            }
+            value => sea_orm::Value::Json(Some(Box::new(value.clone()))),
+        }
+    };
+    let operator = params.filter_operator.as_deref().unwrap_or("eq");
+    if matches!(operator, "in" | "not_in") {
+        let values = value
+            .as_array()
+            .ok_or_else(|| better_auth_core::AuthError::internal("Value must be an array"))?;
+        let number_strings = matches!(field_type, Some(UserFieldType::Number))
+            && values.iter().all(|value| {
+                value
+                    .as_str()
+                    .and_then(better_auth_core::organization_fields::numeric_filter)
+                    .is_some()
+            });
+        let values: Vec<_> = values
+            .iter()
+            .map(|value| convert(value, number_strings))
+            .collect();
+        return Ok(query.filter(if operator == "in" {
+            column.is_in(values)
+        } else {
+            column.is_not_in(values)
+        }));
+    }
     let raw_value = value;
     let value = if field == "createdAt" {
-        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(value) else {
+        let Some(parsed) = value
+            .as_str()
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        else {
             return Ok(query.filter(M::column("id")?.eq("__better_auth_never_matches__")));
         };
         sea_orm::Value::ChronoDateTimeUtc(Some(parsed.with_timezone(&Utc)))
     } else {
-        match config
-            .additional_fields
-            .get(field)
-            .map(|field| &field.field_type)
-        {
-            Some(better_auth_core::user_fields::UserFieldType::Boolean) => (value == "true").into(),
-            Some(better_auth_core::user_fields::UserFieldType::Number) => {
-                better_auth_core::organization_fields::numeric_filter(value)
-                    .map_or_else(|| value.into(), Into::into)
-            }
-            _ => value.into(),
-        }
+        convert(value, true)
     };
-    query = match params.filter_operator.as_deref().unwrap_or("eq") {
+    query = match operator {
         "eq" => query.filter(column.eq(value)),
         "ne" => query.filter(column.ne(value)),
         "gt" => query.filter(column.gt(value)),
         "gte" => query.filter(column.gte(value)),
         "lt" => query.filter(column.lt(value)),
         "lte" => query.filter(column.lte(value)),
-        "contains" => {
+        "contains" | "starts_with" | "ends_with" => {
             let pattern = match value {
                 sea_orm::Value::Double(Some(value)) => value.to_string(),
                 sea_orm::Value::Bool(Some(value)) if backend != DatabaseBackend::Postgres => {
                     u8::from(value).to_string()
                 }
                 sea_orm::Value::Bool(Some(value)) => value.to_string(),
-                _ => raw_value.to_owned(),
+                _ => raw_value
+                    .as_str()
+                    .map_or_else(|| raw_value.to_string(), str::to_owned),
             };
-            query.filter(column.like(format!("%{pattern}%")))
+            let pattern = match operator {
+                "starts_with" => format!("{pattern}%"),
+                "ends_with" => format!("%{pattern}"),
+                _ => format!("%{pattern}%"),
+            };
+            query.filter(column.like(pattern))
         }
         _ => query,
     };
@@ -310,11 +362,21 @@ where
             &self.organization_fields()?.member,
             self.connection().get_database_backend(),
         )?;
-        if let Some(offset) = params.offset {
-            query = query.offset(offset as u64);
+        let (limit, offset) = super::pagination::sql_pagination(
+            self.connection().get_database_backend(),
+            params.limit,
+            params.offset,
+        )?;
+        let unbounded_offset = if limit.is_none() {
+            offset.unwrap_or(0)
+        } else {
+            0
+        };
+        if let Some(offset) = offset.filter(|_| limit.is_some()) {
+            query = query.offset(offset);
         }
-        if let Some(limit) = params.limit {
-            query = query.limit(limit as u64);
+        if let Some(limit) = limit {
+            query = query.limit(limit);
         }
 
         query
@@ -322,6 +384,8 @@ where
             .await
             .map_err(map_db_err)
             .and_then(|rows| {
+                let skip = std::cmp::min(unbounded_offset, rows.len() as u64) as usize;
+                let rows = rows.into_iter().skip(skip).collect();
                 Ok((
                     models::project::<O::Member>(rows, &self.organization_fields()?.member)?,
                     total,
@@ -433,12 +497,12 @@ mod tests {
 
         let params = ListOrganizationMembersParams {
             organization_id: org_id,
-            limit: Some(1),
-            offset: Some(1),
+            limit: Some(1.0),
+            offset: Some(1.0),
             sort_by: Some("role".to_string()),
             sort_direction: Some("asc".to_string()),
             filter_field: Some("role".to_string()),
-            filter_value: Some("owner".to_string()),
+            filter_value: Some("owner".into()),
             filter_operator: Some("ne".to_string()),
         };
 

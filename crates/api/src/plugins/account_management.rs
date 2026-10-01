@@ -1,7 +1,6 @@
-use serde::{Deserialize, Serialize};
-use validator::Validate;
+use serde::Deserialize;
 
-use better_auth_core::entity::{AuthAccount, AuthUser};
+use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
 
@@ -19,33 +18,30 @@ pub struct AccountManagementConfig {
     pub require_authentication: bool,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Clone, Deserialize)]
 struct UnlinkAccountRequest {
     #[serde(rename = "accountId")]
     account_id: String,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct AccountResponse {
-    id: String,
-    #[serde(rename = "accountId")]
-    account_id: String,
-    #[serde(rename = "providerId")]
-    provider_id: String,
-    #[serde(rename = "userId")]
-    user_id: String,
-    #[serde(rename = "createdAt")]
-    created_at: String,
-    #[serde(rename = "updatedAt")]
-    updated_at: String,
-    scopes: Vec<String>,
+fn unlink_account_body(
+    req: &AuthRequest,
+) -> AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (typed, projection) =
+        super::json_body::string_input::<UnlinkAccountRequest>(req, &[("accountId", true)])?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        Some(projection),
+        typed,
+    ))
 }
+
+pub(crate) type AccountResponse = serde_json::Map<String, serde_json::Value>;
 
 better_auth_core::impl_auth_plugin! {
     AccountManagementPlugin, "account-management";
     routes {
         get "/list-accounts" => handle_list_accounts, "list_accounts";
-        post "/unlink-account" => handle_unlink_account, "unlink_account";
+        post "/unlink-account" => handle_unlink_account, "unlink_account", body = unlink_account_body;
     }
 }
 
@@ -59,27 +55,39 @@ pub(crate) async fn list_accounts_core(
 ) -> AuthResult<Vec<AccountResponse>> {
     let accounts = ctx.database.get_user_accounts(&user.id()).await?;
 
-    let filtered: Vec<AccountResponse> = accounts
-        .iter()
-        .map(|acc| AccountResponse {
-            id: acc.id().to_string(),
-            account_id: acc.account_id().to_string(),
-            provider_id: acc.provider_id().to_string(),
-            user_id: acc.user_id().to_string(),
-            created_at: acc
-                .created_at()
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            updated_at: acc
-                .updated_at()
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            scopes: super::helpers::parse_stored_scopes(acc.scope()),
+    accounts
+        .into_iter()
+        .map(|account| {
+            let mut fields = account.internal_fields()?;
+            ctx.config
+                .account
+                .field_schema()
+                .filter_returned_fields(&mut fields);
+            let scopes = match fields.remove("scope") {
+                Some(value) if better_auth_core::user_fields::is_truthy(&value) => {
+                    let scope = value.as_str().ok_or_else(|| {
+                        AuthError::internal("account.scope.split is not a function")
+                    })?;
+                    super::helpers::parse_stored_scopes(Some(scope))
+                }
+                _ => Vec::new(),
+            };
+            // The public account endpoint removes credentials even when a replacement schema enables returned.
+            for name in [
+                "accessToken",
+                "refreshToken",
+                "idToken",
+                "accessTokenExpiresAt",
+                "refreshTokenExpiresAt",
+                "password",
+                "scope",
+            ] {
+                let _ = fields.remove(name);
+            }
+            let _ = fields.insert("scopes".into(), serde_json::to_value(scopes)?);
+            Ok(fields)
         })
-        .collect::<Vec<_>>();
-
-    let mut filtered = filtered;
-    filtered.sort_by(|left, right| left.created_at.cmp(&right.created_at));
-
-    Ok(filtered)
+        .collect()
 }
 
 pub(crate) async fn unlink_account_core(
@@ -93,9 +101,9 @@ pub(crate) async fn unlink_account_core(
     }
     let account = accounts
         .iter()
-        .find(|account| account.id() == account_id)
+        .find(|account| account.id == account_id)
         .ok_or_else(|| AuthError::bad_request("Account not found"))?;
-    ctx.database.delete_account(&account.id()).await?;
+    ctx.database.delete_account(account.id.typed()?).await?;
     Ok(StatusResponse { status: true })
 }
 
@@ -128,9 +136,9 @@ impl AccountManagementPlugin {
             });
         }
 
-        let unlink_req: UnlinkAccountRequest = match better_auth_core::validate_request_body(req) {
-            Ok(v) => v,
-            Err(resp) => return Ok(resp),
+        let unlink_req: UnlinkAccountRequest = match req.validated_body::<UnlinkAccountRequest>() {
+            Some(body) => body.clone(),
+            None => super::json_body::string_input(req, &[("accountId", true)])?.0,
         };
 
         let response = unlink_account_core(&user, &unlink_req.account_id, ctx).await?;

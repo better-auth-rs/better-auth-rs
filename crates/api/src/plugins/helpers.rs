@@ -3,7 +3,7 @@
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
 use better_auth_core::config::OAuthStateStrategy;
-use better_auth_core::entity::{AuthAccount, AuthUser};
+use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, CreateUser, UpdateUser};
 use chrono::Utc;
 
@@ -167,13 +167,13 @@ pub async fn require_org_api_key_permission(
 pub async fn get_credential_account<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,
     user_id: impl AsRef<str>,
-) -> AuthResult<Option<S::Account>> {
+) -> AuthResult<Option<better_auth_core::wire::AccountView>> {
     Ok(ctx
         .database
         .get_user_accounts(user_id.as_ref())
         .await?
         .into_iter()
-        .find(|account| account.provider_id() == "credential"))
+        .find(|account| account.provider_id == "credential"))
 }
 
 /// Resolve the user's stored password hash from the credential account.
@@ -181,9 +181,13 @@ pub async fn get_credential_password_hash(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     user: &impl AuthUser,
 ) -> AuthResult<Option<String>> {
-    Ok(get_credential_account(ctx, user.id())
-        .await?
-        .and_then(|account| account.password().map(str::to_string)))
+    let Some(account) = get_credential_account(ctx, user.id()).await? else {
+        return Ok(None);
+    };
+    if !account.password.is_truthy()? {
+        return Ok(None);
+    }
+    Ok(account.password.typed()?.clone())
 }
 
 /// Whether the user currently has a password set.
@@ -395,10 +399,14 @@ pub(crate) fn parse_stored_scopes(scope: Option<&str>) -> Vec<String> {
     scope
         .unwrap_or_default()
         .split(',')
-        .map(str::trim)
+        .map(|scope| scope.trim_matches(oauth_scope_whitespace))
         .filter(|scope| !scope.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+pub(crate) fn oauth_scope_whitespace(character: char) -> bool {
+    (character.is_whitespace() && character != '\u{85}') || character == '\u{feff}'
 }
 
 #[cfg(test)]

@@ -3,10 +3,7 @@ use std::sync::Arc;
 use axum::{Json, Router, routing::post};
 use better_auth::{AuthConfig, BetterAuth};
 use better_auth_core::utils::{jwe, symmetric};
-use better_auth_core::{
-    AuthAccount, AuthUser, AuthVerification, CreateUser, CreateVerification, SecretKey,
-    VersionedSecret,
-};
+use better_auth_core::{AuthUser, CreateUser, CreateVerification, SecretKey, VersionedSecret};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
 
@@ -41,12 +38,14 @@ pub(super) fn router(auth: Arc<BetterAuth<TestSchema>>) -> Router {
                 if let Some(value) = body.get("value") {
                     store.delete_verification_by_identifier(state).await.unwrap();
                     store.create_verification(CreateVerification {
-                        identifier: state.into(), value: value.as_str().map(str::to_owned).unwrap_or_else(|| value.to_string()),
-                        expires_at: Utc::now() + Duration::minutes(10),
-                    }).await.unwrap();
+identifier: state.into(),
+value: (value.as_str().map(str::to_owned).unwrap_or_else(|| value.to_string())).into(),
+expires_at: (Utc::now() + Duration::minutes(10)).into(),
+..Default::default()
+}).await.unwrap();
                 }
                 let verification = store.get_verification_by_identifier(state).await.unwrap();
-                return Json(json!({"value": verification.as_ref().map(|v| v.value())}));
+                return Json(json!({"value": verification.as_ref().map(|v| &v.value)}));
             }
             if operation == "user" {
                 let user = store.create_user(CreateUser {
@@ -61,7 +60,7 @@ pub(super) fn router(auth: Arc<BetterAuth<TestSchema>>) -> Router {
             if operation == "accounts" {
                 let user = store.get_user_by_email(body["email"].as_str().unwrap()).await.unwrap().unwrap();
                 let accounts = store.get_user_accounts(user.id().as_ref()).await.unwrap();
-                return Json(json!(accounts.iter().map(|a| json!({"id":a.id(), "userId":a.user_id(), "providerId":a.provider_id(), "accountId":a.account_id(), "accessToken":a.access_token(), "refreshToken":a.refresh_token(), "idToken":a.id_token()})).collect::<Vec<_>>()));
+                return Json(json!(accounts.iter().map(|a| json!({"id":a.id, "userId":a.user_id, "providerId":a.provider_id, "accountId":a.account_id, "accessToken":a.access_token, "refreshToken":a.refresh_token, "idToken":a.id_token})).collect::<Vec<_>>()));
             }
             let keys: Vec<_> = body["secrets"].as_array().map(|keys| keys.iter().map(|key| VersionedSecret::new(key["version"].as_u64().unwrap().into(), key["value"].as_str().unwrap())).collect()).unwrap_or_default();
             let key = if let Some(secret) = body["secret"].as_str() { SecretKey::Single(secret) }

@@ -74,49 +74,118 @@ fn error_response(status: u16, code: &str, message: &str) -> AuthResponse {
     .with_header("content-type", "application/json")
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct SignOutBody {
     pub callback_url: Option<String>,
     pub disable_redirect: Option<bool>,
     pub state: Option<String>,
 }
 
-pub(crate) fn sign_out(req: &AuthRequest) -> Result<SignOutBody, AuthResponse> {
-    let Some(body) = parse(req)? else {
-        return Ok(SignOutBody::default());
+fn parse_sign_out(req: &AuthRequest) -> better_auth_core::AuthResult<(SignOutBody, Option<Value>)> {
+    let input = req.input_body()?;
+    let Some(body) = input else {
+        return Ok((SignOutBody::default(), None));
     };
-    let Some(body) = body.as_object() else {
-        return Err(validation_error(&invalid_type(
+    let object = body.as_object().ok_or_else(|| {
+        better_auth_core::AuthError::from(validation_error(&invalid_type(
             "body",
             "object",
             Some(&body),
-        )));
-    };
+        )))
+    })?;
     let mut errors = Vec::new();
+    let mut output = serde_json::Map::new();
     for (field, expected) in [
         ("callbackURL", "string"),
         ("disableRedirect", "boolean"),
         ("state", "string"),
     ] {
-        if let Some(value) = body.get(field)
-            && type_name(Some(value)) != expected
-        {
-            errors.push(invalid_type(
-                &format!("body.{field}"),
-                expected,
-                Some(value),
-            ));
+        if let Some(value) = object.get(field) {
+            if type_name(Some(value)) != expected {
+                errors.push(invalid_type(
+                    &format!("body.{field}"),
+                    expected,
+                    Some(value),
+                ));
+            } else {
+                let _ = output.insert(field.to_owned(), value.clone());
+            }
         }
     }
     if !errors.is_empty() {
-        return Err(validation_error(&errors.join("; ")));
+        return Err(validation_error(&errors.join("; ")).into());
     }
-    Ok(SignOutBody {
-        callback_url: body
+    let typed = SignOutBody {
+        callback_url: output
             .get("callbackURL")
             .and_then(Value::as_str)
             .map(str::to_owned),
-        disable_redirect: body.get("disableRedirect").and_then(Value::as_bool),
-        state: body.get("state").and_then(Value::as_str).map(str::to_owned),
-    })
+        disable_redirect: output.get("disableRedirect").and_then(Value::as_bool),
+        state: output
+            .get("state")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    };
+    Ok((typed, Some(Value::Object(output))))
+}
+
+pub(crate) fn sign_out_body(
+    req: &AuthRequest,
+) -> better_auth_core::AuthResult<better_auth_core::endpoint_input::ValidatedBody> {
+    let (typed, projection) = parse_sign_out(req)?;
+    Ok(better_auth_core::endpoint_input::ValidatedBody::new(
+        projection, typed,
+    ))
+}
+
+pub(crate) fn sign_out(req: &AuthRequest) -> Result<SignOutBody, AuthResponse> {
+    match req.validated_body::<SignOutBody>() {
+        Some(body) => Ok(body.clone()),
+        None => parse_sign_out(req)
+            .map(|(body, _)| body)
+            .map_err(|error| error.to_auth_response()),
+    }
+}
+
+pub(crate) fn valid_email(email: &str) -> better_auth_core::AuthResult<bool> {
+    static EMAIL: std::sync::LazyLock<Result<regex::Regex, regex::Error>> =
+        std::sync::LazyLock::new(|| {
+            regex::Regex::new(
+                r"\A(?:[A-Za-z0-9_'+\-]+\.)*[A-Za-z0-9_'+\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}\z",
+            )
+        });
+    let expression = EMAIL.as_ref().map_err(|error| {
+        better_auth_core::AuthError::internal(format!("Invalid email schema: {error}"))
+    })?;
+    Ok(expression.is_match(email))
+}
+
+pub(crate) fn string_input<T: serde::de::DeserializeOwned>(
+    req: &AuthRequest,
+    fields: &[(&str, bool)],
+) -> better_auth_core::AuthResult<(T, Value)> {
+    let body = req.input_body()?;
+    let object = body.as_ref().and_then(Value::as_object).ok_or_else(|| {
+        better_auth_core::AuthError::from(validation_error(&invalid_type(
+            "body",
+            "object",
+            body.as_ref(),
+        )))
+    })?;
+    let mut output = serde_json::Map::new();
+    let mut errors = Vec::new();
+    for &(name, required) in fields {
+        match object.get(name) {
+            Some(value @ Value::String(_)) => {
+                let _ = output.insert(name.into(), value.clone());
+            }
+            None if !required => {}
+            value => errors.push(invalid_type(&format!("body.{name}"), "string", value)),
+        }
+    }
+    if !errors.is_empty() {
+        return Err(validation_error(&errors.join("; ")).into());
+    }
+    let projection = Value::Object(output);
+    Ok((serde_json::from_value(projection.clone())?, projection))
 }

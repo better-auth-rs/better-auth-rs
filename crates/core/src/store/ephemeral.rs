@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
+use serde_json::{Map, Value};
 
 use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult};

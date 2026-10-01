@@ -91,7 +91,7 @@ fn create_auth_request(
         path.to_string(),
         headers,
         body.map(|b| serde_json::to_vec(&b).unwrap()),
-        query.unwrap_or_default(),
+        Some(serde_json::json!(query.unwrap_or_default())),
     )
 }
 

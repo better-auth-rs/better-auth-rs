@@ -5,7 +5,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    AuthVerification, CreateVerification,
+    CreateVerification,
     utils::cookie_utils::verify_cookie_value,
     wire::{SessionView, UserView},
 };
@@ -132,9 +132,10 @@ impl OneTimeTokenPlugin {
         let _ = ctx
             .database
             .create_verification(CreateVerification {
-                identifier: format!("one-time-token:{stored}"),
-                value: session_token,
-                expires_at: Utc::now() + self.config.expires_in,
+                identifier: (format!("one-time-token:{stored}")).into(),
+                value: (session_token).into(),
+                expires_at: (Utc::now() + self.config.expires_in).into(),
+                ..Default::default()
             })
             .await?;
         Ok(token)
@@ -173,7 +174,7 @@ impl OneTimeTokenPlugin {
         else {
             return message_error("Invalid token");
         };
-        let Some((session, user)) = find_session(ctx, verification.value()).await? else {
+        let Some((session, user)) = find_session(ctx, verification.value.typed()?).await? else {
             return message_error("Session not found");
         };
         let response = if session.expires_at < Utc::now() {

@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use axum::{Json, Router, routing::post};
 use better_auth::__private_core::store::{SecondaryStorage, transaction};
 use better_auth::__private_core::types::{CreateSession, CreateVerification};
-use better_auth::__private_core::wire::VerificationView;
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks};
@@ -130,7 +129,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn after_create_verification(
         &self,
-        _: &S::Verification,
+        _: &better_auth_core::wire::VerificationView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("verification.create.after");
@@ -138,7 +137,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn before_delete_verification(
         &self,
-        _: &S::Verification,
+        _: &better_auth_core::wire::VerificationView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<HookControl> {
         self.push("verification.delete.before");
@@ -146,7 +145,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn after_delete_verification(
         &self,
-        _: &S::Verification,
+        _: &better_auth_core::wire::VerificationView,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("verification.delete.after");
@@ -305,13 +304,15 @@ impl SecondaryFixture {
                     .create_verification(CreateVerification {
                         identifier: identifier.into(),
                         value: text("value").into(),
-                        expires_at: Utc::now()
+                        expires_at: (Utc::now()
                             + chrono::Duration::seconds(
                                 body.get("seconds").and_then(Value::as_i64).unwrap_or(60),
-                            ),
+                            ))
+                        .into(),
+                        ..Default::default()
                     })
                     .await?;
-                return Ok(serde_json::to_value(VerificationView::from(&row))?);
+                return Ok(serde_json::to_value(&row)?);
             }
             "find-verification" => {
                 return Ok(auth
@@ -319,7 +320,7 @@ impl SecondaryFixture {
                     .get_verification_including_expired(identifier)
                     .await?
                     .as_ref()
-                    .map(VerificationView::from)
+                    .cloned()
                     .map_or(Value::Null, |row| json!(row)));
             }
             "update-verification" => {
@@ -340,7 +341,7 @@ impl SecondaryFixture {
                     .consume_verification_by_identifier(identifier)
                     .await?
                     .as_ref()
-                    .map(VerificationView::from)
+                    .cloned()
                     .map_or(Value::Null, |row| json!(row)));
             }
             "reserve-verification" => {
@@ -349,7 +350,8 @@ impl SecondaryFixture {
                     .reserve_verification_value(CreateVerification {
                         identifier: identifier.into(),
                         value: text("value").into(),
-                        expires_at: Utc::now() + chrono::Duration::seconds(60),
+                        expires_at: (Utc::now() + chrono::Duration::seconds(60)).into(),
+                        ..Default::default()
                     })
                     .await
                 {

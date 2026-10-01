@@ -60,7 +60,7 @@ impl SeaOrmHooks<BundledSchema> for OrderedHooks {
 
     async fn after_create_account(
         &self,
-        _: &<BundledSchema as AuthSchema>::Account,
+        _: &better_auth_core::wire::AccountView,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.after_account()
@@ -142,16 +142,17 @@ async fn check_order<S: AuthSchema>(
             .await?;
             let _ = tx
                 .create_account(CreateAccount {
-                    user_id: tx_user_id,
+                    user_id: (tx_user_id).into(),
                     provider_id: "mock".into(),
                     account_id: "mock".into(),
-                    password: None,
-                    access_token: None,
-                    refresh_token: None,
-                    id_token: None,
-                    access_token_expires_at: None,
-                    refresh_token_expires_at: None,
-                    scope: None,
+                    password: Default::default(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    ..Default::default()
                 })
                 .await?;
             tx.queue_after_commit(Box::pin(async move {

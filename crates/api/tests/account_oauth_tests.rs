@@ -12,7 +12,7 @@
 use std::sync::{Arc, Once};
 
 use async_trait::async_trait;
-use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::store::AuthStore;
 use better_auth_core::utils::cookie_utils::sign_cookie_value;
 use better_auth_core::{
@@ -133,16 +133,21 @@ async fn setup_user_with_account(
 
     let account = db
         .create_account(CreateAccount {
-            user_id: user_id.clone(),
-            account_id: format!("{}-account-id", provider),
-            provider_id: provider.to_string(),
-            access_token,
-            refresh_token,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: Some("email profile".to_string()),
-            password: None,
+            user_id: (user_id.clone()).into(),
+            account_id: (format!("{}-account-id", provider)).into(),
+            provider_id: (provider.to_string()).into(),
+            access_token: (access_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            refresh_token: (refresh_token)
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .unwrap_or_default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: (Some("email profile".to_string())).into(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -155,7 +160,7 @@ async fn setup_user_with_account(
         .unwrap();
     let token = session.token().to_string();
 
-    (user_id, token, account.id().to_string())
+    (user_id, token, account.id.typed().unwrap().to_string())
 }
 
 async fn create_test_database() -> Arc<dyn AuthStore<TestSchema>> {
@@ -221,7 +226,7 @@ struct TestAccountCookieClaims<'a> {
 }
 
 fn encode_account_cookie(
-    account: &impl AuthAccount,
+    account: &better_auth_core::wire::AccountView,
     access_token: Option<&str>,
     refresh_token: Option<&str>,
     access_token_expires_at: Option<chrono::DateTime<Utc>>,
@@ -230,16 +235,20 @@ fn encode_account_cookie(
     better_auth_core::utils::jwe::encode(
         serde_json::from_value(
             serde_json::to_value(TestAccountCookieClaims {
-                id: Some(account.id().to_string()),
-                user_id: account.user_id().to_string(),
-                provider_id: account.provider_id(),
-                account_id: account.account_id(),
+                id: Some(account.id.typed().unwrap().to_string()),
+                user_id: account.user_id.typed().unwrap().to_string(),
+                provider_id: account.provider_id.typed().unwrap(),
+                account_id: account.account_id.typed().unwrap(),
                 access_token,
                 refresh_token,
-                id_token: account.id_token(),
+                id_token: account.id_token.typed().unwrap().as_deref(),
                 access_token_expires_at,
-                refresh_token_expires_at: account.refresh_token_expires_at(),
-                scope: account.scope(),
+                refresh_token_expires_at: account
+                    .refresh_token_expires_at
+                    .typed()
+                    .unwrap()
+                    .to_owned(),
+                scope: account.scope.typed().unwrap().as_deref(),
                 exp: (now + Duration::minutes(5)).timestamp() as usize,
                 iat: now.timestamp() as usize,
             })
@@ -410,8 +419,18 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
     // Verify tokens in DB are encrypted (not plaintext)
     let accounts = db.get_user_accounts(&user_id).await.unwrap();
     assert_eq!(accounts.len(), 1);
-    let stored_access = accounts[0].access_token().unwrap();
-    let stored_refresh = accounts[0].refresh_token().unwrap();
+    let stored_access = accounts[0]
+        .access_token
+        .typed()
+        .unwrap()
+        .as_deref()
+        .unwrap();
+    let stored_refresh = accounts[0]
+        .refresh_token
+        .typed()
+        .unwrap()
+        .as_deref()
+        .unwrap();
     assert_ne!(stored_access, plaintext_access);
     assert_ne!(stored_refresh, plaintext_refresh);
 
@@ -514,7 +533,10 @@ async fn test_encryption_disabled_stores_plaintext() {
 
     // Tokens should be stored as-is when encryption is disabled
     let accounts = db.get_user_accounts(&user_id).await.unwrap();
-    assert_eq!(accounts[0].access_token(), Some(plaintext_access));
+    assert_eq!(
+        accounts[0].access_token.typed().unwrap().as_deref(),
+        Some(plaintext_access)
+    );
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/account.test.ts :: describe("account") and packages/better-auth/src/oauth2/link-account.test.ts; adapted to the Rust account and OAuth route behavior.
@@ -610,14 +632,25 @@ async fn test_refresh_token_migrates_plaintext_when_encryption_is_enabled() {
     assert_eq!(body["idToken"], "plain-id-token");
     let account = db.get_user_accounts(&user_id).await.unwrap().remove(0);
     assert_eq!(
-        decrypt_token(account.access_token().unwrap(), TEST_SECRET).unwrap(),
+        decrypt_token(
+            account.access_token.typed().unwrap().as_deref().unwrap(),
+            TEST_SECRET
+        )
+        .unwrap(),
         "rotated-access-token"
     );
     assert_eq!(
-        decrypt_token(account.refresh_token().unwrap(), TEST_SECRET).unwrap(),
+        decrypt_token(
+            account.refresh_token.typed().unwrap().as_deref().unwrap(),
+            TEST_SECRET
+        )
+        .unwrap(),
         "rotated-refresh-token"
     );
-    assert_eq!(account.id_token(), Some("plain-id-token"));
+    assert_eq!(
+        account.id_token.typed().unwrap().as_deref(),
+        Some("plain-id-token")
+    );
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/account.ts :: getAccessToken/refreshToken cookie-backed token refresh behavior; adapted to the Rust account and OAuth route behavior.
@@ -688,10 +721,10 @@ async fn test_refresh_token_persists_rotated_tokens_for_cookie_matched_account()
         .await
         .unwrap()
         .into_iter()
-        .find(|candidate| candidate.id() == account.id())
+        .find(|candidate| candidate.id.typed().unwrap() == account.id.typed().unwrap())
         .unwrap();
     assert_eq!(
-        updated_account.refresh_token(),
+        updated_account.refresh_token.typed().unwrap().as_deref(),
         Some("rotated-refresh-token"),
         "refresh-token should persist rotated refresh tokens back to the DB"
     );
@@ -771,10 +804,10 @@ async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matche
         .await
         .unwrap()
         .into_iter()
-        .find(|candidate| candidate.id() == account.id())
+        .find(|candidate| candidate.id.typed().unwrap() == account.id.typed().unwrap())
         .unwrap();
     assert_eq!(
-        updated_account.refresh_token(),
+        updated_account.refresh_token.typed().unwrap().as_deref(),
         Some("rotated-refresh-token"),
         "get-access-token refresh path should persist rotated refresh tokens back to the DB"
     );
@@ -816,7 +849,13 @@ async fn test_account_info_returns_provider_user_info_for_local_account_id() {
 
     let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
     req.query
-        .insert("accountId".to_string(), account_id.clone());
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "accountId".to_string(),
+            serde_json::Value::from(account_id.clone()),
+        );
     req.headers
         .insert("cookie".to_string(), session_cookie(&session_token));
 
@@ -924,9 +963,13 @@ async fn test_get_access_token_rejects_cookie_for_the_wrong_user() {
 
     let account_cookie = encode_account_cookie(
         &cookie_account,
-        cookie_account.access_token(),
-        cookie_account.refresh_token(),
-        cookie_account.access_token_expires_at(),
+        cookie_account.access_token.typed().unwrap().as_deref(),
+        cookie_account.refresh_token.typed().unwrap().as_deref(),
+        cookie_account
+            .access_token_expires_at
+            .typed()
+            .unwrap()
+            .to_owned(),
     );
 
     let ctx = AuthContext::new(config.clone(), db.clone())
@@ -980,7 +1023,11 @@ async fn test_account_info_returns_provider_not_configured_message() {
     let oauth_plugin = OAuthPlugin::with_config(OAuthConfig::default());
 
     let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
-    req.query.insert("accountId".to_string(), account_id);
+    req.query
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert("accountId".to_string(), serde_json::Value::from(account_id));
     req.headers
         .insert("cookie".to_string(), session_cookie(&session_token));
 
@@ -1030,7 +1077,13 @@ async fn test_account_info_rejects_missing_access_token() {
 
     let mut req = AuthRequest::new(HttpMethod::Get, "/account-info");
     req.query
-        .insert("accountId".to_string(), account_id.clone());
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "accountId".to_string(),
+            serde_json::Value::from(account_id.clone()),
+        );
     req.headers
         .insert("cookie".to_string(), session_cookie(&session_token));
 
@@ -1170,31 +1223,33 @@ async fn test_unlink_non_last_account_always_allowed() {
     // Create two accounts
     let google_account = db
         .create_account(CreateAccount {
-            user_id: user_id.clone(),
-            account_id: "google-id".to_string(),
-            provider_id: "google".to_string(),
-            access_token: Some("google-token".to_string()),
-            refresh_token: None,
-            id_token: None,
-            access_token_expires_at: None,
-            refresh_token_expires_at: None,
-            scope: None,
-            password: None,
+            user_id: (user_id.clone()).into(),
+            account_id: ("google-id".to_string()).into(),
+            provider_id: ("google".to_string()).into(),
+            access_token: (Some("google-token".to_string())).into(),
+            refresh_token: Default::default(),
+            id_token: Default::default(),
+            access_token_expires_at: Default::default(),
+            refresh_token_expires_at: Default::default(),
+            scope: Default::default(),
+            password: Default::default(),
+            ..Default::default()
         })
         .await
         .unwrap();
 
     db.create_account(CreateAccount {
-        user_id: user_id.clone(),
-        account_id: "github-id".to_string(),
-        provider_id: "github".to_string(),
-        access_token: Some("github-token".to_string()),
-        refresh_token: None,
-        id_token: None,
-        access_token_expires_at: None,
-        refresh_token_expires_at: None,
-        scope: None,
-        password: None,
+        user_id: (user_id.clone()).into(),
+        account_id: ("github-id".to_string()).into(),
+        provider_id: ("github".to_string()).into(),
+        access_token: (Some("github-token".to_string())).into(),
+        refresh_token: Default::default(),
+        id_token: Default::default(),
+        access_token_expires_at: Default::default(),
+        refresh_token_expires_at: Default::default(),
+        scope: Default::default(),
+        password: Default::default(),
+        ..Default::default()
     })
     .await
     .unwrap();
@@ -1213,7 +1268,7 @@ async fn test_unlink_non_last_account_always_allowed() {
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/unlink-account");
     req.body = Some(
-        json!({"accountId": google_account.id()})
+        json!({"accountId": google_account.id.typed().unwrap()})
             .to_string()
             .into_bytes(),
     );
@@ -1257,16 +1312,17 @@ async fn test_account_linking_disabled_rejects_new_provider() {
         .unwrap();
 
     db.create_account(CreateAccount {
-        user_id: user.id().to_string(),
-        account_id: "old-github-id".to_string(),
-        provider_id: "github".to_string(),
-        access_token: Some("old-token".to_string()),
-        refresh_token: None,
-        id_token: None,
-        access_token_expires_at: None,
-        refresh_token_expires_at: None,
-        scope: None,
-        password: None,
+        user_id: (user.id().to_string()).into(),
+        account_id: ("old-github-id".to_string()).into(),
+        provider_id: ("github".to_string()).into(),
+        access_token: (Some("old-token".to_string())).into(),
+        refresh_token: Default::default(),
+        id_token: Default::default(),
+        access_token_expires_at: Default::default(),
+        refresh_token_expires_at: Default::default(),
+        scope: Default::default(),
+        password: Default::default(),
+        ..Default::default()
     })
     .await
     .unwrap();
@@ -1286,9 +1342,10 @@ async fn test_account_linking_disabled_rejects_new_provider() {
     });
 
     db.create_verification(CreateVerification {
-        identifier: state.to_owned(),
-        value: payload.to_string(),
-        expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+        identifier: (state.to_owned()).into(),
+        value: (payload.to_string()).into(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::minutes(10)).into(),
+        ..Default::default()
     })
     .await
     .unwrap();
@@ -1304,8 +1361,21 @@ async fn test_account_linking_disabled_rejects_new_provider() {
         &format!("/callback/test?code=test-code&state={}", state),
     );
     req.query
-        .insert("code".to_string(), "test-code".to_string());
-    req.query.insert("state".to_string(), state.to_string());
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "code".to_string(),
+            serde_json::Value::from("test-code".to_string()),
+        );
+    req.query
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "state".to_string(),
+            serde_json::Value::from(state.to_string()),
+        );
 
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
     let result = oauth_plugin.on_request(&req, &ctx).await;
@@ -1434,9 +1504,10 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
     });
 
     db.create_verification(CreateVerification {
-        identifier: state.to_owned(),
-        value: payload.to_string(),
-        expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+        identifier: (state.to_owned()).into(),
+        value: (payload.to_string()).into(),
+        expires_at: (chrono::Utc::now() + chrono::Duration::minutes(10)).into(),
+        ..Default::default()
     })
     .await
     .unwrap();
@@ -1451,8 +1522,21 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
         &format!("/callback/test?code=test-code&state={}", state),
     );
     req.query
-        .insert("code".to_string(), "test-code".to_string());
-    req.query.insert("state".to_string(), state.to_string());
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "code".to_string(),
+            serde_json::Value::from("test-code".to_string()),
+        );
+    req.query
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .unwrap()
+        .insert(
+            "state".to_string(),
+            serde_json::Value::from(state.to_string()),
+        );
 
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
     let result = oauth_plugin.on_request(&req, &ctx).await;
@@ -1476,7 +1560,12 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
             let accounts = db.get_user_accounts(&user.id()).await.unwrap();
             assert_eq!(accounts.len(), 1);
 
-            let stored_access = accounts[0].access_token().unwrap();
+            let stored_access = accounts[0]
+                .access_token
+                .typed()
+                .unwrap()
+                .as_deref()
+                .unwrap();
             // The mock server returns "mock-access-token".
             // With encryption on, the stored value should NOT be the plaintext.
             assert_ne!(
@@ -1489,7 +1578,7 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
             assert_eq!(decrypted, "mock-access-token");
 
             // Also verify refresh token is encrypted
-            if let Some(stored_refresh) = accounts[0].refresh_token() {
+            if let Some(stored_refresh) = accounts[0].refresh_token.typed().unwrap().as_deref() {
                 assert_ne!(
                     stored_refresh, "mock-refresh-token",
                     "Refresh token should be encrypted in DB"

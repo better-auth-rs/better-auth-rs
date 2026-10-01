@@ -8,15 +8,15 @@ pub(super) enum Effect<S: AuthSchema> {
     UserCreated(S::User),
     UserUpdated(Option<S::User>),
     UserDeleted(S::User),
-    AccountCreated(S::Account),
+    AccountCreated(Box<better_auth_core::wire::AccountView>),
     SessionCreated(S::Session),
-    Created(S::Verification),
-    Deleted(S::Verification),
+    Created(Box<better_auth_core::wire::VerificationView>),
+    Deleted(Box<better_auth_core::wire::VerificationView>),
 }
 
 pub(super) enum PendingEffect<S: AuthSchema> {
     Database {
-        effect: Effect<S>,
+        effect: Box<Effect<S>>,
         request: Option<better_auth_core::hooks::RequestHookContext>,
     },
     External {
@@ -39,7 +39,7 @@ where
             .lock()
             .map_err(|_| AuthError::internal("Transaction hook queue lock poisoned"))?
             .push(PendingEffect::Database {
-                effect,
+                effect: Box::new(effect),
                 request: crate::hooks::current_request_hook_context(),
             });
         Ok(())
@@ -47,12 +47,16 @@ where
     pub(super) async fn create_transaction_verification(
         &self,
         input: CreateVerification,
-    ) -> AuthResult<S::Verification> {
+        writer: Option<better_auth_core::store::VerificationCreateWriter>,
+    ) -> AuthResult<better_auth_core::wire::VerificationView> {
         let record = self
             .store
             .create_verification_with_connection(self.tx, Some((self.tx, self)), input)
             .await?;
-        self.queue(Effect::Created(record.clone()))?;
+        if let Some(writer) = writer {
+            writer(record.clone()).await?;
+        }
+        self.queue(Effect::Created(Box::new(record.clone())))?;
         Ok(record)
     }
 
@@ -62,7 +66,7 @@ where
             .delete_expired_verifications_with_connection(self.tx, Some((self.tx, self)))
             .await?;
         for record in records {
-            self.queue(Effect::Deleted(record))?;
+            self.queue(Effect::Deleted(Box::new(record)))?;
         }
         Ok(count)
     }
@@ -99,7 +103,7 @@ where
             let mut context = self.hook_context(None);
             context.request = request;
             for hook in self.hooks() {
-                match &effect {
+                match effect.as_ref() {
                     Effect::UserCreated(record) => hook.after_create_user(record, &context).await?,
                     Effect::UserUpdated(record) => {
                         hook.after_update_user(record.as_ref(), &context).await?

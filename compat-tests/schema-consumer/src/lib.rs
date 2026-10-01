@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    mod account_verification;
     mod dynamic_fields;
     mod field_attributes;
     mod organization;
