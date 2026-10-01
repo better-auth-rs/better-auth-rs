@@ -245,7 +245,7 @@ pub(super) async fn complete_link_social(
         .iter()
         .any(|trusted| trusted == provider_name);
 
-    if !linking.enabled() || (!trusted_provider && !user_info.email_verified) {
+    if !linking.enabled() || (!trusted_provider && !user_info.email_verified()?) {
         return Err("unable_to_link_account".to_string().into());
     }
 
@@ -546,7 +546,7 @@ async fn link_with_id_token_core(
         .iter()
         .any(|trusted| trusted == &body.provider);
 
-    if !linking.enabled() || (!trusted_provider && !response.user.email_verified) {
+    if !linking.enabled() || (!trusted_provider && !response.user.email_verified()?) {
         return Err(AuthError::Upstream {
             status: 401,
             code: "LINKING_NOT_ALLOWED",

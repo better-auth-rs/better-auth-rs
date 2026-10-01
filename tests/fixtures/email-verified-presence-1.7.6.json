@@ -1,0 +1,557 @@
+{
+  "version": "1.7.6",
+  "profiles": {
+    "discord": {
+      "profile": {
+        "id": "123456789",
+        "email": "owner@example.test",
+        "username": "Owner",
+        "avatar": "portrait",
+        "verified": true
+      },
+      "field": "verified"
+    },
+    "huggingface": {
+      "profile": {
+        "sub": "hf-owner",
+        "name": "Hugging Face Owner",
+        "preferred_username": "hf-owner",
+        "email": "hf-owner@example.test",
+        "picture": "https://images.example.test/huggingface.png",
+        "email_verified": true
+      },
+      "field": "email_verified"
+    },
+    "reddit": {
+      "profile": {
+        "id": "r12345",
+        "name": "Reddit Owner",
+        "icon_img": "https://images.example.test/reddit.png?width=256&format=png",
+        "has_verified_email": true,
+        "oauth_client_id": "ordinary-client",
+        "verified": true
+      },
+      "field": "has_verified_email"
+    },
+    "generic": {
+      "profile": {
+        "id": "ordinary-generic-account",
+        "email": "owner@example.test",
+        "name": "Owner",
+        "emailVerified": true
+      },
+      "field": "emailVerified"
+    }
+  },
+  "cases": [
+    {
+      "provider": "discord",
+      "raw": "true",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "false",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": false
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "omitted",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {},
+        "mapperInput": {
+          "present": false
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "null",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": null
+        },
+        "mapperInput": {
+          "present": true,
+          "value": null
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "true",
+      "mapping": "undefined",
+      "expected": {
+        "user": {},
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "true",
+      "mapping": "null",
+      "expected": {
+        "user": {
+          "emailVerified": null
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "true",
+      "mapping": "false",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "discord",
+      "raw": "true",
+      "mapping": "true",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "true",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "false",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": false
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "omitted",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": false
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "null",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": null
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "true",
+      "mapping": "undefined",
+      "expected": {
+        "user": {},
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "true",
+      "mapping": "null",
+      "expected": {
+        "user": {
+          "emailVerified": null
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "true",
+      "mapping": "false",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "huggingface",
+      "raw": "true",
+      "mapping": "true",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "reddit",
+      "raw": "true",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "reddit",
+      "raw": "true",
+      "mapping": "undefined",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "reddit",
+      "raw": "true",
+      "mapping": "null",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "reddit",
+      "raw": "true",
+      "mapping": "false",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "reddit",
+      "raw": "true",
+      "mapping": "true",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "true",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "false",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": false
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "omitted",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {},
+        "mapperInput": {
+          "present": false
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "null",
+      "mapping": "unchanged",
+      "expected": {
+        "user": {
+          "emailVerified": null
+        },
+        "mapperInput": {
+          "present": true,
+          "value": null
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "true",
+      "mapping": "undefined",
+      "expected": {
+        "user": {},
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "true",
+      "mapping": "null",
+      "expected": {
+        "user": {
+          "emailVerified": null
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "true",
+      "mapping": "false",
+      "expected": {
+        "user": {
+          "emailVerified": false
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "generic",
+      "raw": "true",
+      "mapping": "true",
+      "expected": {
+        "user": {
+          "emailVerified": true
+        },
+        "mapperInput": {
+          "present": true,
+          "value": true
+        },
+        "events": [
+          "custom",
+          "map"
+        ]
+      }
+    }
+  ]
+}

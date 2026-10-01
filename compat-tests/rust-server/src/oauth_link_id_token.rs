@@ -57,7 +57,7 @@ impl OAuthUserInfoHandler for OAuthLinkIdTokenFixture {
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|error| better_auth_core::AuthError::internal(error.to_string()))?,
-                email_verified: data["emailVerified"] == true,
+                email_verified: Some(data["emailVerified"] == true).into(),
                 additional_fields,
             },
             data: {

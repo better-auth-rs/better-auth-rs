@@ -1,0 +1,2000 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "clientId": "ordinary-client",
+    "clientSecret": "ordinary-client-secret",
+    "codeVerifier": "ordinary-vk-verifier-with-at-least-43-characters",
+    "redirectURI": "http://app.example.test/api/auth/callback/vk",
+    "authorizationEndpoint": "https://id.vk.com/authorize",
+    "tokenEndpoint": "https://id.vk.com/oauth2/auth",
+    "profileEndpoint": "https://id.vk.com/oauth2/user_info"
+  },
+  "scopeCases": [
+    {
+      "name": "default",
+      "options": {
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-vk-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/vk",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://id.vk.com/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=email+phone&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fvk&code_challenge_method=S256&code_challenge=yw_Hd-lcHaNShS3K6ld_znhYN5ayo58J1xEPLO584pw&request_marker=ordinary"
+    },
+    {
+      "name": "append",
+      "options": {
+        "prompt": "consent",
+        "scope": [
+          "profile",
+          "email"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-vk-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/vk",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        },
+        "scopes": [
+          "phone",
+          "profile"
+        ]
+      },
+      "url": "https://id.vk.com/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=email+phone+profile+email+phone+profile&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fvk&code_challenge_method=S256&code_challenge=yw_Hd-lcHaNShS3K6ld_znhYN5ayo58J1xEPLO584pw&request_marker=ordinary"
+    },
+    {
+      "name": "disabled",
+      "options": {
+        "prompt": "consent",
+        "disableDefaultScope": true,
+        "scope": [
+          "profile"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-vk-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/vk",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        },
+        "scopes": [
+          "email"
+        ]
+      },
+      "url": "https://id.vk.com/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=profile+email&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fvk&code_challenge_method=S256&code_challenge=yw_Hd-lcHaNShS3K6ld_znhYN5ayo58J1xEPLO584pw&request_marker=ordinary"
+    },
+    {
+      "name": "empty",
+      "options": {
+        "prompt": "consent",
+        "disableDefaultScope": true
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-vk-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/vk",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://id.vk.com/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fvk&code_challenge_method=S256&code_challenge=yw_Hd-lcHaNShS3K6ld_znhYN5ayo58J1xEPLO584pw&request_marker=ordinary"
+    }
+  ],
+  "grants": [
+    {
+      "name": "code",
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-vk-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/vk",
+        "deviceId": "ordinary-device"
+      },
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/auth",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-vk-verifier-with-at-least-43-characters&device_id=ordinary-device&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fvk&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "ordinary-scope"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "ordinary-scope"
+      }
+    },
+    {
+      "name": "refresh",
+      "input": "ordinary-refresh",
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/auth",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "response": {
+        "accessToken": "rotated-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "rawResponse": {
+        "access_token": "rotated-access",
+        "refresh_token": "rotated-refresh",
+        "token_type": "Bearer",
+        "scope": "refreshed-scope"
+      }
+    }
+  ],
+  "profileCases": [
+    {
+      "name": "default profile",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "email omitted",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": null,
+      "presence": null
+    },
+    {
+      "name": "email null",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": null,
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": null,
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": null,
+      "presence": null
+    },
+    {
+      "name": "email empty",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": null,
+      "presence": null
+    },
+    {
+      "name": "mapper supplies omitted email",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "email": "mapped@example.test"
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "raw email with mapped string",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "email": "mapped@example.test"
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "raw email with mapped null",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "null",
+      "mapperPatch": {
+        "email": null
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": null,
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "raw email with mapped empty",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "empty",
+      "mapperPatch": {
+        "email": ""
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "raw email with mapped undefined",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "undefined",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [
+        "email"
+      ],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "both emails null",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": null,
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "null",
+      "mapperPatch": {
+        "email": null
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": null,
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": null,
+      "presence": null
+    },
+    {
+      "name": "both emails empty",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "empty",
+      "mapperPatch": {
+        "email": ""
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": null,
+      "presence": null
+    },
+    {
+      "name": "optional extras omitted",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": true
+        },
+        "sex": {
+          "own": true,
+          "undefined": true
+        }
+      }
+    },
+    {
+      "name": "optional extras null",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": null,
+          "sex": null,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": null,
+          "sex": null,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": null,
+          "sex": null,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": null,
+            "sex": null,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "mapped extras",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {
+        "first_name": "Mapped",
+        "last_name": "Person",
+        "birthday": "1991-02-03",
+        "sex": 0
+      },
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "Mapped",
+          "last_name": "Person",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1991-02-03",
+          "sex": 0,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "empty names preserve separator",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "",
+          "last_name": "",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "",
+          "last_name": "",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "",
+          "last_name": "",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": " "
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "",
+            "last_name": "",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "names preserve whitespace",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "  VK",
+          "last_name": "Owner  ",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "  VK",
+          "last_name": "Owner  ",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "  VK",
+          "last_name": "Owner  ",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "  VK Owner  "
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "  VK",
+            "last_name": "Owner  ",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "image omitted",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "image null",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": null,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": null,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": null,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "image": null,
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": null,
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "profile uses current client ID",
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "clientIdAfterConstruction": "ordinary-current-client",
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "mapperUndefinedFields": [],
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-current-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "result": {
+        "user": {
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "image": "https://images.example.test/vk.png",
+          "emailVerified": false,
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "name": "VK Owner"
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "presence": {
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "first_name": {
+          "own": true,
+          "undefined": false
+        },
+        "last_name": {
+          "own": true,
+          "undefined": false
+        },
+        "birthday": {
+          "own": true,
+          "undefined": false
+        },
+        "sex": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "empty access token",
+      "input": {
+        "accessToken": ""
+      },
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "requests": [],
+      "events": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "http503",
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 503,
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile"
+      ],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "mapper error",
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "requests": [
+        {
+          "url": "https://id.vk.com/oauth2/user_info",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "*/*",
+          "body": "access_token=ordinary-access&client_id=ordinary-client"
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper"
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary VK mapper error",
+        "sameError": true
+      }
+    },
+    {
+      "mode": "custom success",
+      "input": {
+        "accessToken": ""
+      },
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "requests": [],
+      "events": [
+        "custom"
+      ],
+      "result": {
+        "user": {
+          "name": "Custom VK Owner",
+          "email": "custom@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "user": {
+            "user_id": "ordinary-vk-owner",
+            "first_name": "VK",
+            "last_name": "Owner",
+            "email": "vk-owner@example.test",
+            "avatar": "https://images.example.test/vk.png",
+            "birthday": "1990-01-02",
+            "sex": 2,
+            "verified": true
+          }
+        }
+      },
+      "sameCustom": true
+    },
+    {
+      "mode": "custom null",
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "requests": [],
+      "events": [
+        "custom"
+      ],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "custom error",
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "profile": {
+        "user": {
+          "user_id": "ordinary-vk-owner",
+          "first_name": "VK",
+          "last_name": "Owner",
+          "email": "vk-owner@example.test",
+          "avatar": "https://images.example.test/vk.png",
+          "birthday": "1990-01-02",
+          "sex": 2,
+          "verified": true
+        }
+      },
+      "profileStatus": 200,
+      "requests": [],
+      "events": [
+        "custom"
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary VK custom error",
+        "sameError": true
+      }
+    }
+  ]
+}

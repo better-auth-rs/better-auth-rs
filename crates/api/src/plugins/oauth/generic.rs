@@ -115,8 +115,8 @@ pub struct OAuthProfile {
     pub name: Option<Option<String>>,
     /// Override the profile image; `Some(None)` clears the provider value.
     pub image: Option<Option<String>>,
-    /// Override the provider's email verification signal.
-    pub email_verified: Option<bool>,
+    /// Leave verification unchanged with `None`, or override its boolean/null/undefined value.
+    pub email_verified: Option<better_auth_core::SchemaValue<Option<bool>>>,
 }
 
 /// Maps provider profile fields without changing the provider account subject.

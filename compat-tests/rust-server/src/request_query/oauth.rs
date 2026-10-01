@@ -52,7 +52,7 @@ impl OAuthUserInfoHandler for BodyTrace {
                 id: email.clone(),
                 email: Some(email).into(),
                 name: Some("OAuth schema".into()),
-                email_verified: true,
+                email_verified: Some(true).into(),
                 image: None,
                 additional_fields: Default::default(),
             },

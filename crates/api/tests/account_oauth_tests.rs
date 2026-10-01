@@ -371,7 +371,7 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
             .into(),
             name: v["name"].as_str().map(String::from),
             image: None,
-            email_verified: true,
+            email_verified: Some(true).into(),
         })
     });
     provider.disable_implicit_sign_up = Some(false);

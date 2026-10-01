@@ -233,7 +233,7 @@ mod discord {
                 Some("owner@example.test"),
                 "{label}"
             );
-            assert!(response.user.email_verified, "{label}");
+            assert!(response.user.email_verified()?, "{label}");
             assert_eq!(response.data, prepared, "{label}");
             assert_eq!(
                 *events

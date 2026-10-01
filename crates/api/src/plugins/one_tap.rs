@@ -94,8 +94,11 @@ impl OneTapPlugin {
             additional_fields: Default::default(),
             id: subject.to_owned(),
             email: Some(email.to_lowercase()).into(),
-            email_verified: claim("email_verified").as_bool() == Some(true)
-                || claim("email_verified").as_str() == Some("true"),
+            email_verified: Some(
+                claim("email_verified").as_bool() == Some(true)
+                    || claim("email_verified").as_str() == Some("true"),
+            )
+            .into(),
             name: Some(claim("name").as_str().unwrap_or_default().to_owned()),
             image: claim("picture")
                 .as_str()

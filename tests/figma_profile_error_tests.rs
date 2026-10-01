@@ -186,7 +186,7 @@ impl OAuthUserInfoHandler for CustomProfile {
                     .map(serde_json::from_value)
                     .transpose()
                     .unwrap(),
-                email_verified: user["emailVerified"].as_bool().unwrap(),
+                email_verified: Some(user["emailVerified"].as_bool().unwrap()).into(),
                 additional_fields: Default::default(),
             },
             data: profile,

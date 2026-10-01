@@ -166,7 +166,7 @@ impl OAuthUserInfoHandler for ConfiguredUserInfo {
                 email: Some("google-normal@example.test".into()).into(),
                 name: Some("Configured Google User".into()),
                 image: None,
-                email_verified: true,
+                email_verified: Some(true).into(),
                 additional_fields: Default::default(),
             },
             data: claims(),

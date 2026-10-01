@@ -8,7 +8,7 @@
 use async_trait::async_trait;
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Query, State},
     http::HeaderMap,
     routing::{get, post},
 };
@@ -31,7 +31,9 @@ use std::{
 #[derive(Clone)]
 struct ProviderState {
     profile: Value,
+    email_profile: Option<Value>,
     profile_body: Option<Value>,
+    profile_form: Option<Value>,
     events: Arc<Mutex<Vec<String>>>,
     token_requests: Arc<Mutex<Vec<TokenRequest>>>,
     profile_headers: Arc<Mutex<Option<HeaderMap>>>,
@@ -72,17 +74,31 @@ async fn token(
 
 async fn profile(
     State(state): State<ProviderState>,
+    Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
     body: String,
 ) -> Json<Value> {
-    assert_eq!(headers["authorization"], "Bearer ordinary-access");
+    if let Some(expected) = &state.profile_form {
+        assert!(headers.get("authorization").is_none());
+        assert_eq!(headers["content-type"], "application/x-www-form-urlencoded");
+        let form: HashMap<String, String> = url::form_urlencoded::parse(body.as_bytes())
+            .into_owned()
+            .collect();
+        assert_eq!(serde_json::to_value(form).unwrap(), *expected);
+    } else {
+        assert_eq!(headers["authorization"], "Bearer ordinary-access");
+    }
     if let Some(expected) = &state.profile_body {
         assert_eq!(headers["content-type"], "application/json");
         assert_eq!(serde_json::from_str::<Value>(&body).unwrap(), *expected);
-    } else {
+    } else if state.profile_form.is_none() {
         assert!(body.is_empty());
     }
     *state.profile_headers.lock().unwrap() = Some(headers);
+    if query.get("user.fields").map(String::as_str) == Some("confirmed_email") {
+        state.events.lock().unwrap().push("confirmed_email".into());
+        return Json(state.email_profile.unwrap());
+    }
     state.events.lock().unwrap().push("profile".into());
     Json(state.profile)
 }
@@ -100,10 +116,18 @@ impl Drop for Server {
 }
 
 impl Server {
-    async fn start(profile: Value, post_profile: bool, profile_body: Option<Value>) -> Self {
+    async fn start(
+        profile: Value,
+        post_profile: bool,
+        profile_body: Option<Value>,
+        email_profile: Option<Value>,
+        profile_form: Option<Value>,
+    ) -> Self {
         let state = ProviderState {
             profile,
+            email_profile,
             profile_body,
+            profile_form,
             events: Default::default(),
             token_requests: Default::default(),
             profile_headers: Default::default(),
@@ -134,9 +158,24 @@ impl OAuthProfileMapper for Mapper {
         assert_eq!(profile, &self.2);
         self.0.events.lock().unwrap().push("map".into());
         Ok(OAuthProfile {
-            name: Some(serde_json::from_value(self.1["name"].clone())?),
-            image: Some(serde_json::from_value(self.1["image"].clone())?),
-            email_verified: self.1["emailVerified"].as_bool(),
+            name: self
+                .1
+                .get("name")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()?,
+            image: self
+                .1
+                .get("image")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()?,
+            email_verified: self
+                .1
+                .get("emailVerified")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()?,
             ..Default::default()
         })
     }
@@ -161,6 +200,36 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
         serde_json::from_str(include_str!("fixtures/social-http-providers-1.7.6.json")).unwrap();
     let redirects: Value =
         serde_json::from_str(include_str!("fixtures/social-redirect-uri-1.7.6.json")).unwrap();
+    let twitter: Value = serde_json::from_str(include_str!("fixtures/twitter-1.7.6.json")).unwrap();
+    let twitter_sample = &twitter["profileCases"][0];
+    let twitter_case = json!({
+        "profile": twitter_sample["profile"],
+        "emailResponse": twitter_sample["emailResponse"],
+        "mapperProfile": twitter_sample["mapperProfile"],
+        "defaultUser": twitter_sample["result"]["user"],
+        "mappedUser": twitter_sample["result"]["user"],
+        "mapperPatch": twitter_sample["mapperPatch"],
+        "subjectField": "id",
+        "tokenContract": {"authorization": twitter["grants"][0]["requests"][0]["authorization"]},
+    });
+    let vk: Value = serde_json::from_str(include_str!("fixtures/vk-1.7.6.json")).unwrap();
+    let vk_sample = &vk["profileCases"][0];
+    let profile_form: HashMap<String, String> = url::form_urlencoded::parse(
+        vk_sample["requests"][0]["body"]
+            .as_str()
+            .unwrap()
+            .as_bytes(),
+    )
+    .into_owned()
+    .collect();
+    let vk_case = json!({
+        "profile": vk_sample["profile"],
+        "defaultUser": vk_sample["result"]["user"],
+        "mappedUser": vk_sample["result"]["user"],
+        "mapperPatch": vk_sample["mapperPatch"],
+        "profileForm": profile_form,
+        "subjectField": "user_id",
+    });
     for redirect in redirects["cases"].as_array().unwrap() {
         let providers = [
             "gitlab",
@@ -180,6 +249,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             "salesforce",
             "kakao",
             "zoom",
+            "twitter",
+            "vk",
         ]
         .into_iter()
         .map(|id| (id, None, true));
@@ -190,7 +261,13 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             .map(|case| ("cloudflare", Some(case), true));
         for (id, authentication, pkce) in providers.chain(cloudflare).chain([("zoom", None, false)])
         {
-            let case = &fixture["providers"][id];
+            let case = if id == "twitter" {
+                &twitter_case
+            } else if id == "vk" {
+                &vk_case
+            } else {
+                &fixture["providers"][id]
+            };
             let profile = if id == "kick" {
                 json!({"data": [case["profile"]]})
             } else if id == "linear" {
@@ -202,8 +279,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             };
             let server = Server::start(
                 profile,
-                matches!(id, "dropbox" | "linear"),
+                matches!(id, "dropbox" | "linear" | "vk"),
                 case.get("profileBody").cloned(),
+                case.get("emailResponse").cloned(),
+                case.get("profileForm").cloned(),
             )
             .await;
             let mut provider = match id {
@@ -234,6 +313,14 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     OAuthProvider::zoom_without_pkce("social-http-client", "ordinary-client-secret")
                 }
                 "zoom" => OAuthProvider::zoom("social-http-client", "ordinary-client-secret"),
+                "twitter" => OAuthProvider::twitter(
+                    twitter["metadata"]["clientId"].as_str().unwrap(),
+                    twitter["metadata"]["clientSecret"].as_str().unwrap(),
+                ),
+                "vk" => OAuthProvider::vk(
+                    vk["metadata"]["clientId"].as_str().unwrap(),
+                    vk["metadata"]["clientSecret"].as_str().unwrap(),
+                ),
                 "cloudflare" => {
                     OAuthProvider::cloudflare("social-http-client", "ordinary-client-secret")
                 }
@@ -276,7 +363,9 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             provider.map_profile_to_user = Some(Arc::new(Mapper(
                 server.state.clone(),
                 case["mapperPatch"].clone(),
-                case["profile"].clone(),
+                case.get("mapperProfile")
+                    .unwrap_or(&case["profile"])
+                    .clone(),
             )));
             if id == "zoom" {
                 provider.scopes = Some(vec!["user:read".into()]);
@@ -296,6 +385,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "salesforce"
                     | "kakao"
                     | "zoom"
+                    | "twitter"
+                    | "vk"
             ) {
                 sign_in["loginHint"] = json!("owner@example.test");
                 sign_in["additionalParams"] = json!({"request_marker":"request-value"});
@@ -346,6 +437,11 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 assert_eq!(query["audience"], "api.atlassian.com");
             }
             assert_eq!(query["redirect_uri"], expected_redirect);
+            if id == "twitter" {
+                assert!(!query.contains_key("login_hint"));
+                assert_eq!(query["client_id"], twitter["metadata"]["clientId"]);
+                assert_eq!(query["request_marker"], "request-value");
+            }
             if id == "salesforce" {
                 assert!(!query.contains_key("login_hint"));
                 assert_eq!(query["request_marker"], "request-value");
@@ -374,6 +470,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "salesforce"
                     | "kakao"
                     | "zoom"
+                    | "twitter"
+                    | "vk"
             ) {
                 callback_query["device_id"] = json!("ordinary-device");
             }
@@ -421,6 +519,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             let account = serde_json::to_value(&accounts[0]).unwrap();
             let profile_fields = if id == "naver" {
                 &case["profile"]["response"]
+            } else if id == "twitter" {
+                &case["profile"]["data"]
+            } else if id == "vk" {
+                &case["profile"]["user"]
             } else {
                 &case["profile"]
             };
@@ -436,7 +538,11 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             assert_eq!(account["scope"], "ordinary-scope");
             assert_eq!(
                 *server.state.events.lock().unwrap(),
-                ["token", "profile", "map"]
+                if id == "twitter" {
+                    vec!["token", "profile", "confirmed_email", "map"]
+                } else {
+                    vec!["token", "profile", "map"]
+                }
             );
             if id == "vercel" {
                 let expired_at = chrono::Utc::now() - chrono::Duration::seconds(30);
@@ -500,6 +606,40 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     ["token", "profile", "map"]
                 );
             }
+            if id == "vk" {
+                for field in ["first_name", "last_name", "birthday", "sex"] {
+                    assert!(
+                        value.get(field).is_none(),
+                        "Unconfigured field must not be stored: {field}"
+                    );
+                }
+                let cookies = callback
+                    .headers
+                    .get_all("set-cookie")
+                    .map(|cookie| cookie.split(';').next().unwrap())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                let info = auth
+                    .call_endpoint(
+                        HttpMethod::Get,
+                        "/account-info",
+                        EndpointInput {
+                            query: Some(json!({"accountId": account["id"]})),
+                            headers: Some(HashMap::from([("cookie".into(), cookies)])),
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(info.status, 200);
+                let info: Value = serde_json::from_slice(&info.body).unwrap();
+                assert_eq!(info["user"], vk_sample["result"]["user"]);
+                assert_eq!(info["data"], vk_sample["profile"]);
+                assert_eq!(
+                    *server.state.events.lock().unwrap(),
+                    ["token", "profile", "map", "profile", "map"]
+                );
+            }
             let requests = server.state.token_requests.lock().unwrap().clone();
             assert_eq!(requests.len(), 1);
             let form = &requests[0].form;
@@ -523,7 +663,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 let _ = expected_form.insert("redirect_uri".into(), expected_redirect.clone());
                 let _ = expected_form.insert("code_verifier".into(), form["code_verifier"].clone());
                 assert_eq!(*form, expected_form);
-            } else if matches!(id, "figma" | "reddit") {
+            } else if matches!(id, "figma" | "reddit" | "twitter") {
                 assert_eq!(
                     requests[0].headers["authorization"],
                     case["tokenContract"]["authorization"].as_str().unwrap()
@@ -532,9 +672,20 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 assert!(!form.contains_key("client_secret"));
                 assert_eq!(form.len(), if id == "reddit" { 3 } else { 4 });
             } else {
-                assert_eq!(form["client_id"], "social-http-client");
+                assert_eq!(
+                    form["client_id"],
+                    if id == "vk" {
+                        vk["metadata"]["clientId"].as_str().unwrap()
+                    } else {
+                        "social-http-client"
+                    }
+                );
                 assert_eq!(form["client_secret"], "ordinary-client-secret");
-                if matches!(id, "dropbox" | "kick" | "atlassian" | "salesforce" | "zoom") {
+                if id == "vk" {
+                    assert!(requests[0].headers.get("authorization").is_none());
+                    assert_eq!(form.len(), 7);
+                    assert_eq!(form["device_id"], vk["grants"][0]["input"]["deviceId"]);
+                } else if matches!(id, "dropbox" | "kick" | "atlassian" | "salesforce" | "zoom") {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 6);
                     assert!(!form.contains_key("device_id"));
@@ -584,6 +735,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "reddit"
                     | "kakao"
                     | "zoom"
+                    | "twitter"
+                    | "vk"
                     | "cloudflare"
                     | "salesforce"
             ) {
@@ -639,7 +792,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                         expected["contentType"].as_str().unwrap()
                     );
                     expected_form = serde_json::from_value(expected["body"].clone()).unwrap();
-                } else if matches!(id, "figma" | "reddit") {
+                } else if matches!(id, "figma" | "reddit" | "twitter") {
                     assert_eq!(
                         requests[1].headers["authorization"],
                         case["tokenContract"]["authorization"].as_str().unwrap()
@@ -647,7 +800,14 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 } else {
                     assert!(requests[1].headers.get("authorization").is_none());
                     expected_form.extend([
-                        ("client_id".into(), "social-http-client".into()),
+                        (
+                            "client_id".into(),
+                            if id == "vk" {
+                                vk["metadata"]["clientId"].as_str().unwrap().into()
+                            } else {
+                                "social-http-client".into()
+                            },
+                        ),
                         ("client_secret".into(), "ordinary-client-secret".into()),
                     ]);
                 }
@@ -664,7 +824,13 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 }
                 assert_eq!(
                     *server.state.events.lock().unwrap(),
-                    ["token", "profile", "map", "token"]
+                    if id == "twitter" {
+                        vec!["token", "profile", "confirmed_email", "map", "token"]
+                    } else if id == "vk" {
+                        vec!["token", "profile", "map", "profile", "map", "token"]
+                    } else {
+                        vec!["token", "profile", "map", "token"]
+                    }
                 );
             }
         }

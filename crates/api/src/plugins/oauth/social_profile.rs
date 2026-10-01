@@ -1,4 +1,4 @@
-use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthError, AuthResult, SchemaValue};
 
 use super::google::{self, VerifiedGoogleClaims};
 use super::id_token::VerifiedIdToken;
@@ -46,10 +46,13 @@ pub(super) async fn fetch_user_info_with_claims(
         let response = handler.get_user_info(request).await?;
         if let Some(response) = &response {
             let _ = response.user.email()?;
+            let _ = response.user.email_verified()?;
         }
         return Ok(response);
     }
-    if provider.config.is_atlassian() && request.access_token.as_deref().is_none_or(str::is_empty) {
+    if (provider.config.is_atlassian() || provider.config.is_vk())
+        && request.access_token.as_deref().is_none_or(str::is_empty)
+    {
         return Ok(None);
     }
     match fetch_default_user_info(provider, request, claims).await {
@@ -120,8 +123,33 @@ async fn fetch_default_user_info(
     let Some(mut response) = fetch_social_user_info(provider, request, claims).await? else {
         return Ok(None);
     };
-    if let Some(mapper) = &provider.config.map_profile_to_user {
-        let mapped = mapper.map_profile(&response.data).await?;
+    let mapped = if let Some(mapper) = &provider.config.map_profile_to_user {
+        Some(mapper.map_profile(&response.data).await?)
+    } else {
+        None
+    };
+    if provider.config.is_vk() {
+        let original_email = response
+            .data
+            .pointer("/user/email")
+            .cloned()
+            .map_or(SchemaValue::Undefined, SchemaValue::Dynamic);
+        let mapped_email = mapped
+            .as_ref()
+            .and_then(|value| value.email.as_ref())
+            .map(super::providers::profile_email)
+            .transpose()?
+            .flatten();
+        if super::providers::profile_email(&original_email)?.is_none_or(str::is_empty)
+            && mapped_email.is_none_or(str::is_empty)
+        {
+            return Ok(None);
+        }
+    }
+    if provider.config.is_twitter() && response.user.email()?.is_none_or(str::is_empty) {
+        response.user.email = Some(placeholder_email(&response.user.id, "twitter")?).into();
+    }
+    if let Some(mapped) = mapped {
         response
             .user
             .additional_fields
@@ -142,6 +170,10 @@ async fn fetch_default_user_info(
     if provider.config.is_reddit() && response.user.email()?.is_none_or(str::is_empty) {
         response.user.email = Some(placeholder_email(&response.user.id, "reddit")?).into();
     }
+    let verified = response.user.email_verified()?;
+    if provider.config.is_reddit() && !verified {
+        response.user.email_verified = Some(false).into();
+    }
     let _ = response.user.email()?;
     Ok(Some(response))
 }
@@ -153,6 +185,9 @@ async fn fetch_social_user_info(
 ) -> AuthResult<Option<OAuthUserInfoResponse>> {
     if let Some((user_url, emails_url)) = provider.config.github_endpoints() {
         return super::providers::github_profile(user_url, emails_url, &request).await;
+    }
+    if provider.config.is_twitter() {
+        return super::providers::twitter::fetch_user_info(&provider.config, &request).await;
     }
     let data = if let Some(claims) = claims {
         let claims = claims.into_value();

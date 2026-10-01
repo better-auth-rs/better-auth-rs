@@ -408,7 +408,7 @@ impl OAuthUserInfoHandler for CompatGoogleUserInfoHandler {
                 } else {
                     profile.image.clone().map(Some)
                 },
-                email_verified: profile.email_verified,
+                email_verified: Some(profile.email_verified).into(),
             },
             data: serde_json::json!({
                 "sub": profile.sub,

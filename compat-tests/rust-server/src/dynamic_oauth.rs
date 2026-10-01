@@ -51,7 +51,7 @@ impl OAuthUserInfoHandler for Provider {
                 email: Some(data["email"].as_str().unwrap().into()).into(),
                 name: data["name"].as_str().map(str::to_owned),
                 image: None,
-                email_verified: false,
+                email_verified: Some(false).into(),
                 additional_fields: Default::default(),
             },
             data,

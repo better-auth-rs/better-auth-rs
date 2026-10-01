@@ -165,7 +165,7 @@ impl OAuthProfileMapper for Mapper {
             mapped.name = Some(Some("Mapped".into()));
             mapped.image = Some(None);
             mapped.email = Some(Some("mapped@example.test".into()).into());
-            mapped.email_verified = Some(false);
+            mapped.email_verified = Some(Some(false).into());
         }
         Ok(mapped)
     }
@@ -187,7 +187,7 @@ impl OAuthUserInfoHandler for CustomProfile {
                 email: Some("custom@example.test".into()).into(),
                 name: Some("Custom".into()),
                 image: Some(Some("https://images.test/custom.png".into())),
-                email_verified: true,
+                email_verified: Some(true).into(),
                 additional_fields: [("locale".into(), json!("en"))].into_iter().collect(),
             },
             data: json!({"id":"custom-subject"}),

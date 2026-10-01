@@ -34,7 +34,7 @@ impl OAuthProfileMapper for MappedIdentity {
             )?,
             name: Some(Some("Mapped OIDC User".to_owned())),
             image: Some(None),
-            email_verified: Some(false),
+            email_verified: Some(Some(false).into()),
             ..Default::default()
         })
     }

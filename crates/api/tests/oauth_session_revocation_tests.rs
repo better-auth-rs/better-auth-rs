@@ -124,7 +124,7 @@ impl OAuthUserInfoHandler for ProviderCalls {
                 email: Some("operator@example.com".to_string()).into(),
                 name: Some("Operator".to_string()),
                 image: None,
-                email_verified: true,
+                email_verified: Some(true).into(),
             },
             data: json!({ "sub": "provider-subject", "email": "operator@example.com" }),
         }))

@@ -369,7 +369,7 @@ impl OAuthProfileMapper for Mapper {
         Ok(OAuthProfile {
             name: Some(serde_json::from_value(patch["name"].clone())?),
             image: Some(serde_json::from_value(patch["image"].clone())?),
-            email_verified: patch["emailVerified"].as_bool(),
+            email_verified: (patch["emailVerified"].as_bool()).map(|value| Some(value).into()),
             additional_fields: [("locale".into(), patch["locale"].clone())]
                 .into_iter()
                 .collect(),
@@ -393,7 +393,7 @@ impl OAuthUserInfoHandler for CustomProfile {
                 email: Some(self.0["email"].as_str().unwrap().into()).into(),
                 name: serde_json::from_value(self.0["name"].clone()).unwrap(),
                 image: Some(serde_json::from_value(self.0["image"].clone()).unwrap()),
-                email_verified: self.0["emailVerified"].as_bool().unwrap(),
+                email_verified: Some(self.0["emailVerified"].as_bool().unwrap()).into(),
                 additional_fields: Map::new(),
             },
             data: json!({"id":self.1}),

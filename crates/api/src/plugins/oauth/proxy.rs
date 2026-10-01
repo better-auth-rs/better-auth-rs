@@ -77,8 +77,11 @@ struct ProfileUser {
     id: String,
     email: String,
     name: String,
-    #[serde(default)]
-    email_verified: bool,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    email_verified: better_auth_core::SchemaValue<Option<bool>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -801,4 +804,34 @@ fn redirect_error(
     Ok(handlers::redirect_response(
         &better_auth_core::utils::url::append_query_params(target, &params.finish())?,
     ))
+}
+
+#[cfg(test)]
+mod verification_presence_tests {
+    #![expect(
+        clippy::unwrap_used,
+        clippy::indexing_slicing,
+        reason = "Serialization fixtures fail immediately on an invalid ordinary field shape."
+    )]
+
+    use super::ProfileUser;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn proxy_profile_preserves_verification_presence() {
+        for value in [
+            None,
+            Some(Value::Null),
+            Some(json!(false)),
+            Some(json!(true)),
+        ] {
+            let mut profile =
+                json!({"id":"ordinary-account","email":"owner@example.test","name":"Owner"});
+            if let Some(value) = value {
+                profile["emailVerified"] = value;
+            }
+            let decoded: ProfileUser = serde_json::from_value(profile.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), profile);
+        }
+    }
 }

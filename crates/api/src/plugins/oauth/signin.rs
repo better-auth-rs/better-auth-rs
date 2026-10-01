@@ -167,6 +167,7 @@ pub(super) async fn process_oauth_sign_in(
     meta: &better_auth_core::RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> Result<ProcessOAuthUserResult, OAuthSignInError> {
+    let email_verified = user_info.email_verified()?;
     let Some(provider_email) = user_info.email()?.filter(|email| !email.is_empty()) else {
         return Err(OAuthSignInError::Generic("email not found".to_string()));
     };
@@ -253,7 +254,7 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?;
         }
 
-        if user_info.email_verified
+        if email_verified
             && !user.email_verified()
             && user
                 .email()
@@ -295,7 +296,7 @@ pub(super) async fn process_oauth_sign_in(
                         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                         email: Some(provider_email.to_lowercase()),
                         email_verified: Some(
-                            user_info.email_verified
+                            email_verified
                                 || (user.email_verified()
                                     && user.email().is_some_and(|email| {
                                         email.eq_ignore_ascii_case(provider_email)
@@ -388,7 +389,7 @@ pub(super) async fn process_oauth_sign_in(
         // an unverified local account is not implicitly linkable.
         if !linking.enabled()
             || linking.disable_implicit_linking
-            || (!trusted_provider && !user_info.email_verified)
+            || (!trusted_provider && !email_verified)
             || (linking.require_local_email_verified && !existing_user.email_verified())
         {
             return Err(OAuthSignInError::Generic("account not linked".to_string()));
@@ -437,7 +438,7 @@ pub(super) async fn process_oauth_sign_in(
             .await
             .map_err(|_| "unable to link account".to_string())?;
 
-        if user_info.email_verified
+        if email_verified
             && !linked_user.email_verified()
             && linked_user
                 .email()
@@ -481,7 +482,7 @@ pub(super) async fn process_oauth_sign_in(
                         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                         email: Some(provider_email.to_lowercase()),
                         email_verified: Some(
-                            user_info.email_verified
+                            email_verified
                                 || (linked_user.email_verified()
                                     && linked_user.email().is_some_and(|email| {
                                         email.eq_ignore_ascii_case(provider_email)
@@ -539,7 +540,7 @@ pub(super) async fn process_oauth_sign_in(
         let mut create_user = CreateUser::new()
             .with_email(provider_email.to_lowercase())
             .with_name(user_info.name.as_deref().unwrap_or(provider_email))
-            .with_email_verified(user_info.email_verified);
+            .with_email_verified(email_verified);
         create_user.image = user_info.image.clone().map(Into::into).unwrap_or_default();
         create_user.additional_fields = ctx
             .config
@@ -727,7 +728,11 @@ pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
     } else {
         let _ = fields.insert("email".into(), serde_json::Value::Null);
     }
-    let _ = fields.insert("emailVerified".into(), user.email_verified.into());
+    if let Some(verified) = user.email_verified.json()? {
+        let _ = fields.insert("emailVerified".into(), verified);
+    } else {
+        let _ = fields.remove("emailVerified");
+    }
     if let Some(name) = &user.name {
         let _ = fields.insert("name".into(), name.clone().into());
     }

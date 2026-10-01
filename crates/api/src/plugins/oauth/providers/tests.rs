@@ -148,7 +148,7 @@ async fn github_provider_get_user_info_uses_email_fallback_and_login_name() {
         response.user.image.as_ref().and_then(Option::as_deref),
         Some("https://avatars.githubusercontent.com/u/42?v=4")
     );
-    assert!(response.user.email_verified);
+    assert!(matches!(response.user.email_verified(), Ok(true)));
     assert_eq!(
         response.data["email"],
         serde_json::json!("octocat@example.com")
@@ -219,7 +219,7 @@ async fn github_provider_get_user_info_keeps_inline_email() {
         Some("public@example.com")
     );
     assert_eq!(response.user.name.as_deref(), Some("Octo Cat"));
-    assert!(!response.user.email_verified);
+    assert!(matches!(response.user.email_verified(), Ok(false)));
 }
 #[tokio::test]
 async fn github_http_errors_distinguish_missing_profile_from_optional_email_data() {
@@ -253,7 +253,7 @@ async fn github_http_errors_distinguish_missing_profile_from_optional_email_data
                 response.user.email.typed().unwrap().as_deref(),
                 Some("public@example.test")
             );
-            assert!(!response.user.email_verified);
+            assert!(matches!(response.user.email_verified(), Ok(false)));
             assert_eq!(requests.lock().await.len(), 2);
         }
     }

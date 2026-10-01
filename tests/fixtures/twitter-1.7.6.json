@@ -1,0 +1,1360 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "clientId": "ordinary-client",
+    "clientSecret": "ordinary-client-secret",
+    "codeVerifier": "ordinary-twitter-verifier-with-at-least-43-characters",
+    "redirectURI": "http://app.example.test/api/auth/callback/twitter",
+    "authorizationEndpoint": "https://x.com/i/oauth2/authorize",
+    "tokenEndpoint": "https://api.x.com/2/oauth2/token",
+    "profileEndpoint": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+    "emailEndpoint": "https://api.x.com/2/users/me?user.fields=confirmed_email"
+  },
+  "scopeCases": [
+    {
+      "name": "default",
+      "options": {
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-twitter-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/twitter",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://x.com/i/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=users.read+tweet.read+offline.access+users.email&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitter&code_challenge_method=S256&code_challenge=kgDxEsIfc13_TpanDg89bCBK3qBk8WYBY80tk4x9iGk&request_marker=ordinary"
+    },
+    {
+      "name": "append",
+      "options": {
+        "prompt": "consent",
+        "scope": [
+          "bookmark.read",
+          "tweet.read"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-twitter-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/twitter",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        },
+        "scopes": [
+          "like.read",
+          "bookmark.read"
+        ]
+      },
+      "url": "https://x.com/i/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=users.read+tweet.read+offline.access+users.email+bookmark.read+tweet.read+like.read+bookmark.read&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitter&code_challenge_method=S256&code_challenge=kgDxEsIfc13_TpanDg89bCBK3qBk8WYBY80tk4x9iGk&request_marker=ordinary"
+    },
+    {
+      "name": "disabled",
+      "options": {
+        "prompt": "consent",
+        "disableDefaultScope": true,
+        "scope": [
+          "bookmark.read"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-twitter-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/twitter",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        },
+        "scopes": [
+          "like.read"
+        ]
+      },
+      "url": "https://x.com/i/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=bookmark.read+like.read&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitter&code_challenge_method=S256&code_challenge=kgDxEsIfc13_TpanDg89bCBK3qBk8WYBY80tk4x9iGk&request_marker=ordinary"
+    },
+    {
+      "name": "empty",
+      "options": {
+        "prompt": "consent",
+        "disableDefaultScope": true
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-twitter-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/twitter",
+        "loginHint": "ordinary@example.test",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://x.com/i/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitter&code_challenge_method=S256&code_challenge=kgDxEsIfc13_TpanDg89bCBK3qBk8WYBY80tk4x9iGk&request_marker=ordinary"
+    }
+  ],
+  "grants": [
+    {
+      "name": "code",
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-twitter-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/twitter",
+        "deviceId": "ordinary-device"
+      },
+      "requests": [
+        {
+          "url": "https://api.x.com/2/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-twitter-verifier-with-at-least-43-characters&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitter"
+        }
+      ],
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "ordinary-scope"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "ordinary-scope"
+      }
+    },
+    {
+      "name": "refresh",
+      "input": "ordinary-refresh",
+      "requests": [
+        {
+          "url": "https://api.x.com/2/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh"
+        }
+      ],
+      "response": {
+        "accessToken": "rotated-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "rawResponse": {
+        "access_token": "rotated-access",
+        "refresh_token": "rotated-refresh",
+        "token_type": "Bearer",
+        "scope": "refreshed-scope"
+      }
+    }
+  ],
+  "profileCases": [
+    {
+      "name": "confirmed email",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {
+          "confirmed_email": "confirmed@example.test"
+        }
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": "confirmed@example.test"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "confirmed@example.test",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": true
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png",
+            "email": "confirmed@example.test"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": true,
+        "dataEmailUndefined": false
+      }
+    },
+    {
+      "name": "empty confirmation",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {
+          "confirmed_email": ""
+        }
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "null confirmation",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {
+          "confirmed_email": null
+        }
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "omitted confirmation",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "second 503 retains raw email",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": "raw@example.test"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 503,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": "raw@example.test"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "raw@example.test",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png",
+            "email": "raw@example.test"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": true,
+        "dataEmailUndefined": false
+      }
+    },
+    {
+      "name": "second 503 without raw email",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 503,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "first 503",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 503,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "returned"
+      ],
+      "mapperCalls": 0,
+      "result": null,
+      "presence": null
+    },
+    {
+      "name": "null raw email",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": null
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": null
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png",
+            "email": null
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": true,
+        "dataEmailUndefined": false
+      }
+    },
+    {
+      "name": "empty raw email",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": ""
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png",
+          "email": ""
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png",
+            "email": ""
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": true,
+        "dataEmailUndefined": false
+      }
+    },
+    {
+      "name": "image omitted",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": true,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "image null",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": null
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": null
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "ordinary-twitter-owner@twitter.placeholder.invalid",
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": null
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "mapped email string",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "email": "mapped@example.test"
+      },
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "mapped email null",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "null",
+      "mapperPatch": {
+        "email": null
+      },
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": null,
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "mapped email undefined",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "undefined",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": true,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    },
+    {
+      "name": "mapped email empty",
+      "profile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "emailResponse": {
+        "data": {}
+      },
+      "profileStatus": 200,
+      "emailStatus": 200,
+      "mapperEmailMode": "empty",
+      "mapperPatch": {
+        "email": ""
+      },
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "data": {
+          "id": "ordinary-twitter-owner",
+          "name": "Twitter Owner",
+          "username": "twitter-owner",
+          "profile_image_url": "https://images.example.test/twitter.png"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Twitter Owner",
+          "email": "",
+          "image": "https://images.example.test/twitter.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "presence": {
+        "userEmailOwn": true,
+        "userEmailUndefined": false,
+        "userImageOwn": true,
+        "userImageUndefined": false,
+        "dataEmailOwn": false,
+        "dataEmailUndefined": true
+      }
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "mapper error",
+      "requests": [
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=profile_image_url",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://api.x.com/2/users/me?user.fields=confirmed_email",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "confirmed_email",
+        "mapper"
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Twitter mapper error",
+        "sameError": true
+      }
+    },
+    {
+      "mode": "custom success",
+      "requests": [],
+      "events": [
+        "custom"
+      ],
+      "result": {
+        "user": {
+          "name": "Custom Twitter Owner",
+          "email": "custom@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "id": "ordinary-twitter-owner",
+            "name": "Twitter Owner",
+            "username": "twitter-owner",
+            "profile_image_url": "https://images.example.test/twitter.png"
+          }
+        }
+      },
+      "sameCustom": true
+    },
+    {
+      "mode": "custom null",
+      "requests": [],
+      "events": [
+        "custom"
+      ],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "custom error",
+      "requests": [],
+      "events": [
+        "custom"
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Twitter custom error",
+        "sameError": true
+      }
+    }
+  ]
+}

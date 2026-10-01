@@ -405,7 +405,7 @@ impl OAuthProfileMapper for Mapper {
             name: Some(Some("Mapped Salesforce Owner".into())),
             email: Some(None.into()),
             image: Some(None),
-            email_verified: Some(false),
+            email_verified: Some(Some(false).into()),
             ..Default::default()
         })
     }

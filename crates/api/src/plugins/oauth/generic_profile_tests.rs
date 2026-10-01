@@ -40,7 +40,7 @@ impl OAuthProfileMapper for MapProfile {
         Ok(OAuthProfile {
             email: Some(Some("mapped@example.com".to_string()).into()),
             name: Some(Some("Mapped name".to_string())),
-            email_verified: Some(true),
+            email_verified: Some(Some(true).into()),
             ..Default::default()
         })
     }
@@ -76,7 +76,7 @@ async fn id_token_profile_is_preferred_and_mapping_cannot_change_account_subject
         Some("mapped@example.com")
     );
     assert_eq!(response.user.name.as_deref(), Some("Mapped name"));
-    assert!(response.user.email_verified);
+    assert!(matches!(response.user.email_verified(), Ok(true)));
     assert_eq!(
         response.user.image.as_ref().and_then(Option::as_deref),
         Some("https://example.com/image.png")
@@ -243,7 +243,7 @@ async fn id_token_without_email_falls_back_to_userinfo_with_access_token() {
         response.user.email.typed().unwrap().as_deref(),
         Some("userinfo@example.com")
     );
-    assert!(!response.user.email_verified);
+    assert!(matches!(response.user.email_verified(), Ok(false)));
     assert_eq!(
         response.user.image.as_ref().and_then(Option::as_deref),
         Some("https://example.com/picture.png")

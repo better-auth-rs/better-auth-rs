@@ -35,6 +35,8 @@ pub(super) enum ProviderKind {
     },
     Cloudflare,
     Salesforce,
+    Twitter,
+    Vk,
 }
 
 impl ProviderKind {
@@ -58,6 +60,8 @@ impl ProviderKind {
             Self::Kakao => &["account_email", "profile_image", "profile_nickname"],
             Self::Cloudflare => &["user-details.read"],
             Self::Salesforce => &["openid", "email", "profile"],
+            Self::Twitter => &["users.read", "tweet.read", "offline.access", "users.email"],
+            Self::Vk => &["email", "phone"],
         }
     }
     pub(super) fn decode_profile(&self, profile: Value) -> AuthResult<Option<OAuthUserInfo>> {
@@ -95,6 +99,8 @@ impl ProviderKind {
             Self::Zoom { .. } => zoom_profile,
             Self::Cloudflare => cloudflare_profile,
             Self::Salesforce => salesforce_profile,
+            Self::Twitter => super::twitter::decode_profile,
+            Self::Vk => vk_profile,
             Self::GitHub { .. } | Self::Custom => {
                 return Err(AuthError::internal("Missing user-info mapper for provider"));
             }
@@ -103,7 +109,7 @@ impl ProviderKind {
     }
 }
 
-fn profile_email(profile: &Value) -> Result<SchemaValue<Option<String>>, String> {
+pub(super) fn profile_email(profile: &Value) -> Result<SchemaValue<Option<String>>, String> {
     profile
         .get("email")
         .cloned()
@@ -111,6 +117,38 @@ fn profile_email(profile: &Value) -> Result<SchemaValue<Option<String>>, String>
         .transpose()
         .map(|value| value.map(SchemaValue::Typed).unwrap_or_default())
         .map_err(|error| format!("Invalid provider email: {error}"))
+}
+
+fn vk_profile(profile: Value) -> Result<OAuthUserInfo, String> {
+    let user = profile.get("user").ok_or("Missing VK user profile")?;
+    let first_name = user
+        .get("first_name")
+        .and_then(Value::as_str)
+        .ok_or("Missing VK first name")?;
+    let last_name = user
+        .get("last_name")
+        .and_then(Value::as_str)
+        .ok_or("Missing VK last name")?;
+    Ok(OAuthUserInfo {
+        id: user
+            .get("user_id")
+            .and_then(Value::as_str)
+            .ok_or("missing user_id")?
+            .into(),
+        email: profile_email(user)?,
+        name: Some(format!("{first_name} {last_name}")),
+        image: user
+            .get("avatar")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid VK avatar: {error}"))?,
+        email_verified: Some(false).into(),
+        additional_fields: ["first_name", "last_name", "birthday", "sex"]
+            .into_iter()
+            .filter_map(|field| user.get(field).map(|value| (field.into(), value.clone())))
+            .collect(),
+    })
 }
 
 fn salesforce_profile(profile: Value) -> Result<OAuthUserInfo, String> {
@@ -134,16 +172,20 @@ fn salesforce_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Salesforce image: {error}"))?,
-        email_verified: profile
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        email_verified: Some(
+            profile
+                .get("email_verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+        .into(),
         additional_fields: Default::default(),
     })
 }
 
 fn google_profile(v: Value) -> Result<OAuthUserInfo, String> {
-    openid_profile(v, "Google")
+    let verified = SchemaValue::from_json(v.get("email_verified").cloned());
+    openid_profile(v, "Google", verified)
 }
 
 fn atlassian_profile(v: Value) -> Result<OAuthUserInfo, String> {
@@ -162,12 +204,18 @@ fn atlassian_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Atlassian picture: {error}"))?,
-        email_verified: false,
+        email_verified: Some(false).into(),
     })
 }
 
 fn linkedin_profile(v: Value) -> Result<OAuthUserInfo, String> {
-    openid_profile(v, "LinkedIn")
+    let verified = Some(
+        v.get("email_verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    )
+    .into();
+    openid_profile(v, "LinkedIn", verified)
 }
 
 fn slack_profile(v: Value) -> Result<OAuthUserInfo, String> {
@@ -193,10 +241,7 @@ fn slack_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Slack picture: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .ok_or("missing email_verified")?,
+        email_verified: SchemaValue::from_json(v.get("email_verified").cloned()),
     })
 }
 
@@ -217,7 +262,7 @@ fn naver_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Naver profile image: {error}"))?,
-        email_verified: false,
+        email_verified: Some(false).into(),
     })
 }
 
@@ -237,7 +282,7 @@ fn linear_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Linear avatar: {error}"))?,
-        email_verified: false,
+        email_verified: Some(false).into(),
     })
 }
 
@@ -269,8 +314,11 @@ fn kakao_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Kakao image: {error}"))?,
-        email_verified: account.get("is_email_valid").and_then(Value::as_bool) == Some(true)
-            && account.get("is_email_verified").and_then(Value::as_bool) == Some(true),
+        email_verified: Some(
+            account.get("is_email_valid").and_then(Value::as_bool) == Some(true)
+                && account.get("is_email_verified").and_then(Value::as_bool) == Some(true),
+        )
+        .into(),
     })
 }
 
@@ -294,7 +342,7 @@ fn reddit_profile(v: Value) -> Result<OAuthUserInfo, String> {
                     .to_owned(),
             )
         }),
-        email_verified: false,
+        email_verified: Some(false).into(),
         additional_fields: Default::default(),
     })
 }
@@ -318,13 +366,19 @@ fn zoom_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Zoom picture: {error}"))?,
-        email_verified: v
-            .get("verified")
-            .is_some_and(crate::plugins::json_body::is_truthy),
+        email_verified: Some(
+            v.get("verified")
+                .is_some_and(crate::plugins::json_body::is_truthy),
+        )
+        .into(),
     })
 }
 
-fn openid_profile(v: Value, provider: &str) -> Result<OAuthUserInfo, String> {
+fn openid_profile(
+    v: Value,
+    provider: &str,
+    email_verified: SchemaValue<Option<bool>>,
+) -> Result<OAuthUserInfo, String> {
     Ok(OAuthUserInfo {
         additional_fields: Default::default(),
         id: v
@@ -340,10 +394,7 @@ fn openid_profile(v: Value, provider: &str) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid {provider} picture: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
+        email_verified,
     })
 }
 
@@ -404,7 +455,7 @@ fn discord_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Discord image: {error}"))?,
-        email_verified: v.get("verified").and_then(|v| v.as_bool()).unwrap_or(false),
+        email_verified: SchemaValue::from_json(v.get("verified").cloned()),
     })
 }
 
@@ -434,10 +485,12 @@ fn gitlab_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid GitLab avatar: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        email_verified: Some(
+            v.get("email_verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+        .into(),
     })
 }
 
@@ -463,7 +516,7 @@ fn spotify_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Spotify image: {error}"))?,
-        email_verified: false,
+        email_verified: Some(false).into(),
     })
 }
 
@@ -483,10 +536,12 @@ fn huggingface_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Hugging Face picture: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        email_verified: Some(
+            v.get("email_verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+        .into(),
     })
 }
 
@@ -506,10 +561,12 @@ fn polar_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Polar avatar: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        email_verified: Some(
+            v.get("email_verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+        .into(),
     })
 }
 
@@ -535,10 +592,12 @@ fn vercel_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Vercel picture: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        email_verified: Some(
+            v.get("email_verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+        .into(),
     })
 }
 
@@ -575,10 +634,12 @@ fn dropbox_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Dropbox image: {error}"))?,
-        email_verified: v
-            .get("email_verified")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        email_verified: Some(
+            v.get("email_verified")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        )
+        .into(),
     })
 }
 
@@ -598,7 +659,7 @@ fn figma_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Figma image: {error}"))?,
-        email_verified: false,
+        email_verified: Some(false).into(),
     })
 }
 
@@ -623,7 +684,7 @@ fn cloudflare_profile(v: Value) -> Result<OAuthUserInfo, String> {
             Some(name)
         },
         image: None,
-        email_verified: false,
+        email_verified: Some(false).into(),
         additional_fields: Default::default(),
     })
 }
@@ -644,7 +705,7 @@ fn kick_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Kick image: {error}"))?,
-        email_verified: false,
+        email_verified: Some(false).into(),
     })
 }
 
@@ -739,7 +800,7 @@ pub(in crate::plugins::oauth) async fn github_profile(
                 .map(serde_json::from_value)
                 .transpose()
                 .map_err(|error| AuthError::internal(format!("Invalid GitHub avatar: {error}")))?,
-            email_verified,
+            email_verified: Some(email_verified).into(),
         },
         data: profile,
     }))

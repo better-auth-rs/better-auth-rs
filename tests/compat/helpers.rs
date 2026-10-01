@@ -234,7 +234,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                     email: Some("mock@example.com".to_string()).into(),
                     name: Some("Mock OAuth User".to_string()),
                     image: None,
-                    email_verified: true,
+                    email_verified: Some(true).into(),
                 },
                 data: serde_json::json!({
                     "id": "mock-account-id",
@@ -267,7 +267,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                 email: Some("mock@example.com".to_string()).into(),
                 name: Some("Mock OAuth User".to_string()),
                 image: None,
-                email_verified: true,
+                email_verified: Some(true).into(),
             })
         });
         provider.get_user_info = Some(Arc::new(MockUserInfoHandler));

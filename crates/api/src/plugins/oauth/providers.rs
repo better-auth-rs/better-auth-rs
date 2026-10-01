@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 mod defaults;
+pub(super) mod twitter;
 use super::OAuthProfileMapper;
 use super::token::{TokenEndpointAuth, TokenEndpointSecretAuthentication};
 use defaults::ProviderKind;
@@ -41,12 +42,29 @@ pub struct OAuthUserInfo {
     pub name: Option<String>,
     /// Omit the image with `None`, clear it with `Some(None)`, or supply a URL.
     pub image: Option<Option<String>>,
-    pub email_verified: bool,
+    /// Preserve omitted or null provider values without treating either as verified.
+    pub email_verified: SchemaValue<Option<bool>>,
 }
 
 impl OAuthUserInfo {
     pub(super) fn email(&self) -> AuthResult<Option<&str>> {
         profile_email(&self.email)
+    }
+
+    pub(super) fn email_verified(&self) -> AuthResult<bool> {
+        profile_email_verified(&self.email_verified)
+    }
+}
+
+pub(super) fn profile_email_verified(value: &SchemaValue<Option<bool>>) -> AuthResult<bool> {
+    match value {
+        SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(Value::Bool(value)) => Ok(*value),
+        SchemaValue::Undefined | SchemaValue::Typed(None) | SchemaValue::Dynamic(Value::Null) => {
+            Ok(false)
+        }
+        SchemaValue::Dynamic(_) | SchemaValue::InvalidDate => Err(AuthError::internal(
+            "OAuth profile email verification must be a boolean, null, or undefined",
+        )),
     }
 }
 
@@ -356,6 +374,15 @@ impl OAuthProvider {
         url: &str,
         access_token: &str,
     ) -> reqwest::RequestBuilder {
+        if self.is_vk() {
+            return reqwest::Client::new()
+                .post(url)
+                .header("Accept", "*/*")
+                .form(&[
+                    ("access_token", access_token),
+                    ("client_id", &self.client_id),
+                ]);
+        }
         let method = match self.kind {
             ProviderKind::Dropbox | ProviderKind::Linear => reqwest::Method::POST,
             _ => reqwest::Method::GET,
@@ -363,7 +390,14 @@ impl OAuthProvider {
         let request = reqwest::Client::new()
             .request(method, url)
             .bearer_auth(access_token)
-            .header("Accept", "application/json");
+            .header(
+                "Accept",
+                if self.is_twitter() {
+                    "*/*"
+                } else {
+                    "application/json"
+                },
+            );
         if matches!(self.kind, ProviderKind::Linear) {
             request.json(&serde_json::json!({
                 "query": "query { viewer { id name email avatarUrl active createdAt updatedAt } }"
@@ -560,6 +594,44 @@ impl OAuthProvider {
         }
     }
 
+    /// Configure Twitter with PKCE, HTTP Basic token authentication, and its two user-info requests.
+    pub fn twitter(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Twitter,
+            user_info_url: Some(
+                "https://api.x.com/2/users/me?user.fields=profile_image_url".into(),
+            ),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://x.com/i/oauth2/authorize",
+                "https://api.x.com/2/oauth2/token",
+            )
+        }
+    }
+
+    pub(super) fn is_twitter(&self) -> bool {
+        matches!(self.kind, ProviderKind::Twitter)
+    }
+
+    /// Configure VK with PKCE, client-secret-post grants, and form-based user info.
+    pub fn vk(client_id: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::Vk,
+            user_info_url: Some("https://id.vk.com/oauth2/user_info".into()),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://id.vk.com/authorize",
+                "https://id.vk.com/oauth2/auth",
+            )
+        }
+    }
+
+    pub(super) fn is_vk(&self) -> bool {
+        matches!(self.kind, ProviderKind::Vk)
+    }
+
     pub(super) fn is_reddit(&self) -> bool {
         matches!(self.kind, ProviderKind::Reddit)
     }
@@ -592,6 +664,8 @@ impl OAuthProvider {
                 | ProviderKind::Salesforce
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { .. }
+                | ProviderKind::Twitter
+                | ProviderKind::Vk
         )
     }
 
@@ -608,6 +682,7 @@ impl OAuthProvider {
                 | ProviderKind::Salesforce
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { .. }
+                | ProviderKind::Twitter
         )
     }
 
@@ -670,6 +745,7 @@ impl OAuthProvider {
     pub(super) fn token_authentication(&self) -> Option<TokenEndpointSecretAuthentication> {
         (self.is_figma()
             || self.is_reddit()
+            || self.is_twitter()
             || matches!(self.kind, ProviderKind::Cloudflare) && !self.client_secret.is_empty())
         .then_some(TokenEndpointSecretAuthentication::Basic)
     }
@@ -798,6 +874,8 @@ impl OAuthProvider {
             | ProviderKind::Cloudflare
             | ProviderKind::Salesforce
             | ProviderKind::Kakao
+            | ProviderKind::Twitter
+            | ProviderKind::Vk
             | ProviderKind::Zoom { .. } => None,
         }
     }

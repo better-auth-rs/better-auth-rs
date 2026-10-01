@@ -408,7 +408,7 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
                 email: Some("owner@example.test".into()).into(),
                 name: None,
                 image: None,
-                email_verified: true,
+                email_verified: Some(true).into(),
                 additional_fields: Default::default(),
             },
             &incoming,

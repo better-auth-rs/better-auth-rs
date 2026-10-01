@@ -94,6 +94,10 @@ pub(super) async fn fetch_profile(
         .email
         .unwrap_or_else(|| Some(string(profile, "email").unwrap_or_default()).into());
     let _ = super::providers::profile_email(&email)?;
+    let email_verified = mapped.email_verified.unwrap_or_else(|| {
+        better_auth_core::SchemaValue::from_json(profile.get("emailVerified").cloned())
+    });
+    let _ = super::providers::profile_email_verified(&email_verified)?;
     Ok(ProfileResponse {
         user: AccountInfoUser {
             id: None,
@@ -104,12 +108,7 @@ pub(super) async fn fetch_profile(
                 .image
                 .unwrap_or_else(|| string(profile, "image"))
                 .map(Some),
-            email_verified: mapped.email_verified.unwrap_or_else(|| {
-                profile
-                    .get("emailVerified")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-            }),
+            email_verified,
         },
         data: raw,
     })

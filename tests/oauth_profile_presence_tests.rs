@@ -2,7 +2,6 @@
 #![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
-    clippy::panic,
     reason = "Integration fixtures fail immediately on invalid setup, changed protocol fields, or premature callback completion."
 )]
 
@@ -13,7 +12,10 @@ use axum::{
     http::HeaderMap,
     routing::{get, post},
 };
-use better_auth::plugins::oauth::{OAuthPlugin, OAuthProfile, OAuthProfileMapper, OAuthProvider};
+use better_auth::plugins::oauth::{
+    GenericOAuthConfig, GenericOAuthUserInfoHandler, OAuthPlugin, OAuthProfile, OAuthProfileMapper,
+    OAuthProvider, OAuthUserInfoRequest,
+};
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
 use better_auth_core::{AuthRequest, AuthResponse, AuthResult, HttpMethod, SchemaValue};
 use better_auth_seaorm::{
@@ -40,6 +42,7 @@ struct ProviderState {
     id: &'static str,
     profile: Arc<Mutex<Value>>,
     email: Arc<Mutex<Option<SchemaValue<Option<String>>>>>,
+    verified: Arc<Mutex<Option<SchemaValue<Option<bool>>>>>,
     events: Arc<Mutex<Vec<&'static str>>>,
     started: Arc<Notify>,
     release: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
@@ -80,8 +83,19 @@ impl OAuthProfileMapper for Mapper {
         self.0.events.lock().unwrap().push("map:end");
         Ok(OAuthProfile {
             email: self.0.email.lock().unwrap().clone(),
+            email_verified: self.0.verified.lock().unwrap().clone(),
             ..Default::default()
         })
+    }
+}
+
+struct GenericProfile(ProviderState);
+
+#[async_trait]
+impl GenericOAuthUserInfoHandler for GenericProfile {
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
+        self.0.events.lock().unwrap().push("custom");
+        Ok(self.0.profile.lock().unwrap().clone())
     }
 }
 
@@ -109,6 +123,11 @@ impl Fixture {
                 "profile":{"id":"123456789", "email":"owner@example.test", "username":"Owner", "avatar":"portrait", "verified":true},
                 "defaultUser":{"name":"Owner", "email":"owner@example.test", "image":DISCORD_IMAGE, "emailVerified":true}
             })
+        } else if id == "generic" {
+            json!({
+                "profile":{"id":"ordinary-generic-account","email":"owner@example.test","name":"Owner","emailVerified":true},
+                "defaultUser":{"email":"owner@example.test","name":"Owner","emailVerified":true}
+            })
         } else {
             fixture["providers"][id].clone()
         };
@@ -116,6 +135,7 @@ impl Fixture {
             id,
             profile: Arc::new(Mutex::new(data["profile"].clone())),
             email: Default::default(),
+            verified: Default::default(),
             events: Default::default(),
             started: Default::default(),
             release: Default::default(),
@@ -132,6 +152,13 @@ impl Fixture {
         let mut provider = match id {
             "huggingface" => OAuthProvider::huggingface(client_id, client_secret),
             "vercel" => OAuthProvider::vercel(client_id, client_secret),
+            "reddit" => OAuthProvider::reddit(client_id, client_secret),
+            "generic" => OAuthProvider::custom(
+                client_id,
+                client_secret,
+                "https://provider.example.test/authorize",
+                "https://provider.example.test/token",
+            ),
             _ => {
                 assert_eq!(id, "discord");
                 OAuthProvider::discord(client_id, client_secret)
@@ -140,13 +167,29 @@ impl Fixture {
         provider.token_url = format!("{server_url}/token");
         provider.user_info_url = Some(format!("{server_url}/profile"));
         provider.map_profile_to_user = Some(Arc::new(Mapper(state.clone())));
+        let plugin = if id == "generic" {
+            OAuthPlugin::new().add_generic_provider(
+                id,
+                GenericOAuthConfig {
+                    client_id: client_id.into(),
+                    client_secret: Some(client_secret.into()),
+                    authorization_url: Some(provider.auth_url),
+                    token_url: Some(provider.token_url),
+                    get_user_info: Some(Arc::new(GenericProfile(state.clone()))),
+                    map_profile_to_user: provider.map_profile_to_user,
+                    ..Default::default()
+                },
+            )
+        } else {
+            OAuthPlugin::new().add_provider(id, provider)
+        };
         let config = AuthConfig::new("oauth-profile-presence-test-secret-more-than-32-characters")
             .base_url(BASE_URL);
         let database = Database::connect("sqlite::memory:").await.unwrap();
         migrator::run_migrations(&database).await.unwrap();
         let auth = AuthBuilder::<BundledSchema>::new(config.clone())
             .store(SeaOrmStore::<BundledSchema>::new(config, database.clone()))
-            .plugin(OAuthPlugin::new().add_provider(id, provider))
+            .plugin(plugin)
             .build()
             .await
             .unwrap();
@@ -310,6 +353,74 @@ async fn account_info_email_presence_matches_pinned_oracle_without_changing_sqli
                 ["profile", "map:start", "map:end"]
             );
             assert_eq!(fixture.rows().await, before, "{raw_email}/{mapping}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn account_info_verification_presence_matches_pinned_oracle_without_changing_sqlite_rows() {
+    let golden: Value =
+        serde_json::from_str(include_str!("fixtures/email-verified-presence-1.7.6.json")).unwrap();
+    for id in ["discord", "huggingface", "reddit", "generic"] {
+        let fixture = Fixture::new(id).await;
+        let login = fixture.login().await;
+        let before = fixture.rows().await;
+        let account = &before.1[0];
+        for case in golden["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|case| case["provider"] == id)
+        {
+            let field = golden["profiles"][id]["field"].as_str().unwrap();
+            let mut raw = golden["profiles"][id]["profile"].clone();
+            if case["raw"] == "omitted" {
+                let _ = raw.as_object_mut().unwrap().remove(field);
+            } else {
+                raw[field] = serde_json::from_str(case["raw"].as_str().unwrap()).unwrap();
+            }
+            *fixture.state.profile.lock().unwrap() = raw.clone();
+            *fixture.state.verified.lock().unwrap() = match case["mapping"].as_str().unwrap() {
+                "unchanged" => None,
+                "undefined" => Some(SchemaValue::Undefined),
+                value => Some(serde_json::from_str(value).unwrap()),
+            };
+            fixture.state.events.lock().unwrap().clear();
+            let mut input = request(HttpMethod::Get, "/api/auth/account-info");
+            input.headers = HashMap::from([("cookie".into(), cookies(&login))]);
+            input.query = Some(json!({"accountId":account.id}));
+            let response = fixture.auth.handle_request(input).await.unwrap();
+            assert_eq!(response.status, 200, "{case}");
+            let actual: Value = serde_json::from_slice(&response.body).unwrap();
+            let mut expected_user = fixture.data["defaultUser"].clone();
+            let _ = expected_user
+                .as_object_mut()
+                .unwrap()
+                .remove("emailVerified");
+            expected_user
+                .as_object_mut()
+                .unwrap()
+                .extend(case["expected"]["user"].as_object().unwrap().clone());
+            if id == "discord" {
+                raw["image_url"] = json!(DISCORD_IMAGE);
+            }
+            assert_eq!(
+                actual,
+                json!({
+                    "user":expected_user, "data":raw,
+                    "account":{"id":account.id,"providerId":account.provider_id,"accountId":account.account_id}
+                }),
+                "{case}"
+            );
+            assert_eq!(
+                *fixture.state.events.lock().unwrap(),
+                [
+                    if id == "generic" { "custom" } else { "profile" },
+                    "map:start",
+                    "map:end"
+                ]
+            );
+            assert_eq!(fixture.rows().await, before, "{case}");
         }
     }
 }

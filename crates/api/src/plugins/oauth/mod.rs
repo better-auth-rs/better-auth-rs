@@ -39,7 +39,11 @@ mod social_profile;
 mod state;
 mod state_json;
 mod token;
+#[cfg(test)]
+mod twitter_tests;
 mod types;
+#[cfg(test)]
+mod vk_tests;
 
 #[cfg(test)]
 mod google_test_support;
@@ -255,6 +259,9 @@ mod readiness_tests;
 
 #[cfg(test)]
 mod social_options_tests;
+
+#[cfg(test)]
+mod email_verified_tests;
 
 #[cfg(test)]
 mod http_provider_tests;
