@@ -17,6 +17,12 @@
 /// Messages outside every table carry no `code` on the wire at all, which is
 /// why this returns an `Option` rather than falling back to a derivation.
 pub(crate) fn upstream_code(message: &str) -> Option<&'static str> {
+    // `parseInputData` throws `${key} is not allowed to be set` together with
+    // BASE_ERROR_CODES.FIELD_NOT_ALLOWED, so the message is templated and
+    // cannot be a key in the exact-match table below.
+    if message.ends_with(" is not allowed to be set") {
+        return Some("FIELD_NOT_ALLOWED");
+    }
     let code = match message {
         "Access denied" => "ACCESS_DENIED",
         "Account not found" => "ACCOUNT_NOT_FOUND",
@@ -376,4 +382,30 @@ pub(crate) fn upstream_code(message: &str) -> Option<&'static str> {
         _ => return None,
     };
     Some(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::upstream_code;
+
+    #[test]
+    fn templated_field_not_allowed_message_maps_to_code() {
+        assert_eq!(
+            upstream_code("role is not allowed to be set"),
+            Some("FIELD_NOT_ALLOWED")
+        );
+        assert_eq!(
+            upstream_code("emailVerified is not allowed to be set"),
+            Some("FIELD_NOT_ALLOWED")
+        );
+    }
+
+    #[test]
+    fn messages_without_an_upstream_code_stay_unmapped() {
+        assert_eq!(upstream_code("No fields to update"), None);
+        assert_eq!(
+            upstream_code("Field not allowed to be set"),
+            Some("FIELD_NOT_ALLOWED")
+        );
+    }
 }

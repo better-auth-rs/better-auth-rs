@@ -265,7 +265,10 @@ pub(crate) struct TrustedDeviceCheck {
     pub set_cookie_headers: Vec<String>,
 }
 
-pub(crate) fn is_enabled(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> bool {
+/// Whether the TwoFactor plugin is installed, read from the flag it sets at
+/// `on_init`. Public because `POST /update-user` gates `input: false` fields
+/// on it (better-auth 1.6.29 parity).
+pub fn is_enabled(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> bool {
     ctx.get_metadata(METADATA_ENABLED)
         .and_then(|value| value.as_bool())
         .unwrap_or(false)

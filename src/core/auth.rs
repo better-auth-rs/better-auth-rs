@@ -423,14 +423,43 @@ impl<S: AuthSchema> BetterAuth<S> {
         if body.contains_key("email") {
             return Err(AuthError::bad_request("Email can not be updated"));
         }
+        // Upstream rejects `input: false` schema fields before it writes, and
+        // only knows plugin-contributed fields when that plugin is installed.
+        // Either way the key is stripped below, so it never reaches the store.
+        let admin_enabled = better_auth_api::plugins::helpers::admin_plugin_enabled(&self.context);
+        let two_factor_enabled = better_auth_api::plugins::two_factor::is_enabled(&self.context);
 
-        let mut body = body.clone();
-        if self.context.get_metadata("username.enabled") != Some(&serde_json::Value::Bool(true)) {
-            _ = body.remove("username");
-            _ = body.remove("displayUsername");
+        for (key, value) in body.iter() {
+            let core_denied = UpdateUserRequest::NON_WRITABLE_CORE_FIELDS.contains(&key.as_str());
+            let plugin_denied = UpdateUserRequest::is_denied_by_plugin(
+                key.as_str(),
+                admin_enabled,
+                two_factor_enabled,
+            );
+
+            if (core_denied || plugin_denied) && UpdateUserRequest::is_js_truthy(value) {
+                return Err(AuthError::bad_request(format!(
+                    "{key} is not allowed to be set"
+                )));
+            }
         }
-        let update_req: UpdateUserRequest = serde_json::from_value(serde_json::Value::Object(body))
-            .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
+
+        let mut clean_body = body.clone();
+
+        clean_body.retain(|key, _| {
+            let key = key.as_str();
+            !UpdateUserRequest::NON_WRITABLE_CORE_FIELDS.contains(&key)
+                && !UpdateUserRequest::is_plugin_non_writable(key)
+        });
+
+        if self.context.get_metadata("username.enabled") != Some(&serde_json::Value::Bool(true)) {
+            _ = clean_body.remove("username");
+            _ = clean_body.remove("displayUsername");
+        }
+
+        let update_req: UpdateUserRequest =
+            serde_json::from_value(serde_json::Value::Object(clean_body))
+                .map_err(|e| AuthError::bad_request(format!("Invalid JSON: {}", e)))?;
         let (username, display_username) =
             normalize_username_fields(update_req.username, update_req.display_username);
 
@@ -471,7 +500,6 @@ impl<S: AuthSchema> BetterAuth<S> {
             || update_req.image.is_some()
             || username.is_some()
             || display_username.is_some()
-            || update_req.role.is_some()
             || update_req.metadata.is_some();
         if !has_changes {
             return Err(AuthError::bad_request("No fields to update"));
@@ -484,7 +512,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             email_verified: None,
             username,
             display_username,
-            role: update_req.role,
+            role: None,
             banned: None,
             ban_reason: None,
             ban_expires: None,

@@ -62,6 +62,38 @@ Content-Type: application/json
 
 All fields are optional. Only provided fields are updated.
 
+Some fields are never writable through this endpoint. They are stripped from
+the request before it reaches the store, and rejected with `400` /
+`FIELD_NOT_ALLOWED` when the plugin that owns them is installed:
+
+| Field | Owner |
+|-------|-------|
+| `emailVerified` | Core — rejected on every request |
+| `role`, `banned`, `banReason`, `banExpires` | `AdminPlugin` |
+| `twoFactorEnabled` | `TwoFactorPlugin` |
+
+```json
+{
+  "code": "FIELD_NOT_ALLOWED",
+  "message": "role is not allowed to be set"
+}
+```
+
+<Callout type="info">
+When the owning plugin is not installed the key is unknown to the schema, so it
+is dropped silently instead of rejected — a request left with nothing to write
+returns `400` with `No fields to update` and no `code`. Falsy values (`null`,
+`false`, `0`, `""`) are skipped rather than rejected.
+</Callout>
+
+Write privileged fields through their own endpoints: `POST /admin/set-role` for
+`role`, and the ban endpoints for `banned`, `banReason` and `banExpires`.
+`email` cannot be changed here either — use `POST /change-email`.
+
+`metadata` is writable. It is opaque pass-through data: it is stored and echoed
+back on the user object, but nothing in this crate reads it to make an
+authorization decision.
+
 ### Delete User
 
 ```http

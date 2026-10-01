@@ -15,6 +15,7 @@ use std::collections::HashSet;
 
 use better_auth::prelude::CreateAccount;
 
+use better_auth_core::AuthUser;
 use compat::helpers::*;
 use compat::schema::extract_success_schema;
 use compat::shapes::check_camel_case_fields;
@@ -417,5 +418,101 @@ async fn test_error_response_shapes_match_spec() {
     assert!(
         all_passed,
         "Some error responses don't match the spec. See output above."
+    );
+}
+
+// POST /update-user: non-writable fields (issue #112)
+/// `input: false` fields must 400 with the upstream code + message, and must
+/// not partially apply the rest of the body.
+#[tokio::test]
+async fn test_update_user_rejects_role() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "esc@test.com", "password123", "Esc User").await;
+
+    // 1. truthy role -> 400 FIELD_NOT_ALLOWED, role untouched
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth("/update-user", serde_json::json!({"role": "admin"}), &token),
+    )
+    .await;
+    assert_eq!(status, 400, "role must be rejected: {body}");
+    assert_eq!(body["code"], "FIELD_NOT_ALLOWED", "{body}");
+    assert_eq!(body["message"], "role is not allowed to be set", "{body}");
+
+    // 2. no partial write: a valid `name` next to a rejected `role` applies nothing
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/update-user",
+            serde_json::json!({ "name": "Hacked", "role": "admin" }),
+            &token,
+        ),
+    )
+    .await;
+    assert_eq!(
+        status, 400,
+        "rejected body must not partially apply: {body}"
+    );
+
+    // 3. falsy role is skipped by upstream's `if (data[key])` -> nothing to update
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth("/update-user", serde_json::json!({ "role": "" }), &token),
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["message"], "No fields to update", "{body}");
+    assert!(
+        body.get("code").is_none(),
+        "upstream emits no code here: {body}"
+    );
+
+    // persisted state: role never changed, name never applied
+    let user = auth
+        .store()
+        .get_user_by_email("esc@test.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        user.role().as_deref(),
+        Some("user"),
+        "role must be unchanged"
+    );
+    assert_eq!(user.name(), Some("Esc User"), "name must not be applied");
+
+    // 4. control: a plain profile update still succeeds
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/update-user",
+            serde_json::json!({ "name": "Renamed" }),
+            &token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 200, "legit update must still work: {body}");
+}
+
+/// Core-schema `input: false` fields are rejected regardless of plugins.
+#[tokio::test]
+async fn test_update_user_rejects_core_non_writable_field() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "ev@test.com", "password123", "EV User").await;
+
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/update-user",
+            serde_json::json!({ "emailVerified": true }),
+            &token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["code"], "FIELD_NOT_ALLOWED", "{body}");
+    assert_eq!(
+        body["message"], "emailVerified is not allowed to be set",
+        "{body}"
     );
 }

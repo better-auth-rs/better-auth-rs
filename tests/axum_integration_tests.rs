@@ -7,8 +7,9 @@ use axum::{
 };
 use better_auth::integrations::axum::{AxumIntegration, CurrentSession, OptionalSession};
 use better_auth::plugins::{
-    EmailPasswordPlugin, EmailVerificationPlugin, PasswordManagementPlugin,
-    SessionManagementPlugin, UserManagementPlugin, password_management::SendResetPassword,
+    AdminPlugin, EmailPasswordPlugin, EmailVerificationPlugin, PasswordManagementPlugin,
+    SessionManagementPlugin, TwoFactorPlugin, UserManagementPlugin,
+    password_management::SendResetPassword,
 };
 use better_auth::prelude::AuthUser;
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth};
@@ -50,8 +51,44 @@ async fn create_test_auth() -> Arc<BetterAuth<TestSchema>> {
     .await
 }
 
-async fn create_test_auth_with_config(mut config: AuthConfig) -> Arc<BetterAuth<TestSchema>> {
-    config.session.bearer = Some(better_auth::config::BearerConfig::default());
+async fn create_test_auth_with_config(config: AuthConfig) -> Arc<BetterAuth<TestSchema>> {
+    build_test_auth(config, false, false).await
+}
+
+/// The same plugin set as [`create_test_auth_with_config`] **plus**
+/// `AdminPlugin`, and deliberately no Two-Factor plugin. The split lets a test
+/// prove that non-writable `input: false` fields are gated on the plugin that
+/// owns them rather than on either plugin being present.
+async fn create_admin_test_auth() -> Arc<BetterAuth<TestSchema>> {
+    build_test_auth(
+        AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+            .base_url("http://localhost:3000")
+            .password_min_length(6),
+        true,
+        false,
+    )
+    .await
+}
+
+/// The mirror of [`create_admin_test_auth`]: Two-Factor installed, Admin
+/// absent. Pins the rejection branch for `twoFactorEnabled` and, in the other
+/// direction, that an unrelated installed plugin must not reject `role`.
+async fn create_two_factor_test_auth() -> Arc<BetterAuth<TestSchema>> {
+    build_test_auth(
+        AuthConfig::new("test-secret-key-that-is-at-least-32-characters-long")
+            .base_url("http://localhost:3000")
+            .password_min_length(6),
+        false,
+        true,
+    )
+    .await
+}
+
+async fn build_test_auth(
+    mut config: AuthConfig,
+    admin: bool,
+    two_factor: bool,
+) -> Arc<BetterAuth<TestSchema>> {
     struct NoopResetSender;
 
     #[async_trait::async_trait]
@@ -66,24 +103,42 @@ async fn create_test_auth_with_config(mut config: AuthConfig) -> Arc<BetterAuth<
         }
     }
 
+    // Bearer auth is opt-in; every builder variant must enable it, otherwise
+    // `Authorization: Bearer` requests silently get 401.
+    config.session.bearer = Some(Default::default());
+
     let store = SeaOrmStore::<TestSchema>::new(config.clone(), test_database().await);
+    let builder = AuthBuilder::<TestSchema>::new(config)
+        .store(store)
+        .plugin(
+            EmailPasswordPlugin::new()
+                .enable_signup(true)
+                .username(true),
+        )
+        .plugin(SessionManagementPlugin::new())
+        .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
+        .plugin(EmailVerificationPlugin::new())
+        .plugin(
+            UserManagementPlugin::new()
+                .change_email_enabled(true)
+                .delete_user_enabled(true)
+                .require_delete_verification(false),
+        );
+
+    let builder = if admin {
+        builder.plugin(AdminPlugin::new())
+    } else {
+        builder
+    };
+
+    let builder = if two_factor {
+        builder.plugin(TwoFactorPlugin::new())
+    } else {
+        builder
+    };
+
     Arc::new(
-        AuthBuilder::<TestSchema>::new(config)
-            .store(store)
-            .plugin(
-                EmailPasswordPlugin::new()
-                    .enable_signup(true)
-                    .username(true),
-            )
-            .plugin(SessionManagementPlugin::new())
-            .plugin(PasswordManagementPlugin::new().send_reset_password(Arc::new(NoopResetSender)))
-            .plugin(EmailVerificationPlugin::new())
-            .plugin(
-                UserManagementPlugin::new()
-                    .change_email_enabled(true)
-                    .delete_user_enabled(true)
-                    .require_delete_verification(false),
-            )
+        builder
             .build()
             .await
             .expect("Failed to create test auth instance"),
@@ -1470,4 +1525,132 @@ async fn test_axum_complete_workflow() {
 
     let response = router.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+// Upstream source: packages/better-auth/src/api/routes/update-user public endpoint handler matching this request path; adapted to Axum transport coverage.
+#[tokio::test]
+async fn test_axum_update_user_role_ignored_without_admin_plugin() {
+    let auth = create_test_auth().await;
+    let router = create_test_router(auth.clone());
+    let (_user, token) = create_test_user(router.clone()).await;
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/update-user")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(json!({"role": "admin"}).to_string()))
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+
+    let data: Value = serde_json::from_slice(&body_bytes).unwrap();
+
+    assert_eq!(data["message"], "No fields to update");
+    assert!(data.get("code").is_none(), "{data}");
+}
+
+/// `input: false` fields are gated on the plugin that **owns** them, not on
+/// either plugin being installed. Here Admin is present and Two-Factor is not,
+/// so `role` must be rejected outright while `twoFactorEnabled` is unknown to
+/// every installed schema and gets silently dropped — upstream's behaviour.
+// Upstream reference: @better-auth/core parseInputData — a field is rejected
+// only when an installed schema marks it `input: false`; unknown keys are
+// skipped rather than rejected.
+#[tokio::test]
+async fn test_axum_update_user_gates_plugin_fields_per_plugin() {
+    let auth = create_admin_test_auth().await;
+    let router = create_test_router(auth.clone());
+    let (_user, token) = create_test_user(router.clone()).await;
+
+    // Admin plugin installed -> `role` is a known `input: false` field.
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/update-user")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(json!({"role": "admin"}).to_string()))
+        .unwrap();
+
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let data: Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(data["code"], "FIELD_NOT_ALLOWED", "{data}");
+    assert_eq!(data["message"], "role is not allowed to be set", "{data}");
+
+    // No Two-Factor plugin -> `twoFactorEnabled` is in no installed schema, so
+    // it is dropped rather than rejected.
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/update-user")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(json!({"twoFactorEnabled": true}).to_string()))
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let data: Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(data["message"], "No fields to update", "{data}");
+    assert!(data.get("code").is_none(), "{data}");
+}
+
+/// The inverse of [`test_axum_update_user_gates_plugin_fields_per_plugin`]:
+/// Two-Factor installed and Admin absent, so `twoFactorEnabled` is a known
+/// `input: false` field and must be rejected, while `role` belongs to no
+/// installed schema and is dropped. The second half also guards against a
+/// gate keyed on *any* installed plugin instead of the owning one.
+// Upstream reference: @better-auth/core parseInputData — a field is rejected
+// only when an installed schema marks it `input: false`; unknown keys are
+// skipped rather than rejected.
+#[tokio::test]
+async fn test_axum_update_user_rejects_two_factor_field_when_plugin_installed() {
+    let auth = create_two_factor_test_auth().await;
+    let router = create_test_router(auth.clone());
+    let (_user, token) = create_test_user(router.clone()).await;
+
+    // Two-Factor plugin installed -> `twoFactorEnabled` is `input: false`.
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/update-user")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(json!({"twoFactorEnabled": true}).to_string()))
+        .unwrap();
+
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let data: Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(data["code"], "FIELD_NOT_ALLOWED", "{data}");
+    assert_eq!(
+        data["message"], "twoFactorEnabled is not allowed to be set",
+        "{data}"
+    );
+
+    // No Admin plugin -> `role` is in no installed schema, so it is dropped.
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/update-user")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(json!({"role": "admin"}).to_string()))
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let data: Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(data["message"], "No fields to update", "{data}");
+    assert!(data.get("code").is_none(), "{data}");
 }

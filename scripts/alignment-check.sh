@@ -34,6 +34,7 @@ cargo test --locked --features axum --test axum_integration_tests
 cargo test --locked --test compat_endpoint_tests -- --nocapture
 cargo test --locked --test compat_coverage_tests -- --nocapture
 cargo test --locked --test wire_compat_smoke_tests -- --nocapture
-bun test compat-tests/client-tests/support
 cargo test --locked --test client_compat_tests full_client_compat -- --ignored --nocapture
 cargo test --locked --test client_compat_tests configuration_client_compat -- --ignored --nocapture
+cargo test --locked --test compat_admin_tests -- --nocapture
+bun test compat-tests/client-tests/support

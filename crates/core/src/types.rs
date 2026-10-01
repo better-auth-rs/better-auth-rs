@@ -483,6 +483,53 @@ pub struct UpdateUserRequest {
     pub metadata: Option<serde_json::Value>,
 }
 
+impl UpdateUserRequest {
+    /// Wire keys upstream core marks `input: false`.
+    ///
+    /// Rejected on every request; stripped before deserialization so they can
+    /// never reach the store.
+    pub const NON_WRITABLE_CORE_FIELDS: [&'static str; 1] = ["emailVerified"];
+
+    /// Wire keys the Admin plugin's user schema marks `input: false`.
+    pub const NON_WRITABLE_ADMIN_FIELDS: [&'static str; 4] =
+        ["role", "banned", "banReason", "banExpires"];
+
+    /// Wire keys the Two-Factor plugin's user schema marks `input: false`.
+    pub const NON_WRITABLE_TWO_FACTOR_FIELDS: [&'static str; 1] = ["twoFactorEnabled"];
+
+    /// Every plugin-contributed non-writable key, regardless of which plugin
+    /// owns it. Stripped before deserialization, exactly like upstream's
+    /// silent ignore when the owning plugin is absent.
+    pub fn is_plugin_non_writable(key: &str) -> bool {
+        Self::NON_WRITABLE_ADMIN_FIELDS.contains(&key)
+            || Self::NON_WRITABLE_TWO_FACTOR_FIELDS.contains(&key)
+    }
+
+    /// Whether `key` must be rejected on this request. Upstream only knows a
+    /// plugin-contributed `input: false` field when that plugin's schema is
+    /// installed, so each key is gated on its own plugin — not on either one.
+    pub fn is_denied_by_plugin(
+        key: &str,
+        admin_installed: bool,
+        two_factor_installed: bool,
+    ) -> bool {
+        (admin_installed && Self::NON_WRITABLE_ADMIN_FIELDS.contains(&key))
+            || (two_factor_installed && Self::NON_WRITABLE_TWO_FACTOR_FIELDS.contains(&key))
+    }
+
+    /// JS truthiness, mirroring upstream's `if (data[key])` gate in
+    /// `parseInputData`: `null`/`false`/`0`/`""` are skipped, not rejected.
+    pub fn is_js_truthy(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Null => false,
+            serde_json::Value::Bool(b) => *b,
+            serde_json::Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
+            serde_json::Value::String(s) => !s.is_empty(),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => true,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct UpdateUserResponse<U: Serialize> {
     pub user: U,

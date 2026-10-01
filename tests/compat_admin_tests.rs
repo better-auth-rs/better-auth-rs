@@ -579,3 +579,87 @@ async fn test_admin_endpoints_require_authentication() {
     let (status, _) = send_request(&auth, req).await;
     assert_eq!(status, 401, "has-permission without auth should get 401");
 }
+
+// ---------------------------------------------------------------------------
+// Regression: issue #112 — self-service role escalation
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_update_user_cannot_escalate_role() {
+    let auth = create_test_auth().await;
+    let (token, _) = signup_user(&auth, "escalate@test.com", "password123", "Escalate").await;
+
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth("/update-user", json!({ "role": "admin" }), &token),
+    )
+    .await;
+    assert_eq!(status, 400, "escalation attempt must fail: {body}");
+    assert_eq!(body["code"], "FIELD_NOT_ALLOWED", "{body}");
+
+    // the user still has no admin powers
+    let (status, _) = send_request(&auth, get_with_auth("/admin/list-users", &token)).await;
+    assert_eq!(status, 403, "non-admin must still be forbidden");
+
+    let user = auth
+        .store()
+        .get_user_by_email("escalate@test.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        user.role().as_deref(),
+        Some("user"),
+        "role must be unchanged"
+    );
+}
+
+/// The admin path that legitimately writes `role` must stay open.
+#[tokio::test]
+async fn test_admin_set_role_still_works_after_update_user_gate() {
+    let auth = create_test_auth().await;
+    let admin_token = setup_admin(&auth).await;
+    let (promoted_token, signup_json) =
+        signup_user(&auth, "promote@test.com", "password123", "Promote").await;
+    let user_id = signup_json["user"]["id"].as_str().unwrap();
+
+    // Before promotion the same token is refused.
+    let (status, body) =
+        send_request(&auth, get_with_auth("/admin/list-users", &promoted_token)).await;
+    assert_eq!(status, 403, "plain user must be refused: {body}");
+
+    // Admin promotes through the legitimate path, which must stay open even
+    // though POST /update-user now rejects `role`.
+    let (status, body) = send_request(
+        &auth,
+        post_json_with_auth(
+            "/admin/set-role",
+            json!({ "userId": user_id, "role": "admin" }),
+            &admin_token,
+        ),
+    )
+    .await;
+    assert_eq!(status, 200, "admin set-role must be unaffected: {body}");
+    assert_eq!(
+        body["user"]["role"], "admin",
+        "response must carry the new role: {body}"
+    );
+
+    // The role actually persisted...
+    let promoted = auth
+        .store()
+        .get_user_by_email("promote@test.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        promoted.role().as_deref(),
+        Some("admin"),
+        "promoted role must persist"
+    );
+
+    // ...so the user can now exercise admin powers.
+    let (status, body) =
+        send_request(&auth, get_with_auth("/admin/list-users", &promoted_token)).await;
+    assert_eq!(status, 200, "promoted user must be allowed: {body}");
+}
