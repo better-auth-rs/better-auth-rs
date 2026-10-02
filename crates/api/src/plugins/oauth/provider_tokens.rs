@@ -17,6 +17,22 @@ pub(super) async fn refresh_tokens_via_provider(
     refresh_token: &str,
     request: &AuthRequest,
 ) -> AuthResult<OAuthTokenSet> {
+    let result = refresh_tokens(provider, refresh_token, request).await;
+    if provider.generic.is_none()
+        && provider.config.is_paypal()
+        && provider.config.refresh_access_token.is_none()
+    {
+        super::providers::paypal::token_result(result, TokenGrantType::RefreshToken)
+    } else {
+        result
+    }
+}
+
+async fn refresh_tokens(
+    provider: &ResolvedProvider,
+    refresh_token: &str,
+    request: &AuthRequest,
+) -> AuthResult<OAuthTokenSet> {
     if let Some(handler) = &provider.config.refresh_access_token {
         return handler
             .refresh_access_token(refresh_token)
@@ -50,6 +66,21 @@ pub(super) async fn refresh_tokens_via_provider(
 }
 
 pub(super) async fn validate_authorization_code_via_provider(
+    provider: &ResolvedProvider,
+    code: &str,
+    redirect_uri: &str,
+    code_verifier: Option<&str>,
+    device_id: Option<&str>,
+) -> AuthResult<OAuthTokenSet> {
+    let result = exchange_code(provider, code, redirect_uri, code_verifier, device_id).await;
+    if provider.generic.is_none() && provider.config.is_paypal() {
+        super::providers::paypal::token_result(result, TokenGrantType::AuthorizationCode)
+    } else {
+        result
+    }
+}
+
+async fn exchange_code(
     provider: &ResolvedProvider,
     code: &str,
     redirect_uri: &str,

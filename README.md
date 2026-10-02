@@ -125,7 +125,7 @@ Optional configuration fields use `Option` to distinguish omission from an expli
 
 Google sign-in maps verified ID-token claims through the shared Google verifier used by One Tap. See [Google profile behavior](docs/content/docs/plugins/oauth.mdx#social-provider-inputs) for custom callbacks and account-info behavior.
 
-Built-in provider constructors supply provider defaults and profile mapping, including WeChat WebsiteApp code login. See [built-in providers](docs/content/docs/plugins/oauth.mdx#built-in-providers) for supported constructors and configuration.
+Built-in provider constructors supply provider defaults and profile mapping. See [built-in providers](docs/content/docs/plugins/oauth.mdx#built-in-providers) for supported constructors and configuration.
 
 Set `OAuthProvider::redirect_uri` to use a configured provider callback URI for both authorization and code exchange.
 

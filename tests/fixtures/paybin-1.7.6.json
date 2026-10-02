@@ -1,0 +1,901 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "issuer": "https://idp.paybin.io",
+    "clientId": "ordinary-client",
+    "clientSecret": "ordinary-client-secret",
+    "issuedAt": 1790900575,
+    "verifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+    "redirectURI": "https://app.example/callback/paybin"
+  },
+  "scopeCases": [
+    {
+      "name": "default",
+      "options": {},
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "explicit issuer",
+      "options": {
+        "issuer": "https://idp.paybin.io"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "empty issuer",
+      "options": {
+        "issuer": ""
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "custom issuer",
+      "options": {
+        "issuer": "https://login.paybin.example/tenant"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://login.paybin.example/tenant/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "ordered scopes and hints",
+      "options": {
+        "scope": [
+          "merchant:read",
+          "email"
+        ],
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin",
+        "scopes": [
+          "wallet:read",
+          "email"
+        ],
+        "loginHint": "owner@example.com",
+        "idTokenNonce": "ordinary-unused-nonce",
+        "additionalParams": {
+          "ordinary": "request"
+        }
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile+merchant%3Aread+email+wallet%3Aread+email&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&login_hint=owner%40example.com&prompt=consent&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U&ordinary=request"
+    },
+    {
+      "name": "disabled defaults",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": [
+          "email"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin",
+        "scopes": [
+          "profile"
+        ]
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "empty scopes",
+      "options": {
+        "disableDefaultScope": true
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "configured redirect",
+      "options": {
+        "redirectURI": "https://app.example/configured-paybin"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fconfigured-paybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "empty redirect",
+      "options": {
+        "redirectURI": ""
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "url": "https://idp.paybin.io/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    },
+    {
+      "name": "authorization endpoint",
+      "options": {
+        "authorizationEndpoint": "https://login.paybin.example/authorize?ordinary=base"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin",
+        "additionalParams": {
+          "ordinary": "request"
+        }
+      },
+      "url": "https://login.paybin.example/authorize?ordinary=request&response_type=code&client_id=ordinary-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&code_challenge_method=S256&code_challenge=LvhDliVvhdOeUy0JW1q9hNLoEvHYcqucpEmqs1MEz7U"
+    }
+  ],
+  "configurationErrors": [
+    {
+      "name": "missing client",
+      "options": {
+        "clientId": ""
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "error": {
+        "name": "BetterAuthError",
+        "message": "CLIENT_ID_AND_SECRET_REQUIRED"
+      },
+      "logs": [
+        [
+          "Client Id and Client Secret is required for Paybin. Make sure to provide them in the options."
+        ]
+      ]
+    },
+    {
+      "name": "missing secret",
+      "options": {
+        "clientSecret": ""
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-code-verifier-for-a-local-paybin-contract",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "error": {
+        "name": "BetterAuthError",
+        "message": "CLIENT_ID_AND_SECRET_REQUIRED"
+      },
+      "logs": [
+        [
+          "Client Id and Client Secret is required for Paybin. Make sure to provide them in the options."
+        ]
+      ]
+    },
+    {
+      "name": "missing verifier",
+      "options": {},
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "",
+        "redirectURI": "https://app.example/callback/paybin"
+      },
+      "error": {
+        "name": "BetterAuthError",
+        "message": "codeVerifier is required for Paybin"
+      },
+      "logs": []
+    }
+  ],
+  "profileCases": [
+    {
+      "name": "signed default",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "name": "Paybin Owner",
+        "preferred_username": "ordinary-handle",
+        "email": "owner@example.com",
+        "picture": "https://images.example/paybin.png",
+        "email_verified": true
+      },
+      "patch": {},
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "Paybin Owner",
+          "preferred_username": "ordinary-handle",
+          "email": "owner@example.com",
+          "picture": "https://images.example/paybin.png",
+          "email_verified": true
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "Paybin Owner",
+          "email": "owner@example.com",
+          "image": "https://images.example/paybin.png",
+          "emailVerified": true
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "Paybin Owner",
+          "preferred_username": "ordinary-handle",
+          "email": "owner@example.com",
+          "picture": "https://images.example/paybin.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "preferred username",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "name": "",
+        "preferred_username": "ordinary-handle",
+        "email": "owner@example.com",
+        "email_verified": false
+      },
+      "patch": {},
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "",
+          "preferred_username": "ordinary-handle",
+          "email": "owner@example.com",
+          "email_verified": false
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "ordinary-handle",
+          "email": "owner@example.com",
+          "emailVerified": false
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "",
+          "preferred_username": "ordinary-handle",
+          "email": "owner@example.com",
+          "email_verified": false
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "omitted display",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "email": "owner@example.com"
+      },
+      "patch": {},
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "email": "owner@example.com"
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "",
+          "email": "owner@example.com",
+          "emailVerified": false
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "email": "owner@example.com"
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "nullable fields",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "name": null,
+        "preferred_username": "ordinary-handle",
+        "email": null,
+        "picture": null,
+        "email_verified": null
+      },
+      "patch": {},
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": null,
+          "preferred_username": "ordinary-handle",
+          "email": null,
+          "picture": null,
+          "email_verified": null
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "ordinary-handle",
+          "email": null,
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": null,
+          "preferred_username": "ordinary-handle",
+          "email": null,
+          "picture": null,
+          "email_verified": null
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "mapped profile",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "preferred_username": "ordinary-handle",
+        "email": "owner@example.com",
+        "email_verified": true
+      },
+      "patch": {
+        "name": "Mapped Owner",
+        "email": "mapped@example.com",
+        "image": "https://images.example/mapped.png",
+        "emailVerified": false,
+        "ordinary": "mapped value"
+      },
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "preferred_username": "ordinary-handle",
+          "email": "owner@example.com",
+          "email_verified": true
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "Mapped Owner",
+          "email": "mapped@example.com",
+          "image": "https://images.example/mapped.png",
+          "emailVerified": false,
+          "ordinary": "mapped value"
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "preferred_username": "ordinary-handle",
+          "email": "owner@example.com",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "mapped omitted email",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "name": "Paybin Owner",
+        "email_verified": false
+      },
+      "patch": {
+        "email": "mapped@example.com"
+      },
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "Paybin Owner",
+          "email_verified": false
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "Paybin Owner",
+          "email": "mapped@example.com",
+          "emailVerified": false
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "Paybin Owner",
+          "email_verified": false
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "mapped null metadata",
+      "profile": {
+        "iss": "https://idp.paybin.io",
+        "aud": "ordinary-client",
+        "sub": "ordinary-paybin-owner",
+        "iat": 1790900575,
+        "exp": 1790904175,
+        "name": "Paybin Owner",
+        "email": "owner@example.com",
+        "email_verified": true
+      },
+      "patch": {
+        "email": null,
+        "image": null,
+        "emailVerified": null
+      },
+      "mapped": [
+        {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "Paybin Owner",
+          "email": "owner@example.com",
+          "email_verified": true
+        }
+      ],
+      "events": [
+        "mapper",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "Paybin Owner",
+          "email": null,
+          "image": null,
+          "emailVerified": null
+        },
+        "data": {
+          "iss": "https://idp.paybin.io",
+          "aud": "ordinary-client",
+          "sub": "ordinary-paybin-owner",
+          "iat": 1790900575,
+          "exp": 1790904175,
+          "name": "Paybin Owner",
+          "email": "owner@example.com",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "missing token",
+      "events": [
+        "returned"
+      ],
+      "result": null,
+      "presence": null
+    },
+    {
+      "mode": "mapper error",
+      "events": [
+        "mapper",
+        "rejected"
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Paybin mapper error",
+        "sameError": true
+      }
+    },
+    {
+      "mode": "custom success",
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "result": {
+        "user": {
+          "name": "Custom Owner",
+          "email": "custom@example.com",
+          "emailVerified": false
+        },
+        "data": {
+          "ordinary": "custom profile"
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": false,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "mode": "custom null",
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "result": null,
+      "presence": null
+    },
+    {
+      "mode": "custom error",
+      "events": [
+        "custom",
+        "rejected"
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Paybin custom error",
+        "sameError": true
+      }
+    }
+  ],
+  "grants": [
+    {
+      "name": "code",
+      "rawResponse": {
+        "token_type": "Bearer",
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "id_token": "<signed ID token>",
+        "scope": "openid email profile"
+      },
+      "requests": [
+        {
+          "url": "https://idp.paybin.io/oauth2/token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-code-verifier-for-a-local-paybin-contract&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "openid",
+          "email",
+          "profile"
+        ],
+        "idToken": "<signed ID token>",
+        "raw": {
+          "token_type": "Bearer",
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "id_token": "<signed ID token>",
+          "scope": "openid email profile"
+        }
+      }
+    },
+    {
+      "name": "refresh",
+      "rawResponse": {
+        "token_type": "Bearer",
+        "access_token": "refreshed-access",
+        "refresh_token": "rotated-refresh",
+        "id_token": "<signed ID token>",
+        "scope": "openid email profile"
+      },
+      "requests": [
+        {
+          "url": "https://idp.paybin.io/oauth2/token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "response": {
+        "accessToken": "refreshed-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "openid",
+          "email",
+          "profile"
+        ],
+        "idToken": "<signed ID token>"
+      }
+    },
+    {
+      "name": "code 503",
+      "rawResponse": {
+        "token_type": "Bearer",
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "id_token": "<signed ID token>",
+        "scope": "openid email profile"
+      },
+      "requests": [
+        {
+          "url": "https://idp.paybin.io/oauth2/token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-code-verifier-for-a-local-paybin-contract&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback%2Fpaybin&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "error": {
+        "status": 503,
+        "statusText": "Service Unavailable",
+        "error": "ordinary_unavailable"
+      }
+    },
+    {
+      "name": "refresh 503",
+      "rawResponse": {
+        "token_type": "Bearer",
+        "access_token": "refreshed-access",
+        "refresh_token": "rotated-refresh",
+        "id_token": "<signed ID token>",
+        "scope": "openid email profile"
+      },
+      "requests": [
+        {
+          "url": "https://idp.paybin.io/oauth2/token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "error": {
+        "status": 503,
+        "statusText": "Service Unavailable",
+        "error": "ordinary_unavailable"
+      }
+    }
+  ],
+  "customRefresh": {
+    "events": [
+      "ordinary-refresh"
+    ],
+    "response": {
+      "accessToken": "custom-access",
+      "refreshToken": "custom-refresh",
+      "scopes": [
+        "custom"
+      ]
+    },
+    "sameResponse": true
+  }
+}

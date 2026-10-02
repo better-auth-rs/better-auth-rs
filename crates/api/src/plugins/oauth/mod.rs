@@ -18,11 +18,16 @@ mod cognito_contract_tests;
 mod cognito_signed_tests;
 pub use cognito::CognitoOptions;
 pub mod encryption;
+#[cfg(test)]
+mod facebook_contract_tests;
+#[cfg(test)]
+mod facebook_signed_tests;
 mod generic;
 mod generic_profile;
 pub(super) mod google;
 mod handlers;
 mod id_token;
+pub use providers::facebook::FacebookOptions;
 mod line;
 mod microsoft_entra;
 pub(crate) use handlers::validate_redirect_target;
@@ -30,6 +35,10 @@ pub(crate) use signin::sign_in_verified_profile;
 mod logout;
 pub(super) use logout::handle_sign_out;
 mod oidc;
+#[cfg(all(test, feature = "axum"))]
+mod paybin_tests;
+#[cfg(test)]
+mod paypal_tests;
 mod popup;
 mod provider_tokens;
 mod providers;

@@ -6,6 +6,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 pub(super) mod defaults;
+pub(super) mod facebook;
+pub(super) mod paybin;
+pub(super) mod paypal;
 pub(super) mod twitter;
 pub(super) mod wechat;
 use super::OAuthProfileMapper;
@@ -565,13 +568,24 @@ impl OAuthProvider {
     }
 
     pub(super) fn required_credentials_message(&self) -> Option<&'static str> {
+        if self.is_paypal() {
+            return Some(
+                "Client Id and Client Secret is required for PayPal. Make sure to provide them in the options.",
+            );
+        }
         match self.kind {
+            ProviderKind::Facebook(_) => Some(
+                "Client ID and client secret are required for Facebook. Make sure to provide them in the options.",
+            ),
             ProviderKind::Figma => Some(
                 "Client Id and Client Secret are required for Figma. Make sure to provide them in the options.",
             ),
             ProviderKind::Atlassian => Some("Client Id and Secret are required for Atlassian"),
             ProviderKind::Salesforce => Some(
                 "Client Id and Client Secret are required for Salesforce. Make sure to provide them in the options.",
+            ),
+            ProviderKind::Paybin { .. } => Some(
+                "Client Id and Client Secret is required for Paybin. Make sure to provide them in the options.",
             ),
             _ => None,
         }
@@ -720,7 +734,8 @@ impl OAuthProvider {
     pub(super) fn uses_pkce(&self) -> bool {
         !matches!(
             self.kind,
-            ProviderKind::LinkedIn
+            ProviderKind::Facebook(_)
+                | ProviderKind::LinkedIn
                 | ProviderKind::Slack
                 | ProviderKind::Naver
                 | ProviderKind::Linear
@@ -739,6 +754,7 @@ impl OAuthProvider {
         matches!(
             self.kind,
             ProviderKind::Cognito(_)
+                | ProviderKind::PayPal
                 | ProviderKind::Cloudflare
                 | ProviderKind::Slack
                 | ProviderKind::Naver
@@ -756,9 +772,12 @@ impl OAuthProvider {
     pub(super) fn omits_device_id(&self) -> bool {
         matches!(
             self.kind,
-            ProviderKind::Cognito(_)
+            ProviderKind::Facebook(_)
+                | ProviderKind::Cognito(_)
+                | ProviderKind::PayPal
                 | ProviderKind::Cloudflare
                 | ProviderKind::LinkedIn
+                | ProviderKind::Paybin { .. }
                 | ProviderKind::Slack
                 | ProviderKind::Naver
                 | ProviderKind::Linear
@@ -829,7 +848,8 @@ impl OAuthProvider {
     }
 
     pub(super) fn token_authentication(&self) -> Option<TokenEndpointSecretAuthentication> {
-        (self.is_figma()
+        (self.is_paypal()
+            || self.is_figma()
             || self.is_reddit()
             || self.is_twitter()
             || matches!(self.kind, ProviderKind::Cloudflare) && !self.client_secret.is_empty())
@@ -903,7 +923,7 @@ impl OAuthProvider {
     }
 
     pub(super) fn social_scopes<'a>(&'a self, request: Option<&'a [String]>) -> Vec<&'a str> {
-        if matches!(self.kind, ProviderKind::Zoom { .. }) {
+        if matches!(self.kind, ProviderKind::Zoom { .. } | ProviderKind::PayPal) {
             return Vec::new();
         }
         let configured = self.scopes.as_deref().unwrap_or_default();
@@ -940,13 +960,16 @@ impl OAuthProvider {
             | ProviderKind::GitHub { .. }
             | ProviderKind::Discord
             | ProviderKind::Polar
+            | ProviderKind::PayPal
             | ProviderKind::Cognito(_)
+            | ProviderKind::Paybin { .. }
             | ProviderKind::Atlassian => self
                 .prompt
                 .as_deref()
                 .filter(|value| !value.is_empty())
                 .or_else(|| matches!(self.kind, ProviderKind::Discord).then_some("none")),
-            ProviderKind::GitLab
+            ProviderKind::Facebook(_)
+            | ProviderKind::GitLab
             | ProviderKind::Spotify
             | ProviderKind::HuggingFace
             | ProviderKind::Vercel

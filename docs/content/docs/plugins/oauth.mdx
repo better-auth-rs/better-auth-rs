@@ -61,7 +61,10 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Twitter | `OAuthProvider::twitter(client_id, client_secret)` | `users.read`, `tweet.read`, `offline.access`, `users.email` |
 | VK | `OAuthProvider::vk(client_id, client_secret)` | `email`, `phone` |
 | WeChat | `OAuthProvider::wechat(client_id, client_secret)` | `snsapi_login` |
+| Paybin | `OAuthProvider::paybin(client_id, client_secret)` | `openid`, `email`, `profile` |
+| PayPal sandbox / live | `OAuthProvider::paypal(client_id, client_secret)` / `paypal_live(client_id, client_secret)` | none; configured and request scopes are ignored |
 | Cognito | `OAuthProvider::cognito(client_id, client_secret, options)?` | `openid`, `profile`, `email` |
+| Facebook | `OAuthProvider::facebook(client_id, client_secret, options)` | `email`, `public_profile` |
 
 ### Social provider inputs
 
@@ -93,7 +96,7 @@ Provider defaults remain separate from mapped values. Discord, Google, and Slack
 
 Discord prepares `image_url` before invoking the mapper. The default decoder reuses that value for PNG, animated GIF, and default avatars. Display names use `global_name`, then `username`, then an empty string.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, Cognito, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, Kakao, Zoom, Twitter, VK, and WeChat ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, Cognito, Paybin, PayPal, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, Kakao, Zoom, Twitter, VK, WeChat, and Facebook ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
 
 Set `redirect_uri` when the provider callback URI differs from the route URI. Authorization and code exchange use the same configured value. Omitted or empty values use the route URI. Register the configured URI with the provider and route the callback to Better Auth; the option does not create another HTTP route.
 
@@ -468,3 +471,36 @@ Use `CognitoOptions::new(domain, region, user_pool_id)` with `OAuthProvider::cog
 Cognito uses PKCE, client-secret-post for both grants, ordered scopes, and `%20` scope separators. A verified ID token supplies the default profile before an access-token userinfo request. The ID-token path fills the name before mapping and returns that enriched data; the userinfo path passes the original data to the mapper. Both paths retain email, image, and verification-field presence. An ID-profile mapper error is logged and may continue to userinfo; a userinfo mapper error is logged and returns no profile. Custom userinfo handlers run before both default paths and retain their errors.
 
 Default ID-token handling verifies the signature, user-pool issuer, accepted audience, timestamps, supplied nonce, and a maximum token age of one hour. This verification also applies to default code and account-info reads; verification errors do not fall through to userinfo. An explicit `OAuthIdTokenVerifier` remains the application’s delegated direct-token trust policy. The default authorization URL does not introduce a nonce parameter. Ordinary missing or null email reaches the mapper before the unchanged endpoint email checks.
+
+
+### Paybin
+
+Use `OAuthProvider::paybin(client_id, client_secret)` for the default issuer or `OAuthProvider::paybin_with_issuer(client_id, client_secret, issuer)` for an application-configured issuer. Authorization requires both credentials and PKCE. Scopes retain default, configured, and request order. The provider forwards `prompt` and `login_hint`, omits the authorization nonce parameter and code-exchange device ID, and uses client-secret-post for code and refresh grants. `redirect_uri` retains the shared configured-or-route behavior.
+
+The constructor preserves the pinned preset's `/oauth2/authorize` and `/oauth2/token` paths. [Paybin's OIDC documentation](https://developers.paybin.io/knowledge-center/oidc) declares the default issuer `https://idp.paybin.io`, `/.well-known/jwks.json`, and RS256. Its documented `/connect` grant paths differ from the pinned preset; live Paybin grant interoperability is not established by local contracts. A custom issuer supplies its JWKS URI through OpenID discovery. Discovery does not replace the configured issuer, audience, or grant endpoints.
+
+Code login and saved-account profile lookup require successful signature, issuer, audience, expiry, and applicable nonce verification before a profile reaches the mapper. A missing ID token produces no profile. The mapper receives the verified original claims; defaults then use `sub`, `email`, `picture`, `name` or `preferred_username`, and boolean `email_verified` with false for omitted/null values. Mapped fields apply last, preserving typed email and verification-field presence. Custom user-info handlers retain priority and original errors.
+
+Default direct ID-token sign-in remains unsupported. An explicit application verifier can supply accepted claims through the existing callback boundary. Compared with the pinned helper's decode-only profile path, Rust performs additional verification and network requests; error timing and stored-token acceptance are intentional compatibility boundaries. Local signed fixtures cover both grants, custom refresh, ordinary HTTP 503, mapper results/errors, SQLite callback persistence, saved-account profiles, and refresh. No additional persisted token fields are introduced.
+
+### PayPal
+
+`OAuthProvider::paypal(client_id, client_secret)` uses sandbox endpoints. Use `paypal_live` for production endpoints. Both constructors require credentials when building the authorization URL. PayPal keeps PKCE, uses HTTP Basic for code and refresh grants, ignores configured/request scopes and standalone hints, and forwards `prompt` plus ordinary additional authorization parameters. The existing `redirect_uri` option applies to authorization and code exchange.
+
+The default profile request uses Bearer authentication and `schema=paypalv1.1`. Its HTTP response supplies the account subject (`user_id`), mapper input, returned data, and default user fields. Default HTTP/profile/mapper failures return a missing profile after the provider diagnostic; custom user-info and refresh callbacks retain their original error boundary. Default code and refresh errors become `FAILED_TO_GET_ACCESS_TOKEN` and `FAILED_TO_REFRESH_ACCESS_TOKEN` respectively.
+
+Optional ID tokens require an explicit application `verify_id_token` callback. The callback must validate the signature and the application's issuer, audience, lifetime, and applicable nonce policy. Only a successful callback permits claims parsing, followed by the existing comparison with HTTP `sub ?? user_id`. Without that callback, a present ID token produces a missing profile. The default direct ID-token path remains unsupported; an explicit application verifier retains the existing direct-sign-in contract. This preset does not provide automatic PayPal OIDC verification: the examined official login documentation does not establish login issuer/JWKS/algorithm metadata. Verification callbacks run during code and saved-account profile reads when an ID token is present, which is stricter than the pinned helper. Payment SDK token documentation is not used to infer login verification policy.
+
+Ordinary pinned contracts and local SQLite tests cover code login without an ID token, account-info, refresh, nullable profile fields, explicit verification success, and application errors. JavaScript response shapes outside documented string/null fields and complete network/error-timing equivalence are not claimed. `requestShippingAddress` is not exposed because the pinned helper does not consume it.
+
+### Facebook
+
+Use `OAuthProvider::facebook(client_id, client_secret, FacebookOptions::default())` for Graph login and verified Limited Login. `FacebookOptions.fields` appends Graph profile fields after `id`, `name`, `email`, and `picture`. `additional_client_ids` adds accepted app audiences; authorization and token requests use the provider’s current primary client ID. Set `config_id` through `authorization_params` for Facebook Login for Business.
+
+Authorization requires both client credentials. It preserves default, configured, and request scope order and forwards `login_hint`. The fixed provider protocol omits PKCE, configured prompt, authorization nonce, and callback device ID. Code exchange and refresh use the existing client-secret-post requests.
+
+The default opaque-access-token path calls Facebook’s fixed `/debug_token` endpoint before the Bearer `/me` request. Inspection must confirm a valid token, an accepted app ID, and the same profile subject. HTTP failures return no profile; transport, JSON, and mapper errors retain the shared error path. The mapper receives the original Graph profile once. Default mapping reads `picture.data.url` and uses false for missing or null `email_verified`.
+
+The default Limited Login path verifies RS256 signatures, the fixed `https://www.facebook.com` issuer, accepted audience, timestamps, and a supplied exact nonce before mapping. The fixed JWKS URL follows pinned Better Auth 1.7.6: `https://limited.facebook.com/.well-known/oauth/openid/jwks/`. Verified claims supply `name`, `email`, and `picture`, with a false verification default; the mapper applies afterward. Custom user-info handlers run before either default profile path. An explicit `OAuthIdTokenVerifier` retains the existing delegated direct-token trust policy.
+
+Default code and stored-account Limited Login reads perform verification even though the pinned standalone profile helper decodes token-endpoint claims. This stricter verification has extra network and error timing and is not claimed equivalent. Local signed-token, Graph HTTP, mapper, and SQLite contracts cover ordinary flows. Live Facebook credentials, arbitrary JavaScript profile coercions, and provider error text outside those contracts remain unverified.

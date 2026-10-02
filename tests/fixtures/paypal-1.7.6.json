@@ -1,0 +1,900 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "clientId": "ordinary-paypal-client",
+    "clientSecret": "ordinary-paypal-secret",
+    "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+    "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters"
+  },
+  "profile": {
+    "user_id": "paypal-owner",
+    "sub": "paypal-owner",
+    "name": "PayPal Owner",
+    "given_name": "PayPal",
+    "family_name": "Owner",
+    "email": "paypal-owner@example.test",
+    "email_verified": true,
+    "picture": "https://images.example.test/paypal.png"
+  },
+  "codeResponse": {
+    "access_token": "ordinary-access",
+    "refresh_token": "ordinary-refresh",
+    "token_type": "Bearer",
+    "scope": "ordinary-scope"
+  },
+  "refreshResponse": {
+    "access_token": "rotated-access",
+    "refresh_token": "rotated-refresh",
+    "token_type": "Bearer",
+    "scope": "refreshed-scope"
+  },
+  "scopeCases": [
+    {
+      "name": "default sandbox",
+      "options": {},
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal"
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    },
+    {
+      "name": "explicit sandbox",
+      "options": {
+        "environment": "sandbox"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal"
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    },
+    {
+      "name": "live",
+      "options": {
+        "environment": "live"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal"
+      },
+      "url": "https://www.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    },
+    {
+      "name": "ignored scopes",
+      "options": {
+        "scope": [
+          "configured"
+        ],
+        "disableDefaultScope": true
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "scopes": [
+          "requested"
+        ]
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    },
+    {
+      "name": "prompt and hints",
+      "options": {
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "loginHint": "owner@example.test",
+        "idTokenNonce": "ordinary-nonce"
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&prompt=consent&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    },
+    {
+      "name": "additional parameters",
+      "options": {
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "additionalParams": {
+          "prompt": "login",
+          "ordinary": "value"
+        }
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&prompt=login&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI&ordinary=value"
+    },
+    {
+      "name": "configured redirect",
+      "options": {
+        "redirectURI": "https://app.example.test/paypal-callback"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal"
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=https%3A%2F%2Fapp.example.test%2Fpaypal-callback&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    },
+    {
+      "name": "empty redirect",
+      "options": {
+        "redirectURI": ""
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal"
+      },
+      "url": "https://www.sandbox.paypal.com/signin/authorize?response_type=code&client_id=ordinary-paypal-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal&code_challenge_method=S256&code_challenge=-Al2DobwzQqMN4DEMv3twCkVU-ATUdpYBuJJ7zNnhWI"
+    }
+  ],
+  "configErrors": [
+    {
+      "options": {
+        "clientId": ""
+      },
+      "error": "CLIENT_ID_AND_SECRET_REQUIRED",
+      "logs": [
+        "Client Id and Client Secret is required for PayPal. Make sure to provide them in the options."
+      ]
+    },
+    {
+      "options": {
+        "clientSecret": ""
+      },
+      "error": "CLIENT_ID_AND_SECRET_REQUIRED",
+      "logs": [
+        "Client Id and Client Secret is required for PayPal. Make sure to provide them in the options."
+      ]
+    }
+  ],
+  "grants": [
+    {
+      "environment": "sandbox",
+      "grant": "code",
+      "status": 200,
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "deviceId": "ignored-device"
+      },
+      "result": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "ordinary-scope"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      },
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-paypal-code-verifier-at-least-43-characters&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal"
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "code"
+      ],
+      "logs": []
+    },
+    {
+      "environment": "sandbox",
+      "grant": "code",
+      "status": 503,
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "deviceId": "ignored-device"
+      },
+      "error": "FAILED_TO_GET_ACCESS_TOKEN",
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-paypal-code-verifier-at-least-43-characters&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal"
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "code"
+      ],
+      "logs": [
+        {
+          "message": "PayPal token exchange failed:",
+          "sameError": false
+        }
+      ]
+    },
+    {
+      "environment": "sandbox",
+      "grant": "refresh",
+      "status": 200,
+      "input": "ordinary-refresh",
+      "result": {
+        "accessToken": "rotated-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh"
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "refresh"
+      ],
+      "logs": []
+    },
+    {
+      "environment": "sandbox",
+      "grant": "refresh",
+      "status": 503,
+      "input": "ordinary-refresh",
+      "error": "FAILED_TO_REFRESH_ACCESS_TOKEN",
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh"
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "refresh"
+      ],
+      "logs": [
+        {
+          "message": "PayPal token refresh failed:",
+          "sameError": false
+        }
+      ]
+    },
+    {
+      "environment": "live",
+      "grant": "code",
+      "status": 200,
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "deviceId": "ignored-device"
+      },
+      "result": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "ordinary-scope"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      },
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-paypal-code-verifier-at-least-43-characters&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal"
+        }
+      ],
+      "events": [
+        "api-m.paypal.com",
+        "code"
+      ],
+      "logs": []
+    },
+    {
+      "environment": "live",
+      "grant": "code",
+      "status": 503,
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-paypal-code-verifier-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/paypal",
+        "deviceId": "ignored-device"
+      },
+      "error": "FAILED_TO_GET_ACCESS_TOKEN",
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-paypal-code-verifier-at-least-43-characters&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fpaypal"
+        }
+      ],
+      "events": [
+        "api-m.paypal.com",
+        "code"
+      ],
+      "logs": [
+        {
+          "message": "PayPal token exchange failed:",
+          "sameError": false
+        }
+      ]
+    },
+    {
+      "environment": "live",
+      "grant": "refresh",
+      "status": 200,
+      "input": "ordinary-refresh",
+      "result": {
+        "accessToken": "rotated-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh"
+        }
+      ],
+      "events": [
+        "api-m.paypal.com",
+        "refresh"
+      ],
+      "logs": []
+    },
+    {
+      "environment": "live",
+      "grant": "refresh",
+      "status": 503,
+      "input": "ordinary-refresh",
+      "error": "FAILED_TO_REFRESH_ACCESS_TOKEN",
+      "requests": [
+        {
+          "path": "/v1/oauth2/token",
+          "method": "POST",
+          "authorization": "Basic b3JkaW5hcnktcGF5cGFsLWNsaWVudDpvcmRpbmFyeS1wYXlwYWwtc2VjcmV0",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh"
+        }
+      ],
+      "events": [
+        "api-m.paypal.com",
+        "refresh"
+      ],
+      "logs": [
+        {
+          "message": "PayPal token refresh failed:",
+          "sameError": false
+        }
+      ]
+    }
+  ],
+  "profileCases": [
+    {
+      "name": "default",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "result": {
+        "user": {
+          "name": "PayPal Owner",
+          "email": "paypal-owner@example.test",
+          "image": "https://images.example.test/paypal.png",
+          "emailVerified": true
+        },
+        "data": {
+          "user_id": "paypal-owner",
+          "sub": "paypal-owner",
+          "name": "PayPal Owner",
+          "given_name": "PayPal",
+          "family_name": "Owner",
+          "email": "paypal-owner@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/paypal.png"
+        }
+      },
+      "mapperProfile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "name": "mapped",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "patch": {
+        "name": "Mapped PayPal Owner",
+        "email": "mapped-paypal@example.test",
+        "image": null,
+        "emailVerified": false,
+        "ordinary": "extra"
+      },
+      "result": {
+        "user": {
+          "name": "Mapped PayPal Owner",
+          "email": "mapped-paypal@example.test",
+          "image": null,
+          "emailVerified": false,
+          "ordinary": "extra"
+        },
+        "data": {
+          "user_id": "paypal-owner",
+          "sub": "paypal-owner",
+          "name": "PayPal Owner",
+          "given_name": "PayPal",
+          "family_name": "Owner",
+          "email": "paypal-owner@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/paypal.png"
+        }
+      },
+      "mapperProfile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "name": "nullable fields",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": null,
+        "email_verified": null,
+        "picture": null
+      },
+      "result": {
+        "user": {
+          "name": "PayPal Owner",
+          "email": null,
+          "image": null,
+          "emailVerified": null
+        },
+        "data": {
+          "user_id": "paypal-owner",
+          "sub": "paypal-owner",
+          "name": "PayPal Owner",
+          "given_name": "PayPal",
+          "family_name": "Owner",
+          "email": null,
+          "email_verified": null,
+          "picture": null
+        }
+      },
+      "mapperProfile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": null,
+        "email_verified": null,
+        "picture": null
+      },
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "name": "omitted fields",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner"
+      },
+      "result": {
+        "user": {
+          "name": "PayPal Owner"
+        },
+        "data": {
+          "user_id": "paypal-owner",
+          "sub": "paypal-owner",
+          "name": "PayPal Owner",
+          "given_name": "PayPal",
+          "family_name": "Owner"
+        }
+      },
+      "mapperProfile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner"
+      },
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "name": "verified optional token",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "idToken": true,
+      "result": {
+        "user": {
+          "name": "PayPal Owner",
+          "email": "paypal-owner@example.test",
+          "image": "https://images.example.test/paypal.png",
+          "emailVerified": true
+        },
+        "data": {
+          "user_id": "paypal-owner",
+          "sub": "paypal-owner",
+          "name": "PayPal Owner",
+          "given_name": "PayPal",
+          "family_name": "Owner",
+          "email": "paypal-owner@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/paypal.png"
+        }
+      },
+      "mapperProfile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "name": "http 503",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "status": 503,
+      "result": null,
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Failed to fetch user info from PayPal",
+          "sameError": false
+        }
+      ]
+    },
+    {
+      "name": "null profile",
+      "profile": null,
+      "result": null,
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Failed to fetch user info from PayPal",
+          "sameError": false
+        }
+      ]
+    },
+    {
+      "name": "missing access token",
+      "profile": {
+        "user_id": "paypal-owner",
+        "sub": "paypal-owner",
+        "name": "PayPal Owner",
+        "given_name": "PayPal",
+        "family_name": "Owner",
+        "email": "paypal-owner@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/paypal.png"
+      },
+      "missingAccess": true,
+      "result": null,
+      "requests": [],
+      "events": [
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Access token is required to fetch PayPal user info",
+          "sameError": false
+        }
+      ]
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "mapper error",
+      "result": null,
+      "requests": [
+        {
+          "path": "/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "application/json",
+          "body": ""
+        }
+      ],
+      "events": [
+        "api-m.sandbox.paypal.com",
+        "profile",
+        "mapper",
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Failed to fetch user info from PayPal:",
+          "sameError": true
+        }
+      ]
+    },
+    {
+      "mode": "custom error",
+      "error": {
+        "message": "Ordinary PayPal custom error",
+        "sameError": true
+      },
+      "requests": [],
+      "events": [
+        "custom",
+        "rejected"
+      ],
+      "logs": []
+    },
+    {
+      "mode": "custom null",
+      "result": null,
+      "requests": [],
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "mode": "custom success",
+      "result": {
+        "user": {
+          "name": "Custom Owner",
+          "email": "custom-paypal@example.test"
+        },
+        "data": {
+          "user_id": "paypal-owner",
+          "sub": "paypal-owner",
+          "name": "PayPal Owner",
+          "given_name": "PayPal",
+          "family_name": "Owner",
+          "email": "paypal-owner@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/paypal.png"
+        }
+      },
+      "requests": [],
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "logs": []
+    },
+    {
+      "mode": "custom refresh error",
+      "error": {
+        "message": "Ordinary PayPal custom refresh error",
+        "sameError": true
+      },
+      "requests": [],
+      "events": [
+        "custom refresh",
+        "rejected"
+      ],
+      "logs": []
+    },
+    {
+      "mode": "custom refresh success",
+      "result": {
+        "accessToken": "custom-access",
+        "scopes": []
+      },
+      "requests": [],
+      "events": [
+        "custom refresh",
+        "returned"
+      ],
+      "logs": []
+    }
+  ]
+}

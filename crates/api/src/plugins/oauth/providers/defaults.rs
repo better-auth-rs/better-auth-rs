@@ -5,8 +5,13 @@ use serde_json::Value;
 
 #[derive(Clone)]
 pub(super) enum ProviderKind {
+    Facebook(super::facebook::FacebookOptions),
     Cognito(super::super::CognitoOptions),
+    Paybin {
+        issuer: String,
+    },
     Custom,
+    PayPal,
     Google {
         jwks_url: String,
     },
@@ -46,7 +51,8 @@ pub(super) enum ProviderKind {
 impl ProviderKind {
     pub(super) fn scopes(&self) -> &'static [&'static str] {
         match self {
-            Self::Custom | Self::Vercel | Self::Zoom { .. } => &[],
+            Self::Facebook(_) => &["email", "public_profile"],
+            Self::Custom | Self::Vercel | Self::Zoom { .. } | Self::PayPal => &[],
             Self::Google { .. } => &["email", "profile", "openid"],
             Self::GitHub { .. } => &["read:user", "user:email"],
             Self::Discord => &["identify", "email"],
@@ -65,7 +71,7 @@ impl ProviderKind {
             Self::Reddit => &["identity"],
             Self::Kakao => &["account_email", "profile_image", "profile_nickname"],
             Self::Cloudflare => &["user-details.read"],
-            Self::Salesforce => &["openid", "email", "profile"],
+            Self::Salesforce | Self::Paybin { .. } => &["openid", "email", "profile"],
             Self::Twitter => &["users.read", "tweet.read", "offline.access", "users.email"],
             Self::Vk => &["email", "phone"],
             Self::WeChat { .. } => &["snsapi_login"],
@@ -73,7 +79,10 @@ impl ProviderKind {
     }
     pub(super) fn decode_profile(&self, profile: Value) -> AuthResult<Option<OAuthUserInfo>> {
         let mapper = match self {
+            Self::Facebook(_) => super::facebook::graph_profile,
             Self::Cognito(_) => super::super::cognito::decode_profile,
+            Self::Paybin { .. } => super::paybin::decode_profile,
+            Self::PayPal => super::paypal::decode_profile,
             Self::Google { .. } => google_profile,
             Self::Discord => discord_profile,
             Self::GitLab => {

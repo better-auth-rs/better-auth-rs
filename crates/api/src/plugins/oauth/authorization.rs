@@ -41,6 +41,11 @@ pub(super) fn build_authorization_url(
             },
             ..input
         }
+    } else if generic.is_none() && provider.config.facebook_options().is_some() {
+        AuthorizationRequest {
+            nonce: None,
+            ..input
+        }
     } else {
         input
     };
@@ -73,10 +78,17 @@ pub(super) fn build_authorization_url(
         better_auth_core::observability::logger::current().error(message, &[]);
         return Err(AuthError::internal("CLIENT_ID_AND_SECRET_REQUIRED"));
     }
-    if generic.is_none() && provider.config.is_salesforce() && input.code_challenge.is_empty() {
-        return Err(AuthError::internal(
-            "codeVerifier is required for Salesforce",
-        ));
+    if generic.is_none() && input.code_challenge.is_empty() {
+        let message = if provider.config.is_salesforce() {
+            Some("codeVerifier is required for Salesforce")
+        } else if provider.config.paybin_issuer().is_some() {
+            Some("codeVerifier is required for Paybin")
+        } else {
+            None
+        };
+        if let Some(message) = message {
+            return Err(AuthError::internal(message));
+        }
     }
     if provider.config.auth_url.is_empty() {
         return Err(AuthError::Upstream {
@@ -162,7 +174,14 @@ pub(super) fn build_authorization_url(
         );
         for (name, value) in [
             ("login_hint", input.login_hint),
-            ("nonce", input.nonce),
+            (
+                "nonce",
+                if generic.is_none() && provider.config.paybin_issuer().is_some() {
+                    None
+                } else {
+                    input.nonce
+                },
+            ),
             (
                 "prompt",
                 options.map_or_else(

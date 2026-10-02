@@ -1,0 +1,3204 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "clientId": "ordinary-client",
+    "clientIds": [
+      "ordinary-client",
+      "ordinary-secondary-client"
+    ],
+    "clientSecret": "ordinary-client-secret",
+    "codeVerifier": "ordinary-facebook-verifier-with-at-least-43-characters",
+    "redirectURI": "http://app.example.test/api/auth/callback/facebook",
+    "authorizationEndpoint": "https://www.facebook.com/v24.0/dialog/oauth",
+    "tokenEndpoint": "https://graph.facebook.com/v24.0/oauth/access_token",
+    "debugEndpoint": "https://graph.facebook.com/debug_token",
+    "profileEndpoint": "https://graph.facebook.com/me",
+    "jwksEndpoint": "https://limited.facebook.com/.well-known/oauth/openid/jwks/",
+    "issuer": "https://www.facebook.com",
+    "nonce": "ordinary-facebook-nonce"
+  },
+  "localSigning": {
+    "publicJwk": {
+      "e": "AQAB",
+      "kty": "RSA",
+      "n": "yarGx_2djxdza7ENF0wlWZEMWjW_z8mG8zQyEwkvBnOfIAXaWMNE3H4G9JOn8G4-6LeLwdhGb5PK58PEen5jECIvtlHh3H9uc6b9qQSo2jfji08zoH8Mdo9GAnkQJPIq18GYhMlO1igKD2laAly0Wsy7uOfPePtk75F5iMqtcE3UFt_PU6FxZoRmJOA7Ho_BNvxJn7WFMYPuf20WIQ_CmCItIcVyXl3Y2qwS9vvMTu3OvBvbiBMm6DHI7dHqGEebJPIAzgAFtoSlcCEYL5QFpeXeifcdHUrcdjnMIXHUOliBjtaxG9ehuoXP4UOCFhtIYH2HPQHoC4-Tz-1vCv3-8w",
+      "kid": "ordinary-local-facebook",
+      "alg": "RS256",
+      "use": "sig"
+    },
+    "issuedAt": 1790900676,
+    "expiresAt": 1790904276
+  },
+  "idTokenDeclaration": {
+    "issuer": "https://www.facebook.com",
+    "audience": [
+      "ordinary-client",
+      "ordinary-secondary-client"
+    ],
+    "algorithms": [
+      "RS256"
+    ]
+  },
+  "scopeCases": [
+    {
+      "name": "default",
+      "options": {
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-facebook-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/facebook",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-facebook-nonce",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://www.facebook.com/v24.0/dialog/oauth?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=email+public_profile&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ffacebook&login_hint=ordinary%40example.test&request_marker=ordinary"
+    },
+    {
+      "name": "append and config",
+      "options": {
+        "prompt": "consent",
+        "configId": "ordinary-config",
+        "scope": [
+          "email"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-facebook-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/facebook",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-facebook-nonce",
+        "scopes": [
+          "public_profile",
+          "email"
+        ],
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://www.facebook.com/v24.0/dialog/oauth?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=email+public_profile+email+public_profile+email&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ffacebook&login_hint=ordinary%40example.test&config_id=ordinary-config&request_marker=ordinary"
+    },
+    {
+      "name": "disabled and request config",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": [
+          "email"
+        ],
+        "configId": "ordinary-config"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-facebook-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/facebook",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-facebook-nonce",
+        "scopes": [
+          "public_profile"
+        ],
+        "additionalParams": {
+          "request_marker": "ordinary",
+          "config_id": "ordinary-request-config"
+        }
+      },
+      "url": "https://www.facebook.com/v24.0/dialog/oauth?response_type=code&client_id=ordinary-client&state=ordinary-state&scope=email+public_profile&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ffacebook&login_hint=ordinary%40example.test&config_id=ordinary-request-config&request_marker=ordinary"
+    },
+    {
+      "name": "empty",
+      "options": {
+        "disableDefaultScope": true,
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-facebook-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/facebook",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-facebook-nonce",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://www.facebook.com/v24.0/dialog/oauth?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ffacebook&login_hint=ordinary%40example.test&request_marker=ordinary"
+    }
+  ],
+  "grants": [
+    {
+      "name": "code",
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-facebook-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/facebook",
+        "deviceId": "ordinary-unused-device"
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/v24.0/oauth/access_token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ffacebook&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "events": [
+        "code"
+      ],
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "ordinary-scope"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "ordinary-scope"
+      }
+    },
+    {
+      "name": "refresh",
+      "input": "ordinary-refresh",
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/v24.0/oauth/access_token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "events": [
+        "refresh"
+      ],
+      "response": {
+        "accessToken": "rotated-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "rawResponse": {
+        "access_token": "rotated-access",
+        "refresh_token": "rotated-refresh",
+        "token_type": "Bearer",
+        "scope": "refreshed-scope"
+      }
+    }
+  ],
+  "profileCases": [
+    {
+      "source": "graph",
+      "name": "default",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "email omitted",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "email null",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": null,
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": null,
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": null,
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": null,
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "email empty",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "name omitted",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": true
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "name empty",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "image omitted",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "image null",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": null
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": null
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": null
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "mapper fills email",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "email": "mapped@example.test"
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "mapped email null",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "null",
+      "mapperPatch": {
+        "email": null
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": null,
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "mapped email undefined",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "undefined",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "mapped display",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "name": "Mapped Facebook Owner",
+        "email": "mapped@example.test",
+        "image": "https://images.example.test/mapped-facebook.png",
+        "emailVerified": true,
+        "locale": "en"
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Mapped Facebook Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/mapped-facebook.png",
+          "emailVerified": true,
+          "locale": "en"
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "verified true and extra fields",
+      "options": {
+        "fields": [
+          "locale",
+          "email"
+        ]
+      },
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        },
+        "email_verified": true,
+        "locale": "en"
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture%2Clocale%2Cemail",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        },
+        "email_verified": true,
+        "locale": "en"
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": true
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          },
+          "email_verified": true,
+          "locale": "en"
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "graph",
+      "name": "verified null",
+      "options": {},
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        },
+        "email_verified": null
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        },
+        "email_verified": null
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          },
+          "email_verified": null
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "default",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.cwXBqPX--9jWSsClAEa92Zs44sMQ4BFy9I1UVEf8QUVgAaOMD0HTlGcCd8GdKVHgAzAseVVuF22dxKIs9k4eMf_Sl_-9nxK9RAK0bFZrTIMJvGIuCFXuJIdqLTav-lkh-lS0zDDaRsse4GK9aQj8PAYPYfE9o6NIUjLfoSJxStUZydFdFFvba6RgzM2GDc4yAYft625O27Oyi-OvBz0N7Ahra4YBXgZ7e8vejQUffcIsDHAaEbeTW5Sd1e4Ezqg9ozXZXgkvkeavZgsGG9VKIvvRYgN8BFG0u8MOqktX02yhnLL1dtn3kphsFtmNIJl3usUyD8c3Wr4lb3_4MXy7Nw",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "email omitted",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsInBpY3R1cmUiOiJodHRwczovL2ltYWdlcy5leGFtcGxlLnRlc3QvZmFjZWJvb2sucG5nIiwiaXNzIjoiaHR0cHM6Ly93d3cuZmFjZWJvb2suY29tIiwiYXVkIjoib3JkaW5hcnktY2xpZW50Iiwibm9uY2UiOiJvcmRpbmFyeS1mYWNlYm9vay1ub25jZSIsImlhdCI6MTc5MDkwMDY3NiwiZXhwIjoxNzkwOTA0Mjc2fQ.hynwG7CGKxpk1Zo1YGIf9OKTAYXa6myIfARj9WnKr5XXXrxkX_ObCFNV5OGrySfcvDnuIN5JJe6-s0s2tR8QSg78yqoZXNoXd0PTXEk-9bCnDrQRSM5sr9HUztkoP8siNIGNQlQvCpIUuOay-LX5oD16EW9k4EkUbstzUcdpn0VlVCKIOXlb4kT-eDfEkSwDgdWuJaS_IcFlQhGbKkewtiRd2KQGoItUuCkeRS850yOhgg-o06R-sM_fNA8wrblsVRMcOGbkQL5UHVzCrL9GYk5w2s7ZzbTcQMPwpGMHTWWIHuNId0b5PhXO15snIUewRNPxQPNc0XnSbXnjTRxK8A",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "email null",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": null,
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjpudWxsLCJwaWN0dXJlIjoiaHR0cHM6Ly9pbWFnZXMuZXhhbXBsZS50ZXN0L2ZhY2Vib29rLnBuZyIsImlzcyI6Imh0dHBzOi8vd3d3LmZhY2Vib29rLmNvbSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsIm5vbmNlIjoib3JkaW5hcnktZmFjZWJvb2stbm9uY2UiLCJpYXQiOjE3OTA5MDA2NzYsImV4cCI6MTc5MDkwNDI3Nn0.FLsh9f4BWwY3xJiG1A2hXJo9j3RKk064hBAZMRSZDRi0uJxArCJHZc9sVIUpZpKs_kACRLYnK19Lp-0PlJzLVM9h6QjxspUyh8PiPyzeN9dy3TV9293rPkqx1reaDET7SRMtMYGsaCrTWz2WtKscsP2Ss-0P8pvtLHepDzgT6OK9yWXjnJy9Ed8ES-CHwn-BKapJ64PxKC2rmwq3AbPOqShPojf0TtrlCjq5mXyuwVwoMssdH97rPPZRwsot5MlkPCe_21QbvNHX6tmSMmN6Lf-wmjIVS9F8X6SjAh-qMlpkztfW3kEmGelAdZXoPtzhOyFh7YvGsa1Gg3mR_3uaTg",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": null,
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": null,
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": null,
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "email empty",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiIiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.oVeTNZwDS75KTGpMXMrt0JOFZany5Of33UcDOls6lg3ZFbr-H4gfafrjed01DhrjSn9VKfnCfYByMf6hWc2G8VRGsHE31xJWkOBD8sSqkzbmkfrvk37RBqEN6VzJGDYt8Ul1icRuzR4-d2PDrdqhVmS6KmwdfD1cu-2x91pQ6Vm6WakN4d2iK-HxJrbBZgjAdWednjLYbxOu9ihmpXfZpbqOlgmo8RLSnk5segDDbqfiwjAhc3uXFIpoUG0Y3VGuXbXDd_P3Wr3q28wIe3SdaVSCSNGfmhS8xDyfNd9S-sx2bwb6Q3_PcLXzFDuGp1qksa891NguEUcV8s8rOylbvA",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "name omitted",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.HP81qm9xfD8EnMvRTAwJT1EKOwYZyrgIkI_AC_4E7BUUVtlVXh8ZoRy1aETVYYMJa5H2pHKzEXeeG2OYSge4HGfZf3Hlq64y8sDrelswUxRjzseBO2gABCB8-zCb5-n7x-VQ60bRjjoLbM1o9wekq9lcwPSD7BNOm4Y2IpEv8LYAxJNqRy3q-XfL2PZE4RPTBFVvhLgZY1sXxxHKPO0mpFwd4t2M6XoBYQZbB_2GFh9WVa3UxeLzAfYAHEPirMdantTNlJXwZT3xWNX5jO4jWxIvFgMfff7WkHrC2XPzT_anq7i74LmxluEa5KLUl9y7TensaEekqCo5jMLFJnNsEA",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": true
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "name empty",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiIiLCJlbWFpbCI6ImZhY2Vib29rLW93bmVyQGV4YW1wbGUudGVzdCIsInBpY3R1cmUiOiJodHRwczovL2ltYWdlcy5leGFtcGxlLnRlc3QvZmFjZWJvb2sucG5nIiwiaXNzIjoiaHR0cHM6Ly93d3cuZmFjZWJvb2suY29tIiwiYXVkIjoib3JkaW5hcnktY2xpZW50Iiwibm9uY2UiOiJvcmRpbmFyeS1mYWNlYm9vay1ub25jZSIsImlhdCI6MTc5MDkwMDY3NiwiZXhwIjoxNzkwOTA0Mjc2fQ.AZ5B0BYy1-yqfpOjWkjERIFpOJ7zaPOgxkJWCSxyPnlxIGmM_3f3IfxeURW8icsSJQ3Jyyb_qKc8oly6L5MXI8Y058IbmHmGMlgqZOx0IklcXXm9kUi0xP1zXyaUI5ZgTPj0nj7jDMgUSgT42mYbyjKcSrkZylzpi3vSxpwD5unyV6nMhGRz-IZQ102gad4xmT-MUY0hsEj4Lb7H_8Hq1piE9hxyx-MbjpoK-Uxpz45CeQsgY9A-2Jzhn7lFhWcQjRRR4P_0l7jfDptIdIArNtAq2tkGu8h7SLluRA2EIXVqk-gGhruuRUfRLxDaVk-9ork75ztgYi7GBMXEl7vuUQ",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "email": "facebook-owner@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "image omitted",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwiaXNzIjoiaHR0cHM6Ly93d3cuZmFjZWJvb2suY29tIiwiYXVkIjoib3JkaW5hcnktY2xpZW50Iiwibm9uY2UiOiJvcmRpbmFyeS1mYWNlYm9vay1ub25jZSIsImlhdCI6MTc5MDkwMDY3NiwiZXhwIjoxNzkwOTA0Mjc2fQ.xisRScAAnunJgInEyUNZPjBeJIdi3yp8ibIwQXx3Z5U8z9rP_ZfuU4PXc-R0me_3dPTTRHP3IU30P4QdKj1j78DMY6YO3cEE01L0N8NejVI_YL7EC-vFFINmTlWhXhmfzC539PWS-q_ibcTLgreAM2Z7gjcSASrbsnL8puYDofQjMcFPsyAmliIjZ8uovy1x2a3iYTi7wMvXNso247OBkYS_BXMWcGC8vmqaHY75ymo5nRBXwPlToUV6LPkOIEnbrA71vVgt4h0NFHEiurjLrO1wrBi9EgoyKpN86JnGJq4zAEHCJ0pweOvLCHhUY5CAH0M9EC-G4kJfdwDZfCan4g",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "image null",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": null,
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6bnVsbCwiaXNzIjoiaHR0cHM6Ly93d3cuZmFjZWJvb2suY29tIiwiYXVkIjoib3JkaW5hcnktY2xpZW50Iiwibm9uY2UiOiJvcmRpbmFyeS1mYWNlYm9vay1ub25jZSIsImlhdCI6MTc5MDkwMDY3NiwiZXhwIjoxNzkwOTA0Mjc2fQ.DzaA-f-iTm7qiHQ2K84nyAJqu47iSnODuu7gAvhPPd45N_0V4hFcLubCmGeFos0r6R5WcqXH1Zr8o7eoDAbSbh3qr3OQ5c2b6LPFpPplABFGSESJFY-l88jdLmx6CXHUBYJWr5Sb5tq7stN8ZXeCGUq9Rog-uRx48pz2t1uOZO2__E6aYuEpLqv7paxkzup_dCSFimB8nZrqmNnfobQ18yVLI6s8hAanbkw-px-csdQkT-taDUCB5NYSBRPi0RRj_Bj4T58liAApzJvjS4YH_y9XfL4h8VxjC58y-4qlldvThbDbSN0OY2a5VL1otx-4csDkXe-ZCgB_XxDZX4dJRQ",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": null,
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": null,
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "mapper fills email",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsInBpY3R1cmUiOiJodHRwczovL2ltYWdlcy5leGFtcGxlLnRlc3QvZmFjZWJvb2sucG5nIiwiaXNzIjoiaHR0cHM6Ly93d3cuZmFjZWJvb2suY29tIiwiYXVkIjoib3JkaW5hcnktY2xpZW50Iiwibm9uY2UiOiJvcmRpbmFyeS1mYWNlYm9vay1ub25jZSIsImlhdCI6MTc5MDkwMDY3NiwiZXhwIjoxNzkwOTA0Mjc2fQ.hynwG7CGKxpk1Zo1YGIf9OKTAYXa6myIfARj9WnKr5XXXrxkX_ObCFNV5OGrySfcvDnuIN5JJe6-s0s2tR8QSg78yqoZXNoXd0PTXEk-9bCnDrQRSM5sr9HUztkoP8siNIGNQlQvCpIUuOay-LX5oD16EW9k4EkUbstzUcdpn0VlVCKIOXlb4kT-eDfEkSwDgdWuJaS_IcFlQhGbKkewtiRd2KQGoItUuCkeRS850yOhgg-o06R-sM_fNA8wrblsVRMcOGbkQL5UHVzCrL9GYk5w2s7ZzbTcQMPwpGMHTWWIHuNId0b5PhXO15snIUewRNPxQPNc0XnSbXnjTRxK8A",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "email": "mapped@example.test"
+      },
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "mapped email null",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.cwXBqPX--9jWSsClAEa92Zs44sMQ4BFy9I1UVEf8QUVgAaOMD0HTlGcCd8GdKVHgAzAseVVuF22dxKIs9k4eMf_Sl_-9nxK9RAK0bFZrTIMJvGIuCFXuJIdqLTav-lkh-lS0zDDaRsse4GK9aQj8PAYPYfE9o6NIUjLfoSJxStUZydFdFFvba6RgzM2GDc4yAYft625O27Oyi-OvBz0N7Ahra4YBXgZ7e8vejQUffcIsDHAaEbeTW5Sd1e4Ezqg9ozXZXgkvkeavZgsGG9VKIvvRYgN8BFG0u8MOqktX02yhnLL1dtn3kphsFtmNIJl3usUyD8c3Wr4lb3_4MXy7Nw",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "null",
+      "mapperPatch": {
+        "email": null
+      },
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "email": null,
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "mapped email undefined",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.cwXBqPX--9jWSsClAEa92Zs44sMQ4BFy9I1UVEf8QUVgAaOMD0HTlGcCd8GdKVHgAzAseVVuF22dxKIs9k4eMf_Sl_-9nxK9RAK0bFZrTIMJvGIuCFXuJIdqLTav-lkh-lS0zDDaRsse4GK9aQj8PAYPYfE9o6NIUjLfoSJxStUZydFdFFvba6RgzM2GDc4yAYft625O27Oyi-OvBz0N7Ahra4YBXgZ7e8vejQUffcIsDHAaEbeTW5Sd1e4Ezqg9ozXZXgkvkeavZgsGG9VKIvvRYgN8BFG0u8MOqktX02yhnLL1dtn3kphsFtmNIJl3usUyD8c3Wr4lb3_4MXy7Nw",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "undefined",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Facebook Owner",
+          "image": "https://images.example.test/facebook.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "source": "limited",
+      "name": "mapped display",
+      "options": {},
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.cwXBqPX--9jWSsClAEa92Zs44sMQ4BFy9I1UVEf8QUVgAaOMD0HTlGcCd8GdKVHgAzAseVVuF22dxKIs9k4eMf_Sl_-9nxK9RAK0bFZrTIMJvGIuCFXuJIdqLTav-lkh-lS0zDDaRsse4GK9aQj8PAYPYfE9o6NIUjLfoSJxStUZydFdFFvba6RgzM2GDc4yAYft625O27Oyi-OvBz0N7Ahra4YBXgZ7e8vejQUffcIsDHAaEbeTW5Sd1e4Ezqg9ozXZXgkvkeavZgsGG9VKIvvRYgN8BFG0u8MOqktX02yhnLL1dtn3kphsFtmNIJl3usUyD8c3Wr4lb3_4MXy7Nw",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "name": "Mapped Facebook Owner",
+        "email": "mapped@example.test",
+        "image": "https://images.example.test/mapped-facebook.png",
+        "emailVerified": true,
+        "locale": "en"
+      },
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "result": {
+        "user": {
+          "name": "Mapped Facebook Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/mapped-facebook.png",
+          "emailVerified": true,
+          "locale": "en"
+        },
+        "data": {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "no access token",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {},
+      "requests": [],
+      "events": [
+        "returned"
+      ],
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "debug 503",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 503,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "returned"
+      ],
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "profile 503",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 503,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "returned"
+      ],
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "graph mapper error",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "requests": [
+        {
+          "url": "https://graph.facebook.com/debug_token?input_token=ordinary-access&access_token=ordinary-client%7Cordinary-client-secret",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        },
+        {
+          "url": "https://graph.facebook.com/me?fields=id%2Cname%2Cemail%2Cpicture",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "debug",
+        "profile",
+        "mapper",
+        "rejected"
+      ],
+      "mapperCalls": 1,
+      "mapperProfiles": [
+        {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Facebook graph mapper error",
+        "sameError": true
+      }
+    },
+    {
+      "mode": "limited mapper error",
+      "source": "limited",
+      "profile": {
+        "sub": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": "https://images.example.test/facebook.png",
+        "iss": "https://www.facebook.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-facebook-nonce",
+        "iat": 1790900676,
+        "exp": 1790904276
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWZhY2Vib29rIn0.eyJzdWIiOiJvcmRpbmFyeS1mYWNlYm9vay1vd25lciIsIm5hbWUiOiJGYWNlYm9vayBPd25lciIsImVtYWlsIjoiZmFjZWJvb2stb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9mYWNlYm9vay5wbmciLCJpc3MiOiJodHRwczovL3d3dy5mYWNlYm9vay5jb20iLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJub25jZSI6Im9yZGluYXJ5LWZhY2Vib29rLW5vbmNlIiwiaWF0IjoxNzkwOTAwNjc2LCJleHAiOjE3OTA5MDQyNzZ9.cwXBqPX--9jWSsClAEa92Zs44sMQ4BFy9I1UVEf8QUVgAaOMD0HTlGcCd8GdKVHgAzAseVVuF22dxKIs9k4eMf_Sl_-9nxK9RAK0bFZrTIMJvGIuCFXuJIdqLTav-lkh-lS0zDDaRsse4GK9aQj8PAYPYfE9o6NIUjLfoSJxStUZydFdFFvba6RgzM2GDc4yAYft625O27Oyi-OvBz0N7Ahra4YBXgZ7e8vejQUffcIsDHAaEbeTW5Sd1e4Ezqg9ozXZXgkvkeavZgsGG9VKIvvRYgN8BFG0u8MOqktX02yhnLL1dtn3kphsFtmNIJl3usUyD8c3Wr4lb3_4MXy7Nw",
+        "accessToken": "ordinary-access",
+        "expectedIdTokenNonce": "ordinary-facebook-nonce"
+      },
+      "signatureVerifiedLocally": true,
+      "requests": [],
+      "events": [
+        "mapper",
+        "rejected"
+      ],
+      "mapperCalls": 1,
+      "mapperProfiles": [
+        {
+          "sub": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": "https://images.example.test/facebook.png",
+          "iss": "https://www.facebook.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-facebook-nonce",
+          "iat": 1790900676,
+          "exp": 1790904276
+        }
+      ],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Facebook limited mapper error",
+        "sameError": true
+      }
+    },
+    {
+      "mode": "custom success",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {},
+      "requests": [],
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "result": {
+        "user": {
+          "name": "Custom Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "id": "ordinary-facebook-owner",
+          "name": "Facebook Owner",
+          "email": "facebook-owner@example.test",
+          "picture": {
+            "data": {
+              "height": 100,
+              "width": 100,
+              "is_silhouette": false,
+              "url": "https://images.example.test/facebook.png"
+            }
+          }
+        }
+      },
+      "sameCustom": true
+    },
+    {
+      "mode": "custom null",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {},
+      "requests": [],
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "custom error",
+      "source": "graph",
+      "profile": {
+        "id": "ordinary-facebook-owner",
+        "name": "Facebook Owner",
+        "email": "facebook-owner@example.test",
+        "picture": {
+          "data": {
+            "height": 100,
+            "width": 100,
+            "is_silhouette": false,
+            "url": "https://images.example.test/facebook.png"
+          }
+        }
+      },
+      "debugResponse": {
+        "data": {
+          "is_valid": true,
+          "app_id": "ordinary-client",
+          "user_id": "ordinary-facebook-owner"
+        }
+      },
+      "debugStatus": 200,
+      "profileStatus": 200,
+      "input": {},
+      "requests": [],
+      "events": [
+        "custom",
+        "rejected"
+      ],
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Facebook custom error",
+        "sameError": true
+      }
+    }
+  ]
+}

@@ -8,6 +8,9 @@ pub(super) enum VerifiedIdToken {
     Google(VerifiedGoogleClaims),
     Generic(serde_json::Value),
     Cognito(serde_json::Value),
+    Paybin(serde_json::Value),
+    PayPal(serde_json::Value),
+    Facebook(serde_json::Value),
 }
 
 pub(super) async fn verify(
@@ -31,6 +34,17 @@ pub(super) async fn verify(
             && provider.config.get_user_info.is_none()
         {
             accepted.value().map(VerifiedIdToken::Cognito).map(Some)
+        } else if provider.config.paybin_issuer().is_some()
+            && provider.config.get_user_info.is_none()
+        {
+            accepted.value().map(VerifiedIdToken::Paybin).map(Some)
+        } else if provider.config.is_paypal() && provider.config.get_user_info.is_none() {
+            accepted.value().map(VerifiedIdToken::PayPal).map(Some)
+        } else if provider.config.facebook_options().is_some()
+            && provider.config.get_user_info.is_none()
+            && token.split('.').count() == 3
+        {
+            accepted.value().map(VerifiedIdToken::Facebook).map(Some)
         } else {
             Ok(None)
         };
@@ -42,6 +56,17 @@ pub(super) async fn verify(
     {
         let claims = verifier.verify(token, nonce).await.map_err(|_| invalid())?;
         return Ok(Some(VerifiedIdToken::Generic(claims)));
+    }
+    if let Some(options) = provider.config.facebook_options() {
+        if token.split('.').count() != 3 {
+            // Opaque tokens supply no claims. The default profile must inspect its access token.
+            return Ok(None);
+        }
+        return options
+            .verify(&provider.config.client_id, token, nonce)
+            .await
+            .map(VerifiedIdToken::Facebook)
+            .map(Some);
     }
     if let Some(options) = provider.config.cognito_options() {
         return options

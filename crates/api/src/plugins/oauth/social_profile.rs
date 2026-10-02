@@ -1,6 +1,6 @@
 use better_auth_core::{AuthError, AuthResult, SchemaValue};
 
-use super::google::{self, VerifiedGoogleClaims};
+use super::google;
 use super::id_token::VerifiedIdToken;
 use super::providers::{OAuthUserInfoRequest, OAuthUserInfoResponse};
 use super::resolved::ResolvedProvider;
@@ -23,7 +23,13 @@ pub(super) async fn fetch_user_info_with_claims(
         let claims = match claims {
             Some(VerifiedIdToken::Generic(claims)) => Some(claims),
             None => None,
-            Some(VerifiedIdToken::Google(_) | VerifiedIdToken::Cognito(_)) => {
+            Some(
+                VerifiedIdToken::Google(_)
+                | VerifiedIdToken::Cognito(_)
+                | VerifiedIdToken::Paybin(_)
+                | VerifiedIdToken::PayPal(_)
+                | VerifiedIdToken::Facebook(_),
+            ) => {
                 return Err(AuthError::internal(
                     "Social claims supplied to a Generic provider",
                 ));
@@ -40,6 +46,49 @@ pub(super) async fn fetch_user_info_with_claims(
             let _ = response.user.email_verified()?;
         }
         return Ok(response);
+    }
+    if provider.config.is_paypal() {
+        let claims = match claims {
+            Some(VerifiedIdToken::PayPal(claims)) => Some(claims),
+            None => None,
+            Some(_) => return Err(AuthError::internal("Non-PayPal claims supplied to PayPal")),
+        };
+        return super::providers::paypal::fetch_user_info(
+            &provider.config,
+            request,
+            expected_nonce,
+            claims,
+        )
+        .await;
+    }
+    if let Some(options) = provider.config.facebook_options() {
+        let claims = match claims {
+            Some(VerifiedIdToken::Facebook(claims)) => Some(claims),
+            None => match request
+                .id_token
+                .as_deref()
+                .filter(|token| token.split('.').count() == 3)
+            {
+                Some(token) => Some(
+                    options
+                        .verify(&provider.config.client_id, token, expected_nonce)
+                        .await?,
+                ),
+                None => None,
+            },
+            Some(_) => {
+                return Err(AuthError::internal(
+                    "Non-Facebook claims supplied to Facebook",
+                ));
+            }
+        };
+        return super::providers::facebook::fetch_user_info(
+            &provider.config,
+            options,
+            request,
+            claims,
+        )
+        .await;
     }
     if let Some(options) = provider.config.cognito_options() {
         let claims = match claims {
@@ -65,11 +114,41 @@ pub(super) async fn fetch_user_info_with_claims(
         return super::cognito::fetch_user_info(&provider.config, request, claims).await;
     }
     let claims = match claims {
-        Some(VerifiedIdToken::Google(claims)) => Some(claims),
-        None => None,
+        Some(VerifiedIdToken::Google(claims)) if provider.config.paybin_issuer().is_none() => {
+            Some(VerifiedIdToken::Google(claims))
+        }
+        Some(VerifiedIdToken::Paybin(claims)) if provider.config.paybin_issuer().is_some() => {
+            Some(VerifiedIdToken::Paybin(claims))
+        }
+        None => {
+            if let Some(issuer) = provider.config.paybin_issuer() {
+                let Some(token) = request
+                    .id_token
+                    .as_deref()
+                    .filter(|token| !token.is_empty())
+                else {
+                    return Ok(None);
+                };
+                Some(VerifiedIdToken::Paybin(
+                    super::providers::paybin::verify(
+                        issuer,
+                        &provider.config.client_id,
+                        token,
+                        expected_nonce,
+                    )
+                    .await?,
+                ))
+            } else {
+                None
+            }
+        }
         Some(_) => {
             return Err(AuthError::internal(
-                "Non-Google claims supplied to a Social provider",
+                if provider.config.paybin_issuer().is_some() {
+                    "Non-Paybin claims supplied to Paybin"
+                } else {
+                    "Non-Google claims supplied to a Social provider"
+                },
             ));
         }
     };
@@ -141,7 +220,7 @@ pub(super) async fn fetch_user_info_for_code(
 async fn fetch_default_user_info(
     provider: &ResolvedProvider,
     request: OAuthUserInfoRequest,
-    claims: Option<VerifiedGoogleClaims>,
+    claims: Option<VerifiedIdToken>,
 ) -> AuthResult<Option<OAuthUserInfoResponse>> {
     let Some(mut response) = fetch_social_user_info(provider, request, claims).await? else {
         return Ok(None);
@@ -220,7 +299,7 @@ pub(super) fn apply_mapped_profile(
 async fn fetch_social_user_info(
     provider: &ResolvedProvider,
     request: OAuthUserInfoRequest,
-    claims: Option<VerifiedGoogleClaims>,
+    claims: Option<VerifiedIdToken>,
 ) -> AuthResult<Option<OAuthUserInfoResponse>> {
     if let Some((user_url, emails_url)) = provider.config.github_endpoints() {
         return super::providers::github_profile(user_url, emails_url, &request).await;
@@ -231,36 +310,41 @@ async fn fetch_social_user_info(
     if provider.config.wechat_refresh_url().is_some() {
         return super::providers::wechat::fetch_user_info(&provider.config, &request).await;
     }
-    let data = if let Some(claims) = claims {
-        let claims = claims.into_value();
-        if !google::hosted_domain_allowed(provider.config.google_hosted_domain(), &claims) {
-            return Ok(None);
+    let data = match claims {
+        Some(VerifiedIdToken::Google(claims)) => {
+            let claims = claims.into_value();
+            if !google::hosted_domain_allowed(provider.config.google_hosted_domain(), &claims) {
+                return Ok(None);
+            }
+            claims
         }
-        claims
-    } else {
-        let user_info_url = provider
-            .config
-            .user_info_url
-            .as_deref()
-            .ok_or_else(|| AuthError::internal("Missing user_info_url for provider"))?;
-        let access_token = request
-            .access_token
-            .as_deref()
-            .ok_or_else(|| AuthError::internal("Missing access token for user-info lookup"))?;
-        let request = provider
-            .config
-            .user_info_request(user_info_url, access_token);
-        let Some(profile) = fetch_http_profile(request).await? else {
-            return Ok(None);
-        };
-        let Some(profile) = provider
-            .config
-            .http_profile_data(profile)
-            .map_err(AuthError::internal)?
-        else {
-            return Ok(None);
-        };
-        profile
+        Some(VerifiedIdToken::Paybin(claims)) => claims,
+        Some(_) => return Err(AuthError::internal("Unexpected verified Social profile")),
+        None => {
+            let user_info_url = provider
+                .config
+                .user_info_url
+                .as_deref()
+                .ok_or_else(|| AuthError::internal("Missing user_info_url for provider"))?;
+            let access_token = request
+                .access_token
+                .as_deref()
+                .ok_or_else(|| AuthError::internal("Missing access token for user-info lookup"))?;
+            let request = provider
+                .config
+                .user_info_request(user_info_url, access_token);
+            let Some(profile) = fetch_http_profile(request).await? else {
+                return Ok(None);
+            };
+            let Some(profile) = provider
+                .config
+                .http_profile_data(profile)
+                .map_err(AuthError::internal)?
+            else {
+                return Ok(None);
+            };
+            profile
+        }
     };
     Ok(provider
         .config
