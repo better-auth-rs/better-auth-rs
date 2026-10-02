@@ -60,9 +60,10 @@ impl EphemeralStore {
                 let configured = name != "id" && self.config.user.fields().contains_key(name);
                 Box::pin(async move {
                     if configured {
-                        let value = project_adapter_value(value, field, true, true)
-                            .await?
-                            .json()?;
+                        let value =
+                            project_adapter_value(value, field, field.references_id(), true)
+                                .await?
+                                .json()?;
                         crate::user_fields::assign_output(output, name, field, value)?;
                     }
                     Ok(())

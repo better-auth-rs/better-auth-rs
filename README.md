@@ -13,7 +13,7 @@ Sessions use signed cookies. Response headers preserve repeated cookie writes in
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 
-Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. Configured fields use their logical name when `field_name` is omitted or empty, including username projections. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
+Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. Configured fields use their logical name when `field_name` is omitted or empty, including username projections. User lists filter and sort declared scalar display fields by logical or mapped name before output transforms. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, batch projection, and Memory JSON representation.
 
 Adapter-created JSON text uses JavaScript property ordering and number formatting. See [JSON field bindings](docs/content/docs/concepts/database.mdx#json-field-bindings) for the fallible conversion API and native SQL JSON storage boundary.
 

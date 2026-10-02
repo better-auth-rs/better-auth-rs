@@ -72,6 +72,22 @@ impl UserConfig {
         &self,
         storage: &[Map<String, Value>],
     ) -> AuthResult<Vec<Map<String, Value>>> {
+        self.output_fields_many_with_json(storage, |_| true).await
+    }
+
+    pub(crate) async fn output_memory_fields_many(
+        &self,
+        storage: &[Map<String, Value>],
+    ) -> AuthResult<Vec<Map<String, Value>>> {
+        self.output_fields_many_with_json(storage, UserFieldConfig::references_id)
+            .await
+    }
+
+    async fn output_fields_many_with_json(
+        &self,
+        storage: &[Map<String, Value>],
+        supports_native_json: impl Fn(&UserFieldConfig) -> bool + Sync,
+    ) -> AuthResult<Vec<Map<String, Value>>> {
         let mut rows: Vec<_> = storage
             .iter()
             .map(|storage| (storage, Map::new()))
@@ -80,6 +96,7 @@ impl UserConfig {
             &mut rows,
             self.fields(),
             |(storage, output), name, field| {
+                let supports_native_json = supports_native_json(field);
                 Box::pin(async move {
                     let value = storage
                         .get(resolve_field_name(field.field_name.as_deref(), name))
@@ -88,7 +105,7 @@ impl UserConfig {
                         output,
                         name,
                         field,
-                        field.adapter_output(value, true).await?,
+                        field.adapter_output(value, supports_native_json).await?,
                     )
                 })
             },

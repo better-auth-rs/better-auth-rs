@@ -1,0 +1,2578 @@
+{
+  "version": "1.7.6",
+  "groups": [
+    {
+      "name": "user",
+      "operations": [
+        {
+          "name": "create-a",
+          "events": [
+            [
+              "input",
+              "user",
+              "settings",
+              {
+                "label": "user-a"
+              }
+            ],
+            [
+              "input",
+              "user",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "user",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "user",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "settings",
+              "{\"label\":\"user-a\"}"
+            ],
+            [
+              "output",
+              "user",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "user",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "user-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "user",
+              "fields": {
+                "stored_settings": "{\"label\":\"user-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-b",
+          "events": [
+            [
+              "input",
+              "user",
+              "settings",
+              {
+                "label": "user-b"
+              }
+            ],
+            [
+              "input",
+              "user",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "user",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "user",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "settings",
+              "{\"label\":\"user-b\"}"
+            ],
+            [
+              "output",
+              "user",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "user",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "user-b"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "user",
+              "fields": {
+                "stored_settings": "{\"label\":\"user-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-a",
+          "events": [
+            [
+              "input",
+              "user",
+              "settings",
+              {
+                "label": "user-a-updated"
+              }
+            ],
+            [
+              "input",
+              "user",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "input",
+              "user",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "input",
+              "user",
+              "displayOrder",
+              [
+                3
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "settings",
+              "{\"label\":\"user-a-updated\"}"
+            ],
+            [
+              "output",
+              "user",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "output",
+              "user",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "displayOrder",
+              [
+                3
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "user-a-updated"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "updated"
+            },
+            "labels": [
+              "updated"
+            ],
+            "displayOrder": [
+              3
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "user",
+              "fields": {
+                "stored_settings": "{\"label\":\"user-a-updated\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"updated\"}",
+                "stored_labels": [
+                  "updated"
+                ],
+                "stored_display_order": [
+                  3
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "read-a",
+          "events": [
+            [
+              "output",
+              "user",
+              "settings",
+              "{\"label\":\"user-a-updated\"}"
+            ],
+            [
+              "output",
+              "user",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "output",
+              "user",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "displayOrder",
+              [
+                3
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "user-a-updated"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "updated"
+            },
+            "labels": [
+              "updated"
+            ],
+            "displayOrder": [
+              3
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "user",
+              "fields": {
+                "stored_settings": "{\"label\":\"user-a-updated\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"updated\"}",
+                "stored_labels": [
+                  "updated"
+                ],
+                "stored_display_order": [
+                  3
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "session",
+      "operations": [
+        {
+          "name": "create-a",
+          "events": [
+            [
+              "input",
+              "session",
+              "settings",
+              {
+                "label": "session-a"
+              }
+            ],
+            [
+              "input",
+              "session",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "session",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "session",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "settings",
+              "{\"label\":\"session-a\"}"
+            ],
+            [
+              "output",
+              "session",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "session",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "session-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "session",
+              "fields": {
+                "stored_settings": "{\"label\":\"session-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-b",
+          "events": [
+            [
+              "input",
+              "session",
+              "settings",
+              {
+                "label": "session-b"
+              }
+            ],
+            [
+              "input",
+              "session",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "session",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "session",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "settings",
+              "{\"label\":\"session-b\"}"
+            ],
+            [
+              "output",
+              "session",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "session",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "session-b"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "session",
+              "fields": {
+                "stored_settings": "{\"label\":\"session-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-a",
+          "events": [
+            [
+              "input",
+              "session",
+              "settings",
+              {
+                "label": "session-a-updated"
+              }
+            ],
+            [
+              "input",
+              "session",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "input",
+              "session",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "input",
+              "session",
+              "displayOrder",
+              [
+                3
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "settings",
+              "{\"label\":\"session-a-updated\"}"
+            ],
+            [
+              "output",
+              "session",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "output",
+              "session",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "displayOrder",
+              [
+                3
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "session-a-updated"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "updated"
+            },
+            "labels": [
+              "updated"
+            ],
+            "displayOrder": [
+              3
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "session",
+              "fields": {
+                "stored_settings": "{\"label\":\"session-a-updated\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"updated\"}",
+                "stored_labels": [
+                  "updated"
+                ],
+                "stored_display_order": [
+                  3
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "session",
+              "settings",
+              "{\"label\":\"session-a-updated\"}"
+            ],
+            [
+              "output",
+              "session",
+              "settings",
+              "{\"label\":\"session-b\"}"
+            ],
+            [
+              "output",
+              "session",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "session",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "output",
+              "session",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "session",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "displayOrder",
+              [
+                3
+              ]
+            ],
+            [
+              "output",
+              "session",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": [
+            {
+              "settings": {
+                "label": "session-a-updated"
+              },
+              "nullableSettings": null,
+              "encodedSettings": {
+                "kind": "updated"
+              },
+              "labels": [
+                "updated"
+              ],
+              "displayOrder": [
+                3
+              ]
+            },
+            {
+              "settings": {
+                "label": "session-b"
+              },
+              "nullableSettings": null,
+              "encodedSettings": {
+                "kind": "text"
+              },
+              "labels": [
+                "alpha",
+                "beta"
+              ],
+              "displayOrder": [
+                1,
+                2
+              ]
+            }
+          ],
+          "storedPhysical": [
+            {
+              "model": "session",
+              "fields": {
+                "stored_settings": "{\"label\":\"session-a-updated\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"updated\"}",
+                "stored_labels": [
+                  "updated"
+                ],
+                "stored_display_order": [
+                  3
+                ]
+              }
+            },
+            {
+              "model": "session",
+              "fields": {
+                "stored_settings": "{\"label\":\"session-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "organization-snapshot",
+      "operations": [
+        {
+          "name": "create-organization-a",
+          "events": [
+            [
+              "input",
+              "organization",
+              "settings",
+              {
+                "label": "organization-a"
+              }
+            ],
+            [
+              "input",
+              "organization",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "settings",
+              "{\"label\":\"organization-a\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "organization-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "organization",
+              "fields": {
+                "stored_settings": "{\"label\":\"organization-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-organization-b",
+          "events": [
+            [
+              "input",
+              "organization",
+              "settings",
+              {
+                "label": "organization-b"
+              }
+            ],
+            [
+              "input",
+              "organization",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "settings",
+              "{\"label\":\"organization-b\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "organization-b"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "organization",
+              "fields": {
+                "stored_settings": "{\"label\":\"organization-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-member-a-a",
+          "events": [
+            [
+              "input",
+              "member",
+              "settings",
+              {
+                "label": "member-a-a"
+              }
+            ],
+            [
+              "input",
+              "member",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-a-a\"}"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "member-a-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-a-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-member-b-a",
+          "events": [
+            [
+              "input",
+              "member",
+              "settings",
+              {
+                "label": "member-b-a"
+              }
+            ],
+            [
+              "input",
+              "member",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-b-a\"}"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "member-b-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-b-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-member-a-b",
+          "events": [
+            [
+              "input",
+              "member",
+              "settings",
+              {
+                "label": "member-a-b"
+              }
+            ],
+            [
+              "input",
+              "member",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-a-b\"}"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "member-a-b"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-a-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-team",
+          "events": [
+            [
+              "input",
+              "team",
+              "settings",
+              {
+                "label": "team"
+              }
+            ],
+            [
+              "input",
+              "team",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "team",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "team",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "team",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "team",
+              "settings",
+              "{\"label\":\"team\"}"
+            ],
+            [
+              "output",
+              "team",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "team",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "team",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "team",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "team"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "team",
+              "fields": {
+                "stored_settings": "{\"label\":\"team\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-invitation",
+          "events": [
+            [
+              "input",
+              "invitation",
+              "settings",
+              {
+                "label": "invitation"
+              }
+            ],
+            [
+              "input",
+              "invitation",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "invitation",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "invitation",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "invitation",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "invitation",
+              "settings",
+              "{\"label\":\"invitation\"}"
+            ],
+            [
+              "output",
+              "invitation",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "invitation",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "invitation",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "invitation",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "invitation"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "invitation",
+              "fields": {
+                "stored_settings": "{\"label\":\"invitation\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "create-role",
+          "events": [
+            [
+              "input",
+              "organizationRole",
+              "settings",
+              {
+                "label": "role"
+              }
+            ],
+            [
+              "input",
+              "organizationRole",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "organizationRole",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "input",
+              "organizationRole",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "organizationRole",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "organizationRole",
+              "settings",
+              "{\"label\":\"role\"}"
+            ],
+            [
+              "output",
+              "organizationRole",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organizationRole",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organizationRole",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organizationRole",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "role"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "organizationRole",
+              "fields": {
+                "stored_settings": "{\"label\":\"role\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "read-organization",
+          "events": [
+            [
+              "output",
+              "organization",
+              "settings",
+              "{\"label\":\"organization-a\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "organization-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "organization",
+              "fields": {
+                "stored_settings": "{\"label\":\"organization-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "read-member",
+          "events": [
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-a-a\"}"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "member-a-a"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-a-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "read-team",
+          "events": [
+            [
+              "output",
+              "team",
+              "settings",
+              "{\"label\":\"team\"}"
+            ],
+            [
+              "output",
+              "team",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "team",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "team",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "team",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "team"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "team",
+              "fields": {
+                "stored_settings": "{\"label\":\"team\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "read-invitation",
+          "events": [
+            [
+              "output",
+              "invitation",
+              "settings",
+              "{\"label\":\"invitation\"}"
+            ],
+            [
+              "output",
+              "invitation",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "invitation",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "invitation",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "invitation",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "invitation"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "invitation",
+              "fields": {
+                "stored_settings": "{\"label\":\"invitation\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "read-role",
+          "events": [
+            [
+              "output",
+              "organizationRole",
+              "settings",
+              "{\"label\":\"role\"}"
+            ],
+            [
+              "output",
+              "organizationRole",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organizationRole",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organizationRole",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organizationRole",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "label": "role"
+            },
+            "nullableSettings": null,
+            "encodedSettings": {
+              "kind": "text"
+            },
+            "labels": [
+              "alpha",
+              "beta"
+            ],
+            "displayOrder": [
+              1,
+              2
+            ]
+          },
+          "storedPhysical": [
+            {
+              "model": "organizationRole",
+              "fields": {
+                "stored_settings": "{\"label\":\"role\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "organization-joined-query",
+      "operations": [
+        {
+          "name": "list-for-user-a",
+          "events": [
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-a-a\"}"
+            ],
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-a-b\"}"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "settings",
+              "{\"label\":\"organization-a\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "settings",
+              "{\"label\":\"organization-b\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organization",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "organization",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": [
+            {
+              "settings": {
+                "label": "organization-a"
+              },
+              "nullableSettings": null,
+              "encodedSettings": {
+                "kind": "text"
+              },
+              "labels": [
+                "alpha",
+                "beta"
+              ],
+              "displayOrder": [
+                1,
+                2
+              ]
+            },
+            {
+              "settings": {
+                "label": "organization-b"
+              },
+              "nullableSettings": null,
+              "encodedSettings": {
+                "kind": "text"
+              },
+              "labels": [
+                "alpha",
+                "beta"
+              ],
+              "displayOrder": [
+                1,
+                2
+              ]
+            }
+          ],
+          "storedPhysical": [
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-a-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            },
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-a-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            },
+            {
+              "model": "organization",
+              "fields": {
+                "stored_settings": "{\"label\":\"organization-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            },
+            {
+              "model": "organization",
+              "fields": {
+                "stored_settings": "{\"label\":\"organization-b\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "filter-members",
+          "events": [
+            [
+              "output",
+              "member",
+              "settings",
+              "{\"label\":\"member-a-a\"}"
+            ],
+            [
+              "output",
+              "member",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "member",
+              "encodedSettings",
+              "{\"kind\":\"text\"}"
+            ],
+            [
+              "output",
+              "member",
+              "labels",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "member",
+              "displayOrder",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "settings",
+              "{\"label\":\"user-a-updated\"}"
+            ],
+            [
+              "output",
+              "user",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "user",
+              "encodedSettings",
+              "{\"kind\":\"updated\"}"
+            ],
+            [
+              "output",
+              "user",
+              "labels",
+              [
+                "updated"
+              ]
+            ],
+            [
+              "output",
+              "user",
+              "displayOrder",
+              [
+                3
+              ]
+            ]
+          ],
+          "result": {
+            "rows": [
+              {
+                "settings": {
+                  "label": "member-a-a"
+                },
+                "nullableSettings": null,
+                "encodedSettings": {
+                  "kind": "text"
+                },
+                "labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "displayOrder": [
+                  1,
+                  2
+                ]
+              }
+            ],
+            "total": 1
+          },
+          "storedPhysical": [
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-a-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            },
+            {
+              "model": "member",
+              "fields": {
+                "stored_settings": "{\"label\":\"member-b-a\"}",
+                "stored_nullable_settings": "null",
+                "stored_encoded_settings": "{\"kind\":\"text\"}",
+                "stored_labels": [
+                  "alpha",
+                  "beta"
+                ],
+                "stored_display_order": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

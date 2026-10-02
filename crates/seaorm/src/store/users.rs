@@ -689,22 +689,40 @@ where
         )
         .await?;
 
-        let views = models
-            .iter()
-            .map(better_auth_core::UserView::from_model)
-            .collect::<AuthResult<Vec<_>>>()?;
-        let (views, _) = better_auth_core::user_query::apply_list_users(views, &params);
-        let selected = views
-            .iter()
-            .map(|view| {
-                use better_auth_core::AuthUser;
-                let model = models
+        let query_record = |model| {
+            let view = better_auth_core::UserView::from_model(&model)?;
+            let fields = if self.config().user.fields().is_empty() {
+                serde_json::Map::new()
+            } else {
+                let serialized = serde_json::to_value(&model)?;
+                self.config()
+                    .user
+                    .fields()
                     .iter()
-                    .find(|model| model.id().into_owned() == view.id)
-                    .ok_or_else(|| AuthError::internal("Selected user model is missing"))?;
-                Ok(model.clone())
-            })
+                    .filter_map(|(name, field)| {
+                        let physical = resolve_field_name(field.field_name.as_deref(), name);
+                        serialized
+                            .get(physical)
+                            .map(|value| (physical.to_owned(), value.clone()))
+                    })
+                    .collect::<serde_json::Map<_, _>>()
+            };
+            AuthResult::Ok((view, fields, model))
+        };
+        let records = models
+            .into_iter()
+            .map(&query_record)
             .collect::<AuthResult<Vec<_>>>()?;
+        let (selected, _) = better_auth_core::user_query::apply_list_users_by(
+            records,
+            &params,
+            &self.config().user,
+            |(view, fields, _)| (view, fields),
+        )?;
+        let selected = selected
+            .into_iter()
+            .map(|(_, _, model)| model)
+            .collect::<Vec<_>>();
         let users = self.output_users(&selected, self.connection()).await?;
         let total = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -714,11 +732,16 @@ where
                     .all(self.connection())
                     .await
                     .map_err(map_db_err)?;
-                let views = rows
-                    .iter()
-                    .map(better_auth_core::UserView::from_model)
+                let records = rows
+                    .into_iter()
+                    .map(query_record)
                     .collect::<AuthResult<Vec<_>>>()?;
-                Ok(better_auth_core::user_query::count_users(&views, &params))
+                better_auth_core::user_query::count_users(
+                    &records,
+                    &params,
+                    &self.config().user,
+                    |(view, fields, _)| (view, fields),
+                )
             },
         )
         .await?;

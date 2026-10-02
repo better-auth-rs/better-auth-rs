@@ -14,6 +14,22 @@ The shared field adapter now uses the existing JavaScript-compatible JSON serial
 
 The ordinary finite JSON contract uses a real pinned Memory/SQLite capture and the exact unchanged OpenAPI serializer oracle. Strict Bun comparison and the Rust acceptance pass for independent stored text, create/read callback text, returned JSON decoding, and the native-JSON callback reconstruction helper. The five existing JWK and five Wallet ordinary regressions, scoped new-target Clippy, and workspace formatting also pass. Existing fixtures remain unchanged. Native SQL JSON raw-byte equivalence, other Memory families' capability differences, and arbitrary numeric precision remain unresolved; this change does not establish those contracts. PostgreSQL and MySQL have not been executed for this slice.
 
+## Declared User display-field queries
+
+User list selection now resolves declared logical and mapped field names against raw adapter values. Memory retains each selected `RowRef`; SeaORM retains each original model alongside its native query view and raw mapped fields. The shared query helpers apply the same Number/Boolean binding to list filters and the later unpaged count. Selection and pagination remain before output projection, and the count remains after successful output.
+
+The pinned capture and strict Bun/Rust comparisons pass seven ordinary queries on each of Memory and SQLite: logical and physical string names, raw pre-transform filtering, numeric-string and numeric-string-array binding, Boolean-string binding, numeric ordering, and a paged result with an unpaged total. Full callback events and returned display fields are compared. Scoped new-target Clippy, the existing two Admin count tests, one User live-read test, one transform-order test, two transform-batch tests, and workspace formatting also pass. These focused checks do not replace the integrated full gate.
+
+This change does not complete adapter-specific Date, JSON, array, or reference query binding and equality. Those declarations resolve to raw values but retain the existing scalar comparison boundary. String collation, unknown-field behavior, native-field aliases, and null, missing, mixed-type, or non-scalar comparisons remain open. Application input callbacks do not become query conversion hooks.
+
+## Memory User, Session, and Organization JSON representation
+
+The Memory adapter routes six existing input callers through the shared Memory field binding. User snapshot/live, typed Session batch, and Organization snapshot/live/batch output roots select JSON conversion per field. Public projection helpers and SQL callers keep their constant capability flags. User date assignment, typed Session assignment, Organization decoding, selected live rows, callback scheduling, and raw association keys remain unchanged. The redundant Serial-only input helper is removed after its callers migrate.
+
+Member filtering converts the original JSON object, array, or null query value after reference conversion, following the pinned adapter query phase. The ordinary contract uses the public Organization `listMembers` helper for an object filter; its public filter type accepts objects. Direct `DBAdapter` `Where.value` does not declare objects despite the factory's runtime conversion. The contract retains the helper's subsequent User read and every resulting display callback.
+
+The pinned 1.7.6 capture and strict Bun comparison pass. One Memory context records four groups and 23 ordinary operations with complete display callback values, returned fields, and independent physical stored fields. JSON objects, null, valid JSON text, and already-supported string/number arrays cover the six output roots and one Member object filter/count. The complete core library passes 231 tests, including the new contract. Core production Clippy with `-D warnings`, the four specified Organization/Memory Serial regression targets, and workspace formatting also pass. No existing fixture or assertion changed. SQL execution, arbitrary reference replacements, callback errors, and transaction behavior are not new claims of this fixture. Remaining User query type and ordering differences are recorded above.
+
 ## Confirmed work
 
 | Priority | Capability | Upstream evidence | Rust gap or work | Completion evidence |

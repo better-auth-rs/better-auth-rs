@@ -36,6 +36,8 @@ mod jwks;
 #[cfg(test)]
 mod lifecycle_tests;
 mod member_delete;
+#[cfg(test)]
+mod memory_json_tests;
 mod organization;
 #[cfg(test)]
 mod organization_async_tests;

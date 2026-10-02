@@ -45,7 +45,7 @@ impl EphemeralStore {
                         .get(resolve_field_name(field.field_name.as_deref(), name))
                         .or_else(|| storage.get(name))
                         .cloned();
-                    if let Some(value) = field.adapter_output(value, true).await? {
+                    if let Some(value) = field.adapter_output(value, field.references_id()).await? {
                         let _ = session.additional_fields.insert(name.to_owned(), value);
                     }
                     Ok(())
@@ -194,7 +194,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 .session_config
                 .field_schema()
                 .storage_fields_with_binding(fields, true, |_, field, value| {
-                    self.memory_field_input(field, value)
+                    self.memory_plugin_field_input(field, value)
                 })
                 .await?,
         };

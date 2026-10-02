@@ -155,6 +155,31 @@ impl UserConfig {
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
     {
+        self.organization_output_records_with_json(records, |_| supports_native_json, complete)
+            .await
+    }
+
+    pub(crate) async fn organization_output_memory_records(
+        &self,
+        records: Vec<AdapterRecord>,
+    ) -> AuthResult<Vec<Map<String, Value>>> {
+        self.organization_output_records_with_json(
+            records,
+            UserFieldConfig::references_id,
+            |_, output| std::future::ready(Ok(output)),
+        )
+        .await
+    }
+
+    async fn organization_output_records_with_json<R: Send, F>(
+        &self,
+        records: Vec<AdapterRecord>,
+        supports_native_json: impl Fn(&UserFieldConfig) -> bool + Sync,
+        complete: impl Fn(usize, Map<String, Value>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<R>> + Send,
+    {
         let mut rows = self.organization_records(records)?;
         super::batch::project_fields_then(
             &mut rows,
@@ -164,7 +189,7 @@ impl UserConfig {
                     row,
                     name,
                     field,
-                    supports_native_json,
+                    supports_native_json(field),
                 ))
             },
             |index, (_, output)| complete(index, std::mem::take(output)),
@@ -183,6 +208,43 @@ impl UserConfig {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
+        self.organization_output_records_batches_with_json(
+            records,
+            |_| supports_native_json,
+            decode,
+            complete,
+        )
+        .await
+    }
+
+    pub(crate) async fn organization_output_memory_records_batches_then<V: Send, R: Send, F>(
+        &self,
+        records: Vec<AdapterRecord>,
+        decode: impl Fn(usize, Map<String, Value>) -> AuthResult<V> + Sync,
+        complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
+        self.organization_output_records_batches_with_json(
+            records,
+            UserFieldConfig::references_id,
+            decode,
+            complete,
+        )
+        .await
+    }
+
+    async fn organization_output_records_batches_with_json<V: Send, R: Send, F>(
+        &self,
+        records: Vec<AdapterRecord>,
+        supports_native_json: impl Fn(&UserFieldConfig) -> bool + Sync,
+        decode: impl Fn(usize, Map<String, Value>) -> AuthResult<V> + Sync,
+        complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
         let mut rows = self.organization_records(records)?;
         super::batch::project_fields_batches_then(
             &mut rows,
@@ -192,7 +254,7 @@ impl UserConfig {
                     row,
                     name,
                     field,
-                    supports_native_json,
+                    supports_native_json(field),
                 ))
             },
             |index, (_, output)| decode(index, std::mem::take(output)),

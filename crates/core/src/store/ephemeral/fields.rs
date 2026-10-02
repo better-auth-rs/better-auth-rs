@@ -308,7 +308,7 @@ impl EphemeralStore {
             if let Some(value) =
                 fields.get_mut(resolve_field_name(field.field_name.as_deref(), name))
             {
-                *value = self.memory_field_input(field, std::mem::take(value))?;
+                *value = self.memory_plugin_field_input(field, std::mem::take(value))?;
             }
         }
         Ok(())
@@ -424,10 +424,14 @@ impl EphemeralStore {
                 let configured = name != "id" && schema.fields().contains_key(name);
                 Box::pin(async move {
                     if configured {
-                        let value =
-                            crate::user_fields::project_adapter_value(value, field, true, true)
-                                .await?
-                                .json()?;
+                        let value = crate::user_fields::project_adapter_value(
+                            value,
+                            field,
+                            field.references_id(),
+                            true,
+                        )
+                        .await?
+                        .json()?;
                         crate::user_fields::assign_output(output, name, field, value)?;
                     } else if let Some(value) = value {
                         let _ = output.insert(name.to_owned(), value);
@@ -455,7 +459,7 @@ impl EphemeralStore {
             .map(|value| record_output(role, value, &schema))
             .collect::<AuthResult<Vec<_>>>()?;
         schema
-            .organization_output_records(records, true)
+            .organization_output_memory_records(records)
             .await?
             .into_iter()
             .map(|fields| decode_record(&schema, fields))
@@ -482,9 +486,8 @@ impl EphemeralStore {
             .map(|value| record_output(role, value, &schema))
             .collect::<AuthResult<Vec<_>>>()?;
         schema
-            .organization_output_records_batches_then(
+            .organization_output_memory_records_batches_then(
                 records,
-                true,
                 |_, fields| decode_record(&schema, fields),
                 complete,
             )

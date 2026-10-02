@@ -48,25 +48,13 @@ impl EphemeralStore {
         ) && field.references_id()
     }
 
-    pub(super) fn memory_field_input(
-        &self,
-        field: &UserFieldConfig,
-        value: Value,
-    ) -> AuthResult<Value> {
-        if self.uses_serial_reference(field) {
-            crate::id::serial_reference_value(value)
-        } else {
-            Ok(value)
-        }
-    }
-
     pub(super) fn memory_plugin_field_input(
         &self,
         field: &UserFieldConfig,
         value: Value,
     ) -> AuthResult<Value> {
         if self.uses_serial_reference(field) {
-            self.memory_field_input(field, value)
+            crate::id::serial_reference_value(value)
         } else if matches!(field.field_type, UserFieldType::Json) {
             // Memory stores JSON text but retains native arrays, booleans and dates.
             field.adapter_input(value, false, false)
@@ -81,11 +69,12 @@ impl EphemeralStore {
         name: &str,
         value: Value,
     ) -> AuthResult<Value> {
-        if schema
-            .fields()
-            .get(name)
-            .is_some_and(|field| self.uses_serial_reference(field))
-        {
+        let field = schema.fields().get(name);
+        let original_json = field
+            .is_some_and(|field| matches!(field.field_type, UserFieldType::Json))
+            .then(|| value.clone())
+            .filter(|value| value.is_object() || value.is_array() || value.is_null());
+        let value = if field.is_some_and(|field| self.uses_serial_reference(field)) {
             let mut value = crate::id::serial_reference_value(value)?;
             // Where conversion uses Number(null), while stored references preserve null.
             let replace_null = |value: &mut Value| {
@@ -97,9 +86,14 @@ impl EphemeralStore {
                 Value::Array(values) => values.iter_mut().for_each(replace_null),
                 value => replace_null(value),
             }
-            Ok(value)
+            value
         } else {
-            Ok(value)
+            value
+        };
+        // Query JSON conversion follows reference conversion and uses the original query value.
+        match original_json {
+            Some(value) => Ok(Value::String(crate::utils::json::stringify(&value)?)),
+            None => Ok(value),
         }
     }
 

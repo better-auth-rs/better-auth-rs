@@ -1,10 +1,13 @@
 //! Internal helpers for applying admin user-list query semantics.
 
 use chrono::{DateTime, Utc};
+use serde_json::{Map, Value};
 use std::cmp::Ordering;
 
+use crate::store::schema::resolve_field_name;
 use crate::types::ListUsersParams;
-use crate::{UserView, entity::AuthUser};
+use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldType};
+use crate::{AuthResult, UserView, entity::AuthUser};
 
 fn string_field(user: &UserView, field: &str) -> Option<String> {
     match field {
@@ -131,6 +134,14 @@ fn matches_filter(user: &UserView, params: &ListUsersParams) -> bool {
         }
         false
     };
+    match_filter(filter_value, operator, matches)
+}
+
+fn match_filter(
+    filter_value: &Value,
+    operator: &str,
+    matches: impl Fn(&Value, &str) -> bool,
+) -> bool {
     if matches!(operator, "in" | "not_in") {
         let Some(values) = filter_value.as_array() else {
             return false;
@@ -139,6 +150,138 @@ fn matches_filter(user: &UserView, params: &ListUsersParams) -> bool {
         return if operator == "in" { present } else { !present };
     }
     matches(filter_value, operator)
+}
+
+fn additional_field<'a>(
+    name: &str,
+    fields: &'a UserConfig,
+) -> Option<(&'a str, &'a UserFieldConfig)> {
+    if name == "_id" || UserView::NATIVE_FIELDS.contains(&name) {
+        return None;
+    }
+    let (logical, field) = fields.fields().get_key_value(name).or_else(|| {
+        fields.fields().iter().find(|(logical, field)| {
+            resolve_field_name(field.field_name.as_deref(), logical) == name
+        })
+    })?;
+    if logical == "_id" || UserView::NATIVE_FIELDS.contains(&logical.as_str()) {
+        return None;
+    }
+    Some((
+        resolve_field_name(field.field_name.as_deref(), logical),
+        field,
+    ))
+}
+
+fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> {
+    let number = |value: f64| -> AuthResult<Value> {
+        Ok(serde_json::from_str(&crate::schema_value::number_string(
+            value,
+        ))?)
+    };
+    match (&field.field_type, value) {
+        (UserFieldType::Number, Value::String(value)) => {
+            crate::organization_fields::numeric_filter(value)
+                .map(number)
+                .transpose()
+                .map(|number| number.unwrap_or_else(|| Value::String(value.clone())))
+        }
+        (UserFieldType::Number, Value::Array(values)) => {
+            let numbers = values
+                .iter()
+                .map(|value| {
+                    value
+                        .as_str()
+                        .and_then(crate::organization_fields::numeric_filter)
+                })
+                .collect::<Option<Vec<_>>>();
+            match numbers {
+                Some(numbers) => numbers
+                    .into_iter()
+                    .map(number)
+                    .collect::<AuthResult<Vec<_>>>()
+                    .map(Value::Array),
+                None => Ok(value.clone()),
+            }
+        }
+        (UserFieldType::Boolean, Value::String(value)) => Ok(Value::Bool(value == "true")),
+        _ => Ok(value.clone()),
+    }
+}
+
+fn additional_filter<'a>(
+    params: &ListUsersParams,
+    fields: &'a UserConfig,
+) -> AuthResult<Option<(&'a str, Value)>> {
+    let Some(value) = params.filter_value.as_ref() else {
+        return Ok(None);
+    };
+    let Some((name, field)) =
+        additional_field(params.filter_field.as_deref().unwrap_or("email"), fields)
+    else {
+        return Ok(None);
+    };
+    Ok(Some((name, bind_filter(field, value)?)))
+}
+
+fn matches_value(actual: Option<&Value>, expected: &Value, operator: &str) -> bool {
+    match (actual, expected) {
+        (Some(Value::String(actual)), Value::String(expected)) => {
+            compare_string(actual, expected, operator)
+        }
+        (Some(Value::Bool(actual)), Value::Bool(expected)) => {
+            compare_bool(*actual, *expected, operator)
+        }
+        (Some(Value::Number(actual)), Value::Number(expected)) => {
+            let ordering = actual.as_f64().partial_cmp(&expected.as_f64());
+            match operator {
+                "eq" => ordering.is_some_and(Ordering::is_eq),
+                "ne" => ordering.is_some_and(|ordering| !ordering.is_eq()),
+                "lt" => ordering.is_some_and(Ordering::is_lt),
+                "lte" => ordering.is_some_and(|ordering| !ordering.is_gt()),
+                "gt" => ordering.is_some_and(Ordering::is_gt),
+                "gte" => ordering.is_some_and(|ordering| !ordering.is_lt()),
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+fn matches_record(
+    (user, raw): (&UserView, &Map<String, Value>),
+    params: &ListUsersParams,
+    filter: &Option<(&str, Value)>,
+) -> bool {
+    matches_search(user, params)
+        && match filter {
+            Some((name, value)) => match_filter(
+                value,
+                params.filter_operator.as_deref().unwrap_or("eq"),
+                |expected, operator| matches_value(raw.get(*name), expected, operator),
+            ),
+            None => matches_filter(user, params),
+        }
+}
+
+fn compare_values(left: Option<&Value>, right: Option<&Value>, direction: &str) -> Ordering {
+    let ordering = match (left, right) {
+        (Some(Value::Number(left)), Some(Value::Number(right))) => left
+            .as_f64()
+            .partial_cmp(&right.as_f64())
+            .unwrap_or(Ordering::Equal),
+        (Some(Value::String(left)), Some(Value::String(right))) => left.cmp(right),
+        (Some(Value::Bool(left)), Some(Value::Bool(right))) => left.cmp(right),
+        (None | Some(Value::Null), None | Some(Value::Null)) => Ordering::Equal,
+        (None | Some(Value::Null), _) => Ordering::Less,
+        (_, None | Some(Value::Null)) => Ordering::Greater,
+        _ => Ordering::Equal,
+    };
+    if direction == "asc" {
+        ordering
+    } else {
+        ordering.reverse()
+    }
 }
 
 fn compare_option_strings(lhs: Option<String>, rhs: Option<String>, direction: &str) -> Ordering {
@@ -160,29 +303,28 @@ fn compare_option_dates(
 }
 
 /// Count matching rows without sorting, paging, or applying output transforms.
-pub fn count_users<'a>(
-    users: impl IntoIterator<Item = &'a UserView>,
+pub fn count_users<'a, T: 'a>(
+    users: impl IntoIterator<Item = &'a T>,
     params: &ListUsersParams,
-) -> usize {
-    users
+    fields: &UserConfig,
+    record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+) -> AuthResult<usize> {
+    let filter = additional_filter(params, fields)?;
+    Ok(users
         .into_iter()
-        .filter(|user| matches_search(user, params) && matches_filter(user, params))
-        .count()
+        .filter(|user| matches_record(record(user), params, &filter))
+        .count())
 }
 
-/// Apply Better Auth admin list-users semantics to a user collection.
-pub fn apply_list_users(users: Vec<UserView>, params: &ListUsersParams) -> (Vec<UserView>, usize) {
-    apply_list_users_by(users, params, |user| user)
-}
-
-pub(crate) fn apply_list_users_by<T>(
+/// Select raw user records while retaining each adapter's original row association.
+pub fn apply_list_users_by<T>(
     mut users: Vec<T>,
     params: &ListUsersParams,
-    record: impl Fn(&T) -> &UserView,
-) -> (Vec<T>, usize) {
-    users.retain(|user| {
-        matches_search(record(user), params) && matches_filter(record(user), params)
-    });
+    fields: &UserConfig,
+    record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+) -> AuthResult<(Vec<T>, usize)> {
+    let filter = additional_filter(params, fields)?;
+    users.retain(|user| matches_record(record(user), params, &filter));
 
     if let Some(sort_by) = params.sort_by.as_deref().filter(|value| !value.is_empty()) {
         let sort_direction = params
@@ -190,9 +332,13 @@ pub(crate) fn apply_list_users_by<T>(
             .as_deref()
             .filter(|value| !value.is_empty())
             .unwrap_or("asc");
+        let additional_sort = additional_field(sort_by, fields).map(|(name, _)| name);
 
         users.sort_by(|lhs, rhs| {
-            let (lhs, rhs) = (record(lhs), record(rhs));
+            let ((lhs, left), (rhs, right)) = (record(lhs), record(rhs));
+            if let Some(name) = additional_sort {
+                return compare_values(left.get(name), right.get(name), sort_direction);
+            }
             match sort_by {
                 "id" | "_id" | "email" | "name" | "username" | "role" => compare_option_strings(
                     string_field(lhs, sort_by),
@@ -220,5 +366,5 @@ pub(crate) fn apply_list_users_by<T>(
     let total = users.len();
     let paged = crate::query::paginate_memory(users, params.limit, params.offset);
 
-    (paged, total)
+    Ok((paged, total))
 }

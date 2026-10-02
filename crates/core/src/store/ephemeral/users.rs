@@ -73,7 +73,7 @@ impl EphemeralStore {
                 Ok(input)
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let fields = self.config.user.output_fields_many(&storage).await?;
+        let fields = self.config.user.output_memory_fields_many(&storage).await?;
         for (user, fields) in users.iter_mut().zip(fields) {
             self.assign_user_output(user, fields);
         }
@@ -126,7 +126,7 @@ impl EphemeralStore {
             .config
             .user
             .storage_fields_with_binding(fields, false, |_, field, value| {
-                self.memory_field_input(field, value)
+                self.memory_plugin_field_input(field, value)
             })
             .await?;
         for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
@@ -308,7 +308,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .config
             .user
             .storage_fields_with_binding(fields, true, |_, field, value| {
-                self.memory_field_input(field, value)
+                self.memory_plugin_field_input(field, value)
             })
             .await?;
         for (name, target) in [
@@ -559,17 +559,23 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .collect::<AuthResult<Vec<_>>>()
             })
             .await?;
-        let (users, _) =
-            crate::user_query::apply_list_users_by(users, &params, |(snapshot, _)| snapshot);
+        let (users, _) = crate::user_query::apply_list_users_by(
+            users,
+            &params,
+            &self.config.user,
+            |(snapshot, _)| (snapshot, &snapshot.additional_fields),
+        )?;
         let users = self
             .output_user_refs(users.into_iter().map(|(_, source)| source).collect())
             .await?;
         let total = self
             .raw("user", "count", |state| {
-                Ok(crate::user_query::count_users(
+                crate::user_query::count_users(
                     state.users.snapshot()?.iter(),
                     &params,
-                ))
+                    &self.config.user,
+                    |snapshot| (snapshot, &snapshot.additional_fields),
+                )
             })
             .await?;
         Ok((users, total))

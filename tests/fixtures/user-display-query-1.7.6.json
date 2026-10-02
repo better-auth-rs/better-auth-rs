@@ -1,0 +1,311 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "queries": [
+        {
+          "name": "logical-label",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-label",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "pre-transform-label",
+          "events": [],
+          "result": {
+            "users": [],
+            "total": 0
+          }
+        },
+        {
+          "name": "numeric-string",
+          "events": [
+            [
+              "output",
+              "label",
+              "gamma:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "gamma:in:out",
+                "rank": 12,
+                "highlighted": true
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "numeric-string-in",
+          "events": [
+            [
+              "output",
+              "label",
+              "beta:in"
+            ],
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "beta:in:out",
+                "rank": 3,
+                "highlighted": false
+              },
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "boolean-string",
+          "events": [
+            [
+              "output",
+              "label",
+              "gamma:in"
+            ],
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "gamma:in:out",
+                "rank": 12,
+                "highlighted": true
+              },
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "paginated-total",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 2
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "queries": [
+        {
+          "name": "logical-label",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-label",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "pre-transform-label",
+          "events": [],
+          "result": {
+            "users": [],
+            "total": 0
+          }
+        },
+        {
+          "name": "numeric-string",
+          "events": [
+            [
+              "output",
+              "label",
+              "gamma:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "gamma:in:out",
+                "rank": 12,
+                "highlighted": true
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "numeric-string-in",
+          "events": [
+            [
+              "output",
+              "label",
+              "beta:in"
+            ],
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "beta:in:out",
+                "rank": 3,
+                "highlighted": false
+              },
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "boolean-string",
+          "events": [
+            [
+              "output",
+              "label",
+              "gamma:in"
+            ],
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "gamma:in:out",
+                "rank": 12,
+                "highlighted": true
+              },
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "paginated-total",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha:in"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha:in:out",
+                "rank": 20,
+                "highlighted": true
+              }
+            ],
+            "total": 2
+          }
+        }
+      ]
+    }
+  ]
+}

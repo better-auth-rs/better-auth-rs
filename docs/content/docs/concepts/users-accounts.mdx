@@ -62,6 +62,24 @@ Plugin fields are projected from the active plugin schema. Disabling Anonymous, 
 
 Custom stores must apply `UserConfig::storage_fields` before persistence. Custom endpoints must return `AuthContext::user_view` rather than serialize storage models. `UserView::from` is an unconfigured internal conversion. Generic OAuth and OIDC pass `OAuthProfile.additional_fields` through `UserConfig::parse_provider_input` before persistence. Custom provider integrations must use the same boundary. Raw OAuth provider response data is not mapped user input.
 
+### Memory JSON and arrays
+
+The Memory adapter stores declared JSON objects, arrays, and null as JSON text after input transforms. An existing JSON string remains unchanged. Output transforms receive the stored text before JSON decoding. A valid JSON string therefore returns its decoded value. Declared string arrays and number arrays remain arrays in storage and callbacks.
+
+User snapshot and live projections retain their existing field order and date assignment. Session projections retain their typed rows and batch order. Fields that reference an ID retain their separate reference conversion before JSON output decoding. The public `UserConfig` projection helpers keep their existing adapter-independent behavior; SQL column conversion and secondary-only session caches are separate boundaries.
+
+JSON storage representation does not establish JSON query equality. The query boundary below describes the current support for declared display fields.
+
+### Query Application User Fields
+
+`UserStore::list_users` resolves declared display fields in `ListUsersParams.filter_field` and `sort_by` through their logical name or configured `field_name`. Memory reads the query snapshot's mapped values. SeaORM reads the original application model's serialized fields and retains that model through selection. Both adapters filter, sort, and page before output transforms, then perform a separate unpaged count after output succeeds. Search keeps its existing native-field behavior.
+
+String and enum fields compare stored strings. Number fields accept qualifying numeric strings, and `in` arrays convert only when every element is a qualifying numeric string. Boolean fields convert string values by comparison with `"true"`. Query binding does not run application input transforms. The selected page runs the existing output policies once; count runs no output callbacks. Numeric representation errors propagate through `AuthResult`.
+
+Adapter-specific Date, JSON, array, and reference query binding and equality remain incomplete. Logical and mapped name resolution does not establish those contracts. Null, missing, and mixed-type comparisons, unknown-field behavior, native-field aliases, and database or JavaScript locale collation also remain unresolved. The pinned Memory/SQLite capture, strict Bun comparison, and Rust contract pass seven ordinary queries per backend.
+
+Custom adapters that use `better_auth_core::user_query` must pass final `UserConfig` metadata and a raw-record accessor to `apply_list_users_by` and `count_users`. The accessor returns the native query snapshot and a separate map of mapped raw fields. Keep the raw map separate from projected `UserView` fields. Both helpers return `AuthResult`; propagate conversion errors.
+
 ## Account Entity
 
 Accounts represent authentication methods linked to a user (email/password, OAuth providers, etc.):
