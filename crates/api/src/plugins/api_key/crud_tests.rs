@@ -227,7 +227,7 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
     let (ctx, user_id, _) = context().await;
     let plugin = ApiKeyPlugin::builder()
         .key_expiration(KeyExpirationConfig {
-            min_expires_in: 0,
+            min_expires_in: 0.0,
             ..Default::default()
         })
         .build();

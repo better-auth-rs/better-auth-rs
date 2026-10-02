@@ -1,0 +1,1204 @@
+{
+  "omitted": {
+    "input": {},
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 124,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  },
+  "false": {
+    "input": {
+      "global": false
+    },
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 124,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  },
+  "true": {
+    "input": {
+      "global": true
+    },
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Partitioned",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Partitioned",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3925,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3925,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 150,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Partitioned",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Partitioned",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  },
+  "callerFalse": {
+    "input": {
+      "global": true,
+      "caller": false
+    },
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Partitioned",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 124,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Partitioned",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Partitioned",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  },
+  "callerTrue": {
+    "input": {
+      "global": false,
+      "caller": true
+    },
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Partitioned",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3925,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3925,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 150,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  },
+  "namedFalse": {
+    "input": {
+      "global": true,
+      "caller": true,
+      "named": false
+    },
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3938,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 124,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  },
+  "namedTrue": {
+    "input": {
+      "global": false,
+      "caller": false,
+      "named": true
+    },
+    "resolved": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Partitioned",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "plain": {
+      "name": "better-auth.ordinary",
+      "valueLength": 7,
+      "attributes": [
+        "Domain=.cookie-errors.test",
+        "HttpOnly",
+        "Max-Age=45",
+        "Partitioned",
+        "Path=/ordinary",
+        "SameSite=Lax",
+        "Secure"
+      ]
+    },
+    "chunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.0",
+        "valueLength": 3925,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.1",
+        "valueLength": 3925,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.2",
+        "valueLength": 150,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=45",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clearChunks": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      },
+      {
+        "name": "better-auth.ordinary.5",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "clear": [
+      {
+        "name": "better-auth.ordinary",
+        "valueLength": 0,
+        "attributes": [
+          "Domain=.cookie-errors.test",
+          "HttpOnly",
+          "Max-Age=0",
+          "Partitioned",
+          "Path=/ordinary",
+          "SameSite=Lax",
+          "Secure"
+        ]
+      }
+    ],
+    "session": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.last_used_login_method",
+          "valueLength": 5,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "Max-Age=90",
+            "Partitioned",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        },
+        {
+          "name": "better-auth.session_token",
+          "valueLength": 69,
+          "attributes": [
+            "Domain=.cookie-errors.test",
+            "HttpOnly",
+            "Max-Age=300",
+            "Partitioned",
+            "Path=/ordinary",
+            "SameSite=Lax",
+            "Secure"
+          ]
+        }
+      ]
+    }
+  }
+}

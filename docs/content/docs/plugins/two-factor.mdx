@@ -31,8 +31,8 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
         TwoFactorPlugin::with_config(TwoFactorConfig {
             issuer: Some("My App".to_string()),
             skip_verification_on_enable: false,
-            two_factor_cookie_max_age: 600,
-            trust_device_max_age: 30 * 24 * 60 * 60,
+            two_factor_cookie_max_age: 600.0,
+            trust_device_max_age: 30.0 * 24.0 * 60.0 * 60.0,
             totp_period: 30,
             totp_digits: 6,
             send_otp: None,
@@ -48,8 +48,8 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 |--------|------|---------|-------------|
 | `issuer` | `Option<String>` | `None` | Issuer name shown in authenticator apps. Falls back to `app_name`. |
 | `skip_verification_on_enable` | `bool` | `false` | Marks the user as 2FA-enabled immediately during enrollment. |
-| `two_factor_cookie_max_age` | `i64` | `600` | Lifetime of the pending 2FA cookie in seconds. |
-| `trust_device_max_age` | `i64` | `2592000` | Lifetime of the trusted-device cookie in seconds. |
+| `two_factor_cookie_max_age` | `f64` | `600.0` | Lifetime of the pending 2FA cookie in seconds, including fractions. |
+| `trust_device_max_age` | `f64` | `2592000.0` | Lifetime of the trusted-device cookie in seconds, including fractions. |
 | `totp_period` | `u64` | `30` | TOTP time step in seconds |
 | `totp_digits` | `usize` | `6` | Number of digits in TOTP code |
 | `send_otp` | `Option<Arc<dyn SendTwoFactorOtp>>` | `None` | Callback used by `/two-factor/send-otp`. |
@@ -88,6 +88,8 @@ The enrollment response contains `method: "totp"`, `totpURI`, and `backupCodes`.
 Pass `method: "otp"` with the password to enable email/SMS codes when `send_otp` is configured. This method enables 2FA immediately, rotates the session, and returns only `{ "method": "otp" }`. It does not create an authenticator secret or backup codes.
 
 A pending TOTP enrollment can be restarted. Once verified, another enable request returns `TOTP_ALREADY_ENABLED` and preserves the existing secret and backup codes. Disable 2FA before replacing a verified authenticator.
+
+The two cookie lifetime fields preserve an explicit `0.0`. Stored verification dates use millisecond precision; HTTP `Max-Age` uses whole seconds. Cookie attribute overrides follow the shared [cookie configuration](/docs/concepts/cookies) rules and do not change the stored verification lifetime. Integer assignments from earlier alpha APIs must use floating-point literals, such as `600.0`.
 
 ### Sign-In Flow with 2FA
 

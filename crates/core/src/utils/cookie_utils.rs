@@ -89,6 +89,7 @@ fn resolved_template(resolved: &ResolvedCookie) -> Cookie<'static> {
     if let Some(value) = attrs.secure {
         cookie.set_secure(value);
     }
+    cookie.set_partitioned(attrs.partitioned);
     if let Some(value) = attrs.http_only {
         cookie.set_http_only(value);
     }
@@ -131,7 +132,7 @@ pub fn create_session_cookie(token: &str, config: &AuthConfig) -> AuthResult<Str
 }
 
 /// Build a `Set-Cookie` header value for a session token using the session
-/// cookie attributes, optionally omitting `Max-Age` / `Expires` to create a
+/// cookie attributes, optionally omitting `Max-Age` to create a
 /// browser-session cookie.
 /// A supplied lifetime uses seconds, including fractional values.
 pub fn create_session_cookie_with_max_age(
@@ -209,9 +210,6 @@ fn serialize_cookie(
     }
     cookie.set_max_age(max_age.map(|age| cookie::time::Duration::seconds(age.floor() as i64)));
     cookie.set_value(value.to_owned());
-    if let Some(age) = cookie.max_age() {
-        cookie.set_expires(cookie::time::OffsetDateTime::now_utc() + age);
-    }
     Ok(render_cookie(cookie, resolved))
 }
 

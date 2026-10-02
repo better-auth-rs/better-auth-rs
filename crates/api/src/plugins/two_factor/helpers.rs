@@ -81,16 +81,27 @@ pub(super) fn otp_verification_identifier(key: &str) -> String {
 
 pub(super) fn two_factor_cookie_max_age(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> i64 {
-    ctx.get_metadata(METADATA_TWO_FACTOR_COOKIE_MAX_AGE)
-        .and_then(|value| value.as_i64())
-        .unwrap_or(DEFAULT_TWO_FACTOR_COOKIE_MAX_AGE_SECS)
+) -> f64 {
+    ctx.extensions
+        .get::<TwoFactorConfig>()
+        .map_or(DEFAULT_TWO_FACTOR_COOKIE_MAX_AGE_SECS, |config| {
+            config.two_factor_cookie_max_age
+        })
 }
 
-pub(super) fn trust_device_max_age(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> i64 {
-    ctx.get_metadata(METADATA_TRUST_DEVICE_MAX_AGE)
-        .and_then(|value| value.as_i64())
-        .unwrap_or(DEFAULT_TRUST_DEVICE_MAX_AGE_SECS)
+pub(super) fn trust_device_max_age(ctx: &AuthContext<impl better_auth_core::AuthSchema>) -> f64 {
+    ctx.extensions
+        .get::<TwoFactorConfig>()
+        .map_or(DEFAULT_TRUST_DEVICE_MAX_AGE_SECS, |config| {
+            config.trust_device_max_age
+        })
+}
+
+pub(super) fn cookie_expires_at(seconds: f64) -> AuthResult<chrono::DateTime<Utc>> {
+    better_auth_core::utils::date::from_milliseconds(
+        Utc::now().timestamp_millis() as f64 + seconds * 1000.0,
+    )
+    .ok_or_else(|| AuthError::config("Two Factor cookie expiry is out of range"))
 }
 
 pub(super) fn clear_cookie_header(
@@ -113,7 +124,8 @@ pub(super) async fn create_trust_device_cookie_header(
         &format!("{}!{}", user.id().display_string()?, identifier),
     )?;
     let value = format!("{}!{}", token, identifier);
-    let expires_at = Utc::now() + Duration::seconds(trust_device_max_age(ctx));
+    let max_age = trust_device_max_age(ctx);
+    let expires_at = cookie_expires_at(max_age)?;
     _ = ctx
         .database
         .create_verification(CreateVerification {
@@ -128,7 +140,7 @@ pub(super) async fn create_trust_device_cookie_header(
         &ctx.config,
         TRUST_DEVICE_COOKIE_SUFFIX,
         &value,
-        Some(trust_device_max_age(ctx)),
+        Some(max_age),
     )
 }
 
@@ -137,16 +149,11 @@ pub(super) fn create_signed_cookie_header(
     config: &better_auth_core::AuthConfig,
     suffix: &str,
     value: &str,
-    max_age_seconds: Option<i64>,
+    max_age_seconds: Option<f64>,
 ) -> AuthResult<String> {
     let cookie_name = related_cookie_name(config, suffix);
     let signed_value = sign_cookie_value(secret, value)?;
-    create_session_like_cookie(
-        &cookie_name,
-        &signed_value,
-        max_age_seconds.map(|value| value as f64),
-        config,
-    )
+    create_session_like_cookie(&cookie_name, &signed_value, max_age_seconds, config)
 }
 
 pub(super) fn read_signed_cookie<S: better_auth_core::AuthSchema>(

@@ -1,0 +1,413 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "omitted",
+      "operation": "ban",
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user",
+          "banned": true,
+          "banReason": "Ordinary administrative update",
+          "lifetimeMillis": null
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user",
+        "banned": true,
+        "banReason": "Ordinary administrative update",
+        "lifetimeMillis": null
+      },
+      "issuedSessions": [],
+      "responseMatchesStored": true,
+      "cookies": []
+    },
+    {
+      "name": "zero",
+      "operation": "ban",
+      "configured": 0,
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user",
+          "banned": true,
+          "banReason": "Ordinary administrative update",
+          "lifetimeMillis": null
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user",
+        "banned": true,
+        "banReason": "Ordinary administrative update",
+        "lifetimeMillis": null
+      },
+      "issuedSessions": [],
+      "responseMatchesStored": true,
+      "cookies": []
+    },
+    {
+      "name": "fractional",
+      "operation": "ban",
+      "configured": 1.5,
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user",
+          "banned": true,
+          "banReason": "Ordinary administrative update",
+          "lifetimeMillis": 1500
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user",
+        "banned": true,
+        "banReason": "Ordinary administrative update",
+        "lifetimeMillis": 1500
+      },
+      "issuedSessions": [],
+      "responseMatchesStored": true,
+      "cookies": []
+    },
+    {
+      "name": "omitted",
+      "operation": "impersonate",
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user"
+        },
+        "session": {
+          "userId": "ordinary",
+          "impersonatedBy": "admin",
+          "lifetimeMillis": 3600000
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user"
+      },
+      "issuedSessions": [
+        {
+          "userId": "ordinary",
+          "impersonatedBy": "admin",
+          "lifetimeMillis": 3600000
+        }
+      ],
+      "responseMatchesStored": true,
+      "cookies": [
+        {
+          "name": "better-auth.session_token",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.session_data",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.admin_session",
+          "valuePresent": true,
+          "attributes": {
+            "max-age": "604800",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.session_token",
+          "valuePresent": true,
+          "attributes": {
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "valuePresent": true,
+          "attributes": {
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "operation": "impersonate",
+      "configured": 0,
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user"
+        },
+        "session": {
+          "userId": "ordinary",
+          "impersonatedBy": "admin",
+          "lifetimeMillis": 3600000
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user"
+      },
+      "issuedSessions": [
+        {
+          "userId": "ordinary",
+          "impersonatedBy": "admin",
+          "lifetimeMillis": 3600000
+        }
+      ],
+      "responseMatchesStored": true,
+      "cookies": [
+        {
+          "name": "better-auth.session_token",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.session_data",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.admin_session",
+          "valuePresent": true,
+          "attributes": {
+            "max-age": "604800",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.session_token",
+          "valuePresent": true,
+          "attributes": {
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "valuePresent": true,
+          "attributes": {
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "operation": "impersonate",
+      "configured": 1.5,
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user"
+        },
+        "session": {
+          "userId": "ordinary",
+          "impersonatedBy": "admin",
+          "lifetimeMillis": 1500
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user"
+      },
+      "issuedSessions": [
+        {
+          "userId": "ordinary",
+          "impersonatedBy": "admin",
+          "lifetimeMillis": 1500
+        }
+      ],
+      "responseMatchesStored": true,
+      "cookies": [
+        {
+          "name": "better-auth.session_token",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.session_data",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "valuePresent": false,
+          "attributes": {
+            "max-age": "0",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.admin_session",
+          "valuePresent": true,
+          "attributes": {
+            "max-age": "604800",
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.session_token",
+          "valuePresent": true,
+          "attributes": {
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "valuePresent": true,
+          "attributes": {
+            "path": "/",
+            "httponly": true,
+            "samesite": "lax"
+          }
+        }
+      ]
+    },
+    {
+      "name": "request-priority",
+      "operation": "ban",
+      "configured": 1.5,
+      "requested": 2.5,
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user",
+          "banned": true,
+          "banReason": "Ordinary administrative update",
+          "lifetimeMillis": 2500
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user",
+        "banned": true,
+        "banReason": "Ordinary administrative update",
+        "lifetimeMillis": 2500
+      },
+      "issuedSessions": [],
+      "responseMatchesStored": true,
+      "cookies": []
+    },
+    {
+      "name": "request-zero",
+      "operation": "ban",
+      "configured": 1.5,
+      "requested": 0,
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary@admin-duration.test",
+          "role": "user",
+          "banned": true,
+          "banReason": "Ordinary administrative update",
+          "lifetimeMillis": 1500
+        }
+      },
+      "storedUser": {
+        "name": "Ordinary User",
+        "email": "ordinary@admin-duration.test",
+        "role": "user",
+        "banned": true,
+        "banReason": "Ordinary administrative update",
+        "lifetimeMillis": 1500
+      },
+      "issuedSessions": [],
+      "responseMatchesStored": true,
+      "cookies": []
+    }
+  ]
+}

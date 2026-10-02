@@ -1,0 +1,225 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "omitted",
+      "operation": "challenge",
+      "status": 200,
+      "body": {
+        "twoFactorRedirect": true,
+        "twoFactorMethods": [
+          "otp"
+        ]
+      },
+      "cookie": {
+        "name": "better-auth.two_factor",
+        "attributes": {
+          "max-age": "600",
+          "path": "/",
+          "httponly": true,
+          "samesite": "Lax"
+        }
+      },
+      "sender": [],
+      "records": [
+        {
+          "kind": "attempts",
+          "value": "0",
+          "lifetimeMillis": 600000
+        },
+        {
+          "kind": "challenge",
+          "value": "ordinary-user",
+          "lifetimeMillis": 600000
+        }
+      ]
+    },
+    {
+      "name": "omitted",
+      "operation": "trust",
+      "status": 200,
+      "body": {
+        "tokenPresent": true,
+        "user": {
+          "id": "ordinary-user",
+          "name": "Two Factor Duration",
+          "email": "ordinary@two-factor-duration.test",
+          "emailVerified": true,
+          "twoFactorEnabled": true
+        }
+      },
+      "cookie": {
+        "name": "better-auth.trust_device",
+        "attributes": {
+          "max-age": "2592000",
+          "path": "/",
+          "httponly": true,
+          "samesite": "Lax"
+        }
+      },
+      "sender": [
+        {
+          "userId": "ordinary-user",
+          "email": "ordinary@two-factor-duration.test",
+          "codeLength": 6,
+          "decimalCode": true
+        }
+      ],
+      "records": [
+        {
+          "kind": "trust",
+          "value": "ordinary-user",
+          "lifetimeMillis": 2592000000
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "challenge",
+      "status": 200,
+      "body": {
+        "twoFactorRedirect": true,
+        "twoFactorMethods": [
+          "otp"
+        ]
+      },
+      "cookie": {
+        "name": "better-auth.two_factor",
+        "attributes": {
+          "max-age": "0",
+          "path": "/",
+          "httponly": true,
+          "samesite": "Lax"
+        }
+      },
+      "sender": [],
+      "records": [
+        {
+          "kind": "attempts",
+          "value": "0",
+          "lifetimeMillis": 0
+        },
+        {
+          "kind": "challenge",
+          "value": "ordinary-user",
+          "lifetimeMillis": 0
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "trust",
+      "status": 200,
+      "body": {
+        "tokenPresent": true,
+        "user": {
+          "id": "ordinary-user",
+          "name": "Two Factor Duration",
+          "email": "ordinary@two-factor-duration.test",
+          "emailVerified": true,
+          "twoFactorEnabled": true
+        }
+      },
+      "cookie": {
+        "name": "better-auth.trust_device",
+        "attributes": {
+          "max-age": "0",
+          "path": "/",
+          "httponly": true,
+          "samesite": "Lax"
+        }
+      },
+      "sender": [
+        {
+          "userId": "ordinary-user",
+          "email": "ordinary@two-factor-duration.test",
+          "codeLength": 6,
+          "decimalCode": true
+        }
+      ],
+      "records": [
+        {
+          "kind": "trust",
+          "value": "ordinary-user",
+          "lifetimeMillis": 0
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "challenge",
+      "status": 200,
+      "body": {
+        "twoFactorRedirect": true,
+        "twoFactorMethods": [
+          "otp"
+        ]
+      },
+      "cookie": {
+        "name": "better-auth.two_factor",
+        "attributes": {
+          "max-age": "1",
+          "path": "/",
+          "httponly": true,
+          "samesite": "Lax"
+        }
+      },
+      "sender": [],
+      "records": [
+        {
+          "kind": "attempts",
+          "value": "0",
+          "lifetimeMillis": 1500
+        },
+        {
+          "kind": "challenge",
+          "value": "ordinary-user",
+          "lifetimeMillis": 1500
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "trust",
+      "status": 200,
+      "body": {
+        "tokenPresent": true,
+        "user": {
+          "id": "ordinary-user",
+          "name": "Two Factor Duration",
+          "email": "ordinary@two-factor-duration.test",
+          "emailVerified": true,
+          "twoFactorEnabled": true
+        }
+      },
+      "cookie": {
+        "name": "better-auth.trust_device",
+        "attributes": {
+          "max-age": "1",
+          "path": "/",
+          "httponly": true,
+          "samesite": "Lax"
+        }
+      },
+      "sender": [
+        {
+          "userId": "ordinary-user",
+          "email": "ordinary@two-factor-duration.test",
+          "codeLength": 6,
+          "decimalCode": true
+        }
+      ],
+      "records": [
+        {
+          "kind": "trust",
+          "value": "ordinary-user",
+          "lifetimeMillis": 1500
+        }
+      ]
+    }
+  ]
+}

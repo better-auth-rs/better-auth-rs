@@ -88,6 +88,20 @@ mod tests {
     }
 }
 
+pub(super) fn invitation_team_id_is_declared(config: &super::OrganizationConfig) -> bool {
+    config.teams.enabled || config.schema.invitation.fields().contains_key("teamId")
+}
+
+pub(super) fn invitation_snapshot(
+    mut invitation: better_auth_core::Invitation,
+    config: &super::OrganizationConfig,
+) -> better_auth_core::Invitation {
+    if !invitation_team_id_is_declared(config) {
+        invitation.team_id = better_auth_core::SchemaValue::Undefined;
+    }
+    invitation
+}
+
 pub(super) fn organization(
     organization: &impl AuthOrganization,
     ctx: &AuthContext<impl AuthSchema>,

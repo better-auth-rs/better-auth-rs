@@ -311,6 +311,7 @@ pub(crate) async fn invite_member_core(
             .create_invitation(draft.into_create(expires_at, user.id().typed()?)?)
             .await?
     };
+    let invitation = crate::plugins::organization::fields::invitation_snapshot(invitation, config);
     let invitation_view = InvitationView::from(&invitation);
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         request,

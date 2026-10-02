@@ -484,14 +484,14 @@ pub(crate) async fn ban_user_core(
         .or_else(|| {
             config
                 .default_ban_expires_in
-                .filter(|value| *value != 0)
-                .map(|value| value as f64)
+                .filter(|value| *value != 0.0 && !value.is_nan())
         });
     let ban_expires = seconds
         .map(|seconds| {
-            let millis = (Utc::now().timestamp_millis() as f64 + seconds * 1000.0).trunc();
-            chrono::DateTime::from_timestamp_millis(millis as i64)
-                .ok_or_else(|| AuthError::internal("Invalid ban expiration date"))
+            better_auth_core::utils::date::from_milliseconds(
+                Utc::now().timestamp_millis() as f64 + seconds * 1000.0,
+            )
+            .ok_or_else(|| AuthError::internal("Invalid ban expiration date"))
         })
         .transpose()?;
 
@@ -606,9 +606,14 @@ pub(crate) async fn impersonate_user_core(
         }
     }
 
-    let expires_at = Utc::now()
-        + Duration::try_seconds(config.impersonation_session_duration.unwrap_or(60 * 60))
-            .unwrap_or(Duration::hours(1));
+    let seconds = config
+        .impersonation_session_duration
+        .filter(|value| *value != 0.0 && !value.is_nan())
+        .unwrap_or(3600.0);
+    let expires_at = better_auth_core::utils::date::from_milliseconds(
+        Utc::now().timestamp_millis() as f64 + seconds * 1000.0,
+    )
+    .ok_or_else(|| AuthError::internal("Invalid impersonation expiration date"))?;
     let create_session = CreateSession {
         additional_fields: Default::default(),
         user_id: target.id().into_owned(),

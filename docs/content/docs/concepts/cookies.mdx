@@ -11,6 +11,8 @@ The resolver applies default attributes, `advanced.default_cookie_attributes`, c
 
 Serialization enforces `Secure` for `__Secure-` and `__Host-` names. A `__Host-` name also forces path `/` and removes the domain. Session issuance replaces the configured token-cookie `Max-Age` with the session lifetime, or omits it for a browser-session login. Cache cookies retain their own effective `Max-Age`.
 
+Set `CookieAttributes.partitioned = Some(true)` for partitioned cookies. The existing global, caller, and named-cookie precedence applies; explicit false replaces an earlier true value. Session cookies, application cookies, cache chunks, expiration headers, and LastLogin cookies retain the resolved attribute. Rust uses the cookie crate’s native partitioned support and always emits `Secure` with `Partitioned`. The Better Call serializer bundled with Better Auth 1.7.6 changes its options object after writing the Secure attribute, so that mutation timing is not reproduced. The normal compatibility contract sets `secure: true`. Telemetry and TestUtils browser-cookie exports omit partitioned metadata, matching their upstream projections.
+
 Set `advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig { enabled: Some(true), ..Default::default() })` to derive the domain from each resolved URL. An explicit domain stays fixed. Omitted or false `enabled` disables sharing, even when a domain is configured. When sharing is enabled, static initialization without a URL or explicit cross-subdomain domain fails; setting an unrelated cookie attribute domain does not satisfy that requirement. Cache chunks inherit their parent cookie attributes during writing and deletion.
 
 Use `config.auth_cookie("session_token", CookieAttributes::default())` to inspect the resolved name and attributes. Application cookies can use `context.create_auth_cookie` with their logical name and caller attributes.
@@ -102,7 +104,7 @@ config.advanced.default_cookie_attributes.same_site = Some(SameSite::None);
 
 ### Expiration
 
-The cookie expiration matches the session expiration time. When a session is created, the `Expires` attribute is set accordingly.
+Persistent session cookies use `Max-Age` from the configured session lifetime. The HTTP serializer does not derive an `Expires` attribute from `Max-Age`.
 
 ```rust
 use chrono::Duration;
@@ -116,7 +118,7 @@ config.session.expires_in = Some(Duration::hours(24 * 7));
 The session cookie is set via the `Set-Cookie` HTTP header:
 
 ```
-Set-Cookie: better-auth.session_token=session_abc123.signature; Path=/; Expires=Thu, 08 Jan 2025 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax
+Set-Cookie: better-auth.session_token=session_abc123.signature; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Lax
 ```
 
 ## Cross-Origin Usage

@@ -303,3 +303,6 @@ async fn last_login_overrides_inherited_age_and_keeps_existing_http_error_policy
         assert_eq!(actual, *expected, "{name}");
     }
 }
+
+#[path = "cookie_http_errors_tests/partitioned.rs"]
+mod partitioned;

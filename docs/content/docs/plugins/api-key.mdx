@@ -49,6 +49,14 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `config_id` | `String` | `"default"` | Name of this configuration, stored on every key it creates |
 | `references` | `ApiKeyReferences` | `User` | Whether keys belong to the signed-in user or to an organization |
 
+### Expiration Configuration
+
+`KeyExpirationConfig.default_expires_in` uses `Option<f64>` seconds. `None` and `Some(0.0)` create keys without a default expiration; `Some(1.5)` supplies a 1.5-second default. A supplied creation lifetime replaces the default. Updating a key without `expires_in` preserves its existing expiration.
+
+`min_expires_in` and `max_expires_in` use `f64` **days** and constrain supplied creation and update lifetimes. The default bounds remain `1.0` and `365.0`; configure `0.5` and `1.5` to allow half-day through one-and-a-half-day requests. These bounds do not constrain the configured default lifetime. The existing date conversion persists millisecond timestamps.
+
+This changes the three configuration fields from integer types. Update direct struct initializers to floating-point literals, such as `min_expires_in: 0.0` and `default_expires_in: Some(3600.0)`. Key verification, ownership, and usage policies are unchanged.
+
 ### Application Callbacks
 
 Each configuration accepts `Arc` implementations of `ApiKeyGenerator`, `ApiKeyGetter`, `ApiKeyValidator`, and `ApiKeyDefaultPermissions`. Register them with `custom_key_generator`, `custom_api_key_getter`, `custom_api_key_validator`, and `default_permissions_callback` respectively. The getter is synchronous; the other callbacks are async.

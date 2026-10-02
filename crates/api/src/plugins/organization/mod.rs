@@ -25,7 +25,7 @@ use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod};
 /// Data supplied when an invitation is created or resent.
 #[derive(Clone)]
 pub struct InvitationEmail {
-    /// The persisted invitation, including its current expiration.
+    /// The projected invitation, including its current expiration and declared fields.
     pub invitation: better_auth_core::wire::InvitationView,
     /// The organization receiving the invited member.
     pub organization: types::OrganizationResponse,
@@ -531,7 +531,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         };
         response?
             .map(|mut response| {
-                shape_invitation_output(req.path(), &mut response, self.config.teams.enabled)?;
+                shape_invitation_output(req.path(), &mut response, &self.config)?;
                 Ok(response)
             })
             .transpose()
@@ -541,7 +541,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
 fn shape_invitation_output(
     path: &str,
     response: &mut AuthResponse,
-    teams_enabled: bool,
+    config: &OrganizationConfig,
 ) -> AuthResult<()> {
     if response.status >= 400
         || !matches!(
@@ -560,12 +560,10 @@ fn shape_invitation_output(
     }
     let mut value: serde_json::Value = serde_json::from_slice(&response.body)?;
     let shape = |invitation: &mut serde_json::Value| {
-        if let Some(object) = invitation.as_object_mut() {
-            if teams_enabled {
-                let _ = object.entry("teamId").or_insert(serde_json::Value::Null);
-            } else {
-                let _ = object.remove("teamId");
-            }
+        if !fields::invitation_team_id_is_declared(config)
+            && let Some(object) = invitation.as_object_mut()
+        {
+            let _ = object.remove("teamId");
         }
     };
     match path {

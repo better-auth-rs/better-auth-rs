@@ -106,6 +106,8 @@ Member creation and invitation creation let additional field schemas replace bas
 
 Invitation team checks run only when teams are enabled and the supplied `teamId` is truthy. The before-create hook retains replacement values in `team_ids: SchemaValue<Vec<String>>`; `team_id: SchemaValue<String>` is the informational first-team alias. The adapter joins destination arrays after the hook, matching upstream coercion and runtime errors.
 
+Invitation responses, delivery callbacks, and the after-create hook omit `teamId` when teams are disabled and the invitation schema does not declare that field. Enabling teams or declaring an additional `teamId` field preserves its projected value, including null. This response shape does not remove the nullable column from application-owned storage.
+
 Adapter writes apply creation defaults and `on_update`, including implicit owner/default-team creation, invitation acceptance, and pending-invitation changes during team deletion. Adapter reads apply `transform.output` and `field_name` mapping once. Organization and team responses hide `returned: Some(false)` fields. Member, invitation, and dynamic-role responses retain those fields; full-organization responses hide them in their nested lists. Hooks receive the same entity visibility as the corresponding upstream adapter operation.
 
 Use `UserFieldTransform::new_async` for awaited Organization input and output callbacks. Each row retains field order; asynchronous list projections can complete out of order while results retain query order. An input error prevents the write. An ordinary output error follows the write and leaves the stored row. Compound team and invitation operations retain their transaction and compensation boundaries.

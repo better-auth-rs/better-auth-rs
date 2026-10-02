@@ -33,6 +33,9 @@ mod tests;
 #[cfg(test)]
 mod crud_tests;
 
+#[cfg(test)]
+mod expiration_tests;
+
 use handlers::*;
 use types::*;
 pub use types::{CreateKeyRequest, CreateKeyResponse, UpdateKeyRequest};
@@ -375,13 +378,13 @@ impl std::fmt::Debug for ApiKeyConfig {
 #[derive(Debug, Clone)]
 pub struct KeyExpirationConfig {
     /// Default `expiresIn` (in seconds) when none is provided. `None` = no default.
-    pub default_expires_in: Option<i64>,
+    pub default_expires_in: Option<f64>,
     /// If true, clients cannot set a custom `expiresIn`.
     pub disable_custom_expires_time: bool,
     /// Maximum `expiresIn` in **days**.
-    pub max_expires_in: i64,
+    pub max_expires_in: f64,
     /// Minimum `expiresIn` in **days**.
-    pub min_expires_in: i64,
+    pub min_expires_in: f64,
 }
 
 impl Default for KeyExpirationConfig {
@@ -389,8 +392,8 @@ impl Default for KeyExpirationConfig {
         Self {
             default_expires_in: None,
             disable_custom_expires_time: false,
-            max_expires_in: 365,
-            min_expires_in: 1,
+            max_expires_in: 365.0,
+            min_expires_in: 1.0,
         }
     }
 }
@@ -647,15 +650,15 @@ impl ApiKeyPlugin {
             }
             // expiresIn is in seconds; min/max are in days
             let days = secs / 86_400.0;
-            if days < cfg.min_expires_in as f64 {
+            if days < cfg.min_expires_in {
                 return Err(api_key_error(ApiKeyErrorCode::ExpiresInTooSmall));
             }
-            if days > cfg.max_expires_in as f64 {
+            if days > cfg.max_expires_in {
                 return Err(api_key_error(ApiKeyErrorCode::ExpiresInTooLarge));
             }
             Ok(Some(secs))
         } else {
-            Ok(cfg.default_expires_in.map(|seconds| seconds as f64))
+            Ok(cfg.default_expires_in)
         }
     }
 

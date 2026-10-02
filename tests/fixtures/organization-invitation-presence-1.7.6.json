@@ -1,0 +1,939 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "mode": "default",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "memory",
+      "mode": "teams",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "teamId": null,
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "teamId": null,
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "teamId": null,
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "teamId": null,
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "teamId": null,
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "teamId": null,
+          "status": "pending",
+          "inviterId": "owner",
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "teamId": null,
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "teamId": null,
+            "status": "pending",
+            "inviterId": "owner",
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "teamId": null,
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "memory",
+      "mode": "declared",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": null
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": null
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": null
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": null
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": null
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": null,
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": null
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": null,
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": null
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "memory",
+      "mode": "display",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": "team-display"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": "team-display"
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": "team-display"
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": "team-display"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": "team-display"
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": "team-display",
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": "team-display"
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": "team-display",
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": "team-display"
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "sqlite",
+      "mode": "default",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "sqlite",
+      "mode": "teams",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "teamId": null,
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "teamId": null,
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "teamId": null,
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "teamId": null,
+          "status": "pending",
+          "inviterId": "owner"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "teamId": null,
+              "status": "pending",
+              "inviterId": "owner"
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "teamId": null,
+          "status": "pending",
+          "inviterId": "owner",
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "teamId": null,
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "teamId": null,
+            "status": "pending",
+            "inviterId": "owner",
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "teamId": null,
+            "status": "pending",
+            "inviterId": "owner"
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "sqlite",
+      "mode": "declared",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": null
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": null
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": null
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": null
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": null
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": null,
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": null
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": null,
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": null
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    },
+    {
+      "backend": "sqlite",
+      "mode": "display",
+      "create": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": "team-display"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": "team-display"
+            }
+          ],
+          [
+            "after-create",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": "team-display"
+            }
+          ]
+        ]
+      },
+      "resend": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": "team-display"
+        },
+        "events": [
+          [
+            "sender",
+            {
+              "organizationId": "org",
+              "email": "recipient@invitation-presence.test",
+              "role": "member",
+              "status": "pending",
+              "inviterId": "owner",
+              "teamId": "team-display"
+            }
+          ]
+        ]
+      },
+      "get": {
+        "status": 200,
+        "body": {
+          "organizationId": "org",
+          "email": "recipient@invitation-presence.test",
+          "role": "member",
+          "status": "pending",
+          "inviterId": "owner",
+          "teamId": "team-display",
+          "organizationName": "Ordinary Organization",
+          "organizationSlug": "ordinary-organization",
+          "inviterEmail": "owner@invitation-presence.test"
+        }
+      },
+      "list": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": "team-display"
+          }
+        ]
+      },
+      "received": {
+        "status": 200,
+        "body": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": "team-display",
+            "organizationName": "Ordinary Organization"
+          }
+        ]
+      },
+      "full": {
+        "status": 200,
+        "invitations": [
+          {
+            "organizationId": "org",
+            "email": "recipient@invitation-presence.test",
+            "role": "member",
+            "status": "pending",
+            "inviterId": "owner",
+            "teamId": "team-display"
+          }
+        ]
+      },
+      "onePersistedInvitation": true,
+      "sameInvitation": true
+    }
+  ]
+}

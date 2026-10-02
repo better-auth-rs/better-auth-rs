@@ -97,6 +97,7 @@ impl CookieSettings {
             .unwrap_or_else(|| format!("{}.{logical_name}", self.prefix));
         let mut attributes = CookieAttributes {
             secure: Some(self.secure_prefix),
+            partitioned: None,
             http_only: Some(true),
             same_site: Some(SameSite::Lax),
             path: Some("/".to_owned()),
@@ -122,6 +123,9 @@ impl CookieSettings {
 fn overlay(target: &mut CookieAttributes, source: &CookieAttributes) {
     if let Some(value) = source.secure {
         target.secure = Some(value);
+    }
+    if let Some(value) = source.partitioned {
+        target.partitioned = Some(value);
     }
     if let Some(value) = source.http_only {
         target.http_only = Some(value);

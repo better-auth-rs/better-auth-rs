@@ -156,7 +156,7 @@ impl ApiKeyStorageFixture {
                 storage: ApiKeyStorage::SecondaryStorage,
                 enable_metadata: true,
                 key_expiration: KeyExpirationConfig {
-                    min_expires_in: 0,
+                    min_expires_in: 0.0,
                     ..Default::default()
                 },
                 ..Default::default()

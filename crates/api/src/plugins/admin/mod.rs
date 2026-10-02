@@ -64,12 +64,12 @@ pub struct AdminConfig {
     /// Default reason applied when banning a user without an explicit reason.
     #[config(default = None)]
     pub default_ban_reason: Option<String>,
-    /// Default ban duration in seconds when banning a user without an explicit duration.
+    /// Default ban duration in fractional seconds when the request has no nonzero duration.
     #[config(default = None)]
-    pub default_ban_expires_in: Option<i64>,
-    /// Custom impersonation session duration in seconds.
+    pub default_ban_expires_in: Option<f64>,
+    /// Custom impersonation session duration in fractional seconds; zero uses one hour.
     #[config(default = None)]
-    pub impersonation_session_duration: Option<i64>,
+    pub impersonation_session_duration: Option<f64>,
     /// Message surfaced to banned users.
     #[config(default = BannedUserMessage::default(), skip)]
     pub banned_user_message: BannedUserMessage,

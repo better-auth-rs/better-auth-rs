@@ -1,0 +1,117 @@
+[
+  {
+    "name": "default-omitted",
+    "keyExpiration": {},
+    "created": {
+      "name": "Desk",
+      "lifetimeMillis": null
+    },
+    "storedCreated": {
+      "name": "Desk",
+      "lifetimeMillis": null
+    },
+    "updated": {
+      "name": "Mobile",
+      "lifetimeMillis": null
+    },
+    "storedUpdated": {
+      "name": "Mobile",
+      "lifetimeMillis": null
+    }
+  },
+  {
+    "name": "default-zero",
+    "keyExpiration": {
+      "defaultExpiresIn": 0
+    },
+    "created": {
+      "name": "Desk",
+      "lifetimeMillis": null
+    },
+    "storedCreated": {
+      "name": "Desk",
+      "lifetimeMillis": null
+    },
+    "updated": {
+      "name": "Mobile",
+      "lifetimeMillis": null
+    },
+    "storedUpdated": {
+      "name": "Mobile",
+      "lifetimeMillis": null
+    }
+  },
+  {
+    "name": "default-fractional",
+    "keyExpiration": {
+      "defaultExpiresIn": 1.5
+    },
+    "created": {
+      "name": "Desk",
+      "lifetimeMillis": 1500
+    },
+    "storedCreated": {
+      "name": "Desk",
+      "lifetimeMillis": 1500
+    },
+    "updated": {
+      "name": "Mobile",
+      "lifetimeMillis": 1500
+    },
+    "storedUpdated": {
+      "name": "Mobile",
+      "lifetimeMillis": 1500
+    }
+  },
+  {
+    "name": "range-boundaries",
+    "keyExpiration": {
+      "minExpiresIn": 0.5,
+      "maxExpiresIn": 1.5
+    },
+    "createExpiresIn": 43200,
+    "updateExpiresIn": 129600,
+    "created": {
+      "name": "Desk",
+      "lifetimeMillis": 43200000
+    },
+    "storedCreated": {
+      "name": "Desk",
+      "lifetimeMillis": 43200000
+    },
+    "updated": {
+      "name": "Mobile",
+      "lifetimeMillis": 129600000
+    },
+    "storedUpdated": {
+      "name": "Mobile",
+      "lifetimeMillis": 129600000
+    }
+  },
+  {
+    "name": "range-fractional",
+    "keyExpiration": {
+      "defaultExpiresIn": 1.5,
+      "minExpiresIn": 0.5,
+      "maxExpiresIn": 1.5
+    },
+    "createExpiresIn": 86400.25,
+    "updateExpiresIn": 64800.5,
+    "created": {
+      "name": "Desk",
+      "lifetimeMillis": 86400250
+    },
+    "storedCreated": {
+      "name": "Desk",
+      "lifetimeMillis": 86400250
+    },
+    "updated": {
+      "name": "Mobile",
+      "lifetimeMillis": 64800500
+    },
+    "storedUpdated": {
+      "name": "Mobile",
+      "lifetimeMillis": 64800500
+    }
+  }
+]
