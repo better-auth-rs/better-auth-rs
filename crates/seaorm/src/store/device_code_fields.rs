@@ -1,5 +1,6 @@
 use super::SeaOrmStore;
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
+use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{
     AuthError, AuthResult, DeviceCode, SchemaValue,
     store::schema::{EntityRole, core_fields},
@@ -19,7 +20,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             P::DeviceCode::core_field_name,
         )?;
         for (name, field) in fields.fields().iter().filter(|(name, _)| *name != "scope") {
-            let storage = field.field_name.as_deref().unwrap_or(name);
+            let storage = resolve_field_name(field.field_name.as_deref(), name);
             for core in core_fields(EntityRole::DeviceCode) {
                 let column = P::DeviceCode::column(core.name)?;
                 if [name.as_str(), storage].contains(&column.as_str()) {
@@ -45,7 +46,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .await?;
         let backend = self.connection().get_database_backend();
         for (name, field) in config.fields() {
-            let storage = field.field_name.as_deref().unwrap_or(name);
+            let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = fields.get_mut(storage) {
                 *value = crate::reference_id::input_binding(
                     storage,

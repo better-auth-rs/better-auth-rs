@@ -1,5 +1,6 @@
 use super::id_filter::IdColumn;
 use crate::SeaOrmOrganizationModel;
+use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde_json::{Map, Value};
@@ -38,7 +39,7 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
         if name == "id" {
             continue;
         }
-        let storage_name = field.field_name.as_deref().unwrap_or(name);
+        let storage_name = resolve_field_name(field.field_name.as_deref(), name);
         if let Some(value) = fields.get_mut(storage_name) {
             let column = M::column(storage_name)?;
             let native_json = matches!(

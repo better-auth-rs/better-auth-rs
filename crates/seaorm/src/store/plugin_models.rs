@@ -1,4 +1,5 @@
 use crate::SeaOrmPluginModel;
+use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{AuthResult, id::IdGeneration};
 use serde::Serialize;
 use serde_json::Map;
@@ -43,7 +44,7 @@ pub(super) fn validate_field_columns<C: sea_orm::ColumnTrait>(
         if name == "id" {
             continue;
         }
-        let storage_name = field.field_name.as_deref().unwrap_or(name);
+        let storage_name = resolve_field_name(field.field_name.as_deref(), name);
         let stored_column = column(storage_name)?;
         let logical = column(name)
             .ok()

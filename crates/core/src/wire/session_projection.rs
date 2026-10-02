@@ -1,4 +1,5 @@
 use super::SessionView;
+use crate::store::schema::resolve_field_name;
 use crate::{AuthResult, AuthSession, config::SessionConfig, user_fields::UserFieldConfig};
 use serde_json::{Map, Value};
 
@@ -45,9 +46,10 @@ impl<T: AuthSession> SessionProjection<'_, T> {
         } else {
             let value = self
                 .model
-                .get(T::serialized_field_name(
-                    field.field_name.as_deref().unwrap_or(name),
-                ))
+                .get(T::serialized_field_name(resolve_field_name(
+                    field.field_name.as_deref(),
+                    name,
+                )))
                 .or_else(|| self.model.get(name))
                 .or_else(|| self.core.get(name))
                 .cloned();

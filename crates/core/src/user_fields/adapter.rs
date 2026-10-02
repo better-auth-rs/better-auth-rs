@@ -1,5 +1,6 @@
 use super::{UserConfig, UserFieldConfig, UserFieldType};
 use crate::AuthResult;
+use crate::store::schema::resolve_field_name;
 use serde_json::{Map, Value};
 
 impl UserConfig {
@@ -26,7 +27,7 @@ impl UserConfig {
     ) -> AuthResult<Map<String, Value>> {
         let mut fields = self.storage_fields(input, create).await?;
         for (name, field) in self.fields() {
-            let storage_name = field.field_name.as_ref().unwrap_or(name);
+            let storage_name = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = fields.get_mut(storage_name) {
                 *value = bind(storage_name, field, value.take())?;
             }

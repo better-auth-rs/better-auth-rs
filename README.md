@@ -13,7 +13,7 @@ Sessions use signed cookies. Response headers preserve repeated cookie writes in
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 
-Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
+Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. Ordinary additional fields use their logical name when `field_name` is omitted or empty. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
@@ -23,7 +23,7 @@ API Key expiration configuration accepts fractional seconds for its default and 
 
 Configure LINE code login with `GenericOAuthConfig::line` and read resolved provider inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Social profile fields preserve omitted and null email/verification values; callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
 
-Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page.
+Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page, including custom JWT discovery paths.
 
 The [JWT plugin](docs/content/docs/plugins/jwt.mdx) supports local and custom signing, server-only verification, and asymmetric session cookie caches. Database key selection follows the configured query limit.
 
@@ -111,7 +111,7 @@ The [organization plugin](docs/content/docs/plugins/organization.mdx) supports o
 
 Memory Serial mode applies Organization reference conversion to stored fields, queries, and internal relation keys. See [Organization field policies](docs/content/docs/plugins/organization.mdx#additional-fields) for typed storage boundaries.
 
-The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence.
+The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence. Default device codes contain ASCII letters and digits; verification links replace any existing user-code query parameter.
 
 [HTTP rate limits](docs/content/docs/reference/configuration-options.mdx#ratelimitconfig) support memory, database, secondary, and custom storage. Use `BetterAuth::call_endpoint` for trusted [native endpoint calls](docs/content/docs/concepts/plugins.mdx) with the registered plugin hooks.
 
@@ -125,7 +125,7 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
 
-Plugins can register adapter field policies for supported typed model fields and declared DeviceCode additional fields; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Direct Organization store configuration also resolves built-in field order.
+Plugins can register adapter field policies for supported typed model fields and declared DeviceCode additional fields; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Memory Device create, ordinary update, and code lookups read each additional field when its output callback runs; see [Device field policies](docs/content/docs/plugins/device-authorization.mdx#adapter-field-policies). Direct Organization store configuration also resolves built-in field order.
 
 Optional configuration fields use `Option` to distinguish omission from an explicit value. Construct social providers with a built-in constructor or `OAuthProvider::custom`. See [configuration options](docs/content/docs/reference/configuration-options.mdx) for defaults and [OAuth](docs/content/docs/plugins/oauth.mdx) for provider configuration. [Observability](docs/content/docs/concepts/observability.mdx) documents logging, tracing, opt-in telemetry, and the current alignment boundaries.
 

@@ -44,14 +44,27 @@ impl OpenApiPluginMetadata {
                     continue;
                 };
                 let methods = source.methods()?;
-                let matching: Vec<_> = routes
+                let mut matching: Vec<_> = routes
                     .iter()
                     .filter(|route| same_path(path, &route.path) && methods.contains(&route.method))
                     .collect();
+                let mut endpoint = source.clone();
+                if matching.is_empty()
+                    && let Some(operation_id) = source.metadata.operation_id.as_deref()
+                {
+                    matching = routes
+                        .iter()
+                        .filter(|route| {
+                            route.operation_id == operation_id && methods.contains(&route.method)
+                        })
+                        .collect();
+                    if let Some(route) = matching.first() {
+                        endpoint.path = Some(route.path.clone());
+                    }
+                }
                 if matching.is_empty() {
                     continue;
                 }
-                let mut endpoint = source.clone();
                 endpoint.document_method_order.retain(|method| {
                     matching
                         .iter()

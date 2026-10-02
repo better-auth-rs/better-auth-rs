@@ -180,7 +180,7 @@ pub(super) fn generate(
             let mut storage = #core_root::serde_json::Map::new();
             for (name, field) in fields.fields() {
                 if name == "id" { continue; }
-                let storage_name = field.field_name.as_deref().unwrap_or(name);
+                let storage_name = #core_root::store::schema::resolve_field_name(field.field_name.as_deref(), name);
                 let column = Self::column(storage_name)?;
                 let value = if let Some(core_name) = Self::core_field_name(&column) {
                     core.get(core_name)

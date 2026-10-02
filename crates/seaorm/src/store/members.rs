@@ -1,5 +1,6 @@
 use super::id_filter::IdColumn;
 use async_trait::async_trait;
+use better_auth_core::store::schema::resolve_field_name;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter,
@@ -52,13 +53,13 @@ fn member_column<M: SeaOrmOrganizationModel>(
         "createdAt" => "created_at",
         other => other,
     };
-    M::column(
+    M::column(resolve_field_name(
         config
             .fields()
             .get(field)
-            .and_then(|field| field.field_name.as_deref())
-            .unwrap_or(name),
-    )
+            .and_then(|field| field.field_name.as_deref()),
+        name,
+    ))
     .ok()
 }
 

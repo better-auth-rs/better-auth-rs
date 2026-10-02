@@ -2,6 +2,7 @@ use super::hooks::CommittedWrite;
 use super::rows::RowRef;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
+use crate::store::schema::resolve_field_name;
 
 impl EphemeralStore {
     async fn user_ref_by_email(&self, email: &str) -> AuthResult<Option<RowRef<UserView>>> {
@@ -63,8 +64,10 @@ impl EphemeralStore {
                     if let Some(config) = self.config.user.fields().get(name)
                         && let Some(raw) = value.json()?
                     {
-                        let _ =
-                            input.insert(config.field_name.as_deref().unwrap_or(name).into(), raw);
+                        let _ = input.insert(
+                            resolve_field_name(config.field_name.as_deref(), name).into(),
+                            raw,
+                        );
                     }
                 }
                 Ok(input)
@@ -131,7 +134,7 @@ impl EphemeralStore {
                 *target = crate::SchemaValue::from_json(
                     update
                         .additional_fields
-                        .remove(field.field_name.as_deref().unwrap_or(name)),
+                        .remove(resolve_field_name(field.field_name.as_deref(), name)),
                 );
             }
         }
@@ -314,7 +317,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         ] {
             if let Some(field) = self.config.user.fields().get(name) {
                 *target = crate::SchemaValue::from_json(
-                    fields.remove(field.field_name.as_deref().unwrap_or(name)),
+                    fields.remove(resolve_field_name(field.field_name.as_deref(), name)),
                 );
             }
         }

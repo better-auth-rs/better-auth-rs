@@ -1,4 +1,5 @@
 use super::*;
+use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 use better_auth_schema_registry::EntityRole;
@@ -581,7 +582,7 @@ impl MemberStore for EphemeralStore {
                 _ => schema.fields().get(field).map(|config| {
                     member
                         .additional_fields
-                        .get(config.field_name.as_deref().unwrap_or(field))
+                        .get(resolve_field_name(config.field_name.as_deref(), field))
                         .cloned()
                         .unwrap_or(Value::Null)
                 }),

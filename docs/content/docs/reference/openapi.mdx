@@ -47,6 +47,7 @@ Use `call_endpoint` with `EndpointInput.request` to resolve a dynamic base URL f
 - Core endpoint metadata is included even when a feature is disabled. The endpoint's handler enforces the feature setting.
 - `disabled_paths` removes matching paths from the document.
 - Configured plugins contribute their endpoint metadata and logical models. OpenAPI plugin routes and server-only endpoints are omitted.
+- `JwtPlugin::jwks_path` changes the documented JWKS path and preserves the complete operation metadata. Add the configured path to `disabled_paths` to omit the operation.
 - Physical table and column mappings do not rename logical model or field keys.
 - Additional field policies control documented properties, required fields, and read-only flags. Schema generation does not call default factories, transforms, or validators.
 - User input properties are merged into the signup and update-user request bodies. The model projection and input projection retain their separate policy precedence.

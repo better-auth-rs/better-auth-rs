@@ -1,9 +1,11 @@
 mod redemption;
 mod request;
-use base64::Engine as _;
 pub use better_auth_core::DeviceCodeOwnership;
 use chrono::{Duration, Utc};
-use rand::RngCore;
+use rand::{
+    RngCore,
+    distributions::{Alphanumeric, DistString},
+};
 pub use redemption::{
     DeviceCodeRedemptionAuthorization, DeviceCodeRedemptionResult, DeviceRedemptionFuture,
     redeem_device_code,
@@ -538,11 +540,7 @@ impl DeviceAuthorizationPlugin {
         let code = match &self.config.generate_device_code {
             Some(generator) => generator().await?,
             None => {
-                let mut bytes = vec![0; (self.config.device_code_length * 3).div_ceil(4)];
-                rand::rngs::OsRng.fill_bytes(&mut bytes);
-                let mut code = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-                code.truncate(self.config.device_code_length);
-                code
+                Alphanumeric.sample_string(&mut rand::rngs::OsRng, self.config.device_code_length)
             }
         };
         validate_generated_code(code, "device")
@@ -632,7 +630,9 @@ fn build_verification_uris(
     base_url: &str,
     user_code: &str,
 ) -> AuthResult<(String, String)> {
-    let uri = verification_uri.unwrap_or("/device");
+    let uri = verification_uri
+        .filter(|uri| !uri.is_empty())
+        .unwrap_or("/device");
     let verification_url = match Url::parse(uri) {
         Ok(url) => url,
         Err(_) => Url::parse(base_url)
@@ -644,9 +644,24 @@ fn build_verification_uris(
     };
 
     let mut verification_uri_complete = verification_url.clone();
-    let _ = verification_uri_complete
-        .query_pairs_mut()
-        .append_pair("user_code", user_code);
+    {
+        let mut pairs = verification_uri_complete.query_pairs_mut();
+        let _ = pairs.clear();
+        let mut replaced = false;
+        for (name, value) in verification_url.query_pairs() {
+            if name == "user_code" {
+                if !replaced {
+                    let _ = pairs.append_pair(&name, user_code);
+                    replaced = true;
+                }
+            } else {
+                let _ = pairs.append_pair(&name, &value);
+            }
+        }
+        if !replaced {
+            let _ = pairs.append_pair("user_code", user_code);
+        }
+    }
 
     Ok((
         verification_url.to_string(),

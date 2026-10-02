@@ -1,0 +1,394 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "default",
+      "status": 200,
+      "defaultPathPresent": true,
+      "renamedPathPresent": false,
+      "operation": {
+        "tags": [
+          "Jwt"
+        ],
+        "description": "Get the JSON Web Key Set",
+        "operationId": "getJSONWebKeySet",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON Web Key Set retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "description": "Array of public JSON Web Keys",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kid": {
+                            "type": "string",
+                            "description": "Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk"
+                          },
+                          "kty": {
+                            "type": "string",
+                            "description": "Key type (e.g., 'RSA', 'EC', 'OKP')"
+                          },
+                          "alg": {
+                            "type": "string",
+                            "description": "Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')"
+                          },
+                          "use": {
+                            "type": "string",
+                            "description": "Intended use of the public key (e.g., 'sig' for signature)",
+                            "enum": [
+                              "sig"
+                            ],
+                            "nullable": true
+                          },
+                          "n": {
+                            "type": "string",
+                            "description": "Modulus for RSA keys (base64url-encoded)",
+                            "nullable": true
+                          },
+                          "e": {
+                            "type": "string",
+                            "description": "Exponent for RSA keys (base64url-encoded)",
+                            "nullable": true
+                          },
+                          "crv": {
+                            "type": "string",
+                            "description": "Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+                            "nullable": true
+                          },
+                          "x": {
+                            "type": "string",
+                            "description": "X coordinate for elliptic curve keys (base64url-encoded)",
+                            "nullable": true
+                          },
+                          "y": {
+                            "type": "string",
+                            "description": "Y coordinate for elliptic curve keys (base64url-encoded)",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "kid",
+                          "kty",
+                          "alg"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "keys"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Not Found. The requested resource was not found."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+          }
+        }
+      }
+    },
+    {
+      "name": "renamed",
+      "status": 200,
+      "defaultPathPresent": false,
+      "renamedPathPresent": true,
+      "operation": {
+        "tags": [
+          "Jwt"
+        ],
+        "description": "Get the JSON Web Key Set",
+        "operationId": "getJSONWebKeySet",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "JSON Web Key Set retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "description": "Array of public JSON Web Keys",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kid": {
+                            "type": "string",
+                            "description": "Key ID uniquely identifying the key, corresponds to the 'id' from the stored Jwk"
+                          },
+                          "kty": {
+                            "type": "string",
+                            "description": "Key type (e.g., 'RSA', 'EC', 'OKP')"
+                          },
+                          "alg": {
+                            "type": "string",
+                            "description": "Algorithm intended for use with the key (e.g., 'EdDSA', 'RS256')"
+                          },
+                          "use": {
+                            "type": "string",
+                            "description": "Intended use of the public key (e.g., 'sig' for signature)",
+                            "enum": [
+                              "sig"
+                            ],
+                            "nullable": true
+                          },
+                          "n": {
+                            "type": "string",
+                            "description": "Modulus for RSA keys (base64url-encoded)",
+                            "nullable": true
+                          },
+                          "e": {
+                            "type": "string",
+                            "description": "Exponent for RSA keys (base64url-encoded)",
+                            "nullable": true
+                          },
+                          "crv": {
+                            "type": "string",
+                            "description": "Curve name for elliptic curve keys (e.g., 'Ed25519', 'P-256')",
+                            "nullable": true
+                          },
+                          "x": {
+                            "type": "string",
+                            "description": "X coordinate for elliptic curve keys (base64url-encoded)",
+                            "nullable": true
+                          },
+                          "y": {
+                            "type": "string",
+                            "description": "Y coordinate for elliptic curve keys (base64url-encoded)",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "kid",
+                          "kty",
+                          "alg"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "keys"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Not Found. The requested resource was not found."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+          }
+        }
+      }
+    },
+    {
+      "name": "disabled",
+      "status": 200,
+      "defaultPathPresent": false,
+      "renamedPathPresent": false,
+      "operation": null
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "operation": "create",
+      "events": [
+        [
+          "label",
+          "label-before"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-after"
+        ]
+      ],
+      "result": {
+        "label": "label-before:out",
+        "note": "note-after:out"
+      },
+      "stored": {
+        "label": "label-before",
+        "note": "note-after"
+      }
+    },
+    {
+      "backend": "memory",
+      "operation": "update",
+      "events": [
+        [
+          "label",
+          "label-updated"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-after"
+        ]
+      ],
+      "result": {
+        "label": "label-updated:out",
+        "note": "note-after:out"
+      },
+      "stored": {
+        "label": "label-updated",
+        "note": "note-after"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "operation": "create",
+      "events": [
+        [
+          "label",
+          "label-before"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-before"
+        ]
+      ],
+      "result": {
+        "label": "label-before:out",
+        "note": "note-before:out"
+      },
+      "stored": {
+        "label": "label-before",
+        "note": "note-after"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "operation": "update",
+      "events": [
+        [
+          "label",
+          "label-updated"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-before"
+        ]
+      ],
+      "result": {
+        "label": "label-updated:out",
+        "note": "note-before:out"
+      },
+      "stored": {
+        "label": "label-updated",
+        "note": "note-after"
+      }
+    }
+  ]
+}

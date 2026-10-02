@@ -1,5 +1,6 @@
 //! Application user fields at the input, storage, and public output boundaries.
 
+use crate::store::schema::resolve_field_name;
 use crate::{AuthError, AuthResult};
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
@@ -75,7 +76,7 @@ pub struct UserFieldConfig {
     pub input: Option<bool>,
     /// Include the field in public user views. Omission defaults to true.
     pub returned: Option<bool>,
-    /// Serialized application model field name.
+    /// Serialized application model field name. Omitted or empty names use the logical field name.
     pub field_name: Option<String>,
     /// Foreign-key metadata. References to `id` use the adapter's ID output conversion.
     pub references: Option<UserFieldReference>,
@@ -277,7 +278,10 @@ impl UserConfig {
                 value = transform.call(value).await?;
             }
             if let Some(value) = value {
-                let _ = output.insert(field.field_name.as_ref().unwrap_or(name).clone(), value);
+                let _ = output.insert(
+                    resolve_field_name(field.field_name.as_deref(), name).to_owned(),
+                    value,
+                );
             }
         }
         Ok(output)

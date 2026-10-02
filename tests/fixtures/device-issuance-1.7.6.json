@@ -1,0 +1,292 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "uri-omitted",
+      "configuration": {
+        "defaultDeviceCode": false
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-issuance-device",
+        "user_code": "ABCD 2345+",
+        "verification_uri": "http://device-issuance.test/device",
+        "verification_uri_complete": "http://device-issuance.test/device?user_code=ABCD+2345%2B",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    },
+    {
+      "name": "uri-empty",
+      "configuration": {
+        "defaultDeviceCode": false,
+        "verificationUri": ""
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-issuance-device",
+        "user_code": "ABCD 2345+",
+        "verification_uri": "http://device-issuance.test/device",
+        "verification_uri_complete": "http://device-issuance.test/device?user_code=ABCD+2345%2B",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    },
+    {
+      "name": "uri-replace",
+      "configuration": {
+        "defaultDeviceCode": false,
+        "verificationUri": "https://review.example.test/activate?user_code=old&lang=en&user_code=older&empty=&lang=zh&flow=ordinary%20test~#ready"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-issuance-device",
+        "user_code": "ABCD 2345+",
+        "verification_uri": "https://review.example.test/activate?user_code=old&lang=en&user_code=older&empty=&lang=zh&flow=ordinary%20test~#ready",
+        "verification_uri_complete": "https://review.example.test/activate?user_code=ABCD+2345%2B&lang=en&empty=&lang=zh&flow=ordinary+test%7E#ready",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    },
+    {
+      "name": "uri-append",
+      "configuration": {
+        "defaultDeviceCode": false,
+        "verificationUri": "/custom/verify?lang=en&lang=fr#ready"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-issuance-device",
+        "user_code": "ABCD 2345+",
+        "verification_uri": "http://device-issuance.test/custom/verify?lang=en&lang=fr#ready",
+        "verification_uri_complete": "http://device-issuance.test/custom/verify?lang=en&lang=fr&user_code=ABCD+2345%2B#ready",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    },
+    {
+      "name": "default-short",
+      "configuration": {
+        "defaultDeviceCode": true,
+        "deviceCodeLength": 1
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": {
+          "length": 1,
+          "asciiAlphanumeric": true
+        },
+        "user_code": "ABCD 2345+",
+        "verification_uri": "http://device-issuance.test/device",
+        "verification_uri_complete": "http://device-issuance.test/device?user_code=ABCD+2345%2B",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    },
+    {
+      "name": "default-length",
+      "configuration": {
+        "defaultDeviceCode": true
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": {
+          "length": 40,
+          "asciiAlphanumeric": true
+        },
+        "user_code": "ABCD 2345+",
+        "verification_uri": "http://device-issuance.test/device",
+        "verification_uri_complete": "http://device-issuance.test/device?user_code=ABCD+2345%2B",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    },
+    {
+      "name": "default-long",
+      "configuration": {
+        "defaultDeviceCode": true,
+        "deviceCodeLength": 191
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": {
+          "length": 191,
+          "asciiAlphanumeric": true
+        },
+        "user_code": "ABCD 2345+",
+        "verification_uri": "http://device-issuance.test/device",
+        "verification_uri_complete": "http://device-issuance.test/device?user_code=ABCD+2345%2B",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "persistedCodesMatch": {
+        "deviceCode": true,
+        "userCode": true
+      },
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000
+      }
+    }
+  ]
+}

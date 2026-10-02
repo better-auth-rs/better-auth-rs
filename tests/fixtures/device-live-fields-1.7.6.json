@@ -1,0 +1,109 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "selector": "deviceCode",
+      "events": [
+        [
+          "label",
+          "label-before"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-after"
+        ]
+      ],
+      "result": {
+        "label": "label-before:out",
+        "note": "note-after:out"
+      },
+      "stored": {
+        "label": "label-before",
+        "note": "note-after"
+      }
+    },
+    {
+      "backend": "memory",
+      "selector": "userCode",
+      "events": [
+        [
+          "label",
+          "label-before"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-after"
+        ]
+      ],
+      "result": {
+        "label": "label-before:out",
+        "note": "note-after:out"
+      },
+      "stored": {
+        "label": "label-before",
+        "note": "note-after"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "selector": "deviceCode",
+      "events": [
+        [
+          "label",
+          "label-before"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-before"
+        ]
+      ],
+      "result": {
+        "label": "label-before:out",
+        "note": "note-before:out"
+      },
+      "stored": {
+        "label": "label-before",
+        "note": "note-after"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "selector": "userCode",
+      "events": [
+        [
+          "label",
+          "label-before"
+        ],
+        [
+          "note-write",
+          "note-after"
+        ],
+        [
+          "note",
+          "note-before"
+        ]
+      ],
+      "result": {
+        "label": "label-before:out",
+        "note": "note-before:out"
+      },
+      "stored": {
+        "label": "label-before",
+        "note": "note-after"
+      }
+    }
+  ]
+}

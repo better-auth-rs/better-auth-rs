@@ -1,3 +1,4 @@
+use crate::store::schema::resolve_field_name;
 use crate::{AuthResult, entity::AuthUser, plugin::MetadataMap, wire::UserView};
 use serde_json::{Map, Value, json};
 
@@ -230,7 +231,7 @@ impl UserView {
                         let value = model
                             .as_ref()
                             .and_then(|model| {
-                                model.get(field.field_name.as_deref().unwrap_or(name))
+                                model.get(resolve_field_name(field.field_name.as_deref(), name))
                             })
                             .cloned()
                             .or_else(|| match (name, &field.field_name) {

@@ -1,5 +1,6 @@
 //! Bridge configured username fields to the application-owned typed user record.
 
+use crate::store::schema::resolve_field_name;
 use serde_json::{Map, Value};
 
 use super::UserConfig;
@@ -164,7 +165,7 @@ impl UserConfig {
             return Ok(None);
         };
         fields
-            .get(config.field_name.as_deref().unwrap_or(name))
+            .get(resolve_field_name(config.field_name.as_deref(), name))
             .cloned()
             .map(serde_json::from_value)
             .transpose()

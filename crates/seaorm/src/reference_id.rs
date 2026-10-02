@@ -1,5 +1,6 @@
 //! Bind declared ID references through the configured generation policy and storage type.
 
+use better_auth_core::store::schema::resolve_field_name;
 use sea_orm::sea_query::{ArrayType, ColumnType, Nullable, Value, ValueType, ValueTypeErr};
 use sea_orm::{ColIdx, QueryResult, TryGetError, TryGetable};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -42,7 +43,7 @@ pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
         let column = column(name)?;
         let configured = config.and_then(|config| {
             config.fields().iter().find_map(|(logical, field)| {
-                (field.field_name.as_deref().unwrap_or(logical) == name).then_some(field)
+                (resolve_field_name(field.field_name.as_deref(), logical) == name).then_some(field)
             })
         });
         if name == "id"
@@ -95,7 +96,7 @@ pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
         if name == "id" || !field.references_id() {
             continue;
         }
-        let column = column(field.field_name.as_deref().unwrap_or(name))?;
+        let column = column(resolve_field_name(field.field_name.as_deref(), name))?;
         if let sea_orm::ActiveValue::Set(value) = active.get(column) {
             use sea_orm::ColumnTrait;
             let text_column = matches!(

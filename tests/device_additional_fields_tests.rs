@@ -2,8 +2,14 @@
 
 #[path = "support/device_field_contract.rs"]
 mod contract;
+#[path = "device_additional_fields_tests/empty_field_name.rs"]
+mod empty_field_name;
 #[path = "support/device_fields.rs"]
 mod fixture;
+#[path = "device_additional_fields_tests/live_reads.rs"]
+mod live_reads;
+#[path = "device_additional_fields_tests/live_writes.rs"]
+mod live_writes;
 
 use better_auth::{
     __private_core::{

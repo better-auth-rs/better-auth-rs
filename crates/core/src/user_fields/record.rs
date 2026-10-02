@@ -1,4 +1,5 @@
 use super::{UserConfig, UserFieldConfig, UserFieldReference, UserFieldType};
+use crate::store::schema::resolve_field_name;
 use crate::{AuthResult, SchemaValue};
 use serde_json::{Map, Value};
 use std::sync::Arc;
@@ -224,10 +225,12 @@ impl UserConfig {
         if name == "id" {
             return name;
         }
-        self.fields()
-            .get(name)
-            .and_then(|field| field.field_name.as_deref())
-            .unwrap_or(name)
+        resolve_field_name(
+            self.fields()
+                .get(name)
+                .and_then(|field| field.field_name.as_deref()),
+            name,
+        )
     }
 
     /// Project a raw adapter record without retaining unmapped storage field names.
@@ -337,7 +340,7 @@ impl UserConfig {
             if name == "id" {
                 continue;
             }
-            let storage = field.field_name.as_deref().unwrap_or(name);
+            let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = transformed.get(storage) {
                 let _ = output.insert(storage.to_owned(), bind(storage, field, value.clone())?);
             }
@@ -452,7 +455,7 @@ async fn project_organization_field(
         return Ok(());
     }
     let value = storage
-        .get(field.field_name.as_deref().unwrap_or(name))
+        .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned();
     super::organization::assign_output(
         output,
@@ -493,7 +496,7 @@ async fn project_adapter_field(
     }
     let value = record
         .storage
-        .get(field.field_name.as_deref().unwrap_or(name))
+        .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned();
     let value =
         project_adapter_value(value, field, supports_native_json, supports_native_dates).await?;

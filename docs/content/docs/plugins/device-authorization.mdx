@@ -16,6 +16,10 @@ let plugin = DeviceAuthorizationPlugin::new()
 
 Application generators return `AuthResult<String>`. Each attempt awaits the device-code generator, then the user-code generator, before persistence. A callback error stops the request. Codes may contain up to 191 Unicode scalar values; custom user codes retain their exact case and punctuation. The upstream contract permits an explicitly empty generated code.
 
+The default device-code generator uses ASCII letters and digits. Its default length is 40; configured lengths range from 1 to 191. Custom generators retain their existing string contract.
+
+An omitted or empty `verification_uri` selects `/device`. The complete verification URI replaces the first existing `user_code` query parameter and removes later duplicates, or appends the parameter when absent. Other query pairs retain their order, and the fragment remains unchanged.
+
 The plugin retries a unique-constraint collision at most three times. Each retry generates both codes again. Other persistence errors propagate. Client validation and `on_device_auth_request` run once before generation.
 
 The generator methods now accept asynchronous closures. Change a synchronous closure from `|| value` to `|| async { Ok(value) }`. Keep application-owned admission policy in `validate_client`; a valid device token does not establish machine inventory identity.
@@ -40,6 +44,8 @@ The existing `scope` string policy remains available. The policy cannot replace 
 `CreateDeviceCode.scope` and `UpdateDeviceCode.scope` use `SchemaValue<Option<String>>`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a supplied string. Migrate an old absent create scope to `Default::default()`; append `.into()` to an old supplied `Some(value)`. An omitted update can still receive `on_update`. Explicit null reaches the input transform as null. Memory retains omitted fields, while SQL nullable columns read back as null.
 
 Create, ordinary update, both code lookups, and consumption project scope and declared additional fields. Conditional update and claim operations also await the successful row's output callback before returning their boolean result. Input failure prevents the write. Output failure propagates after persistence. A condition that matches no row returns false without an output callback. Input callbacks run outside storage locks; the existing atomic write conditions remain part of the write.
+
+Memory create, ordinary update, and code lookups read each declared additional field immediately before that field's output callback. If an earlier callback updates a later display field through another store view, the later callback observes the stored update. SeaORM retains the database result snapshot for these operations. Both adapters retain the original typed code, owner, state, and scope snapshot; additional-field projection cannot replace those bindings. Conditional update, claim, and consumption retain their existing output snapshots.
 
 ## Server-only redemption
 

@@ -1,5 +1,6 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
+use better_auth_core::store::schema::resolve_field_name;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
@@ -189,7 +190,7 @@ where
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
             if let Some(field) = self.config().user.fields().get(key) {
                 *target = better_auth_core::SchemaValue::from_json(
-                    fields.remove(field.field_name.as_deref().unwrap_or(key)),
+                    fields.remove(resolve_field_name(field.field_name.as_deref(), key)),
                 );
             }
         }
@@ -346,7 +347,7 @@ where
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
             if let Some(field) = self.config().user.fields().get(key) {
                 *target = better_auth_core::SchemaValue::from_json(
-                    fields.remove(field.field_name.as_deref().unwrap_or(key)),
+                    fields.remove(resolve_field_name(field.field_name.as_deref(), key)),
                 );
             }
         }

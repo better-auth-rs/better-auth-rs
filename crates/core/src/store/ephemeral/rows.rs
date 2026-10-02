@@ -18,6 +18,10 @@ impl<T> RowRef<T> {
     pub(super) fn read<R>(&self, read: impl FnOnce(&T) -> AuthResult<R>) -> AuthResult<R> {
         read(&*lock(&self.0)?)
     }
+
+    pub(super) fn write<R>(&self, write: impl FnOnce(&mut T) -> AuthResult<R>) -> AuthResult<R> {
+        write(&mut *lock(&self.0)?)
+    }
 }
 impl<T> Default for Rows<T> {
     fn default() -> Self {
@@ -52,7 +56,12 @@ impl<T: Clone> Rows<T> {
     }
 
     pub(super) fn push(&mut self, row: T) {
-        self.0.push(Arc::new(Mutex::new(row)));
+        let _ = self.push_ref(row);
+    }
+    pub(super) fn push_ref(&mut self, row: T) -> RowRef<T> {
+        let row = Arc::new(Mutex::new(row));
+        self.0.push(row.clone());
+        RowRef(row)
     }
     pub(super) fn len(&self) -> usize {
         self.0.len()

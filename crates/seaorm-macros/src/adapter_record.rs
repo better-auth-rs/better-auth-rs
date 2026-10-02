@@ -158,7 +158,7 @@ pub(super) fn generate(
                 let mut storage = #core::serde_json::Map::new();
                 for (name, field) in config.fields() {
                     if name == "id" { continue; }
-                    let name = field.field_name.as_deref().unwrap_or(name);
+                    let name = #core::store::schema::resolve_field_name(field.field_name.as_deref(), name);
                     let value = match Self::field_column(name)? { #(#values)* };
                     let _ = storage.insert(name.to_owned(), value);
                 }

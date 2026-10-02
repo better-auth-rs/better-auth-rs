@@ -1,4 +1,5 @@
 use super::*;
+use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 use better_auth_schema_registry::{EntityRole, core_fields};
@@ -186,7 +187,7 @@ impl PreparedOrganizationFields {
             if name == "id" {
                 continue;
             }
-            let storage_name = field.field_name.as_ref().unwrap_or(name);
+            let storage_name = resolve_field_name(field.field_name.as_deref(), name);
             if core_names.contains(name) {
                 if let Some(value) = fields.remove(storage_name) {
                     let _ = record.insert(name.clone(), value);
@@ -194,7 +195,7 @@ impl PreparedOrganizationFields {
                     let _ = record.insert(name.clone(), Value::Null);
                 }
             } else if self.create {
-                let _ = fields.entry(storage_name.clone()).or_insert(Value::Null);
+                let _ = fields.entry(storage_name).or_insert(Value::Null);
             }
         }
         record.extend(fields);
@@ -244,7 +245,7 @@ fn record_fields<T: MemoryOrganizationRecord>(
     for (name, field) in schema.fields() {
         if let Some(value) = core.get(name) {
             let _ = storage.insert(
-                field.field_name.as_ref().unwrap_or(name).clone(),
+                resolve_field_name(field.field_name.as_deref(), name).to_owned(),
                 value.clone(),
             );
         }
@@ -304,7 +305,9 @@ impl EphemeralStore {
             if name == "id" {
                 continue;
             }
-            if let Some(value) = fields.get_mut(field.field_name.as_deref().unwrap_or(name)) {
+            if let Some(value) =
+                fields.get_mut(resolve_field_name(field.field_name.as_deref(), name))
+            {
                 *value = self.memory_field_input(field, std::mem::take(value))?;
             }
         }
@@ -410,7 +413,7 @@ impl EphemeralStore {
                 source.read(|row| {
                     let (_, storage) = record_fields(role, row, &schema)?;
                     let key = if configured {
-                        field.field_name.as_deref().unwrap_or(name)
+                        resolve_field_name(field.field_name.as_deref(), name)
                     } else {
                         name
                     };

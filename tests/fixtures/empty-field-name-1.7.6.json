@@ -1,0 +1,63 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "createdByEmpty": {
+        "hasLabel": true,
+        "label": "label-created"
+      },
+      "readByOmitted": {
+        "hasLabel": true,
+        "label": "label-created"
+      },
+      "updatedByOmitted": {
+        "hasLabel": true,
+        "label": "label-updated"
+      },
+      "readByEmpty": {
+        "hasLabel": true,
+        "label": "label-updated"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "createdByEmpty": {
+        "hasLabel": true,
+        "label": "label-created"
+      },
+      "readByOmitted": {
+        "hasLabel": true,
+        "label": "label-created"
+      },
+      "updatedByOmitted": {
+        "hasLabel": true,
+        "label": "label-updated"
+      },
+      "readByEmpty": {
+        "hasLabel": true,
+        "label": "label-updated"
+      }
+    }
+  ],
+  "schemas": [
+    {
+      "view": "empty",
+      "columns": [
+        "label"
+      ]
+    },
+    {
+      "view": "omitted",
+      "columns": [
+        "label"
+      ]
+    },
+    {
+      "view": "space",
+      "columns": [
+        " "
+      ]
+    }
+  ]
+}

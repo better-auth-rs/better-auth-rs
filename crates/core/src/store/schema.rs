@@ -3,7 +3,9 @@
 mod check;
 mod diff;
 
-pub use better_auth_schema_registry::{EntityRole, core_fields, plugin_schemas};
+pub use better_auth_schema_registry::{
+    EntityRole, core_fields, plugin_schemas, resolve_field_name,
+};
 pub use check::{SchemaCheck, SchemaCheckError, SchemaInspector, SchemaValidation};
 pub use diff::{SchemaColumn, SchemaFinding, SchemaMismatch, SchemaTable, StoredSchemaTable, diff};
 

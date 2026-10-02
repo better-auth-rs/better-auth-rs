@@ -2,6 +2,7 @@ use crate::{
     SeaOrmAccountModel, SeaOrmOrganizationModel, SeaOrmPluginModel, SeaOrmSessionModel,
     SeaOrmUserModel, SeaOrmVerificationModel,
 };
+use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{
     AuthResult, AuthSchema, AuthSession, AuthUser,
     organization_fields::OrganizationFields,
@@ -55,7 +56,7 @@ fn columns<C: ColumnTrait>(
         if name == "id" {
             continue;
         }
-        let name = column(field.field_name.as_deref().unwrap_or(name))?
+        let name = column(resolve_field_name(field.field_name.as_deref(), name))?
             .as_str()
             .to_owned();
         if !names.contains(&name) {

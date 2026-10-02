@@ -1,8 +1,12 @@
+use better_auth_schema_registry::resolve_field_name;
 use std::collections::{BTreeMap, BTreeSet};
 
 use better_auth_schema_registry::{EntityRole, ExtraEntitySchema, FieldDef};
 use heck::{ToLowerCamelCase, ToSnakeCase};
 use serde::Deserialize;
+
+#[cfg(test)]
+mod empty_field_name_tests;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub(crate) enum IdGeneration {
@@ -307,7 +311,7 @@ impl Entity {
                             return Err("DeviceCode scope requires its ordinary string column without reference or field-name replacement".into());
                         }
                     } else {
-                        let storage = field.field_name.as_deref().unwrap_or(name);
+                        let storage = resolve_field_name(field.field_name.as_deref(), name);
                         if entity
                             .fields
                             .iter()
@@ -348,7 +352,7 @@ impl Entity {
                 } else {
                     format!("Option<{ty}>")
                 };
-                let column = field.field_name.as_ref().unwrap_or(name).clone();
+                let column = resolve_field_name(field.field_name.as_deref(), name).to_owned();
                 entity.fields.push(Field {
                     ident,
                     logical_name: name.clone(),
@@ -427,10 +431,11 @@ impl Field {
         };
         self.ty = syn::parse_str(&kind)
             .map_err(|error| format!("invalid built-in field type: {error}"))?;
-        self.column = config
-            .field_name
-            .clone()
-            .unwrap_or_else(|| definition.column_name.unwrap_or(definition.name).to_owned());
+        self.column = resolve_field_name(
+            config.field_name.as_deref(),
+            definition.column_name.unwrap_or(definition.name),
+        )
+        .to_owned();
         self.serialized = Some(self.column.clone());
         self.unique = Some(config.unique);
         self.attributes = Some(config.clone());

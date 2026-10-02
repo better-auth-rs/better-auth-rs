@@ -156,7 +156,7 @@ pub(super) fn generate(
             fn record_fields(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<#core_root::user_fields::AdapterRecord> {
                 let mut storage = #core_root::serde_json::Map::new();
                 for (name, field) in fields.fields() {
-                    let name = field.field_name.as_deref().unwrap_or(name);
+                    let name = #core_root::store::schema::resolve_field_name(field.field_name.as_deref(), name);
                     let value = match Self::column(name)? { #(#values)* };
                     let _ = storage.insert(name.to_owned(), value);
                 }

@@ -4,6 +4,13 @@
 //! and the CLI (for code generation). This is the single source of truth
 //! for which fields belong to core vs which are plugin-provided.
 
+/// Resolve an omitted or empty configured field name without changing the declaration.
+pub fn resolve_field_name<'a>(configured: Option<&'a str>, fallback: &'a str) -> &'a str {
+    configured
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EntityRole {
     User,

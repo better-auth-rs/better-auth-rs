@@ -1,6 +1,7 @@
 use super::hooks::CommittedWrite;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
+use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 use serde_json::Map;
@@ -41,7 +42,7 @@ impl EphemeralStore {
             |(session, storage), name, field| {
                 Box::pin(async move {
                     let value = storage
-                        .get(field.field_name.as_deref().unwrap_or(name))
+                        .get(resolve_field_name(field.field_name.as_deref(), name))
                         .or_else(|| storage.get(name))
                         .cloned();
                     if let Some(value) = field.adapter_output(value, true).await? {

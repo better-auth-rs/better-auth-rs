@@ -90,26 +90,39 @@ impl ModelFields {
         let output = fields
             .project_adapter_records(records, supports_native_json, true)
             .await?;
-        for (row, mut output) in rows.iter_mut().zip(output) {
-            if fields.fields().contains_key("scope") {
-                row.scope = output
-                    .shift_remove("scope")
-                    .map(|value| value.json())
-                    .transpose()?
-                    .flatten()
-                    .map(serde_json::from_value)
-                    .transpose()?
-                    .map(SchemaValue::Typed)
-                    .unwrap_or_default();
-            }
-            row.additional_fields = output
-                .into_iter()
-                .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-                .collect::<AuthResult<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect();
+        for (row, output) in rows.iter_mut().zip(output) {
+            self.assign_device_code_output(row, output)?;
         }
         Ok(rows)
+    }
+
+    pub(crate) fn assign_device_code_output(
+        &self,
+        row: &mut DeviceCode,
+        mut output: indexmap::IndexMap<String, SchemaValue<Value>>,
+    ) -> AuthResult<()> {
+        if self
+            .fields(EntityRole::DeviceCode)
+            .fields()
+            .contains_key("scope")
+        {
+            row.scope = output
+                .shift_remove("scope")
+                .map(|value| value.json())
+                .transpose()?
+                .flatten()
+                .map(serde_json::from_value)
+                .transpose()?
+                .map(SchemaValue::Typed)
+                .unwrap_or_default();
+        }
+        row.additional_fields = output
+            .into_iter()
+            .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
+            .collect::<AuthResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(())
     }
 }

@@ -4,6 +4,7 @@ use super::rows::RowRef;
 use super::*;
 use crate::SchemaValue;
 use crate::session::SessionData;
+use crate::store::schema::resolve_field_name;
 use crate::store::{AccountOwner, UserAccounts};
 use crate::user_fields::{UserFieldConfig, project_adapter_value, project_source_fields_then};
 
@@ -47,7 +48,7 @@ impl EphemeralStore {
                     Ok(if matches!(name, "name" | "image") {
                         value
                     } else {
-                        let key = field.field_name.as_deref().unwrap_or(name);
+                        let key = resolve_field_name(field.field_name.as_deref(), name);
                         user.additional_fields
                             .get(key)
                             .cloned()
