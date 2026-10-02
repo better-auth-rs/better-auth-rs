@@ -60,5 +60,5 @@ cargo clippy --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --
 cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml
 if [[ -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
   cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml tests::ids::live_postgres_generated_ids -- --ignored --exact
-  cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests live_postgres -- --ignored
+  cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test default_find_many_limit_tests live_postgres -- --ignored
 fi

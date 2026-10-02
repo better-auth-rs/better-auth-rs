@@ -146,6 +146,28 @@ async fn check_limit<S: AuthSchema>(
     Ok(())
 }
 
+fn config_with_projection_counter(
+    limit: Option<f64>,
+    projections: Arc<AtomicUsize>,
+) -> Arc<AuthConfig> {
+    let mut config = AuthConfig::default();
+    config.advanced.database.default_find_many_limit = limit;
+    let _ = config.account.additional_fields.insert(
+        "providerId".into(),
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    let _ = projections.fetch_add(1, Ordering::SeqCst);
+                    Ok(value)
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    Arc::new(config)
+}
+
 #[tokio::test]
 async fn default_limits_apply_before_projection_and_cap_snapshots_without_capping_writes()
 -> AuthResult<()> {
@@ -161,24 +183,8 @@ async fn default_limits_apply_before_projection_and_cap_snapshots_without_cappin
             (Some(f64::NEG_INFINITY), 0, None),
         ] {
             let projections = Arc::new(AtomicUsize::new(0));
-            let capture = projections.clone();
-            let mut config = AuthConfig::default();
-            config.advanced.database.default_find_many_limit = limit;
-            let _ = config.account.additional_fields.insert(
-                "providerId".into(),
-                UserFieldConfig {
-                    transform: Some(FieldTransforms {
-                        output: Some(UserFieldTransform::new(move |value| {
-                            let _ = capture.fetch_add(1, Ordering::SeqCst);
-                            Ok(value)
-                        })),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            );
+            let config = config_with_projection_counter(limit, projections.clone());
             let hooks = AccountDeletes::default();
-            let config = Arc::new(config);
             if sqlite {
                 let database = Database::connect("sqlite::memory:")
                     .await
@@ -199,6 +205,45 @@ async fn default_limits_apply_before_projection_and_cap_snapshots_without_cappin
             }
         }
     }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "Requires BETTER_AUTH_TEST_POSTGRES_URL and permission to create isolated test schemas"]
+async fn live_postgres_integer_limits_preserve_projections_and_uncapped_writes()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use better_auth_seaorm::sea_orm::{ConnectOptions, ConnectionTrait};
+
+    let mut options = ConnectOptions::new(std::env::var("BETTER_AUTH_TEST_POSTGRES_URL")?);
+    let _ = options.max_connections(1).sqlx_logging(false);
+    let database = Database::connect(options).await?;
+    let schema = format!("ba_default_limit_{}", uuid::Uuid::new_v4().simple());
+    let _ = database
+        .execute_unprepared(&format!("CREATE SCHEMA {schema}"))
+        .await?;
+    let worker = database.clone();
+    let worker_schema = schema.clone();
+    let result = tokio::spawn(async move {
+        let _ = worker
+            .execute_unprepared(&format!("SET search_path TO {worker_schema}"))
+            .await?;
+        migrator::run_migrations(&worker).await?;
+        for (limit, count) in [(None, 4), (Some(0.0), 0), (Some(1.0), 1), (Some(8.0), 4)] {
+            let projections = Arc::new(AtomicUsize::new(0));
+            let config = config_with_projection_counter(limit, projections.clone());
+            let hooks = AccountDeletes::default();
+            let store = SeaOrmStore::<BundledSchema>::new((*config).clone(), worker.clone())
+                .with_runtime(config, vec![Arc::new(hooks.clone())], Default::default())?;
+            check_limit(store, Some(count), projections, hooks).await?;
+        }
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+    })
+    .await;
+    let _ = database
+        .execute_unprepared(&format!("DROP SCHEMA {schema} CASCADE"))
+        .await?;
+    database.close().await?;
+    result??;
     Ok(())
 }
 
