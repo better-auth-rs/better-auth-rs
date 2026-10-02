@@ -450,19 +450,19 @@ async fn async_serial_creates_allocate_ids_at_insert_after_callbacks() -> AuthRe
     let (first, second) = tokio::join!(
         store.create_team(CreateTeam {
             name: "first".into(),
-            organization_id: "organization".into(),
+            organization_id: "1".into(),
             ..Default::default()
         }),
         store.create_team(CreateTeam {
             name: "second".into(),
-            organization_id: "organization".into(),
+            organization_id: "1".into(),
             ..Default::default()
         }),
     );
     let mut ids = [first?.id.typed()?.clone(), second?.id.typed()?.clone()];
     ids.sort();
     assert_eq!(ids, ["1", "2"]);
-    assert_eq!(store.count_organization_teams("organization").await?, 2);
+    assert_eq!(store.count_organization_teams("1").await?, 2);
     Ok(())
 }
 

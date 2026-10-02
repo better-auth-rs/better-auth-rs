@@ -142,7 +142,9 @@ For TS compatibility, Rust keeps backup-code retrieval as a server-only capabili
 - **TOTP and backup-code challenges** allow five failed attempts before the challenge is invalidated
 - **Account lockout** blocks sign-in factor verification for 15 minutes after 10 consecutive failures across challenges; successful verification clears the counter. As in Better Auth 1.7.6, the account must have an authenticator record. OTP-only enrollment uses the per-code attempt limit.
 
-`AccountLockout.duration_seconds` accepts `f64` seconds, including fractions, and defaults to `900.0`. Explicit zero is preserved. Date conversion truncates to JavaScript millisecond precision and returns a configuration error for non-finite or unrepresentable dates. Rust still reads the clock before calling the counter store operation; Better Auth 1.7.6 reads the clock after the first increment reaches the threshold. This numeric configuration support does not establish equivalent counter timing or arbitrary numeric behavior. `max_failed_attempts` remains an integer.
+`AccountLockout.duration_seconds` accepts `f64` seconds, including fractions, and defaults to `900.0`. Explicit zero is preserved. The deadline clock is read after the first counter increment completes and reaches the threshold, as in Better Auth 1.7.6. Date conversion truncates to JavaScript millisecond precision and returns a configuration error for non-finite or unrepresentable dates. Such an error retains the recorded failure and prevents the lock update. `max_failed_attempts` remains an integer; arbitrary numeric behavior is outside this typed contract.
+
+`TwoFactorStore::record_two_factor_failure` accepts a borrowed, fallible deadline closure. Store implementations must invoke the closure once after the successful increment reaches the threshold, then perform the existing guarded lock update. Store implementations must propagate the original callback error. Replace a fixed deadline argument with `&|| Ok(deadline)` when migrating a direct store caller.
 
 ## Errors
 

@@ -1034,12 +1034,13 @@ pub trait TwoFactorStore: Send + Sync {
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool>;
-    /// Atomically count a failed verification and lock the account once the budget is spent.
+    /// Atomically count a failed verification, then apply the lock if the budget is spent.
+    /// Invoke `locked_until` once after the increment reaches `max_attempts`, before the guarded lock update.
     async fn record_two_factor_failure(
         &self,
         id: &crate::SchemaValue<String>,
         max_attempts: i64,
-        locked_until: chrono::DateTime<chrono::Utc>,
+        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<chrono::Utc>> + Send + Sync),
     ) -> AuthResult<()>;
     /// Reset failed verifications, optionally requiring an expired lock.
     async fn reset_two_factor_failures(

@@ -44,11 +44,9 @@ pub(super) async fn record_failure(
 ) -> AuthResult<()> {
     if state.is_sign_in() && config.enabled {
         ctx.database
-            .record_two_factor_failure(
-                &factor.id,
-                config.max_failed_attempts,
-                config.locked_until(Utc::now())?,
-            )
+            .record_two_factor_failure(&factor.id, config.max_failed_attempts, &|| {
+                config.locked_until(Utc::now())
+            })
             .await?;
     }
     Ok(())

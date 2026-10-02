@@ -13,6 +13,13 @@ impl EphemeralStore {
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
+        let invitation_id = self
+            .config
+            .advanced
+            .database
+            .generate_id()
+            .coerce_id(invitation_id)?;
+        let invitation_id = invitation_id.as_ref();
         let patch = self
             .prepare_record_patch(
                 EntityRole::Invitation,
@@ -47,10 +54,11 @@ impl EphemeralStore {
     }
 
     async fn restore_pending_invitation(&self, id: &str) -> AuthResult<()> {
+        let id = self.organization_query(EntityRole::Invitation, "id", json!(id))?;
         if !self
             .lock()?
             .invitations
-            .get(id)?
+            .get(&id)?
             .is_some_and(|row| row.status == InvitationStatus::Accepted)
         {
             return Ok(());
@@ -68,7 +76,7 @@ impl EphemeralStore {
             let state = self.lock()?;
             if let Some(mut row) = state
                 .invitations
-                .get_mut(id)?
+                .get_mut(&id)?
                 .filter(|row| row.status == InvitationStatus::Accepted)
             {
                 *row = patch.apply(row.clone())?;
@@ -91,6 +99,24 @@ impl EphemeralStore {
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Option<SessionView>)> {
+        let member_user = self.organization_query(EntityRole::Member, "userId", json!(user_id))?;
+        let member_org = self.organization_reference_query(
+            EntityRole::Member,
+            "organizationId",
+            &invitation.organization_id,
+        )?;
+        let team_org = self.organization_reference_query(
+            EntityRole::Team,
+            "organizationId",
+            &invitation.organization_id,
+        )?;
+        let team_user = self
+            .config
+            .advanced
+            .database
+            .generate_id()
+            .coerce_id(user_id)?;
+        let team_user = team_user.as_ref();
         let team_ids: Vec<_> = invitation
             .team_id
             .typed()?
@@ -106,14 +132,14 @@ impl EphemeralStore {
             let team = self
                 .lock()?
                 .teams
-                .get(team_id.as_str())?
-                .filter(|team| team.organization_id == invitation.organization_id)
+                .get(&self.organization_query(EntityRole::Team, "id", json!(team_id))?)?
+                .filter(|team| team.organization_id == team_org)
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             let limit = maximum.maximum(team_id).await?;
             let members = self.lock()?.team_members.snapshot()?;
             if !members
                 .iter()
-                .any(|row| row.team_id == team.id && row.user_id == user_id)
+                .any(|row| row.team_id == team.id && row.user_id == team_user)
                 && limit.is_some_and(|limit| {
                     members.iter().filter(|row| row.team_id == team.id).count() >= limit
                 })
@@ -137,9 +163,12 @@ impl EphemeralStore {
                     "Invitation changed while capacity was being resolved",
                 ));
             }
-            if state.members.snapshot()?.iter().any(|row| {
-                row.organization_id == invitation.organization_id && row.user_id == user_id
-            }) {
+            if state
+                .members
+                .snapshot()?
+                .iter()
+                .any(|row| row.organization_id == member_org && row.user_id == member_user)
+            {
                 return Err(AuthError::bad_request("User is already a member"));
             }
             if let Some(token) = session_token {
@@ -161,15 +190,15 @@ impl EphemeralStore {
                 (
                     state
                         .teams
-                        .get(team_id.as_str())?
-                        .filter(|team| team.organization_id == invitation.organization_id)
+                        .get(&self.organization_query(EntityRole::Team, "id", json!(team_id))?)?
+                        .filter(|team| team.organization_id == team_org)
                         .ok_or_else(|| AuthError::bad_request("Team not found"))?,
                     state.team_members.snapshot()?,
                 )
             };
             if members
                 .iter()
-                .any(|row| row.team_id == team.id && row.user_id == user_id)
+                .any(|row| row.team_id == team.id && row.user_id == team_user)
             {
                 continue;
             }
@@ -204,8 +233,8 @@ impl EphemeralStore {
                     .generated_id("teamMember", None, team_member_count + memberships.len())?
                     .map(SchemaValue::Typed)
                     .unwrap_or_default(),
-                team_id: team_id.clone().into(),
-                user_id: user_id.to_owned(),
+                team_id: self.organization_query(EntityRole::Team, "id", json!(team_id))?,
+                user_id: team_user.to_owned(),
                 created_at: Utc::now(),
             });
         }
@@ -227,7 +256,7 @@ impl EphemeralStore {
             .members
             .snapshot()?
             .iter()
-            .any(|row| row.organization_id == invitation.organization_id && row.user_id == user_id)
+            .any(|row| row.organization_id == member_org && row.user_id == member_user)
         {
             return Err(AuthError::bad_request("User is already a member"));
         }
@@ -243,13 +272,13 @@ impl EphemeralStore {
         for id in &team_ids {
             let team = state
                 .teams
-                .get(id.as_str())?
-                .filter(|team| team.organization_id == invitation.organization_id)
+                .get(&self.organization_query(EntityRole::Team, "id", json!(id))?)?
+                .filter(|team| team.organization_id == team_org)
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             if !reservations.iter().any(|(reserved, _)| reserved == id)
                 && !current_members
                     .iter()
-                    .any(|row| row.team_id == team.id && row.user_id == user_id)
+                    .any(|row| row.team_id == team.id && row.user_id == team_user)
             {
                 return Err(AuthError::conflict(
                     "Team membership changed while field transforms were pending",
@@ -260,8 +289,8 @@ impl EphemeralStore {
         for (id, prepared) in reservations {
             let team = state
                 .teams
-                .get(id.as_str())?
-                .filter(|team| team.organization_id == invitation.organization_id)
+                .get(&self.organization_query(EntityRole::Team, "id", json!(id))?)?
+                .filter(|team| team.organization_id == team_org)
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             let actual = current_members
                 .iter()
@@ -269,7 +298,7 @@ impl EphemeralStore {
                 .count();
             if current_members
                 .iter()
-                .any(|row| row.team_id == team.id && row.user_id == user_id)
+                .any(|row| row.team_id == team.id && row.user_id == team_user)
             {
                 return Err(AuthError::conflict(
                     "Team membership changed while field transforms were pending",
@@ -281,10 +310,11 @@ impl EphemeralStore {
             if maximum.is_some_and(|limit| actual >= limit) {
                 return Err(AuthError::forbidden("Team member limit reached"));
             }
-            teams.push((id, prepared.apply(team, actual)?));
+            teams.push((team.id.clone(), prepared.apply(team, actual)?));
         }
         // Validate the complete staged result before publishing any member, seat, or session delta.
-        let organization_id = invitation.organization_id.typed()?.clone();
+        let organization_id = self.organization_primary_id(&invitation.organization_id)?;
+        let organization_id = organization_id.typed()?.clone();
         let (session, cookie_session) = if let Some(mut session) = session {
             let cookie_session = if let [team_id] = team_ids.as_slice() {
                 session.active_team_id = Some(team_id.clone());
@@ -319,7 +349,7 @@ impl EphemeralStore {
             state.team_members.push(membership);
         }
         for (id, team) in teams {
-            let _ = state.teams.replace(id.as_str(), team)?;
+            let _ = state.teams.replace(&id, team)?;
         }
         state.members.push(member);
         if let Some(session) = session {
@@ -355,7 +385,7 @@ mod tests {
                 "1",
                 "first@example.com",
                 "member",
-                "owner",
+                "3",
                 Utc::now() + chrono::Duration::days(1),
             ))
             .await?;
@@ -364,7 +394,7 @@ mod tests {
                 "1",
                 "second@example.com",
                 "member",
-                "owner",
+                "3",
                 Utc::now() + chrono::Duration::days(1),
             ))
             .await?;
@@ -397,14 +427,14 @@ mod tests {
         let (a, b) = tokio::join!(
             store.accept_invitation_with_teams(
                 first.id.typed()?,
-                "first",
+                "1",
                 None,
                 false,
                 TeamMemberLimits::Fixed(None)
             ),
             store.accept_invitation_with_teams(
                 second.id.typed()?,
-                "second",
+                "2",
                 None,
                 false,
                 TeamMemberLimits::Fixed(None)

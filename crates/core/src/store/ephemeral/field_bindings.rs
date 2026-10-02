@@ -1,7 +1,46 @@
 use super::*;
 use crate::user_fields::{UserConfig, UserFieldConfig};
+use better_auth_schema_registry::EntityRole;
 
 impl EphemeralStore {
+    pub(super) fn organization_query(
+        &self,
+        role: EntityRole,
+        name: &str,
+        value: Value,
+    ) -> AuthResult<crate::SchemaValue<String>> {
+        let value = if name == "id" {
+            self.memory_user_id_query(&value)?
+        } else {
+            self.memory_field_query(&self.field_config(role)?, name, value)?
+        };
+        Ok(crate::SchemaValue::from_json(Some(value)))
+    }
+
+    pub(super) fn organization_primary_id(
+        &self,
+        value: &crate::SchemaValue<String>,
+    ) -> AuthResult<crate::SchemaValue<String>> {
+        // Join keys come from the stored row before output transforms run.
+        value
+            .json()?
+            .map(|value| self.memory_user_id_query(&value))
+            .transpose()
+            .map(crate::SchemaValue::from_json)
+    }
+
+    pub(super) fn organization_reference_query(
+        &self,
+        role: EntityRole,
+        name: &str,
+        value: &crate::SchemaValue<String>,
+    ) -> AuthResult<crate::SchemaValue<String>> {
+        match value.json()? {
+            Some(value) => self.organization_query(role, name, value),
+            None => Ok(crate::SchemaValue::Undefined),
+        }
+    }
+
     fn uses_serial_reference(&self, field: &UserFieldConfig) -> bool {
         matches!(
             self.config.advanced.database.generate_id(),

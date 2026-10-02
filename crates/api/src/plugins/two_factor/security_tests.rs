@@ -376,7 +376,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         .unwrap();
     assert_eq!(factor.failed_verification_count, 10);
     ctx.database
-        .record_two_factor_failure(&factor.id, 10, Utc::now() - Duration::seconds(1))
+        .record_two_factor_failure(&factor.id, 10, &|| Ok(Utc::now() - Duration::seconds(1)))
         .await
         .unwrap();
     let _ = verify_backup_code_core(&req, &valid, &config, &ctx)

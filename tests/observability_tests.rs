@@ -1287,10 +1287,10 @@ async fn check_two_factor_operations(
     async {
         let until = chrono::Utc::now() + chrono::Duration::minutes(5);
         store
-            .record_two_factor_failure(&factor.id, 2, until)
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
             .await?;
         store
-            .record_two_factor_failure(&factor.id, 2, until)
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
             .await?;
         let locked = store
             .get_two_factor_by_user_id("owner")
@@ -1306,10 +1306,10 @@ async fn check_two_factor_operations(
         assert_eq!(reset.failed_verification_count, 0);
         assert!(reset.locked_until.is_none());
         store
-            .record_two_factor_failure(&factor.id, 2, until)
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
             .await?;
         store
-            .record_two_factor_failure(&factor.id, 2, until)
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
             .await?;
         store
             .reset_two_factor_failures(&factor.id, Some(until + chrono::Duration::minutes(1)))
@@ -1827,3 +1827,6 @@ async fn memory_api_key_list_traces_default_limited_find_many_and_unlimited_coun
 
 #[path = "observability/native_endpoints.rs"]
 mod native_endpoints;
+
+#[path = "observability/two_factor_clock.rs"]
+mod two_factor_clock;

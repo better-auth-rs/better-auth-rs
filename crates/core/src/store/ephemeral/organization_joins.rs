@@ -3,6 +3,7 @@ use super::*;
 use crate::SchemaValue;
 use crate::store::{MemberUser, OrganizationDetails, OrganizationDetailsQuery, OrganizationKey};
 use better_auth_schema_registry::EntityRole;
+use serde_json::json;
 
 struct OrganizationChildren {
     invitations: Vec<RowRef<Invitation>>,
@@ -48,7 +49,7 @@ impl EphemeralStore {
             let Some(member) = selected else {
                 return Ok(None);
             };
-            let owner_id = member.read(|row| Ok(row.user_id.clone()))?;
+            let owner_id = member.read(|row| self.organization_primary_id(&row.user_id))?;
             let native_member = native
                 .then(|| member.read(|row| Ok(row.clone())))
                 .transpose()?;
@@ -89,21 +90,41 @@ impl EphemeralStore {
         &self,
         query: OrganizationDetailsQuery<'_>,
     ) -> AuthResult<Option<OrganizationDetails>> {
+        let (field, value) = match query.organization {
+            OrganizationKey::Id(id) => ("id", json!(id)),
+            OrganizationKey::Slug(slug) => ("slug", json!(slug)),
+        };
+        let value = self.organization_query(EntityRole::Organization, field, value)?;
         let default_limit = self.config.advanced.database.find_many_limit();
         let members_limit = query.members_limit.unwrap_or(default_limit);
         let native = self.config.advanced.database.joins == Some(true);
-        let (organization, native_organization, organization_id, children) = {
+        let (organization, native_organization, (member_org, invitation_org, team_org), children) = {
             let state = self.lock()?;
             let organization = state
                 .organizations
                 .first_ref(|row| match query.organization {
-                    OrganizationKey::Id(id) => row.id == id,
-                    OrganizationKey::Slug(slug) => row.slug == slug,
+                    OrganizationKey::Id(_) => row.id == value,
+                    OrganizationKey::Slug(_) => row.slug == value,
                 })?;
             let Some(organization) = organization else {
                 return Ok(None);
             };
             let organization_id = organization.read(|row| Ok(row.id.clone()))?;
+            let member_org = self.organization_reference_query(
+                EntityRole::Member,
+                "organizationId",
+                &organization_id,
+            )?;
+            let invitation_org = self.organization_reference_query(
+                EntityRole::Invitation,
+                "organizationId",
+                &organization_id,
+            )?;
+            let team_org = self.organization_reference_query(
+                EntityRole::Team,
+                "organizationId",
+                &organization_id,
+            )?;
             let native_organization = native
                 .then(|| organization.read(|row| Ok(row.clone())))
                 .transpose()?;
@@ -111,18 +132,18 @@ impl EphemeralStore {
                 let invitations = child_page(
                     state
                         .invitations
-                        .select_refs(|row| row.organization_id == organization_id)?,
+                        .select_refs(|row| row.organization_id == invitation_org)?,
                     default_limit,
                 )?;
                 let members = child_page(
                     state
                         .members
-                        .select_refs(|row| row.organization_id == organization_id)?,
+                        .select_refs(|row| row.organization_id == member_org)?,
                     members_limit,
                 )?
                 .into_iter()
                 .map(|row| {
-                    let owner = row.read(|member| Ok(member.user_id.clone()))?;
+                    let owner = row.read(|member| self.organization_primary_id(&member.user_id))?;
                     Ok((row, owner))
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
@@ -130,7 +151,7 @@ impl EphemeralStore {
                     Some(child_page(
                         state
                             .teams
-                            .select_refs(|row| row.organization_id == organization_id)?,
+                            .select_refs(|row| row.organization_id == team_org)?,
                         default_limit,
                     )?)
                 } else {
@@ -144,7 +165,12 @@ impl EphemeralStore {
             } else {
                 None
             };
-            (organization, native_organization, organization_id, children)
+            (
+                organization,
+                native_organization,
+                (member_org, invitation_org, team_org),
+                children,
+            )
         };
         let organization = match native_organization {
             Some(organization) => self.output_organization(organization).await?,
@@ -188,7 +214,7 @@ impl EphemeralStore {
             let rows = crate::query::paginate_memory(
                 self.lock()?
                     .invitations
-                    .select_refs(|row| row.organization_id == organization_id)?,
+                    .select_refs(|row| row.organization_id == invitation_org)?,
                 Some(default_limit),
                 None,
             );
@@ -202,13 +228,13 @@ impl EphemeralStore {
             let rows = crate::query::paginate_memory(
                 self.lock()?
                     .members
-                    .select_refs(|row| row.organization_id == organization_id)?,
+                    .select_refs(|row| row.organization_id == member_org)?,
                 Some(members_limit),
                 None,
             )
             .into_iter()
             .map(|row| {
-                let owner = row.read(|member| Ok(member.user_id.clone()))?;
+                let owner = row.read(|member| self.organization_primary_id(&member.user_id))?;
                 Ok((row, owner))
             })
             .collect::<AuthResult<Vec<_>>>()?;
@@ -225,7 +251,7 @@ impl EphemeralStore {
                 let rows = crate::query::paginate_memory(
                     self.lock()?
                         .teams
-                        .select_refs(|row| row.organization_id == organization_id)?,
+                        .select_refs(|row| row.organization_id == team_org)?,
                     Some(default_limit),
                     None,
                 );
@@ -294,6 +320,7 @@ impl EphemeralStore {
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<Organization>> {
+        let user_id = self.organization_query(EntityRole::Member, "userId", json!(user_id))?;
         let (members, organizations) = {
             let state = self.lock()?;
             let rows = crate::query::paginate_memory(
@@ -309,9 +336,8 @@ impl EphemeralStore {
             let organizations = rows
                 .iter()
                 .map(|row| {
-                    state
-                        .organizations
-                        .first_ref(|org| org.id == row.organization_id)
+                    let id = self.organization_primary_id(&row.organization_id)?;
+                    state.organizations.first_ref(|org| org.id == id)
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
             (rows, organizations)
@@ -342,6 +368,13 @@ impl EphemeralStore {
     }
 
     pub(super) async fn joined_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>> {
+        let user_id = self
+            .config
+            .advanced
+            .database
+            .generate_id()
+            .coerce_id(user_id)?;
+        let user_id = user_id.as_ref();
         let teams = {
             let state = self.lock()?;
             let rows = crate::query::paginate_memory(
@@ -368,7 +401,8 @@ impl EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
-        let email = email.to_lowercase();
+        let email =
+            self.organization_query(EntityRole::Invitation, "email", json!(email.to_lowercase()))?;
         let (invitations, organizations) = {
             let state = self.lock()?;
             let rows = crate::query::paginate_memory(
@@ -384,9 +418,8 @@ impl EphemeralStore {
             let organizations = rows
                 .iter()
                 .map(|row| {
-                    state
-                        .organizations
-                        .first_ref(|org| org.id == row.organization_id)
+                    let id = self.organization_primary_id(&row.organization_id)?;
+                    state.organizations.first_ref(|org| org.id == id)
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
             (rows, organizations)

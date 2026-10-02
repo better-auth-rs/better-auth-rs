@@ -1,0 +1,88 @@
+{
+  "version": "1.7.6",
+  "maxAttempts": 2,
+  "durationSeconds": 1.5,
+  "cases": [
+    {
+      "name": "below",
+      "startMillis": 2000000000123,
+      "incrementCompletedMillis": 2000000002123,
+      "events": [
+        {
+          "type": "incrementOne"
+        }
+      ],
+      "requests": [
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-clock"
+            }
+          ],
+          "increment": {
+            "failedVerificationCount": 1
+          }
+        }
+      ],
+      "stored": {
+        "failedVerificationCount": 1,
+        "lockedUntil": null
+      }
+    },
+    {
+      "name": "threshold",
+      "startMillis": 2000000000123,
+      "incrementCompletedMillis": 2000000002123,
+      "events": [
+        {
+          "type": "incrementOne"
+        },
+        {
+          "type": "clock",
+          "millis": 2000000002123
+        },
+        {
+          "type": "incrementOne"
+        }
+      ],
+      "requests": [
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-clock"
+            }
+          ],
+          "increment": {
+            "failedVerificationCount": 1
+          }
+        },
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-clock"
+            },
+            {
+              "field": "failedVerificationCount",
+              "operator": "gte",
+              "value": 2
+            }
+          ],
+          "increment": {},
+          "set": {
+            "lockedUntil": "2033-05-18T03:33:23.623Z"
+          }
+        }
+      ],
+      "stored": {
+        "failedVerificationCount": 2,
+        "lockedUntil": "2033-05-18T03:33:23.623Z"
+      }
+    }
+  ]
+}

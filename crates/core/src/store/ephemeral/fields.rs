@@ -262,16 +262,53 @@ fn record_output<T: MemoryOrganizationRecord>(
 }
 
 impl EphemeralStore {
-    fn field_config(&self, role: EntityRole) -> AuthResult<crate::user_fields::UserConfig> {
+    pub(super) fn field_config(
+        &self,
+        role: EntityRole,
+    ) -> AuthResult<crate::user_fields::UserConfig> {
         let fields = self.organization_fields()?;
-        match role {
-            EntityRole::Organization => Ok(fields.organization),
-            EntityRole::Member => Ok(fields.member),
-            EntityRole::Invitation => Ok(fields.invitation),
-            EntityRole::Team => Ok(fields.team),
-            EntityRole::OrganizationRole => Ok(fields.organization_role),
-            _ => Err(AuthError::config("Expected an organization entity role")),
+        let mut fields = match role {
+            EntityRole::Organization => fields.organization,
+            EntityRole::Member => fields.member,
+            EntityRole::Invitation => fields.invitation,
+            EntityRole::Team => fields.team,
+            EntityRole::OrganizationRole => fields.organization_role,
+            _ => return Err(AuthError::config("Expected an organization entity role")),
+        };
+        let entity = better_auth_schema_registry::plugin_schemas()
+            .iter()
+            .flat_map(|plugin| plugin.extra_entities)
+            .find(|entity| entity.role == Some(role))
+            .ok_or_else(|| AuthError::config("Missing organization schema"))?;
+        for (name, model) in better_auth_schema_registry::entity_foreign_keys(entity.table_name) {
+            let _ = fields
+                .fields_mut()
+                .entry(public_name(name))
+                .or_insert_with(|| crate::user_fields::UserFieldConfig {
+                    references: Some(crate::user_fields::UserFieldReference {
+                        model: (*model).into(),
+                        field: "id".into(),
+                    }),
+                    ..Default::default()
+                });
         }
+        Ok(fields)
+    }
+
+    fn bind_record_fields(
+        &self,
+        schema: &crate::user_fields::UserConfig,
+        fields: &mut Map<String, Value>,
+    ) -> AuthResult<()> {
+        for (name, field) in schema.fields() {
+            if name == "id" {
+                continue;
+            }
+            if let Some(value) = fields.get_mut(field.field_name.as_deref().unwrap_or(name)) {
+                *value = self.memory_field_input(field, std::mem::take(value))?;
+            }
+        }
+        Ok(())
     }
 
     pub(super) async fn prepare_record_patch(
@@ -281,9 +318,10 @@ impl EphemeralStore {
         extras: Map<String, Value>,
     ) -> AuthResult<PreparedOrganizationFields> {
         let schema = self.field_config(role)?;
-        let fields = schema
+        let mut fields = schema
             .organization_storage_fields(core, extras, false)
             .await?;
+        self.bind_record_fields(&schema, &mut fields)?;
         Ok(PreparedOrganizationFields {
             schema,
             role,
@@ -305,9 +343,10 @@ impl EphemeralStore {
             Some(patch) => patch,
             None => record_input(role, &value)?,
         };
-        let fields = schema
+        let mut fields = schema
             .organization_storage_fields(core, extras, create)
             .await?;
+        self.bind_record_fields(&schema, &mut fields)?;
         PreparedOrganizationFields {
             schema,
             role,

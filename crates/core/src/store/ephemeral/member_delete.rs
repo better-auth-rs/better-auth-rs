@@ -7,21 +7,26 @@ impl EphemeralStore {
         id: &str,
         subject: Option<(&str, &str)>,
     ) -> AuthResult<()> {
+        let id = self.organization_query(EntityRole::Member, "id", serde_json::json!(id))?;
         let (organization_id, user_id) = match subject {
-            Some((organization_id, user_id)) => (organization_id.to_owned(), user_id.to_owned()),
+            Some((organization_id, user_id)) => (organization_id.into(), user_id.into()),
             None => {
-                let Some(member) = self.lock()?.members.get(id)? else {
+                let Some(member) = self.lock()?.members.get(&id)? else {
                     return Ok(());
                 };
-                (
-                    member.organization_id.typed()?.clone(),
-                    member.user_id.typed()?.clone(),
-                )
+                (member.organization_id, member.user_id)
             }
         };
+        let organization_id = self.organization_reference_query(
+            EntityRole::Team,
+            "organizationId",
+            &organization_id,
+        )?;
+        let user_id = self.organization_primary_id(&user_id)?;
+        let user_id = user_id.typed()?;
         let teams = {
             let mut state = self.lock()?;
-            let _ = state.members.remove(id)?;
+            let _ = state.members.remove(&id)?;
             state
                 .teams
                 .snapshot()?
@@ -36,7 +41,7 @@ impl EphemeralStore {
         );
         let teams = self.output_records(EntityRole::Team, teams).await?;
         for team in teams {
-            crate::store::TeamStore::remove_team_member(self, team.id.typed()?, &user_id).await?;
+            crate::store::TeamStore::remove_team_member(self, team.id.typed()?, user_id).await?;
         }
         Ok(())
     }

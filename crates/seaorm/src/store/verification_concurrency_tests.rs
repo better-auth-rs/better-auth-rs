@@ -228,11 +228,9 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                         )
                         .await?;
                     store
-                        .record_two_factor_failure(
-                            &id,
-                            10,
-                            Utc::now() + chrono::Duration::minutes(15),
-                        )
+                        .record_two_factor_failure(&id, 10, &|| {
+                            Ok(Utc::now() + chrono::Duration::minutes(15))
+                        })
                         .await?;
                     Ok::<_, crate::error::AuthError>(consumed)
                 });

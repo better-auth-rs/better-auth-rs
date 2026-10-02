@@ -50,7 +50,7 @@ impl TwoFactorStore for EphemeralStore {
         &self,
         id: &crate::SchemaValue<String>,
         max_attempts: i64,
-        locked_until: chrono::DateTime<Utc>,
+        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<Utc>> + Send + Sync),
     ) -> AuthResult<()> {
         let failures = self
             .raw("twoFactor", "incrementOne", |state| {
@@ -61,6 +61,7 @@ impl TwoFactorStore for EphemeralStore {
             })
             .await?;
         if failures >= max_attempts {
+            let locked_until = locked_until()?;
             self.raw("twoFactor", "incrementOne", |state| {
                 if let Some(mut factor) = state
                     .two_factors

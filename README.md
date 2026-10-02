@@ -35,7 +35,7 @@ Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification an
 
 For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
-Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. Explicit `CookieAttributes.expires` uses `chrono::DateTime<Utc>`. HTTP issuance and clearing return `AuthResult` and enforce the 400-day limits before formatting; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero. The TOTP period and account lockout duration also accept fractional seconds; see the same guide for their numeric and timing boundaries. [OAuth Proxy](docs/content/docs/plugins/oauth-proxy.mdx) accepts finite `f64` seconds for its maximum profile age.
+Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. Explicit `CookieAttributes.expires` uses `chrono::DateTime<Utc>`. HTTP issuance and clearing return `AuthResult` and enforce the 400-day limits before formatting; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero. The TOTP period and account lockout duration also accept fractional seconds; see the same guide for their numeric and timing boundaries. Direct `TwoFactorStore::record_two_factor_failure` callers provide a borrowed deadline closure, evaluated after the counter reaches the threshold. [OAuth Proxy](docs/content/docs/plugins/oauth-proxy.mdx) accepts finite `f64` seconds for its maximum profile age.
 
 ## Quick start
 
@@ -108,6 +108,8 @@ Plugins include email/password, username, sessions, password management, email v
 Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`, including constructors for Auth0, Keycloak, Okta, and Microsoft Entra ID. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
 
 The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements. Use `auth.organization()?.add_member(Some(body)).await` for server-only member creation through the native hook pipeline.
+
+Memory Serial mode applies Organization reference conversion to stored fields, queries, and internal relation keys. See [Organization field policies](docs/content/docs/plugins/organization.mdx#additional-fields) for typed storage boundaries.
 
 The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence.
 

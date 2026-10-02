@@ -1,0 +1,381 @@
+{
+  "version": "1.7.6",
+  "families": {
+    "organization": {
+      "created": "1",
+      "updated": "1",
+      "trace": [
+        [
+          "input",
+          " 001 "
+        ],
+        [
+          "output",
+          1
+        ],
+        [
+          "input",
+          " 1 "
+        ],
+        [
+          "output",
+          1
+        ]
+      ]
+    },
+    "member": {
+      "created": "1",
+      "updated": "1",
+      "trace": [
+        [
+          "input",
+          " 001 "
+        ],
+        [
+          "output",
+          1
+        ],
+        [
+          "input",
+          " 1 "
+        ],
+        [
+          "output",
+          1
+        ]
+      ]
+    },
+    "invitation": {
+      "created": "1",
+      "updated": "1",
+      "trace": [
+        [
+          "input",
+          " 001 "
+        ],
+        [
+          "output",
+          1
+        ],
+        [
+          "input",
+          " 1 "
+        ],
+        [
+          "output",
+          1
+        ]
+      ]
+    },
+    "team": {
+      "created": "1",
+      "updated": "1",
+      "trace": [
+        [
+          "input",
+          " 001 "
+        ],
+        [
+          "output",
+          1
+        ],
+        [
+          "input",
+          " 1 "
+        ],
+        [
+          "output",
+          1
+        ]
+      ]
+    },
+    "organizationRole": {
+      "created": "1",
+      "updated": "1",
+      "trace": [
+        [
+          "input",
+          " 001 "
+        ],
+        [
+          "output",
+          1
+        ],
+        [
+          "input",
+          " 1 "
+        ],
+        [
+          "output",
+          1
+        ]
+      ]
+    }
+  },
+  "replacement": {
+    "created": "1",
+    "read": "1",
+    "outputs": [
+      "1",
+      "1"
+    ]
+  },
+  "lifecycles": [
+    {
+      "joins": false,
+      "lookup": {
+        "numericMember": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "owner"
+        },
+        "member": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "owner",
+          "userIdFromJoin": "1"
+        },
+        "memberById": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "owner",
+          "userIdFromJoin": "1"
+        },
+        "filtered": {
+          "total": 1,
+          "members": [
+            {
+              "id": "1",
+              "organizationId": "1",
+              "userId": "1",
+              "role": "owner",
+              "userIdFromJoin": "1"
+            }
+          ]
+        },
+        "organizations": [
+          "1"
+        ],
+        "teams": [
+          "1"
+        ],
+        "teamMembers": [
+          {
+            "teamId": "1",
+            "userId": "1"
+          }
+        ],
+        "teamMember": {
+          "teamId": "1",
+          "userId": "1"
+        },
+        "counts": {
+          "members": 1,
+          "owners": 1,
+          "pendingInvitations": 1,
+          "teams": 1,
+          "teamMembers": 1,
+          "roles": 1
+        },
+        "role": "1",
+        "invitations": [
+          {
+            "organizationId": "1",
+            "inviterId": "1",
+            "organizationName": "Organization",
+            "teamId": "1"
+          }
+        ],
+        "pending": [
+          "1"
+        ],
+        "full": {
+          "id": "1",
+          "members": [
+            {
+              "id": "1",
+              "organizationId": "1",
+              "userId": "1",
+              "role": "owner",
+              "userIdFromJoin": "1"
+            }
+          ],
+          "teams": [
+            {
+              "id": "1",
+              "organizationId": "1"
+            }
+          ],
+          "invitations": [
+            {
+              "organizationId": "1",
+              "inviterId": "1"
+            }
+          ]
+        }
+      },
+      "removed": {
+        "members": 0,
+        "teamMembers": 0
+      },
+      "acceptance": {
+        "member": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "member"
+        },
+        "status": "accepted",
+        "teamId": "1",
+        "teamMembers": [
+          {
+            "teamId": "1",
+            "userId": "1"
+          }
+        ],
+        "activeOrganizationId": "1",
+        "activeTeamId": "1"
+      },
+      "cleanup": {
+        "removedTeamMember": 0,
+        "members": 0,
+        "invitations": 0,
+        "teams": 0,
+        "roles": 0,
+        "organizationPresent": false,
+        "userPresent": true
+      }
+    },
+    {
+      "joins": true,
+      "lookup": {
+        "numericMember": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "owner"
+        },
+        "member": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "owner",
+          "userIdFromJoin": "1"
+        },
+        "memberById": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "owner",
+          "userIdFromJoin": "1"
+        },
+        "filtered": {
+          "total": 1,
+          "members": [
+            {
+              "id": "1",
+              "organizationId": "1",
+              "userId": "1",
+              "role": "owner",
+              "userIdFromJoin": "1"
+            }
+          ]
+        },
+        "organizations": [
+          "1"
+        ],
+        "teams": [
+          "1"
+        ],
+        "teamMembers": [
+          {
+            "teamId": "1",
+            "userId": "1"
+          }
+        ],
+        "teamMember": {
+          "teamId": "1",
+          "userId": "1"
+        },
+        "counts": {
+          "members": 1,
+          "owners": 1,
+          "pendingInvitations": 1,
+          "teams": 1,
+          "teamMembers": 1,
+          "roles": 1
+        },
+        "role": "1",
+        "invitations": [
+          {
+            "organizationId": "1",
+            "inviterId": "1",
+            "organizationName": "Organization",
+            "teamId": "1"
+          }
+        ],
+        "pending": [
+          "1"
+        ],
+        "full": {
+          "id": "1",
+          "members": [
+            {
+              "id": "1",
+              "organizationId": "1",
+              "userId": "1",
+              "role": "owner",
+              "userIdFromJoin": "1"
+            }
+          ],
+          "teams": [
+            {
+              "id": "1",
+              "organizationId": "1"
+            }
+          ],
+          "invitations": [
+            {
+              "organizationId": "1",
+              "inviterId": "1"
+            }
+          ]
+        }
+      },
+      "removed": {
+        "members": 0,
+        "teamMembers": 0
+      },
+      "acceptance": {
+        "member": {
+          "id": "1",
+          "organizationId": "1",
+          "userId": "1",
+          "role": "member"
+        },
+        "status": "accepted",
+        "teamId": "1",
+        "teamMembers": [
+          {
+            "teamId": "1",
+            "userId": "1"
+          }
+        ],
+        "activeOrganizationId": "1",
+        "activeTeamId": "1"
+      },
+      "cleanup": {
+        "removedTeamMember": 0,
+        "members": 0,
+        "invitations": 0,
+        "teams": 0,
+        "roles": 0,
+        "organizationPresent": false,
+        "userPresent": true
+      }
+    }
+  ]
+}

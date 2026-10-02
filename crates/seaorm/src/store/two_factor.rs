@@ -199,7 +199,7 @@ where
         &self,
         id: &better_auth_core::SchemaValue<String>,
         max_attempts: i64,
-        locked_until: chrono::DateTime<Utc>,
+        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<Utc>> + Send + Sync),
     ) -> AuthResult<()> {
         let id = id.typed()?;
         let filter =
@@ -226,6 +226,7 @@ where
             .transpose()?
             .map_or(0, |row| row.failed_verification_count);
         if failures >= max_attempts {
+            let locked_until = locked_until()?;
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
                 Entity::<P::TwoFactor>::update_many()
                     .col_expr(

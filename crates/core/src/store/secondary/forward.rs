@@ -301,7 +301,7 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
         &self,
         id: &crate::SchemaValue<String>,
         max_attempts: i64,
-        locked_until: chrono::DateTime<chrono::Utc>,
+        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<chrono::Utc>> + Send + Sync),
     ) -> AuthResult<()> {
         self.inner
             .record_two_factor_failure(id, max_attempts, locked_until)

@@ -84,11 +84,9 @@ mod tests {
         assert_eq!(factor.failed_verification_count, 0);
         assert!(factor.locked_until.is_none());
         store
-            .record_two_factor_failure(
-                &factor.id,
-                1,
-                chrono::Utc::now() + chrono::Duration::minutes(15),
-            )
+            .record_two_factor_failure(&factor.id, 1, &|| {
+                Ok(chrono::Utc::now() + chrono::Duration::minutes(15))
+            })
             .await
             .unwrap();
         let factor = store
