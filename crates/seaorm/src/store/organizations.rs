@@ -16,6 +16,26 @@ use sea_orm::{
 };
 use serde_json::json;
 
+impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmStore<S, O, P>
+{
+    pub(super) fn set_organization_fields(&self, fields: OrganizationFields) -> AuthResult<()> {
+        models::validate_fields::<O::Organization>("organization", &fields.organization)?;
+        models::validate_fields::<O::Member>("member", &fields.member)?;
+        models::validate_fields::<O::Invitation>("invitation", &fields.invitation)?;
+        models::validate_fields::<O::Team>("team", &fields.team)?;
+        models::validate_fields::<O::OrganizationRole>(
+            "organizationRole",
+            &fields.organization_role,
+        )?;
+        *self
+            .organization_fields
+            .write()
+            .map_err(|error| AuthError::internal(error.to_string()))? = fields;
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationStore
     for SeaOrmStore<S, O, P>
@@ -88,20 +108,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     }
 
     fn configure_organization_fields(&self, fields: OrganizationFields) -> AuthResult<()> {
-        let fields = fields.into_storage();
-        models::validate_fields::<O::Organization>("organization", &fields.organization)?;
-        models::validate_fields::<O::Member>("member", &fields.member)?;
-        models::validate_fields::<O::Invitation>("invitation", &fields.invitation)?;
-        models::validate_fields::<O::Team>("team", &fields.team)?;
-        models::validate_fields::<O::OrganizationRole>(
-            "organizationRole",
-            &fields.organization_role,
-        )?;
-        *self
-            .organization_fields
-            .write()
-            .map_err(|error| AuthError::internal(error.to_string()))? = fields;
-        Ok(())
+        self.set_organization_fields(fields.into_storage())
     }
 
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization> {

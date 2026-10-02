@@ -78,6 +78,8 @@ Set `OrganizationConfig::schema` to an `OrganizationFields` value. The `organiza
 
 Other plugins can register Organization and Team adapter fields through `AuthInitContext::register_model_fields`. Registration order includes the Organization plugin's own schema. Each later declaration replaces the entire field policy. The final adapter policies retain typed column validation; route validation and visibility continue to use this plugin's configuration.
 
+Direct `configure_organization_fields` calls resolve Organization, Team, Member, Invitation, and OrganizationRole declarations in the built-in schema order. Overriding a built-in field retains its original position; additional fields follow in declaration order. Defaults, `on_update`, input transforms, and output transforms use this resolved order. Runtime plugin declarations retain their registration order instead of being sorted again. SeaORM validates the resolved fields against the selected typed columns.
+
 ```rust
 use better_auth::plugins::organization::{OrganizationConfig, OrganizationFields};
 use better_auth::config::{UserConfig, UserFieldConfig};

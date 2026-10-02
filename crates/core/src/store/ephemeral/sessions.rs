@@ -15,6 +15,18 @@ impl EphemeralStore {
         &self,
         sessions: Vec<SessionView>,
     ) -> AuthResult<Vec<SessionView>> {
+        self.output_sessions_batches_then(sessions, |ready| std::future::ready(Ok(ready)))
+            .await
+    }
+
+    async fn output_sessions_batches_then<R: Send, F>(
+        &self,
+        sessions: Vec<SessionView>,
+        complete: impl Fn(Vec<(usize, SessionView)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
         let mut rows: Vec<_> = sessions
             .into_iter()
             .map(|mut session| {
@@ -23,7 +35,7 @@ impl EphemeralStore {
                 (session, storage)
             })
             .collect();
-        crate::user_fields::project_fields(
+        crate::user_fields::project_fields_batches_then(
             &mut rows,
             self.session_config.fields(),
             |(session, storage), name, field| {
@@ -38,9 +50,10 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
+            |_, (session, _)| Ok(session.clone()),
+            complete,
         )
-        .await?;
-        Ok(rows.into_iter().map(|(session, _)| session).collect())
+        .await
     }
 }
 
@@ -241,12 +254,48 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        Ok(self
-            .output_sessions(sessions)
-            .await?
-            .into_iter()
-            .map(|session| (session, None))
-            .collect())
+        let owner_ids: Vec<_> = sessions
+            .iter()
+            .map(|session| session.user_id.clone())
+            .collect();
+        let snapshots = self
+            .output_sessions_batches_then(sessions, |ready| {
+                let owner_ids = &owner_ids;
+                async move {
+                    let mut pending = Vec::new();
+                    let mut users = Vec::new();
+                    for (index, session) in ready {
+                        let owner_id = owner_ids.get(index).ok_or_else(|| {
+                            AuthError::internal("Session projection lost its stored join index")
+                        })?;
+                        let user = self
+                            .raw("user", "findOne", |state| state.users.get(owner_id))
+                            .await?;
+                        let has_user = user.is_some();
+                        users.extend(user);
+                        pending.push((index, session, has_user));
+                    }
+                    let mut users = self.output_users(users).await?.into_iter();
+                    Ok(pending
+                        .into_iter()
+                        .map(|(index, session, has_user)| {
+                            let data = if has_user { users.next() } else { None }.map(|user| {
+                                crate::session::SessionData {
+                                    session: session.clone(),
+                                    user,
+                                }
+                            });
+                            (index, (session, data))
+                        })
+                        .collect())
+                }
+            })
+            .await?;
+        // Complete started output callbacks before applying the joined batch's missing-user rule.
+        if snapshots.iter().any(|(_, user)| user.is_none()) {
+            return Ok(Vec::new());
+        }
+        Ok(snapshots)
     }
 
     async fn update_session_fields(

@@ -2,15 +2,15 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
-    QuerySelect,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, IntoActiveModel,
+    QueryFilter, QuerySelect,
 };
 
 use better_auth_core::store::{SessionStore, SessionUpdateWriter};
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::{DatabaseHookUpdate, SessionUpdate};
-use crate::schema::{AuthSchema, SeaOrmSessionModel};
+use crate::schema::{AuthSchema, SeaOrmSessionModel, SeaOrmUserModel};
 use crate::types::CreateSession;
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
@@ -364,6 +364,7 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Sessio
 where
     S: AuthSchema + Send + Sync,
     S::Session: SeaOrmSessionModel,
+    S::User: SeaOrmUserModel,
 {
     async fn update_session_with_writer(
         &self,
@@ -463,7 +464,7 @@ where
         if only_active {
             condition = condition.add(S::Session::expires_at_column().gt(Utc::now()));
         }
-        match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+        let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
@@ -478,17 +479,57 @@ where
                     .map_err(map_db_err)
             },
         )
-        .await
-        {
-            Ok(rows) => self.output_sessions(&rows, self.connection()).await,
-            Err(error) => Err(error),
+        .await?;
+        let snapshots =
+            better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter_then(
+                &rows,
+                &self.config().session,
+                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                |index, session| {
+                    let rows = &rows;
+                    async move {
+                        let row = rows.get(index).ok_or_else(|| {
+                            AuthError::internal("Session projection lost its stored join index")
+                        })?;
+                        let owner_id = row
+                            .clone()
+                            .into_active_model()
+                            .get(S::Session::user_id_column())
+                            .into_value();
+                        let user = match owner_id {
+                            Some(owner_id) => {
+                                database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+                                    self.config(),
+                                    "findOne",
+                                    async {
+                                        <S::User as SeaOrmUserModel>::Entity::find()
+                                            .filter(S::User::id_column().eq(owner_id))
+                                            .one(self.connection())
+                                            .await
+                                            .map_err(map_db_err)
+                                    },
+                                )
+                                .await?
+                            }
+                            None => None,
+                        };
+                        let data = match user {
+                            Some(user) => Some(better_auth_core::session::SessionData {
+                                session: session.clone(),
+                                user: self.output_user(&user, self.connection()).await?,
+                            }),
+                            None => None,
+                        };
+                        Ok((session, data))
+                    }
+                },
+            )
+            .await?;
+        // Complete started output callbacks before applying the joined batch's missing-user rule.
+        if snapshots.iter().any(|(_, user)| user.is_none()) {
+            return Ok(Vec::new());
         }
-        .map(|sessions| {
-            sessions
-                .into_iter()
-                .map(|session| (session, None))
-                .collect()
-        })
+        Ok(snapshots)
     }
 
     async fn get_user_sessions(

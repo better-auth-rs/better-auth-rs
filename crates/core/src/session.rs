@@ -8,7 +8,7 @@ use crate::schema::AuthSchema;
 use crate::store::AuthStore;
 use crate::types::CreateSession;
 use crate::utils::cookie_utils::{
-    create_clear_cookie, create_session_cookies, get_cookie, related_cookie_name,
+    create_clear_cookie, get_cookie, related_cookie_name, session_cookie_headers,
     verify_cookie_value,
 };
 use crate::wire::{SessionView, UserView};
@@ -226,8 +226,8 @@ impl<S: AuthSchema> SessionManager<S> {
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<()> {
         let dont_remember = dont_remember.unwrap_or_else(|| self.dont_remember(req));
-        for cookie in create_session_cookies(&data.session.token, dont_remember, &self.config) {
-            req.append_response_header("Set-Cookie", cookie)?;
+        for cookie in session_cookie_headers(&data.session.token, dont_remember, &self.config) {
+            req.append_response_header("Set-Cookie", cookie?)?;
         }
         self.write_cache_with_response(req, &data, dont_remember, None, transaction)
             .await?;
@@ -415,14 +415,14 @@ impl<S: AuthSchema> SessionManager<S> {
                 {
                     self.write_cache(req, &payload.data, false).await?;
                     let max_age = (!self.dont_remember(req))
-                        .then_some(self.config.session.expires_in().num_seconds());
+                        .then_some(self.config.session.expires_in().as_seconds_f64());
                     req.append_response_header(
                         "Set-Cookie",
                         crate::utils::cookie_utils::create_session_cookie_with_max_age(
                             Some(&payload.data.session.token),
                             max_age,
                             &self.config,
-                        ),
+                        )?,
                     )?;
                 }
                 let raw_snapshot =

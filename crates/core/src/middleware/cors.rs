@@ -329,7 +329,7 @@ mod tests {
             .with_header("Access-Control-Expose-Headers", "X-Existing")
             .with_header(
                 "Set-Cookie",
-                create_session_cookie("cors-session-token", &config),
+                create_session_cookie("cors-session-token", &config).unwrap(),
             );
         let manager = SessionManager::new(Arc::new(config), test_database().await);
         manager.finish_response(&req, &mut response).unwrap();

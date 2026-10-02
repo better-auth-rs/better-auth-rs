@@ -795,20 +795,40 @@ impl InvitationStore for EphemeralStore {
             None,
         );
         let ids: Vec<_> = rows.iter().map(|row| row.organization_id.clone()).collect();
-        let invitations = self.output_records(EntityRole::Invitation, rows).await?;
-        let mut result = Vec::new();
-        for (invitation, id) in invitations.into_iter().zip(ids) {
-            let row = self.lock()?.organizations.get(&id)?;
-            let organization = match row {
-                Some(row) => Some(self.output_organization(row).await?),
-                None => None,
-            };
-            result.push(crate::store::InvitationOrganization {
-                invitation,
-                organization,
-            });
-        }
-        Ok(result)
+        self.output_records_batches_then(EntityRole::Invitation, rows, |ready| {
+            let ids = &ids;
+            async move {
+                let mut pending = Vec::new();
+                let mut organizations = Vec::new();
+                for (index, invitation) in ready {
+                    let id = ids.get(index).ok_or_else(|| {
+                        AuthError::internal("Invitation projection lost its stored join index")
+                    })?;
+                    let organization = self.lock()?.organizations.get(id)?;
+                    let has_organization = organization.is_some();
+                    organizations.extend(organization);
+                    pending.push((index, invitation, has_organization));
+                }
+                let mut organizations = self.output_organizations(organizations).await?.into_iter();
+                Ok(pending
+                    .into_iter()
+                    .map(|(index, invitation, has_organization)| {
+                        (
+                            index,
+                            crate::store::InvitationOrganization {
+                                invitation,
+                                organization: if has_organization {
+                                    organizations.next()
+                                } else {
+                                    None
+                                },
+                            },
+                        )
+                    })
+                    .collect())
+            }
+        })
+        .await
     }
 }
 

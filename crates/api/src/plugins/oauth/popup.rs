@@ -277,15 +277,16 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
     }
     let marker =
         serde_json::to_string(&serde_json::json!({ "popupOrigin": origin, "popupNonce": nonce }))?;
-    response.headers.append(
-        "Set-Cookie",
-        create_cookie(
-            &related_cookie_name(&ctx.config, "oauth_popup"),
-            &sign_cookie_value(&marker, ctx.config.signing_secret()),
-            600,
-            &ctx.config,
-        ),
-    );
+    let marker_cookie = match create_cookie(
+        &related_cookie_name(&ctx.config, "oauth_popup"),
+        &sign_cookie_value(&marker, ctx.config.signing_secret()),
+        600.0,
+        &ctx.config,
+    ) {
+        Ok(cookie) => cookie,
+        Err(error) => return failed_start(response, &origin, &nonce, error, ctx),
+    };
+    response.headers.append("Set-Cookie", marker_cookie);
     match handlers::oauth_authorization_url(ctx, &request, &flow) {
         Ok(url) => {
             let _ = response.headers.insert("Location", url);

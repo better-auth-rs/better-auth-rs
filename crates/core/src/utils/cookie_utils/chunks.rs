@@ -81,7 +81,7 @@ pub fn create_chunked_cookies(
         chunk.set_name(name);
         serialize_cookie(chunk, value, cookie)
     };
-    let overhead = write(format!("{name}.99"), "").len();
+    let overhead = write(format!("{name}.99"), "")?.len();
     let count_and_size = 4050_usize
         .checked_sub(overhead)
         .filter(|size| *size > 0)
@@ -95,14 +95,14 @@ pub fn create_chunked_cookies(
         .collect();
     if let Some((count, chunk_size)) = count_and_size.filter(|(count, _)| *count <= 100) {
         if count <= 1 {
-            let _ = cookies.insert(name.to_owned(), write(name.to_owned(), value));
+            let _ = cookies.insert(name.to_owned(), write(name.to_owned(), value)?);
         } else {
             for (index, chunk) in value.as_bytes().chunks(chunk_size).enumerate() {
                 let chunk_name = format!("{name}.{index}");
                 let value = std::str::from_utf8(chunk).map_err(|error| {
                     AuthError::internal(format!("Encoding cookie chunk: {error}"))
                 })?;
-                let _ = cookies.insert(chunk_name.to_owned(), write(chunk_name, value));
+                let _ = cookies.insert(chunk_name.to_owned(), write(chunk_name, value)?);
             }
         }
     } else {

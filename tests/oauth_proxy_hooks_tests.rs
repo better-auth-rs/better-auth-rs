@@ -216,7 +216,8 @@ async fn proxy_before_api_key_preserves_real_session_emulation() {
     let cookie = better_auth_core::utils::cookie_utils::create_session_cookie(
         session.token(),
         auth.config(),
-    );
+    )
+    .expect("serialize session cookie");
     let mut create = request("/api-key/create", json!({"name":"OAuth linking"}));
     let _ = create.headers.insert(
         "cookie".into(),

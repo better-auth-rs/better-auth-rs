@@ -141,7 +141,8 @@ async fn explicit_remember_marker_expiration_survives_browser_session_cookie() {
     let mut response = AuthResponse::new(200)
         .with_appended_header(
             "Set-Cookie",
-            create_session_cookie_with_max_age(Some(&data.session.token), None, &manager.config),
+            create_session_cookie_with_max_age(Some(&data.session.token), None, &manager.config)
+                .unwrap(),
         )
         .with_appended_header(
             "Set-Cookie",
@@ -179,6 +180,7 @@ async fn explicit_browser_session_keeps_the_signed_remember_preference() {
     let mut response = AuthResponse::new(200);
     for cookie in
         crate::utils::cookie_utils::create_session_cookies("session-token", true, &manager.config)
+            .unwrap()
     {
         response.headers.append("Set-Cookie", cookie);
     }

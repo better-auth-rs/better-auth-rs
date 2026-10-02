@@ -450,7 +450,7 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
         .unwrap()
         .with_header(
             "Set-Cookie",
-            create_session_cookie(&data.session.token, &strict.config),
+            create_session_cookie(&data.session.token, &strict.config).unwrap(),
         );
     strict.finish_response(&req, &mut response).unwrap();
     let signed_raw = percent_encoding::percent_decode_str(&signed)

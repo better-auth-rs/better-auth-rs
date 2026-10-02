@@ -73,12 +73,11 @@ pub struct OrganizationFields {
 }
 
 impl OrganizationFields {
-    /// Apply the upstream eager partial schema for dynamic-role storage.
-    pub fn into_storage(mut self) -> Self {
-        for field in self.organization_role.fields_mut().values_mut() {
-            field.required = Some(false);
-        }
-        self
+    /// Resolve raw declarations in native schema order and apply dynamic-role storage requirements.
+    pub fn into_storage(self) -> Self {
+        let mut fields = crate::plugin_runtime::ModelFields::default();
+        fields.register_organization_schema(&self, true);
+        fields.organization_fields(self)
     }
 
     /// Return whether all entity policies use only built-in fields.

@@ -144,6 +144,7 @@ fn events(trace: &Mutex<Trace>) -> AuthResult<Vec<String>> {
 async fn check<S: AuthSchema>(
     store: &impl AuthStore<S>,
     trace: &Arc<Mutex<Trace>>,
+    backend: &str,
 ) -> AuthResult<()> {
     let mut ids = Vec::new();
     for name in ["A", "B"] {
@@ -357,15 +358,33 @@ async fn check<S: AuthSchema>(
         original_name(&snapshots[1].0.token, tokens)?,
     ];
     assert_ne!(names[0], names[1]);
-    assert_eq!(
-        events(trace)?,
-        [
-            format!("first:{}", names[0]),
-            format!("first:{}", names[1]),
-            format!("second:{}.png", names[0]),
-            format!("second:{}.png", names[1])
-        ]
-    );
+    let mut expected = vec![
+        format!("first:{}", names[0]),
+        format!("first:{}", names[1]),
+        format!("second:{}.png", names[0]),
+        format!("second:{}.png", names[1]),
+    ];
+    let captured: Value =
+        serde_json::from_str(include_str!("fixtures/fallback-continuation-1.7.6.json"))?;
+    let captured = captured["cases"]
+        .as_array()
+        .and_then(|cases| {
+            cases.iter().find(|case| {
+                case["backend"] == backend && case["kind"] == "session" && case["mode"] == "sync"
+            })
+        })
+        .ok_or_else(|| AuthError::internal("Pinned session continuation fixture missing"))?;
+    for event in captured["events"]
+        .as_array()
+        .ok_or_else(|| AuthError::internal("Pinned events missing"))?
+    {
+        match event[0].as_str() {
+            Some("name") => expected.push("name:A".into()),
+            Some("detail") => expected.push("image:A.png".into()),
+            _ => {}
+        }
+    }
+    assert_eq!(events(trace)?, expected);
     for (index, ((session, _), name)) in snapshots.iter().zip(names).enumerate() {
         assert_eq!(
             session.additional_fields.get("first"),
@@ -389,7 +408,12 @@ async fn check<S: AuthSchema>(
 #[tokio::test]
 async fn memory_lists_project_by_field_and_preserve_errors() -> AuthResult<()> {
     let trace = Arc::new(Mutex::new(Trace::default()));
-    check(&EphemeralStore::new(config(&trace).into()), &trace).await
+    check(
+        &EphemeralStore::new(config(&trace).into()),
+        &trace,
+        "memory",
+    )
+    .await
 }
 #[tokio::test]
 async fn sqlite_lists_project_by_field_and_preserve_errors() -> AuthResult<()> {
@@ -404,5 +428,10 @@ async fn sqlite_lists_project_by_field_and_preserve_errors() -> AuthResult<()> {
         .execute(&Schema::new(db.get_database_backend()).create_table_from_entity(session::Entity))
         .await
         .map_err(|error| AuthError::internal(error.to_string()))?;
-    check(&SeaOrmStore::<AppSchema>::new(config(&trace), db), &trace).await
+    check(
+        &SeaOrmStore::<AppSchema>::new(config(&trace), db),
+        &trace,
+        "sqlite",
+    )
+    .await
 }

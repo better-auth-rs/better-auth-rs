@@ -159,12 +159,12 @@ pub(super) fn create_challenge_cookie(
         token,
         auth_config.signing_secret(),
     );
-    Ok(better_auth_core::utils::cookie_utils::create_cookie(
+    better_auth_core::utils::cookie_utils::create_cookie(
         &challenge_cookie_name(auth_config, config),
         &signed,
-        config.challenge_ttl_secs,
+        config.challenge_ttl_secs as f64,
         auth_config,
-    ))
+    )
 }
 
 pub(super) fn decode_challenge_cookie(

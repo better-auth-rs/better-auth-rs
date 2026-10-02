@@ -39,6 +39,9 @@ mod device_scope;
 #[path = "plugin_model_fields_tests/organization.rs"]
 mod organization;
 
+#[path = "plugin_model_fields_tests/organization_order.rs"]
+mod organization_order;
+
 #[path = "plugin_model_fields_tests/presence.rs"]
 mod presence;
 #[path = "plugin_model_fields_tests/presence_cache.rs"]

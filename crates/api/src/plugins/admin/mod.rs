@@ -321,9 +321,9 @@ impl AdminPlugin {
             create_session_like_cookie(
                 &admin_cookie_name,
                 &admin_cookie,
-                Some(ctx.config.session.expires_in().num_seconds()),
+                Some(ctx.config.session.expires_in().as_seconds_f64()),
                 &ctx.config,
-            ),
+            )?,
         )?;
         ctx.session_manager()
             .set_session_cookie(req, data, Some(true))

@@ -1,0 +1,405 @@
+{
+  "serializers": {
+    "omitted": {
+      "plain": {
+        "raw": "ordinary=display; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      }
+    },
+    "zero": {
+      "plain": {
+        "raw": "ordinary=display; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      }
+    },
+    "negativeZero": {
+      "plain": {
+        "raw": "ordinary=display; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      }
+    },
+    "fractional": {
+      "plain": {
+        "raw": "ordinary=display; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      }
+    },
+    "negative": {
+      "plain": {
+        "raw": "ordinary=display; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      }
+    },
+    "boundary": {
+      "plain": {
+        "raw": "ordinary=display; Max-Age=34560000; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "34560000"
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Max-Age=34560000; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": "34560000"
+        }
+      }
+    },
+    "beyondFraction": {
+      "plain": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      },
+      "signed": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      }
+    },
+    "beyond": {
+      "plain": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      },
+      "signed": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      }
+    },
+    "nan": {
+      "plain": {
+        "raw": "ordinary=display; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      }
+    },
+    "positiveInfinity": {
+      "plain": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      },
+      "signed": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      }
+    },
+    "negativeInfinity": {
+      "plain": {
+        "raw": "ordinary=display; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      },
+      "signed": {
+        "raw": "ordinary=display.ctJA5vLD5PlWS1G%2By6fVI7lCNJTVTuoyV4nHXTuGoj0%3D; Path=/; HttpOnly; SameSite=Lax",
+        "shape": {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      }
+    }
+  },
+  "chunks": {
+    "omitted": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      ],
+      "warnings": []
+    },
+    "zero": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      ],
+      "warnings": []
+    },
+    "negativeZero": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      ],
+      "warnings": []
+    },
+    "fractional": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": "0"
+        }
+      ],
+      "warnings": []
+    },
+    "negative": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      ],
+      "warnings": []
+    },
+    "boundary": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": "34560000"
+        }
+      ],
+      "warnings": []
+    },
+    "beyondFraction": {
+      "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+      "warnings": []
+    },
+    "beyond": {
+      "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+      "warnings": []
+    },
+    "nan": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      ],
+      "warnings": []
+    },
+    "positiveInfinity": {
+      "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+      "warnings": []
+    },
+    "negativeInfinity": {
+      "headers": [
+        {
+          "name": "ordinary",
+          "maxAge": null
+        }
+      ],
+      "warnings": []
+    }
+  },
+  "session": {
+    "remember": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": "300"
+        }
+      ]
+    },
+    "browser": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "maxAge": null
+        }
+      ]
+    },
+    "markerError": {
+      "status": 200,
+      "body": {
+        "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+        "newSession": false
+      },
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        }
+      ]
+    },
+    "overriddenTokenAge": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": "300"
+        }
+      ]
+    },
+    "omittedTokenAge": {
+      "status": 200,
+      "body": {
+        "error": null,
+        "newSession": true
+      },
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        },
+        {
+          "name": "better-auth.dont_remember",
+          "maxAge": null
+        }
+      ]
+    }
+  },
+  "lastLogin": {
+    "negative": {
+      "status": 200,
+      "body": "{\"ok\":true}",
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        },
+        {
+          "name": "better-auth.last_used_login_method",
+          "maxAge": null
+        }
+      ]
+    },
+    "nan": {
+      "status": 200,
+      "body": "{\"ok\":true}",
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        },
+        {
+          "name": "better-auth.last_used_login_method",
+          "maxAge": null
+        }
+      ]
+    },
+    "negativeInfinity": {
+      "status": 200,
+      "body": "{\"ok\":true}",
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        },
+        {
+          "name": "better-auth.last_used_login_method",
+          "maxAge": null
+        }
+      ]
+    },
+    "boundary": {
+      "status": 200,
+      "body": "{\"ok\":true}",
+      "events": [
+        "before"
+      ],
+      "headers": [
+        {
+          "name": "better-auth.session_token",
+          "maxAge": null
+        },
+        {
+          "name": "better-auth.last_used_login_method",
+          "maxAge": "34560000"
+        }
+      ]
+    },
+    "beyondFraction": {
+      "status": 500,
+      "body": "",
+      "events": [
+        "before",
+        "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      ],
+      "headers": []
+    },
+    "positiveInfinity": {
+      "status": 500,
+      "body": "",
+      "events": [
+        "before",
+        "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      ],
+      "headers": []
+    }
+  }
+}

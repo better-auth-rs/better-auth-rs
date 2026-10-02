@@ -9,7 +9,7 @@ pub use chunks::{
     clear_chunked_cookie, create_chunked_cookies, create_clear_chunked_cookies, get_chunked_cookie,
 };
 
-use crate::{config::AuthConfig, request_runtime::ResolvedCookie};
+use crate::{AuthError, AuthResult, config::AuthConfig, request_runtime::ResolvedCookie};
 use base64::{
     Engine as _, alphabet,
     engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig, general_purpose::STANDARD},
@@ -110,16 +110,22 @@ fn resolved_template(resolved: &ResolvedCookie) -> Cookie<'static> {
 
 /// Build a `Set-Cookie` header value for an arbitrary cookie using the auth
 /// config's session cookie attributes for consistency.
-pub fn create_cookie(name: &str, value: &str, max_age_seconds: i64, config: &AuthConfig) -> String {
+/// The lifetime is measured in seconds and validated before fractional values are rounded.
+pub fn create_cookie(
+    name: &str,
+    value: &str,
+    max_age_seconds: f64,
+    config: &AuthConfig,
+) -> AuthResult<String> {
     create_session_like_cookie(name, value, Some(max_age_seconds), config)
 }
 
 /// Build a `Set-Cookie` header value for a session token using the `cookie`
 /// crate for correct formatting and escaping.
-pub fn create_session_cookie(token: &str, config: &AuthConfig) -> String {
+pub fn create_session_cookie(token: &str, config: &AuthConfig) -> AuthResult<String> {
     create_session_cookie_with_max_age(
         Some(token),
-        Some(config.session.expires_in().num_seconds()),
+        Some(config.session.expires_in().as_seconds_f64()),
         config,
     )
 }
@@ -127,22 +133,22 @@ pub fn create_session_cookie(token: &str, config: &AuthConfig) -> String {
 /// Build a `Set-Cookie` header value for a session token using the session
 /// cookie attributes, optionally omitting `Max-Age` / `Expires` to create a
 /// browser-session cookie.
+/// A supplied lifetime uses seconds, including fractional values.
 pub fn create_session_cookie_with_max_age(
     token: Option<&str>,
-    max_age_seconds: Option<i64>,
+    max_age_seconds: Option<f64>,
     config: &AuthConfig,
-) -> String {
+) -> AuthResult<String> {
     let signed = token
         .filter(|token| !token.is_empty())
         .map(|token| sign_cookie_value(token, config.signing_secret()));
-    let resolved = config.auth_cookie("session_token", Default::default());
-    let mut cookie = resolved_template(&resolved);
-    cookie.set_value(signed.unwrap_or_default());
-    cookie.set_max_age(max_age_seconds.map(cookie::time::Duration::seconds));
-    if let Some(age) = cookie.max_age() {
-        cookie.set_expires(cookie::time::OffsetDateTime::now_utc() + age);
-    }
-    render_cookie(cookie, &resolved)
+    let mut resolved = config.auth_cookie("session_token", Default::default());
+    resolved.attributes.max_age = max_age_seconds;
+    serialize_cookie(
+        resolved_template(&resolved),
+        &signed.unwrap_or_default(),
+        &resolved,
+    )
 }
 
 /// Build session-token cookies and the explicit browser-session preference.
@@ -150,41 +156,63 @@ pub fn create_session_cookies(
     token: &str,
     dont_remember: bool,
     config: &AuthConfig,
-) -> Vec<String> {
-    let mut cookies = vec![create_session_cookie_with_max_age(
-        Some(token),
-        (!dont_remember).then_some(config.session.expires_in().num_seconds()),
-        config,
-    )];
-    if dont_remember {
-        cookies.push(create_session_like_cookie(
+) -> AuthResult<Vec<String>> {
+    session_cookie_headers(token, dont_remember, config).collect()
+}
+
+pub(crate) fn session_cookie_headers<'a>(
+    token: &'a str,
+    dont_remember: bool,
+    config: &'a AuthConfig,
+) -> impl Iterator<Item = AuthResult<String>> + 'a {
+    // Build each header only when requested so a later failure retains earlier writes.
+    std::iter::once_with(move || {
+        create_session_cookie_with_max_age(
+            Some(token),
+            (!dont_remember).then_some(config.session.expires_in().as_seconds_f64()),
+            config,
+        )
+    })
+    .chain(dont_remember.then_some(()).into_iter().map(move |()| {
+        create_session_like_cookie(
             &related_cookie_name(config, "dont_remember"),
             &sign_cookie_value("true", config.signing_secret()),
             None,
             config,
-        ));
-    }
-    cookies
+        )
+    }))
 }
 
 /// Build a `Set-Cookie` header value using the session cookie attributes for
 /// an arbitrary cookie name.
+/// A supplied lifetime uses seconds, including fractional values.
 pub fn create_session_like_cookie(
     name: &str,
     value: &str,
-    max_age_seconds: Option<i64>,
+    max_age_seconds: Option<f64>,
     config: &AuthConfig,
-) -> String {
+) -> AuthResult<String> {
     let resolved = template_for_name(name, max_age_seconds, config);
     serialize_cookie(resolved_template(&resolved), value, &resolved)
 }
 
-fn serialize_cookie(mut cookie: Cookie<'static>, value: &str, resolved: &ResolvedCookie) -> String {
+fn serialize_cookie(
+    mut cookie: Cookie<'static>,
+    value: &str,
+    resolved: &ResolvedCookie,
+) -> AuthResult<String> {
+    let max_age = resolved.attributes.max_age.filter(|age| *age >= 0.0);
+    if max_age.is_some_and(|age| age > 34_560_000.0) {
+        return Err(AuthError::internal(
+            "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+        ));
+    }
+    cookie.set_max_age(max_age.map(|age| cookie::time::Duration::seconds(age.floor() as i64)));
     cookie.set_value(value.to_owned());
     if let Some(age) = cookie.max_age() {
         cookie.set_expires(cookie::time::OffsetDateTime::now_utc() + age);
     }
-    render_cookie(cookie, resolved)
+    Ok(render_cookie(cookie, resolved))
 }
 
 /// Render cookie attributes while preserving the configured Domain spelling.
@@ -238,13 +266,13 @@ pub fn remove_set_cookie_entries(
     Ok(())
 }
 
-fn template_for_name(name: &str, max_age: Option<i64>, config: &AuthConfig) -> ResolvedCookie {
+fn template_for_name(name: &str, max_age: Option<f64>, config: &AuthConfig) -> ResolvedCookie {
     let settings = config.cookie_settings();
     let logical = settings.logical_name(name).unwrap_or("session_token");
     let mut cookie = settings.get(
         logical,
         crate::CookieAttributes {
-            max_age: max_age.map(|value| value as f64),
+            max_age,
             ..Default::default()
         },
     );

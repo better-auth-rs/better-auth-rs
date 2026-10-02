@@ -15,6 +15,12 @@ Set `advanced.cross_sub_domain_cookies = Some(CrossSubDomainConfig { enabled: So
 
 Use `config.auth_cookie("session_token", CookieAttributes::default())` to inspect the resolved name and attributes. Application cookies can use `context.create_auth_cookie` with their logical name and caller attributes.
 
+HTTP serialization checks the effective `Max-Age` before rounding. Values above 34,560,000 seconds, including positive infinity, return an ordinary runtime error. Negative values, negative infinity, and `NaN` omit `Max-Age`; zero emits `Max-Age=0`. Configuration resolution remains infallible because issuance or explicit expiration can replace an attribute before serialization.
+
+The public `create_cookie`, `create_session_like_cookie`, `create_session_cookie`, and `create_session_cookie_with_max_age` helpers return `AuthResult<String>`. `create_session_cookies` returns `AuthResult<Vec<String>>`. Propagate those errors with `?`. Session issuance appends each header before constructing the next cookie. A later failure retains already queued headers and does not publish `newSession`; the endpoint's existing error policy determines the final HTTP response. Explicit clearing helpers keep their infallible return types because the final lifetime is zero.
+
+`create_cookie` accepts its lifetime as `f64` seconds. `create_session_like_cookie` and `create_session_cookie_with_max_age` accept `Option<f64>`. Keep fractional seconds when passing a `chrono::Duration` with `as_seconds_f64()`. Session issuance and renewal preserve this precision: 34,560,000 seconds is allowed, 34,560,000.25 seconds returns an error, and 300.75 seconds emits `Max-Age=300`. Browser-session issuance omits `Max-Age` and does not validate the unused persistent lifetime. The stored session deadline remains independent of HTTP cookie rounding.
+
 ## Response Cookies
 
 `Headers::get_all("set-cookie")` returns every cookie in response order. Ordinary writes retain repeated names. A client must apply each entry in order, so the final value for a cookie determines the browser state.

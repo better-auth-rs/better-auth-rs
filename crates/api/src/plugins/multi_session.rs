@@ -197,9 +197,9 @@ impl MultiSessionPlugin {
             create_cookie(
                 &name,
                 &sign_cookie_value(&token, ctx.config.signing_secret()),
-                ctx.config.session.expires_in().num_seconds(),
+                ctx.config.session.expires_in().as_seconds_f64(),
                 &ctx.config,
-            ),
+            )?,
         );
         Ok(())
     }

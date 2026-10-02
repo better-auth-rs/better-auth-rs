@@ -9,7 +9,7 @@ Configure model IDs and application-owned defaults through [database ID generati
 
 Custom adapters must provide a credential-account point query independent of list pagination; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration).
 
-Sessions use signed cookies. Response headers preserve repeated cookie writes in order; explicit expiration removes earlier values and chunks. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context. Use [Multi Session](docs/content/docs/plugins/multi-session.mdx) to remember and switch between accounts, with adapter-specific session selection.
+Sessions use signed cookies. Response headers preserve repeated cookie writes in order; explicit expiration removes earlier values and chunks. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context. Use [Multi Session](docs/content/docs/plugins/multi-session.mdx) to remember and switch between accounts, with adapter-specific session selection and joined field projection.
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 
@@ -33,7 +33,7 @@ Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification an
 
 For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
-Cookie lifetime configuration accepts fractional seconds; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence.
+Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. HTTP cookie constructors return `AuthResult` and reject effective lifetimes above 400 days before rounding; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence.
 
 ## Quick start
 
@@ -121,7 +121,7 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
 
-Plugins can register adapter field policies for supported typed model fields, including DeviceCode `scope`; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies).
+Plugins can register adapter field policies for supported typed model fields, including DeviceCode `scope`; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Direct Organization store configuration also resolves built-in field order.
 
 Optional configuration fields use `Option` to distinguish omission from an explicit value. Construct social providers with a built-in constructor or `OAuthProvider::custom`. See [configuration options](docs/content/docs/reference/configuration-options.mdx) for defaults and [OAuth](docs/content/docs/plugins/oauth.mdx) for provider configuration. [Observability](docs/content/docs/concepts/observability.mdx) documents logging, tracing, opt-in telemetry, and the current alignment boundaries.
 

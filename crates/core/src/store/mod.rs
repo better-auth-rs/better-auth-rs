@@ -545,7 +545,8 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         create_session: CreateSession,
     ) -> AuthResult<crate::wire::SessionView>;
     async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>>;
-    /// Read a token batch in adapter order, with the adapter limit and optional cached projections.
+    /// Read a token batch in adapter order, with the adapter limit and optional joined or cached projections.
+    /// Joined projections complete adapter output policies before the batch returns.
     async fn get_session_snapshots(
         &self,
         tokens: &[String],

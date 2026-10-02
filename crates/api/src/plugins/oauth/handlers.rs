@@ -133,9 +133,9 @@ pub(super) fn attach_state_cookie(
         better_auth_core::utils::cookie_utils::create_cookie(
             &state_cookie_name(config),
             &value,
-            Duration::minutes(5).num_seconds(),
+            Duration::minutes(5).as_seconds_f64(),
             config,
-        ),
+        )?,
     ))
 }
 
@@ -150,9 +150,9 @@ pub(super) fn attach_cookie_state_payload(
         better_auth_core::utils::cookie_utils::create_cookie(
             &state_cookie_name(config),
             &value,
-            Duration::minutes(10).num_seconds(),
+            Duration::minutes(10).as_seconds_f64(),
             config,
-        ),
+        )?,
     ))
 }
 

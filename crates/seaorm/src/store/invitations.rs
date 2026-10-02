@@ -192,37 +192,46 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        let invitations = models::project::<O::Invitation>(
-            rows.clone(),
+        models::project_then::<O::Invitation, _, _>(
+            &rows,
             &fields.invitation,
             self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            |index, invitation| {
+                let rows = &rows;
+                let fields = &fields;
+                async move {
+                    let row = rows.get(index).ok_or_else(|| {
+                        better_auth_core::AuthError::internal(
+                            "Invitation projection lost its stored join index",
+                        )
+                    })?;
+                    let organization = Entity::<O::Organization>::find()
+                        .filter(
+                            O::Organization::column("id")?
+                                .eq(models::join_value(row, "organization_id")?),
+                        )
+                        .one(self.connection())
+                        .await
+                        .map_err(map_db_err)?;
+                    let organization = match organization {
+                        Some(row) => Some(
+                            row.record(
+                                &fields.organization,
+                                self.connection().get_database_backend()
+                                    == sea_orm::DbBackend::Postgres,
+                            )
+                            .await?,
+                        ),
+                        None => None,
+                    };
+                    Ok(better_auth_core::store::InvitationOrganization {
+                        invitation,
+                        organization,
+                    })
+                }
+            },
         )
-        .await?;
-        let mut result = Vec::with_capacity(rows.len());
-        for (row, invitation) in rows.into_iter().zip(invitations) {
-            let organization = Entity::<O::Organization>::find()
-                .filter(
-                    O::Organization::column("id")?.eq(models::join_value(&row, "organization_id")?),
-                )
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?;
-            let organization = match organization {
-                Some(row) => Some(
-                    row.record(
-                        &fields.organization,
-                        self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                    )
-                    .await?,
-                ),
-                None => None,
-            };
-            result.push(better_auth_core::store::InvitationOrganization {
-                invitation,
-                organization,
-            });
-        }
-        Ok(result)
+        .await
     }
 }
 

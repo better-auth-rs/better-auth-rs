@@ -336,11 +336,11 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
             cookie.set_path("/");
             cookie.unset_domain();
         }
-        if self.config.max_age >= 0.0 {
-            cookie.set_max_age(cookie::time::Duration::seconds(
+        cookie.set_max_age((self.config.max_age >= 0.0).then(|| {
+            cookie::time::Duration::seconds(
                 self.config.max_age.floor() as i64
-            ));
-        }
+            )
+        }));
         response.headers.append(
             "Set-Cookie",
             render_cookie(

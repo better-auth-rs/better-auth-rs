@@ -1,0 +1,151 @@
+{
+  "boundary-remember": {
+    "input": {
+      "expiresIn": 34560000,
+      "dontRemember": false
+    },
+    "status": 200,
+    "body": {
+      "error": null,
+      "resolvedExpiresIn": 34560000,
+      "newSession": true
+    },
+    "headers": [
+      {
+        "name": "better-auth.session_token",
+        "attributes": [
+          "Max-Age=34560000",
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      }
+    ]
+  },
+  "boundary-browser": {
+    "input": {
+      "expiresIn": 34560000,
+      "dontRemember": true
+    },
+    "status": 200,
+    "body": {
+      "error": null,
+      "resolvedExpiresIn": 34560000,
+      "newSession": true
+    },
+    "headers": [
+      {
+        "name": "better-auth.session_token",
+        "attributes": [
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      },
+      {
+        "name": "better-auth.dont_remember",
+        "attributes": [
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      }
+    ]
+  },
+  "beyondFraction-remember": {
+    "input": {
+      "expiresIn": 34560000.25,
+      "dontRemember": false
+    },
+    "status": 200,
+    "body": {
+      "error": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+      "resolvedExpiresIn": 34560000.25,
+      "newSession": false
+    },
+    "headers": []
+  },
+  "beyondFraction-browser": {
+    "input": {
+      "expiresIn": 34560000.25,
+      "dontRemember": true
+    },
+    "status": 200,
+    "body": {
+      "error": null,
+      "resolvedExpiresIn": 34560000.25,
+      "newSession": true
+    },
+    "headers": [
+      {
+        "name": "better-auth.session_token",
+        "attributes": [
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      },
+      {
+        "name": "better-auth.dont_remember",
+        "attributes": [
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      }
+    ]
+  },
+  "ordinaryFraction-remember": {
+    "input": {
+      "expiresIn": 300.75,
+      "dontRemember": false
+    },
+    "status": 200,
+    "body": {
+      "error": null,
+      "resolvedExpiresIn": 300.75,
+      "newSession": true
+    },
+    "headers": [
+      {
+        "name": "better-auth.session_token",
+        "attributes": [
+          "Max-Age=300",
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      }
+    ]
+  },
+  "ordinaryFraction-browser": {
+    "input": {
+      "expiresIn": 300.75,
+      "dontRemember": true
+    },
+    "status": 200,
+    "body": {
+      "error": null,
+      "resolvedExpiresIn": 300.75,
+      "newSession": true
+    },
+    "headers": [
+      {
+        "name": "better-auth.session_token",
+        "attributes": [
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      },
+      {
+        "name": "better-auth.dont_remember",
+        "attributes": [
+          "Path=/",
+          "HttpOnly",
+          "SameSite=Lax"
+        ]
+      }
+    ]
+  }
+}

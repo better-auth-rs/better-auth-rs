@@ -1,0 +1,1345 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "model": "organization",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "logo": "Logo:out",
+        "name": "Acme:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "events": [
+        [
+          "name",
+          "input",
+          " Acme "
+        ],
+        [
+          "logo",
+          "default"
+        ],
+        [
+          "logo",
+          "input",
+          " Logo "
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "output",
+          "Acme"
+        ],
+        [
+          "logo",
+          "output",
+          "Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "logo",
+          "onUpdate"
+        ],
+        [
+          "logo",
+          "input",
+          " Next Logo "
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "model": "team",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "name": "Team:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "name": "Next:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "name": "Next:out"
+      },
+      "events": [
+        [
+          "name",
+          "input",
+          " Team "
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "output",
+          "Team"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "input",
+          " Next "
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "output",
+          "Next"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Next"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "model": "member",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "role": "member"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "role": "member"
+      },
+      "found": {
+        "label": "Updated:out",
+        "role": "member"
+      },
+      "events": [
+        [
+          "role",
+          "input",
+          "member"
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "role",
+          "input",
+          "member"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "model": "invitation",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "status": "pending",
+        "role": "member"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "status": "pending",
+        "role": "member"
+      },
+      "found": {
+        "label": "Updated:out",
+        "status": "pending",
+        "role": "member"
+      },
+      "events": [
+        [
+          "role",
+          "input",
+          "member"
+        ],
+        [
+          "status",
+          "input",
+          "pending"
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "status",
+          "output",
+          "pending"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "status",
+          "input",
+          "pending"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "status",
+          "output",
+          "pending"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "status",
+          "output",
+          "pending"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "model": "organizationRole",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "role": "reader"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "role": "reader"
+      },
+      "found": {
+        "label": "Updated:out",
+        "role": "reader"
+      },
+      "events": [
+        [
+          "role",
+          "input",
+          "reader"
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "role",
+          "output",
+          "reader"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "role",
+          "input",
+          "reader"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "role",
+          "output",
+          "reader"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "role",
+          "output",
+          "reader"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "model": "organization",
+      "mode": "before",
+      "created": {
+        "label": "Label:out",
+        "logo": "Logo:out",
+        "name": "Acme:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "events": [
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "input",
+          " Acme "
+        ],
+        [
+          "logo",
+          "default"
+        ],
+        [
+          "logo",
+          "input",
+          " Logo "
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "output",
+          "Acme"
+        ],
+        [
+          "logo",
+          "output",
+          "Logo"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "logo",
+          "onUpdate"
+        ],
+        [
+          "logo",
+          "input",
+          " Next Logo "
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "model": "organization",
+      "mode": "after",
+      "created": {
+        "label": "Label:out",
+        "logo": "Logo:out",
+        "name": "Acme:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "events": [
+        [
+          "name",
+          "input",
+          " Acme "
+        ],
+        [
+          "logo",
+          "default"
+        ],
+        [
+          "logo",
+          "input",
+          " Logo "
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "output",
+          "Acme"
+        ],
+        [
+          "logo",
+          "output",
+          "Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "logo",
+          "onUpdate"
+        ],
+        [
+          "logo",
+          "input",
+          " Next Logo "
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "organization",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "logo": "Logo:out",
+        "name": "Acme:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "events": [
+        [
+          "name",
+          "input",
+          " Acme "
+        ],
+        [
+          "logo",
+          "default"
+        ],
+        [
+          "logo",
+          "input",
+          " Logo "
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "output",
+          "Acme"
+        ],
+        [
+          "logo",
+          "output",
+          "Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "logo",
+          "onUpdate"
+        ],
+        [
+          "logo",
+          "input",
+          " Next Logo "
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "team",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "name": "Team:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "name": "Next:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "name": "Next:out"
+      },
+      "events": [
+        [
+          "name",
+          "input",
+          " Team "
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "output",
+          "Team"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "input",
+          " Next "
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "output",
+          "Next"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Next"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "member",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "role": "member"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "role": "member"
+      },
+      "found": {
+        "label": "Updated:out",
+        "role": "member"
+      },
+      "events": [
+        [
+          "role",
+          "input",
+          "member"
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "role",
+          "input",
+          "member"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "invitation",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "status": "pending",
+        "role": "member"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "status": "pending",
+        "role": "member"
+      },
+      "found": {
+        "label": "Updated:out",
+        "status": "pending",
+        "role": "member"
+      },
+      "events": [
+        [
+          "role",
+          "input",
+          "member"
+        ],
+        [
+          "status",
+          "input",
+          "pending"
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "status",
+          "output",
+          "pending"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "status",
+          "input",
+          "pending"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "status",
+          "output",
+          "pending"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "role",
+          "output",
+          "member"
+        ],
+        [
+          "status",
+          "output",
+          "pending"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "organizationRole",
+      "mode": "direct",
+      "created": {
+        "label": "Label:out",
+        "role": "reader"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "role": "reader"
+      },
+      "found": {
+        "label": "Updated:out",
+        "role": "reader"
+      },
+      "events": [
+        [
+          "role",
+          "input",
+          "reader"
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "role",
+          "output",
+          "reader"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "role",
+          "input",
+          "reader"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "role",
+          "output",
+          "reader"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "role",
+          "output",
+          "reader"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "organization",
+      "mode": "before",
+      "created": {
+        "label": "Label:out",
+        "logo": "Logo:out",
+        "name": "Acme:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "events": [
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "input",
+          " Acme "
+        ],
+        [
+          "logo",
+          "default"
+        ],
+        [
+          "logo",
+          "input",
+          " Logo "
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "output",
+          "Acme"
+        ],
+        [
+          "logo",
+          "output",
+          "Logo"
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "logo",
+          "onUpdate"
+        ],
+        [
+          "logo",
+          "input",
+          " Next Logo "
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "model": "organization",
+      "mode": "after",
+      "created": {
+        "label": "Label:out",
+        "logo": "Logo:out",
+        "name": "Acme:out"
+      },
+      "updated": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "found": {
+        "label": "Updated:out",
+        "logo": "Next Logo:out",
+        "name": "Renamed:out"
+      },
+      "events": [
+        [
+          "name",
+          "input",
+          " Acme "
+        ],
+        [
+          "logo",
+          "default"
+        ],
+        [
+          "logo",
+          "input",
+          " Logo "
+        ],
+        [
+          "label",
+          "default"
+        ],
+        [
+          "label",
+          "input",
+          " Label "
+        ],
+        [
+          "name",
+          "output",
+          "Acme"
+        ],
+        [
+          "logo",
+          "output",
+          "Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Label"
+        ],
+        [
+          "name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "logo",
+          "onUpdate"
+        ],
+        [
+          "logo",
+          "input",
+          " Next Logo "
+        ],
+        [
+          "label",
+          "onUpdate"
+        ],
+        [
+          "label",
+          "input",
+          " Updated "
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ],
+        [
+          "name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "logo",
+          "output",
+          "Next Logo"
+        ],
+        [
+          "label",
+          "output",
+          "Updated"
+        ]
+      ]
+    }
+  ]
+}

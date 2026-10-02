@@ -141,12 +141,12 @@ pub(super) fn create_signed_cookie_header(
 ) -> AuthResult<String> {
     let cookie_name = related_cookie_name(config, suffix);
     let signed_value = sign_cookie_value(secret, value)?;
-    Ok(create_session_like_cookie(
+    create_session_like_cookie(
         &cookie_name,
         &signed_value,
-        max_age_seconds,
+        max_age_seconds.map(|value| value as f64),
         config,
-    ))
+    )
 }
 
 pub(super) fn read_signed_cookie<S: better_auth_core::AuthSchema>(

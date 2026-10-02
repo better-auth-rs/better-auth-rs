@@ -126,6 +126,36 @@ impl ModelFields {
                 fields.team.clone(),
             );
         }
+        self.declare_native_fields(
+            EntityRole::Member,
+            &["organizationId", "userId", "role", "createdAt"],
+            fields.member.clone(),
+        );
+        self.declare_native_fields(
+            EntityRole::Invitation,
+            &[
+                "organizationId",
+                "email",
+                "role",
+                "teamId",
+                "status",
+                "expiresAt",
+                "createdAt",
+                "inviterId",
+            ],
+            fields.invitation.clone(),
+        );
+        self.declare_native_fields(
+            EntityRole::OrganizationRole,
+            &[
+                "organizationId",
+                "role",
+                "permission",
+                "createdAt",
+                "updatedAt",
+            ],
+            fields.organization_role.clone(),
+        );
     }
 
     fn declare_native_fields(&mut self, role: EntityRole, names: &[&str], fields: UserConfig) {
@@ -139,7 +169,7 @@ impl ModelFields {
         self.extend(role, fields);
     }
 
-    /// Resolve Organization and Team policies without replacing adapter-owned native defaults.
+    /// Resolve Organization model policies without replacing adapter-owned native defaults.
     pub fn organization_fields(
         &self,
         fields: crate::organization_fields::OrganizationFields,
@@ -148,6 +178,9 @@ impl ModelFields {
         for (role, schema) in [
             (EntityRole::Organization, &mut fields.organization),
             (EntityRole::Team, &mut fields.team),
+            (EntityRole::Member, &mut fields.member),
+            (EntityRole::Invitation, &mut fields.invitation),
+            (EntityRole::OrganizationRole, &mut fields.organization_role),
         ] {
             let Some(registered) = self.models.get(&role) else {
                 continue;
@@ -166,7 +199,11 @@ impl ModelFields {
             }
             *schema = resolved;
         }
-        fields.into_storage()
+        // Upstream initializes the dynamic-role update schema eagerly as partial.
+        for field in fields.organization_role.fields_mut().values_mut() {
+            field.required = Some(false);
+        }
+        fields
     }
 
     /// Read the adapter policies for one supported model.

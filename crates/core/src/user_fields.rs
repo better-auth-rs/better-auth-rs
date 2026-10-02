@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use std::sync::{Arc, LazyLock};
 mod adapter;
 mod batch;
-pub(crate) use batch::project_fields;
+pub(crate) use batch::{project_fields_batches_then, project_fields_then};
 pub use record::AdapterRecord;
 mod organization;
 mod output;

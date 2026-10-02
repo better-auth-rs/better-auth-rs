@@ -1,0 +1,1858 @@
+{
+  "version": "1.7.6",
+  "joins": "default-fallback",
+  "cases": [
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "sync",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent:1",
+            "parentDetail": "A-marker:3",
+            "name": "A:5",
+            "detail": "A-detail:7"
+          },
+          {
+            "parent": "B-parent:2",
+            "parentDetail": "B-marker:4",
+            "name": "B:6",
+            "detail": "B-detail:8"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "parent-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "output-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "parent-async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "session",
+      "mode": "parent-read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "parent-display-update",
+          "A-before"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-before-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A-before",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "sync",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent:1",
+            "parentDetail": "A-marker:3",
+            "name": "A:5"
+          },
+          {
+            "parent": "B-parent:2",
+            "parentDetail": "B-marker:4",
+            "name": "B:6"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "parent-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "output-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "parent-async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "invitation",
+      "mode": "parent-read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "parent-display-update",
+          "A-before"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-before-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A-before",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "sync",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent:1",
+            "parentDetail": "A-marker:3",
+            "name": "A:5",
+            "detail": "A-detail:6"
+          },
+          {
+            "parent": "B-parent:2",
+            "parentDetail": "B-marker:4",
+            "name": "B:7",
+            "detail": "B-detail:8"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "parent-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "output-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "parent-async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "session",
+      "mode": "parent-read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "parent-display-update",
+          "A-before"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-before-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A-before",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "sync",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent:1",
+            "parentDetail": "A-marker:3",
+            "name": "A:5"
+          },
+          {
+            "parent": "B-parent:2",
+            "parentDetail": "B-marker:4",
+            "name": "B:7"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "parent-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "output-error",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "parent-async",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "invitation",
+      "mode": "parent-read",
+      "events": [
+        [
+          "parent",
+          "A-parent"
+        ],
+        [
+          "parent",
+          "B-parent"
+        ],
+        [
+          "parent-detail",
+          "B-marker"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "parent-display-update",
+          "A-before"
+        ],
+        [
+          "parent-detail",
+          "A-marker"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "parent": "A-parent-visible",
+            "parentDetail": "A-marker-visible",
+            "name": "A-before-visible"
+          },
+          {
+            "parent": "B-parent-visible",
+            "parentDetail": "B-marker-visible",
+            "name": "B-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A-before",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    }
+  ]
+}

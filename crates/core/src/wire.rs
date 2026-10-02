@@ -230,6 +230,26 @@ impl SessionView {
         config: &crate::config::SessionConfig,
         supports_native_json: bool,
     ) -> crate::AuthResult<Vec<Self>> {
+        Self::with_internal_fields_many_for_adapter_then(
+            sessions,
+            config,
+            supports_native_json,
+            |_, session| std::future::ready(Ok(session)),
+        )
+        .await
+    }
+
+    /// Continue each projected session while other rows retain their pending field callbacks.
+    /// Preserve the original row index for adapter-owned association data.
+    pub async fn with_internal_fields_many_for_adapter_then<T: AuthSession, R: Send, F>(
+        sessions: &[T],
+        config: &crate::config::SessionConfig,
+        supports_native_json: bool,
+        complete: impl Fn(usize, Self) -> F + Sync,
+    ) -> crate::AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = crate::AuthResult<R>> + Send,
+    {
         let mut rows = sessions
             .iter()
             .map(|session| {
@@ -248,7 +268,7 @@ impl SessionView {
                 ))
             })
             .collect::<crate::AuthResult<Vec<_>>>()?;
-        crate::user_fields::project_fields(
+        crate::user_fields::project_fields_then(
             &mut rows,
             config.fields(),
             |(session, view, core, model), name, field| {
@@ -274,9 +294,9 @@ impl SessionView {
                     Ok(())
                 })
             },
+            |index, (_, view, _, _)| complete(index, view.clone()),
         )
-        .await?;
-        Ok(rows.into_iter().map(|(_, view, _, _)| view).collect())
+        .await
     }
 }
 
