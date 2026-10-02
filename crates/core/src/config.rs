@@ -375,7 +375,9 @@ impl CookieCacheConfig {
     }
     /// Read the effective cache lifetime.
     pub fn max_age(&self) -> Duration {
-        self.max_age.unwrap_or_else(|| Duration::minutes(5))
+        self.max_age
+            .filter(|age| !age.is_zero())
+            .unwrap_or_else(|| Duration::minutes(5))
     }
     /// Read the effective cookie protection strategy.
     pub fn strategy(&self) -> CookieCacheStrategy {
@@ -387,10 +389,8 @@ impl CookieCacheConfig {
             None | Some(CookieCacheRefresh::Disabled) => None,
             Some(CookieCacheRefresh::After(age)) => Some(age),
             Some(CookieCacheRefresh::Enabled) => {
-                let age = self.max_age().num_seconds();
-                Some(Duration::seconds(
-                    if age == 0 { 300 } else { age }.div_euclid(5),
-                ))
+                let age = self.max_age().as_seconds_f64();
+                Some(Duration::seconds((age * 0.2).floor() as i64))
             }
         }
     }
@@ -540,7 +540,8 @@ pub struct CookieAttributes {
     /// Override `Path`.
     pub path: Option<String>,
     /// Override `Max-Age` (seconds).
-    pub max_age: Option<i64>,
+    /// Cookie lifetime in seconds, including fractional seconds.
+    pub max_age: Option<f64>,
     /// Override cookie `Domain`.
     pub domain: Option<String>,
 }

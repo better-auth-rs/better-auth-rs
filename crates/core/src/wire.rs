@@ -605,8 +605,8 @@ pub struct ApiKeyView {
     pub metadata: Option<serde_json::Value>,
 }
 
-// JSON.stringify emits safe integral JavaScript numbers without a decimal suffix.
-pub(crate) fn serialize_optional_number<S: Serializer>(
+/// Serialize optional JavaScript numbers, preserving whole-number JSON representation.
+pub fn serialize_optional_number<S: Serializer>(
     value: &Option<f64>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {

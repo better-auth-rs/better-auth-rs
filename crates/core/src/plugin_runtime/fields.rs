@@ -1,13 +1,17 @@
 use crate::store::schema::EntityRole;
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{ApiKey, AuthConfig, AuthError, AuthResult, DeviceCode, Passkey, SchemaValue};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
 
 /// Plugin field policies consumed by the selected adapter during auth initialization.
 #[derive(Clone, Default)]
-pub struct ModelFields(IndexMap<EntityRole, UserConfig>);
+pub struct ModelFields {
+    models: IndexMap<EntityRole, UserConfig>,
+    native_fields: IndexMap<EntityRole, IndexSet<String>>,
+    organization: Option<crate::organization_fields::OrganizationFields>,
+}
 
 type StringFields<'a, const N: usize> = [(&'static str, &'a mut SchemaValue<Option<String>>); N];
 
@@ -44,7 +48,9 @@ impl ModelFields {
             EntityRole::User
             | EntityRole::Session
             | EntityRole::Account
-            | EntityRole::Verification => {}
+            | EntityRole::Verification
+            | EntityRole::Organization
+            | EntityRole::Team => {}
             EntityRole::Passkey | EntityRole::ApiKey | EntityRole::DeviceCode => {
                 for (name, field) in fields.fields() {
                     if !matches!(
@@ -73,7 +79,7 @@ impl ModelFields {
         }
         self.extend(role, fields);
         if role == EntityRole::Passkey
-            && let Some(fields) = self.0.get_mut(&role)
+            && let Some(fields) = self.models.get_mut(&role)
         {
             // Replacing an upstream field policy retains the field's schema position.
             fields
@@ -85,14 +91,88 @@ impl ModelFields {
 
     pub(crate) fn extend(&mut self, role: EntityRole, fields: UserConfig) {
         if let Some(fields) = fields.additional_fields {
-            self.0.entry(role).or_default().fields_mut().extend(fields);
+            if let Some(native) = self.native_fields.get_mut(&role) {
+                native.retain(|name| !fields.contains_key(name));
+            }
+            self.models
+                .entry(role)
+                .or_default()
+                .fields_mut()
+                .extend(fields);
         }
+    }
+
+    pub(crate) fn register_organization_schema(
+        &mut self,
+        fields: &crate::organization_fields::OrganizationFields,
+        teams_enabled: bool,
+    ) {
+        self.organization = Some(fields.clone());
+        self.declare_native_fields(
+            EntityRole::Organization,
+            &["name", "slug", "logo", "createdAt", "metadata"],
+            fields.organization.clone(),
+        );
+        if teams_enabled {
+            self.declare_native_fields(
+                EntityRole::Team,
+                &[
+                    "name",
+                    "memberCount",
+                    "organizationId",
+                    "createdAt",
+                    "updatedAt",
+                ],
+                fields.team.clone(),
+            );
+        }
+    }
+
+    fn declare_native_fields(&mut self, role: EntityRole, names: &[&str], fields: UserConfig) {
+        let registered = self.models.entry(role).or_default().fields_mut();
+        let native = self.native_fields.entry(role).or_default();
+        for name in names {
+            // Reserve the schema position; the adapter already implements native field defaults.
+            let _ = registered.insert((*name).into(), Default::default());
+            let _ = native.insert((*name).into());
+        }
+        self.extend(role, fields);
+    }
+
+    /// Resolve Organization and Team policies without replacing adapter-owned native defaults.
+    pub fn organization_fields(
+        &self,
+        fields: crate::organization_fields::OrganizationFields,
+    ) -> crate::organization_fields::OrganizationFields {
+        let mut fields = self.organization.clone().unwrap_or(fields);
+        for (role, schema) in [
+            (EntityRole::Organization, &mut fields.organization),
+            (EntityRole::Team, &mut fields.team),
+        ] {
+            let Some(registered) = self.models.get(&role) else {
+                continue;
+            };
+            let mut resolved = registered.clone();
+            for (name, field) in schema.fields() {
+                let _ = resolved
+                    .fields_mut()
+                    .entry(name.clone())
+                    .or_insert_with(|| field.clone());
+            }
+            if let Some(native) = self.native_fields.get(&role) {
+                resolved
+                    .fields_mut()
+                    .retain(|name, _| !native.contains(name));
+            }
+            *schema = resolved;
+        }
+        fields.into_storage()
     }
 
     /// Read the adapter policies for one supported model.
     pub fn fields(&self, role: EntityRole) -> &UserConfig {
         static EMPTY: LazyLock<UserConfig> = LazyLock::new(UserConfig::default);
-        self.0.get(&role).unwrap_or(&EMPTY)
+        self.models.get(&role).unwrap_or(&EMPTY)
     }
 
     /// Merge core policies and retain plugin-table policies for `RuntimeStore::with_runtime`.
@@ -101,7 +181,7 @@ impl ModelFields {
         let mut adapter = application.clone();
         let mut endpoint = application.clone();
         let mut resolve = |role, configured| {
-            let fields = self.0.shift_remove(&role).unwrap_or_default();
+            let fields = self.models.shift_remove(&role).unwrap_or_default();
             super::resolve_user_fields(&configured, fields)
         };
         (adapter.user, endpoint.user) = resolve(EntityRole::User, application.user.clone());
@@ -124,6 +204,11 @@ impl ModelFields {
         );
         adapter.verification.additional_fields = stored.additional_fields.unwrap_or_default();
         endpoint.verification.additional_fields = public.additional_fields.unwrap_or_default();
+        for (role, native) in &self.native_fields {
+            if let Some(fields) = self.models.get_mut(role) {
+                fields.fields_mut().retain(|name, _| !native.contains(name));
+            }
+        }
         (adapter, endpoint, self)
     }
 

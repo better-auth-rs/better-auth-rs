@@ -215,25 +215,41 @@ impl<
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        let mut teams = Vec::with_capacity(rows.len());
         let config = self.organization_fields()?.team;
-        for member in rows {
-            if let Some(row) = Entity::<O::Team>::find()
-                .filter(O::Team::column("id")?.eq(models::join_value(&member, "team_id")?))
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?
-            {
-                teams.push(
-                    row.record(
-                        &config,
-                        self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                    )
-                    .await?,
-                );
-            }
-        }
-        Ok(teams)
+        let teams = models::project_then::<O::TeamMember, _, _>(
+            &rows,
+            &better_auth_core::user_fields::UserConfig::default(),
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            |index, _| {
+                let rows = &rows;
+                let config = &config;
+                async move {
+                    let member = rows.get(index).ok_or_else(|| {
+                        better_auth_core::AuthError::internal(
+                            "Team member projection lost its stored join index",
+                        )
+                    })?;
+                    let row = Entity::<O::Team>::find()
+                        .filter(O::Team::column("id")?.eq(models::join_value(member, "team_id")?))
+                        .one(self.connection())
+                        .await
+                        .map_err(map_db_err)?;
+                    match row {
+                        Some(row) => row
+                            .record(
+                                config,
+                                self.connection().get_database_backend()
+                                    == sea_orm::DbBackend::Postgres,
+                            )
+                            .await
+                            .map(Some),
+                        None => Ok(None),
+                    }
+                }
+            },
+        )
+        .await?;
+        Ok(teams.into_iter().flatten().collect())
     }
     async fn get_team_member(
         &self,

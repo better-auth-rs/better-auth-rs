@@ -1,0 +1,104 @@
+[
+  {
+    "backend": "memory",
+    "events": [
+      [
+        "accessToken",
+        "A-access"
+      ],
+      [
+        "accessToken",
+        "B-access"
+      ],
+      [
+        "refreshToken",
+        "A-refresh"
+      ],
+      [
+        "refreshToken",
+        "B-refresh"
+      ],
+      [
+        "name",
+        "A"
+      ],
+      [
+        "name",
+        "B"
+      ],
+      [
+        "image",
+        "A-image"
+      ],
+      [
+        "image",
+        "B-image"
+      ]
+    ],
+    "rows": [
+      {
+        "accessToken": "A-access:1",
+        "refreshToken": "A-refresh:3",
+        "name": "A:5",
+        "image": "A-image:7"
+      },
+      {
+        "accessToken": "B-access:2",
+        "refreshToken": "B-refresh:4",
+        "name": "B:6",
+        "image": "B-image:8"
+      }
+    ]
+  },
+  {
+    "backend": "sqlite",
+    "events": [
+      [
+        "accessToken",
+        "A-access"
+      ],
+      [
+        "accessToken",
+        "B-access"
+      ],
+      [
+        "refreshToken",
+        "A-refresh"
+      ],
+      [
+        "refreshToken",
+        "B-refresh"
+      ],
+      [
+        "name",
+        "A"
+      ],
+      [
+        "image",
+        "A-image"
+      ],
+      [
+        "name",
+        "B"
+      ],
+      [
+        "image",
+        "B-image"
+      ]
+    ],
+    "rows": [
+      {
+        "accessToken": "A-access:1",
+        "refreshToken": "A-refresh:3",
+        "name": "A:5",
+        "image": "A-image:6"
+      },
+      {
+        "accessToken": "B-access:2",
+        "refreshToken": "B-refresh:4",
+        "name": "B:7",
+        "image": "B-image:8"
+      }
+    ]
+  }
+]

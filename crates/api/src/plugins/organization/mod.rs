@@ -281,8 +281,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         &self,
         ctx: &mut better_auth_core::AuthInitContext<S>,
     ) -> better_auth_core::AuthResult<()> {
-        ctx.database
-            .configure_organization_fields(self.config.schema.clone())?;
+        ctx.register_organization_schema(&self.config.schema, self.config.teams.enabled);
         ctx.extensions.insert(self.config.schema.clone());
         ctx.extensions.insert(self.clone());
 

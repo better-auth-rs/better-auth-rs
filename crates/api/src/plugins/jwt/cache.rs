@@ -14,7 +14,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
     async fn sign(
         &self,
         mut payload: Map<String, Value>,
-        expires_in: i64,
+        expires_in: f64,
         context: SessionCookieContext<'_, S>,
     ) -> AuthResult<String> {
         let sid = payload
@@ -31,7 +31,13 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             ("sid".into(), sid),
             ("sub".into(), subject),
             ("iat".into(), Utc::now().timestamp().into()),
-            ("exp".into(), (Utc::now().timestamp() + expires_in).into()),
+            (
+                "exp".into(),
+                better_auth_core::wire::serialize_optional_number(
+                    &Some(Utc::now().timestamp() as f64 + expires_in),
+                    serde_json::value::Serializer,
+                )?,
+            ),
             ("aud".into(), AUDIENCE.into()),
         ]);
         let runtime = self.runtime.context()?;

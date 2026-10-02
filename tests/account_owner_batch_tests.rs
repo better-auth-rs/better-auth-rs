@@ -334,10 +334,10 @@ struct OwnerTrace {
 
 fn owner_config(trace: &Arc<Mutex<OwnerTrace>>) -> AuthConfig {
     let mut config = AuthConfig::default();
-    for name in ["accessToken", "refreshToken", "name"] {
+    for name in ["accessToken", "refreshToken", "name", "image"] {
         let trace = trace.clone();
         let field = UserFieldConfig {
-            returned: Some(name == "name"),
+            returned: Some(matches!(name, "name" | "image")),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(move |value| {
                     let mut trace = trace.lock().unwrap();
@@ -355,7 +355,7 @@ fn owner_config(trace: &Arc<Mutex<OwnerTrace>>) -> AuthConfig {
             }),
             ..Default::default()
         };
-        let fields = if name == "name" {
+        let fields = if matches!(name, "name" | "image") {
             config.user.fields_mut()
         } else {
             &mut config.account.additional_fields
@@ -367,11 +367,12 @@ fn owner_config(trace: &Arc<Mutex<OwnerTrace>>) -> AuthConfig {
 
 async fn check_owner<S: AuthSchema>(store: &impl AuthStore<S>, trace: &Arc<Mutex<OwnerTrace>>) {
     let user = store
-        .create_user(
-            CreateUser::new()
+        .create_user(CreateUser {
+            image: Some("https://ordinary-owner.test/image.png".into()).into(),
+            ..CreateUser::new()
                 .with_name("Fixture User")
-                .with_email("ordinary-owner@example.test"),
-        )
+                .with_email("ordinary-owner@example.test")
+        })
         .await
         .unwrap();
     let _ = store
@@ -400,16 +401,21 @@ async fn check_owner<S: AuthSchema>(store: &impl AuthStore<S>, trace: &Arc<Mutex
         Some(json!("refresh:out"))
     );
     assert_eq!(
-        owner.user.unwrap().name.json().unwrap(),
+        owner.user.as_ref().unwrap().name.json().unwrap(),
         Some(json!("Fixture User:out"))
+    );
+    assert_eq!(
+        owner.user.as_ref().unwrap().image.json().unwrap(),
+        Some(json!("https://ordinary-owner.test/image.png:out"))
     );
     let expected = [
         "accessToken:access",
         "refreshToken:refresh",
         "name:Fixture User",
+        "image:https://ordinary-owner.test/image.png",
     ];
     assert_eq!(trace.lock().unwrap().events, expected);
-    for (index, name) in ["accessToken", "refreshToken", "name"]
+    for (index, name) in ["accessToken", "refreshToken", "name", "image"]
         .into_iter()
         .enumerate()
     {
@@ -442,4 +448,77 @@ async fn sqlite_owner_projects_tokens_then_user_and_preserves_errors() {
     migrator::run_migrations(&db).await.unwrap();
     let store = SeaOrmStore::<BundledSchema>::new(owner_config(&trace), db);
     check_owner(&store, &trace).await;
+}
+
+#[tokio::test]
+async fn ready_account_rows_batch_multifield_owner_projection() {
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "fixtures/account-owner-multiple-fields-1.7.6.json"
+    ))
+    .unwrap();
+    let fixture = fixtures
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["backend"] == "memory")
+        .unwrap();
+    let events = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let field = |name: &'static str| {
+        let events = events.clone();
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    let mut events = events.lock().unwrap();
+                    events.push(json!([name, value]));
+                    Ok(Some(json!(format!(
+                        "{}:{}",
+                        value.unwrap().as_str().unwrap(),
+                        events.len()
+                    ))))
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    };
+    let mut config = AuthConfig::default();
+    for name in ["accessToken", "refreshToken"] {
+        config
+            .account
+            .additional_fields
+            .insert(name.into(), field(name));
+    }
+    let user = UserConfig {
+        additional_fields: Some(
+            [
+                ("name".into(), field("name")),
+                ("image".into(), field("image")),
+            ]
+            .into(),
+        ),
+    };
+    let fields = config.account.field_schema();
+    let accounts = ["A", "B"].into_iter().map(|label| json!({"id":format!("account-{label}"),"accessToken":format!("{label}-access"),"refreshToken":format!("{label}-refresh")} ).as_object().unwrap().clone()).collect::<Vec<_>>();
+    let owners = ["A", "B"]
+        .into_iter()
+        .map(|label| {
+            json!({"id":format!("user-{label}"),"name":label,"image":format!("{label}-image")})
+                .as_object()
+                .unwrap()
+                .clone()
+        })
+        .collect::<Vec<_>>();
+    let rows = fields.project_records_batches_then(&accounts, true, true, |ready| {
+        let user = &user;
+        let owners = &owners;
+        async move {
+            let raw = ready.iter().map(|(index, _)| owners[*index].clone()).collect::<Vec<_>>();
+            let projected = user.project_records(&raw, true, true).await?;
+            Ok(ready.into_iter().zip(projected).map(|((index, account), owner)| (index, json!({
+                "accessToken":account["accessToken"], "refreshToken":account["refreshToken"], "name":owner["name"], "image":owner["image"]
+            }))).collect())
+        }
+    }).await.unwrap();
+    assert_eq!(json!(rows), fixture["rows"]);
+    assert_eq!(json!(*events.lock().unwrap()), fixture["events"]);
 }

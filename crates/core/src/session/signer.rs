@@ -12,11 +12,11 @@ pub struct SessionCookieContext<'a, S: AuthSchema> {
 /// Runtime boundary for plugins that sign and verify session cookie caches.
 #[async_trait::async_trait]
 pub trait SessionCookieSigner<S: AuthSchema>: Send + Sync {
-    /// Sign cache claims with the supplied lifetime in the active endpoint context.
+    /// Sign cache claims with the lifetime in seconds, preserving fractional seconds.
     async fn sign(
         &self,
         payload: Map<String, Value>,
-        expires_in: i64,
+        expires_in: f64,
         context: SessionCookieContext<'_, S>,
     ) -> AuthResult<String>;
     /// Return verified cache claims, or `None` for an invalid token.

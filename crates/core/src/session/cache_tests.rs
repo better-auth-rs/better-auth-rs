@@ -71,7 +71,7 @@ async fn cache_renewal_preserves_account_binding_chunks_and_pending_cookies() {
         account.as_object().unwrap().clone(),
         manager.config.encryption_secret(),
         "better-auth-account",
-        30,
+        30.0,
     )
     .unwrap();
     let name = "better-auth.account_data";
@@ -80,7 +80,7 @@ async fn cache_renewal_preserves_account_binding_chunks_and_pending_cookies() {
         &manager.config.auth_cookie(
             "account_data",
             crate::CookieAttributes {
-                max_age: Some(30),
+                max_age: Some(30.0),
                 ..Default::default()
             },
         ),
@@ -527,4 +527,140 @@ async fn large_cache_chunks_are_read_and_cleared_after_revocation() {
         let name = chunk.split('=').next().unwrap();
         assert!(cleared.get_all("Set-Cookie").any(|value| value.starts_with(&format!("{name}=;")) && value.contains("Max-Age=0")));
     }
+}
+
+#[tokio::test]
+async fn fractional_cookie_cache_lifetimes_match_pinned_fixture() {
+    let fixtures: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/cookie-cache-lifetime-1.7.6.json"
+    ))
+    .unwrap();
+    for (label, strategy) in [
+        ("compact", CookieCacheStrategy::Compact),
+        ("jwt", CookieCacheStrategy::Jwt),
+        ("jwe", CookieCacheStrategy::Jwe),
+    ] {
+        for (name, fixture) in fixtures[label].as_object().unwrap() {
+            let input = &fixture["input"];
+            let mut cfg = config(strategy);
+            cfg.session.cookie_cache.as_mut().unwrap().max_age = input["cacheMaxAge"]
+                .as_f64()
+                .map(|age| Duration::milliseconds((age * 1000.0) as i64));
+            cfg.advanced.default_cookie_attributes.max_age = input["defaultMaxAge"].as_f64();
+            cfg.advanced.cookies.get_or_insert_default().insert(
+                "session_data".into(),
+                crate::CookieOverride {
+                    name: None,
+                    attributes: crate::CookieAttributes {
+                        max_age: input["cookieMaxAge"].as_f64(),
+                        ..Default::default()
+                    },
+                },
+            );
+            let (manager, data) = setup(cfg).await;
+            let cache = manager.config.session.cookie_cache.as_ref().unwrap();
+            let before = Utc::now();
+            let encoded = cookie_cache::encode(&data, &manager.config, cache, false)
+                .await
+                .unwrap();
+            let after = Utc::now();
+            let (decoded, expires) =
+                cookie_cache::decode(&encoded, &manager.config, cache).unwrap();
+            let lifetime_ms = (fixture["expiresIn"].as_f64().unwrap() * 1000.0) as i64;
+            let issued_ms = expires - lifetime_ms;
+            let clock = |date: chrono::DateTime<Utc>| {
+                if strategy == CookieCacheStrategy::Compact {
+                    date.timestamp_millis()
+                } else {
+                    date.timestamp() * 1000
+                }
+            };
+            assert!(
+                clock(before) <= issued_ms && issued_ms <= clock(after),
+                "{label}/{name}: full captured lifetime survives authenticated decoding"
+            );
+            assert_eq!(decoded.data.user.id, data.user.id);
+            assert_eq!(decoded.data.session.token, data.session.token);
+            if strategy != CookieCacheStrategy::Compact {
+                assert_eq!(expires % 1000, lifetime_ms % 1000);
+            }
+            let request = request(&data.session.token, &manager.config);
+            manager.write_cache(&request, &data, false).await.unwrap();
+            let headers = request.take_response_headers().unwrap();
+            let header = headers
+                .get_all("set-cookie")
+                .find(|line| line.starts_with("better-auth.session_data="))
+                .unwrap();
+            let max_age = header
+                .split("; ")
+                .find_map(|part| part.strip_prefix("Max-Age="));
+            assert_eq!(max_age, fixture["httpMaxAge"].as_str(), "{label}/{name}");
+            let resolved = manager
+                .resolve(&with_cache(request, &encoded), SessionRead::Cached)
+                .await
+                .unwrap()
+                .data
+                .unwrap();
+            assert_eq!(resolved.user.id, data.user.id);
+        }
+    }
+}
+
+#[tokio::test]
+async fn account_cookie_renewal_preserves_fractional_override() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/cookie-cache-lifetime-1.7.6.json"
+    ))
+    .unwrap();
+    let age = fixture["account"]["override"]["maxAge"].as_f64().unwrap();
+    let mut cfg = config(CookieCacheStrategy::Jwe);
+    cfg.account.store_account_cookie = Some(true);
+    cfg.advanced.cookies.get_or_insert_default().insert(
+        "account_data".into(),
+        crate::CookieOverride {
+            name: None,
+            attributes: crate::CookieAttributes {
+                max_age: Some(age),
+                ..Default::default()
+            },
+        },
+    );
+    let (manager, data) = setup(cfg).await;
+    let account = serde_json::json!({"providerId":"ordinary", "userId":data.user.id, "accessToken":"fixture-access-token"});
+    let value = crate::utils::jwe::encode(
+        account.as_object().unwrap().clone(),
+        manager.config.encryption_secret(),
+        "better-auth-account",
+        3600.5,
+    )
+    .unwrap();
+    let mut req = request(&data.session.token, &manager.config);
+    req.headers
+        .get_mut("cookie")
+        .unwrap()
+        .push_str(&format!("; better-auth.account_data={value}"));
+    let before = Utc::now().timestamp() as f64;
+    manager.write_cache(&req, &data, false).await.unwrap();
+    let after = Utc::now().timestamp() as f64;
+    let headers = req.take_response_headers().unwrap();
+    let header = headers
+        .get_all("set-cookie")
+        .find(|line| line.starts_with("better-auth.account_data="))
+        .unwrap();
+    let value = header.split(';').next().unwrap().split_once('=').unwrap().1;
+    let decoded = crate::utils::jwe::decode(
+        value,
+        manager.config.encryption_secret(),
+        "better-auth-account",
+    )
+    .unwrap();
+    let expiry_base = decoded["exp"].as_f64().unwrap() - age;
+    assert_eq!(expiry_base.fract(), 0.0);
+    assert!(before <= expiry_base && expiry_base <= after);
+    assert_eq!(
+        decoded["providerId"],
+        fixture["account"]["override"]["providerId"]
+    );
+    assert_eq!(decoded["userId"], account["userId"]);
+    assert!(header.contains("Max-Age=90"));
 }

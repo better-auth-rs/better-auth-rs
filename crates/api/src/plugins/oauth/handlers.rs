@@ -97,17 +97,12 @@ pub(super) fn create_account_cookie_headers(
     let cookie = config.auth_cookie(
         "account_data",
         better_auth_core::CookieAttributes {
-            max_age: Some(max_age.num_seconds()),
+            max_age: Some(max_age.as_seconds_f64()),
             ..Default::default()
         },
     );
-    let ttl = cookie
-        .attributes
-        .max_age
-        .filter(|age| *age != 0)
-        .unwrap_or(300);
-    let value =
-        create_account_cookie_value(config.encryption_secret(), payload, Duration::seconds(ttl))?;
+    let ttl = cookie.attributes.max_age.unwrap_or(300.0);
+    let value = create_account_cookie_value(config.encryption_secret(), payload, ttl)?;
     better_auth_core::utils::cookie_utils::create_chunked_cookies(req, &cookie, &value)
 }
 

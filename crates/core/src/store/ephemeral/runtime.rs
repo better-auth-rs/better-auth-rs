@@ -17,13 +17,14 @@ impl RuntimeStore<StatelessSchema> for EphemeralStore {
         model_fields: crate::plugin_runtime::ModelFields,
     ) -> AuthResult<Arc<dyn AuthStore<StatelessSchema>>> {
         hooks.extend(self.hooks.iter().cloned());
+        let organization_fields = model_fields.organization_fields(self.organization_fields()?);
         Ok(Arc::new(Self {
             session_config: config.session.clone(),
             config,
             model_fields,
             state: self.state.clone(),
             verification_locks: self.verification_locks.clone(),
-            organization_fields: Arc::new(RwLock::new(self.organization_fields()?)),
+            organization_fields: Arc::new(RwLock::new(organization_fields)),
             hooks,
             pending_hooks: None,
         }))

@@ -341,33 +341,43 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .all(self.connection())
             .await
             .map_err(map_db_err)?;
-        let _ = models::project::<O::Member>(
-            rows.clone(),
+        let organizations = models::project_then::<O::Member, _, _>(
+            &rows,
             &config.member,
             self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            |index, _| {
+                let rows = &rows;
+                let config = &config;
+                async move {
+                    let member = rows.get(index).ok_or_else(|| {
+                        better_auth_core::AuthError::internal(
+                            "Member projection lost its stored join index",
+                        )
+                    })?;
+                    let row = Entity::<O::Organization>::find()
+                        .filter(
+                            O::Organization::column("id")?
+                                .eq(models::join_value(member, "organization_id")?),
+                        )
+                        .one(self.connection())
+                        .await
+                        .map_err(map_db_err)?;
+                    match row {
+                        Some(row) => row
+                            .record(
+                                &config.organization,
+                                self.connection().get_database_backend()
+                                    == sea_orm::DbBackend::Postgres,
+                            )
+                            .await
+                            .map(Some),
+                        None => Ok(None),
+                    }
+                }
+            },
         )
         .await?;
-        let mut organizations = Vec::with_capacity(rows.len());
-        for member in rows {
-            if let Some(row) = Entity::<O::Organization>::find()
-                .filter(
-                    O::Organization::column("id")?
-                        .eq(models::join_value(&member, "organization_id")?),
-                )
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?
-            {
-                organizations.push(
-                    row.record(
-                        &config.organization,
-                        self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                    )
-                    .await?,
-                );
-            }
-        }
-        Ok(organizations)
+        Ok(organizations.into_iter().flatten().collect())
     }
 }
 

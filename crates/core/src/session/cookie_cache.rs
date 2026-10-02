@@ -38,7 +38,7 @@ fn cache_cookie(
     let mut cookie = config.auth_cookie(
         "session_data",
         CookieAttributes {
-            max_age: Some(cache.max_age().num_seconds()),
+            max_age: Some(cache.max_age().as_seconds_f64()),
             ..Default::default()
         },
     );
@@ -68,7 +68,7 @@ pub(super) async fn payload(
     config: &AuthConfig,
     cache: &CookieCacheConfig,
     dont_remember: bool,
-) -> AuthResult<(serde_json::Map<String, Value>, i64)> {
+) -> AuthResult<(serde_json::Map<String, Value>, f64)> {
     let now = Utc::now();
     let version = cache.version.resolve(data).await?;
     let mut public = data.clone();
@@ -85,8 +85,8 @@ pub(super) async fn payload(
     let max_age = cache_cookie(config, cache, dont_remember)
         .attributes
         .max_age
-        .filter(|age| *age != 0)
-        .unwrap_or(300);
+        .filter(|age| *age != 0.0 && !age.is_nan())
+        .unwrap_or(300.0);
     Ok((payload, max_age))
 }
 
@@ -100,13 +100,17 @@ pub(super) async fn encode(
     let (payload, max_age) = payload(data, config, cache, dont_remember).await?;
     match cache.strategy() {
         CookieCacheStrategy::Compact => {
-            let expires_at = now.timestamp_millis()
-                + cache_cookie(config, cache, dont_remember)
-                    .attributes
-                    .max_age
-                    .filter(|age| *age != 0)
-                    .unwrap_or(60)
-                    * 1000;
+            let expires_at = crate::utils::date::from_milliseconds(
+                now.timestamp_millis() as f64
+                    + cache_cookie(config, cache, dont_remember)
+                        .attributes
+                        .max_age
+                        .filter(|age| *age != 0.0 && !age.is_nan())
+                        .unwrap_or(60.0)
+                        * 1000.0,
+            )
+            .ok_or_else(|| AuthError::config("Invalid cookie cache lifetime"))?
+            .timestamp_millis();
             let mut signed = payload.clone();
             let _ = signed.insert("expiresAt".into(), expires_at.into());
             let mut mac = Hmac::<Sha256>::new_from_slice(config.signing_secret().as_bytes())
@@ -122,7 +126,13 @@ pub(super) async fn encode(
         CookieCacheStrategy::Jwt => {
             let mut claims = payload;
             let _ = claims.insert("iat".into(), now.timestamp().into());
-            let _ = claims.insert("exp".into(), (now.timestamp() + max_age).into());
+            let _ = claims.insert(
+                "exp".into(),
+                crate::wire::serialize_optional_number(
+                    &Some(now.timestamp() as f64 + max_age),
+                    serde_json::value::Serializer,
+                )?,
+            );
             let mut header = Header::new(Algorithm::HS256);
             header.typ = None;
             Ok(jsonwebtoken::encode(
@@ -150,7 +160,8 @@ fn parse_payload(payload: Value) -> Option<CachedSession> {
 }
 
 pub(super) fn parse_jwt(payload: serde_json::Map<String, Value>) -> Option<(CachedSession, i64)> {
-    let expires = payload.get("exp")?.as_i64()?.checked_mul(1000)?;
+    let expires = crate::utils::date::from_milliseconds(payload.get("exp")?.as_f64()? * 1000.0)?
+        .timestamp_millis();
     let mut parsed: CachedSession = parse_payload(Value::Object(payload))?;
     parsed.data.session.active = true;
     Some((parsed, expires))
@@ -188,7 +199,9 @@ pub(super) fn decode(
             )
             .ok()?
             .claims;
-            let expires = payload.get("exp")?.as_i64()?.checked_mul(1000)?;
+            let expires =
+                crate::utils::date::from_milliseconds(payload.get("exp")?.as_f64()? * 1000.0)?
+                    .timestamp_millis();
             (payload, expires)
         }
         CookieCacheStrategy::Jwe => {
@@ -197,7 +210,9 @@ pub(super) fn decode(
                 config.encryption_secret(),
                 "better-auth-session",
             )?);
-            let expires = payload.get("exp")?.as_i64()?.checked_mul(1000)?;
+            let expires =
+                crate::utils::date::from_milliseconds(payload.get("exp")?.as_f64()? * 1000.0)?
+                    .timestamp_millis();
             (payload, expires)
         }
     };
@@ -272,12 +287,11 @@ fn renew_account_cookie(
     let cookie = config.auth_cookie(
         "account_data",
         CookieAttributes {
-            max_age: Some(cache.max_age().num_seconds()),
+            max_age: Some(cache.max_age().as_seconds_f64()),
             ..Default::default()
         },
     );
-    let max_age = cookie.attributes.max_age.unwrap_or(300);
-    let max_age = if max_age == 0 { 300 } else { max_age };
+    let max_age = cookie.attributes.max_age.unwrap_or(300.0);
     let value = crate::utils::jwe::encode(
         account,
         config.encryption_secret(),

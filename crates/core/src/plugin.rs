@@ -438,7 +438,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
             .extend(crate::store::schema::EntityRole::User, fields);
     }
 
-    /// Register adapter fields for core models, Passkey name/aaguid, API Key name, or DeviceCode scope.
+    /// Register adapter fields for core models, Organization, Team, or supported plugin display fields.
     /// Other plugin roles and fields return a configuration error.
     pub fn register_model_fields(
         &mut self,
@@ -446,6 +446,17 @@ impl<S: AuthSchema> AuthInitContext<S> {
         fields: crate::user_fields::UserConfig,
     ) -> AuthResult<()> {
         self.plugin_fields.register(role, fields)
+    }
+
+    /// Register the Organization plugin schema at its position in plugin initialization.
+    #[doc(hidden)]
+    pub fn register_organization_schema(
+        &mut self,
+        fields: &crate::organization_fields::OrganizationFields,
+        teams_enabled: bool,
+    ) {
+        self.plugin_fields
+            .register_organization_schema(fields, teams_enabled);
     }
 
     /// Register a database hook before application-owned adapter hooks.

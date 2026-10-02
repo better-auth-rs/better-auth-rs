@@ -1,0 +1,1188 @@
+{
+  "version": "1.7.6",
+  "joins": "default-fallback",
+  "cases": [
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "sync",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A:1",
+            "detail": "A-detail:3"
+          },
+          {
+            "name": "B:2",
+            "detail": "B-detail:4"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "async",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "read",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "output-error",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "parent-error",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "parent-async",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "organization",
+      "mode": "parent-read",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "member-display-update",
+          "A-before"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-before-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A-before",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "team",
+      "mode": "sync",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A:1",
+            "detail": "A-detail:3"
+          },
+          {
+            "name": "B:2",
+            "detail": "B-detail:4"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "team",
+      "mode": "async",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "team",
+      "mode": "read",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "kind": "team",
+      "mode": "output-error",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "sync",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A:1",
+            "detail": "A-detail:2"
+          },
+          {
+            "name": "B:3",
+            "detail": "B-detail:4"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "async",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "read",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "output-error",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "parent-error",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "parent-async",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "organization",
+      "mode": "parent-read",
+      "events": [
+        [
+          "member",
+          "A-member"
+        ],
+        [
+          "member",
+          "B-member"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "member-display-update",
+          "A-before"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "A-before"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-before-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A-before",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "team",
+      "mode": "sync",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A:1",
+            "detail": "A-detail:2"
+          },
+          {
+            "name": "B:3",
+            "detail": "B-detail:4"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "team",
+      "mode": "async",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "controller",
+          "both-started"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "controller",
+          "release-first"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "team",
+      "mode": "read",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "name",
+          "B-after"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ],
+        [
+          "display-update",
+          "B-after"
+        ],
+        [
+          "detail",
+          "A-detail"
+        ]
+      ],
+      "result": {
+        "rows": [
+          {
+            "name": "A-visible",
+            "detail": "A-detail-visible"
+          },
+          {
+            "name": "B-visible",
+            "detail": "B-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B-after",
+          "detail": "B-detail"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "kind": "team",
+      "mode": "output-error",
+      "events": [
+        [
+          "name",
+          "A"
+        ],
+        [
+          "name",
+          "B"
+        ],
+        [
+          "detail",
+          "B-detail"
+        ]
+      ],
+      "result": {
+        "error": {
+          "status": "BAD_REQUEST",
+          "code": "ORDINARY_FIELD_FAILURE",
+          "message": "Ordinary display callback failed"
+        }
+      },
+      "originalError": true,
+      "stored": [
+        {
+          "name": "A",
+          "detail": "A-detail"
+        },
+        {
+          "name": "B",
+          "detail": "B-detail"
+        }
+      ]
+    }
+  ]
+}

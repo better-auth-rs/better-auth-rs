@@ -50,7 +50,7 @@ pub async fn run() -> AuthResult<Value> {
     config.advanced.default_cookie_attributes = CookieAttributes {
         path: Some("/global".into()),
         domain: Some(".example.test".into()),
-        max_age: Some(7),
+        max_age: Some(7.0),
         secure: Some(false),
         ..Default::default()
     };
@@ -61,7 +61,7 @@ pub async fn run() -> AuthResult<Value> {
             attributes: CookieAttributes {
                 path: Some("/auth".into()),
                 http_only: Some(false),
-                max_age: Some(180),
+                max_age: Some(180.0),
                 ..Default::default()
             },
         },
@@ -72,7 +72,7 @@ pub async fn run() -> AuthResult<Value> {
             name: Some("custom-cache".into()),
             attributes: CookieAttributes {
                 path: Some("/cache".into()),
-                max_age: Some(90),
+                max_age: Some(90.0),
                 ..Default::default()
             },
         },

@@ -1,0 +1,279 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "order": "before",
+      "organizationCreated": {
+        "name": " Acme :own",
+        "logo": null
+      },
+      "organizationUpdated": {
+        "name": " Renamed :own",
+        "logo": null
+      },
+      "teamCreated": {
+        "name": " Team "
+      },
+      "teamUpdated": {
+        "name": " Next "
+      },
+      "listed": [
+        {
+          "name": " Renamed :own",
+          "logo": null
+        }
+      ],
+      "events": [
+        [
+          "organization.name",
+          "own-output",
+          " Acme "
+        ],
+        [
+          "organization.name",
+          "own-output",
+          " Renamed "
+        ],
+        [
+          "organization.name",
+          "own-output",
+          " Renamed "
+        ]
+      ]
+    },
+    {
+      "backend": "memory",
+      "order": "after",
+      "organizationCreated": {
+        "name": "Acme:custom",
+        "logo": "Default:custom"
+      },
+      "organizationUpdated": {
+        "name": "Renamed:custom",
+        "logo": "Updated:custom"
+      },
+      "teamCreated": {
+        "name": "Team:custom"
+      },
+      "teamUpdated": {
+        "name": "Next:custom"
+      },
+      "listed": [
+        {
+          "name": "Renamed:custom",
+          "logo": "Updated:custom"
+        }
+      ],
+      "events": [
+        [
+          "organization.name",
+          "input",
+          " Acme "
+        ],
+        [
+          "organization.logo",
+          "input",
+          " Default "
+        ],
+        [
+          "organization.name",
+          "output",
+          "Acme"
+        ],
+        [
+          "organization.logo",
+          "output",
+          "Default"
+        ],
+        [
+          "organization.name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "organization.logo",
+          "input",
+          " Updated "
+        ],
+        [
+          "organization.name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "organization.logo",
+          "output",
+          "Updated"
+        ],
+        [
+          "team.name",
+          "input",
+          " Team "
+        ],
+        [
+          "team.name",
+          "output",
+          "Team"
+        ],
+        [
+          "team.name",
+          "input",
+          " Next "
+        ],
+        [
+          "team.name",
+          "output",
+          "Next"
+        ],
+        [
+          "organization.name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "organization.logo",
+          "output",
+          "Updated"
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "order": "before",
+      "organizationCreated": {
+        "name": " Acme :own",
+        "logo": null
+      },
+      "organizationUpdated": {
+        "name": " Renamed :own",
+        "logo": null
+      },
+      "teamCreated": {
+        "name": " Team "
+      },
+      "teamUpdated": {
+        "name": " Next "
+      },
+      "listed": [
+        {
+          "name": " Renamed :own",
+          "logo": null
+        }
+      ],
+      "events": [
+        [
+          "organization.name",
+          "own-output",
+          " Acme "
+        ],
+        [
+          "organization.name",
+          "own-output",
+          " Renamed "
+        ],
+        [
+          "organization.name",
+          "own-output",
+          " Renamed "
+        ]
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "order": "after",
+      "organizationCreated": {
+        "name": "Acme:custom",
+        "logo": "Default:custom"
+      },
+      "organizationUpdated": {
+        "name": "Renamed:custom",
+        "logo": "Updated:custom"
+      },
+      "teamCreated": {
+        "name": "Team:custom"
+      },
+      "teamUpdated": {
+        "name": "Next:custom"
+      },
+      "listed": [
+        {
+          "name": "Renamed:custom",
+          "logo": "Updated:custom"
+        }
+      ],
+      "events": [
+        [
+          "organization.name",
+          "input",
+          " Acme "
+        ],
+        [
+          "organization.logo",
+          "input",
+          " Default "
+        ],
+        [
+          "organization.name",
+          "output",
+          "Acme"
+        ],
+        [
+          "organization.logo",
+          "output",
+          "Default"
+        ],
+        [
+          "organization.name",
+          "input",
+          " Renamed "
+        ],
+        [
+          "organization.logo",
+          "input",
+          " Updated "
+        ],
+        [
+          "organization.name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "organization.logo",
+          "output",
+          "Updated"
+        ],
+        [
+          "team.name",
+          "input",
+          " Team "
+        ],
+        [
+          "team.name",
+          "output",
+          "Team"
+        ],
+        [
+          "team.name",
+          "input",
+          " Next "
+        ],
+        [
+          "team.name",
+          "output",
+          "Next"
+        ],
+        [
+          "organization.name",
+          "output",
+          "Renamed"
+        ],
+        [
+          "organization.logo",
+          "output",
+          "Updated"
+        ]
+      ]
+    }
+  ]
+}

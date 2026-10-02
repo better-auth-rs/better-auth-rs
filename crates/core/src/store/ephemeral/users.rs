@@ -14,6 +14,21 @@ impl EphemeralStore {
         .await
     }
 
+    pub(super) async fn user_record_by_id_value(
+        &self,
+        id: &serde_json::Value,
+    ) -> AuthResult<Option<UserView>> {
+        self.raw("user", "findOne", |state| {
+            Ok(state
+                .users
+                .snapshot()?
+                .iter()
+                .find(|user| serde_json::json!(user.id) == *id)
+                .cloned())
+        })
+        .await
+    }
+
     async fn finish_user_update(
         &self,
         id: &str,
@@ -30,7 +45,7 @@ impl EphemeralStore {
         Ok(self.output_users(vec![user]).await?.remove(0))
     }
 
-    async fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
+    pub(super) async fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
         let storage = users
             .iter_mut()
             .map(|user| {
@@ -381,16 +396,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .transpose()
     }
     async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<UserView>> {
-        let user = self
-            .raw("user", "findOne", |state| {
-                Ok(state
-                    .users
-                    .snapshot()?
-                    .iter()
-                    .find(|user| serde_json::json!(user.id) == *id)
-                    .cloned())
-            })
-            .await?;
+        let user = self.user_record_by_id_value(id).await?;
         futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
             .await
             .transpose()

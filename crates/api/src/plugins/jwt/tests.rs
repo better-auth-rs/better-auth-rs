@@ -378,3 +378,96 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
     assert!(payload["exp"].as_i64().unwrap() > Utc::now().timestamp());
     assert!(payload.get("iat").is_none());
 }
+
+#[tokio::test]
+async fn cookie_signer_preserves_fractional_lifetime_through_normal_cache_read() {
+    use crate::plugins::test_helpers::{
+        create_test_config, create_test_context_with_config, create_user_and_session,
+    };
+    use better_auth_core::{
+        CreateUser,
+        config::{CookieCacheConfig, CookieCacheStrategy},
+        session::{SessionCookieSigner, SessionData, SessionRead},
+    };
+    let mut config = create_test_config();
+    config.session.cookie_cache = Some(CookieCacheConfig {
+        enabled: Some(true),
+        strategy: Some(CookieCacheStrategy::Jwt),
+        max_age: Some(Duration::milliseconds(3_600_500)),
+        ..Default::default()
+    });
+    let mut ctx = create_test_context_with_config(config).await;
+    let plugin = JwtPlugin::new().session_cookie_cache(true);
+    let mut init = AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+    plugin.on_init(&mut init).await.unwrap();
+    let runtime = init.runtime();
+    ctx.extensions = init.extensions;
+    let ctx = Arc::new(ctx);
+    runtime.bind(&ctx).unwrap();
+    let (user, session) = create_user_and_session(
+        &ctx,
+        CreateUser::new()
+            .with_email("ordinary@cache-lifetime.test")
+            .with_name("Ordinary"),
+        Duration::hours(2),
+    )
+    .await;
+    let data = SessionData { user, session };
+    let manager = ctx.session_manager();
+    let request = AuthRequest::new(HttpMethod::Get, "/get-session");
+    let before = Utc::now().timestamp() as f64;
+    manager.write_cache(&request, &data, false).await.unwrap();
+    let after = Utc::now().timestamp() as f64;
+    let headers = request.take_response_headers().unwrap();
+    let cookie = headers
+        .get_all("set-cookie")
+        .next()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap();
+    let token = cookie.split_once('=').unwrap().1;
+    let signer = ctx
+        .extensions
+        .get::<Arc<
+            dyn SessionCookieSigner<
+                better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema,
+            >,
+        >>()
+        .unwrap();
+    let claims = signer
+        .verify(
+            token,
+            better_auth_core::session::SessionCookieContext {
+                request: &request,
+                config: &ctx.config,
+                transaction: None,
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let base = claims["exp"].as_f64().unwrap() - 3600.5;
+    assert_eq!(base.fract(), 0.0);
+    assert!(before <= base && base <= after);
+    let mut read = AuthRequest::new(HttpMethod::Get, "/get-session");
+    read.headers.insert(
+        "cookie".into(),
+        format!(
+            "better-auth.session_token={}; {cookie}",
+            better_auth_core::utils::cookie_utils::sign_cookie_value(
+                &data.session.token,
+                &ctx.config.secret
+            )
+        ),
+    );
+    let cached = manager
+        .resolve(&read, SessionRead::Cached)
+        .await
+        .unwrap()
+        .data
+        .unwrap();
+    assert_eq!(cached.session.id, data.session.id);
+    assert_eq!(cached.user.id, data.user.id);
+    assert!(read.take_response_headers().unwrap().is_empty());
+}

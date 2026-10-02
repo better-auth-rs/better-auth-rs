@@ -1,0 +1,185 @@
+{
+  "compact": {
+    "omitted": {
+      "input": {},
+      "resolvedMaxAge": 300,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "300"
+    },
+    "cacheZero": {
+      "input": {
+        "cacheMaxAge": 0
+      },
+      "resolvedMaxAge": 300,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "300"
+    },
+    "fractional": {
+      "input": {
+        "cacheMaxAge": 3600.5
+      },
+      "resolvedMaxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "3600"
+    },
+    "global": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "defaultMaxAge": 7200.5
+      },
+      "resolvedMaxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "3600"
+    },
+    "override": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "cookieMaxAge": 90.5
+      },
+      "resolvedMaxAge": 90.5,
+      "expiresIn": 90.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "90"
+    },
+    "zero": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "cookieMaxAge": 0
+      },
+      "resolvedMaxAge": 0,
+      "expiresIn": 60,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "0"
+    }
+  },
+  "jwt": {
+    "omitted": {
+      "input": {},
+      "resolvedMaxAge": 300,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "300"
+    },
+    "cacheZero": {
+      "input": {
+        "cacheMaxAge": 0
+      },
+      "resolvedMaxAge": 300,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "300"
+    },
+    "fractional": {
+      "input": {
+        "cacheMaxAge": 3600.5
+      },
+      "resolvedMaxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "3600"
+    },
+    "global": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "defaultMaxAge": 7200.5
+      },
+      "resolvedMaxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "3600"
+    },
+    "override": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "cookieMaxAge": 90.5
+      },
+      "resolvedMaxAge": 90.5,
+      "expiresIn": 90.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "90"
+    },
+    "zero": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "cookieMaxAge": 0
+      },
+      "resolvedMaxAge": 0,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "0"
+    }
+  },
+  "jwe": {
+    "omitted": {
+      "input": {},
+      "resolvedMaxAge": 300,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "300"
+    },
+    "cacheZero": {
+      "input": {
+        "cacheMaxAge": 0
+      },
+      "resolvedMaxAge": 300,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "300"
+    },
+    "fractional": {
+      "input": {
+        "cacheMaxAge": 3600.5
+      },
+      "resolvedMaxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "3600"
+    },
+    "global": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "defaultMaxAge": 7200.5
+      },
+      "resolvedMaxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "3600"
+    },
+    "override": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "cookieMaxAge": 90.5
+      },
+      "resolvedMaxAge": 90.5,
+      "expiresIn": 90.5,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "90"
+    },
+    "zero": {
+      "input": {
+        "cacheMaxAge": 3600.5,
+        "cookieMaxAge": 0
+      },
+      "resolvedMaxAge": 0,
+      "expiresIn": 300,
+      "email": "ordinary@cache-lifetime.test",
+      "httpMaxAge": "0"
+    }
+  },
+  "account": {
+    "fractional": {
+      "maxAge": 3600.5,
+      "expiresIn": 3600.5,
+      "providerId": "ordinary"
+    },
+    "override": {
+      "maxAge": 90.5,
+      "expiresIn": 90.5,
+      "providerId": "ordinary"
+    }
+  }
+}

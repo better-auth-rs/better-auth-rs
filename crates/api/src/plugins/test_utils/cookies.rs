@@ -23,8 +23,11 @@ pub struct TestCookie {
     /// Browser API spelling: `Strict`, `Lax`, or `None`.
     pub same_site: &'static str,
     /// Expiry in Unix seconds; absent for a session cookie.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires: Option<i64>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::wire::serialize_optional_number"
+    )]
+    pub expires: Option<f64>,
 }
 fn signed<S: AuthSchema>(
     auth: &AuthContext<S>,
@@ -34,7 +37,7 @@ fn signed<S: AuthSchema>(
         auth.config.auth_cookie(
             "session_token",
             CookieAttributes {
-                max_age: Some(auth.config.session.expires_in().num_seconds()),
+                max_age: Some(auth.config.session.expires_in().as_seconds_f64()),
                 ..Default::default()
             },
         ),
@@ -81,7 +84,7 @@ pub(super) fn cookies<S: AuthSchema>(
         },
         expires: attributes
             .max_age
-            .filter(|value| *value != 0)
-            .map(|age| Utc::now().timestamp() + age),
+            .filter(|value| *value != 0.0 && !value.is_nan())
+            .map(|age| Utc::now().timestamp() as f64 + age),
     }]
 }

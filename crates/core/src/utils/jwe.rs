@@ -27,12 +27,18 @@ pub fn encode<'a>(
     mut payload: Map<String, Value>,
     secret: impl Into<SecretKey<'a>>,
     salt: &str,
-    expires_in: i64,
+    expires_in: f64,
 ) -> AuthResult<String> {
     let key = encryption_key(secret.into().current()?, salt)?;
     let now = Utc::now().timestamp();
     let _ = payload.insert("iat".into(), now.into());
-    let _ = payload.insert("exp".into(), (now + expires_in).into());
+    let _ = payload.insert(
+        "exp".into(),
+        crate::wire::serialize_optional_number(
+            &Some(now as f64 + expires_in),
+            serde_json::value::Serializer,
+        )?,
+    );
     let _ = payload.insert("jti".into(), uuid::Uuid::new_v4().to_string().into());
     let mut header = JweHeader::new();
     header.set_algorithm("dir");

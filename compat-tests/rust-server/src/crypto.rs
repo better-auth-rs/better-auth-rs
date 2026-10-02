@@ -70,7 +70,7 @@ expires_at: (Utc::now() + Duration::minutes(10)).into(),
             let result = match operation {
                 "encrypt" => symmetric::encrypt(key, body["data"].as_str().unwrap()).map(Value::String),
                 "decrypt" => symmetric::decrypt(key, body["data"].as_str().unwrap()).map(Value::String),
-                "encode" => jwe::encode(body["data"].as_object().unwrap().clone(), key, salt, body["expiresIn"].as_i64().unwrap_or(3600)).map(Value::String),
+                "encode" => jwe::encode(body["data"].as_object().unwrap().clone(), key, salt, body["expiresIn"].as_f64().unwrap_or(3600.0)).map(Value::String),
                 "decode" => Ok(jwe::decode(body["data"].as_str().unwrap(), key, salt).map(Value::Object).unwrap_or(Value::Null)),
                 _ => panic!("Unknown crypto operation"),
             };

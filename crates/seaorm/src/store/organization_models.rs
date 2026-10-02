@@ -143,6 +143,33 @@ pub(super) async fn project<M: SeaOrmOrganizationModel>(
     M::records(&rows, config, supports_native_json).await
 }
 
+pub(super) async fn project_then<M: SeaOrmOrganizationModel, R: Send, F>(
+    rows: &[M],
+    config: &UserConfig,
+    supports_native_json: bool,
+    complete: impl Fn(usize, M::Record) -> F + Sync,
+) -> AuthResult<Vec<R>>
+where
+    M::Record: Send,
+    F: Future<Output = AuthResult<R>> + Send,
+{
+    let records = rows
+        .iter()
+        .map(|row| row.record_fields(config))
+        .collect::<AuthResult<Vec<_>>>()?;
+    config
+        .organization_output_records_then(records, supports_native_json, |index, fields| {
+            let complete = &complete;
+            async move {
+                let row = rows.get(index).ok_or_else(|| {
+                    AuthError::internal("Organization projection lost its stored row index")
+                })?;
+                complete(index, row.record_from_fields(config, fields)?).await
+            }
+        })
+        .await
+}
+
 /// Resolve every configured field before accepting writes through this model.
 pub(super) fn validate_fields<M: SeaOrmOrganizationModel>(
     entity: &str,

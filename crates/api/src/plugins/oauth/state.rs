@@ -196,15 +196,10 @@ pub(crate) fn decode_cookie_state_value<'a>(
 pub(crate) fn create_account_cookie_value<'a>(
     secret: impl Into<SecretKey<'a>>,
     payload: &AccountCookiePayload,
-    max_age: Duration,
+    max_age: f64,
 ) -> AuthResult<String> {
     let fields = serde_json::from_value(serde_json::to_value(payload)?)?;
-    better_auth_core::utils::jwe::encode(
-        fields,
-        secret,
-        "better-auth-account",
-        max_age.num_seconds(),
-    )
+    better_auth_core::utils::jwe::encode(fields, secret, "better-auth-account", max_age)
 }
 
 pub(crate) fn decode_account_cookie_value<'a>(
@@ -283,5 +278,70 @@ mod raw_state_tests {
         );
         let output = serde_json::to_string(&OAuthStatePayload::parse(&output).unwrap()).unwrap();
         assert!(output.contains("2026-02-30T00:00:00Z"));
+    }
+}
+
+#[cfg(test)]
+mod cookie_lifetime_tests {
+    use super::*;
+
+    #[test]
+    fn account_cookie_lifetime_uses_the_resolved_fractional_override() {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/cookie-cache-lifetime-1.7.6.json"
+        ))
+        .unwrap();
+        for fixture in fixtures["account"].as_object().unwrap().values() {
+            let age = fixture["maxAge"].as_f64().unwrap();
+            let mut config =
+                AuthConfig::new("ordinary-cookie-lifetime-fixture-secret-more-than-32-characters");
+            config.advanced.cookies.get_or_insert_default().insert(
+                "account_data".into(),
+                better_auth_core::CookieOverride {
+                    name: None,
+                    attributes: better_auth_core::CookieAttributes {
+                        max_age: Some(age),
+                        ..Default::default()
+                    },
+                },
+            );
+            let account = AccountCookiePayload {
+                provider_id: "ordinary".to_owned().into(),
+                access_token: Some("fixture-access-token".into()).into(),
+                ..Default::default()
+            };
+            let before = Utc::now().timestamp() as f64;
+            let headers = crate::plugins::oauth::handlers::create_account_cookie_headers(
+                &AuthRequest::new(better_auth_core::HttpMethod::Get, "/"),
+                &config,
+                &account,
+            )
+            .unwrap();
+            let after = Utc::now().timestamp() as f64;
+            let token = headers[0]
+                .split(';')
+                .next()
+                .unwrap()
+                .split_once('=')
+                .unwrap()
+                .1;
+            let claims = better_auth_core::utils::jwe::decode(
+                token,
+                config.encryption_secret(),
+                "better-auth-account",
+            )
+            .unwrap();
+            let expiry_base =
+                claims["exp"].as_f64().unwrap() - fixture["expiresIn"].as_f64().unwrap();
+            assert_eq!(expiry_base.fract(), 0.0);
+            assert!(before <= expiry_base && expiry_base <= after);
+            assert_eq!(claims["providerId"], fixture["providerId"]);
+            assert_eq!(
+                decode_account_cookie_value(config.encryption_secret(), token)
+                    .unwrap()
+                    .provider_id,
+                account.provider_id
+            );
+        }
     }
 }

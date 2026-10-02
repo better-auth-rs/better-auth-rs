@@ -216,14 +216,13 @@ impl TeamStore for EphemeralStore {
             Some(self.config.advanced.database.find_many_limit()),
             None,
         );
-        let mut output = Vec::new();
+        let mut teams = Vec::new();
         for member in rows {
-            let team = self.lock()?.teams.get(&member.team_id)?;
-            if let Some(team) = team {
-                output.push(self.output_team(team).await?);
+            if let Some(team) = self.lock()?.teams.get(&member.team_id)? {
+                teams.push(team);
             }
         }
-        Ok(output)
+        self.output_records(EntityRole::Team, teams).await
     }
     async fn get_team_member(
         &self,

@@ -95,8 +95,8 @@ fn resolved_template(resolved: &ResolvedCookie) -> Cookie<'static> {
     if let Some(value) = &attrs.same_site {
         cookie.set_same_site(map_same_site(value));
     }
-    if let Some(value) = attrs.max_age {
-        cookie.set_max_age(cookie::time::Duration::seconds(value));
+    if let Some(value) = attrs.max_age.filter(|value| *value >= 0.0) {
+        cookie.set_max_age(cookie::time::Duration::seconds(value.floor() as i64));
     }
     if cookie.name().starts_with("__Secure-") || cookie.name().starts_with("__Host-") {
         cookie.set_secure(true);
@@ -244,7 +244,7 @@ fn template_for_name(name: &str, max_age: Option<i64>, config: &AuthConfig) -> R
     let mut cookie = settings.get(
         logical,
         crate::CookieAttributes {
-            max_age,
+            max_age: max_age.map(|value| value as f64),
             ..Default::default()
         },
     );

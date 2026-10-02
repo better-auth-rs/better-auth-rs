@@ -74,7 +74,7 @@ fn config(calls: Arc<Mutex<Vec<String>>>) -> AuthConfig {
             attributes: better_auth_core::CookieAttributes {
                 path: Some("/custom".into()),
                 domain: Some(".ignored.example".into()),
-                max_age: Some(90),
+                max_age: Some(90.0),
                 same_site: Some(better_auth_core::SameSite::Strict),
                 http_only: Some(false),
                 ..Default::default()
@@ -155,8 +155,8 @@ async fn contract<S: AuthSchema>(
     assert!(!cookie.http_only);
     assert!(!cookie.secure);
     assert_eq!(cookie.same_site, "Strict");
-    assert!(cookie.expires.unwrap() >= start.timestamp() + 90);
-    assert!(cookie.expires.unwrap() <= Utc::now().timestamp() + 90);
+    assert!(cookie.expires.unwrap() >= start.timestamp() as f64 + 90.0);
+    assert!(cookie.expires.unwrap() <= Utc::now().timestamp() as f64 + 90.0);
     assert_eq!(
         better_auth_core::utils::cookie_utils::verify_cookie_value(
             &cookie.value,

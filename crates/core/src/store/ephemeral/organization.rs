@@ -296,15 +296,27 @@ impl OrganizationStore for EphemeralStore {
             None,
         );
         let ids: Vec<_> = rows.iter().map(|row| row.organization_id.clone()).collect();
-        let _ = self.output_records(EntityRole::Member, rows).await?;
-        let mut result = Vec::new();
-        for id in ids {
-            let organization = self.lock()?.organizations.get(&id)?;
-            if let Some(organization) = organization {
-                result.push(self.output_organization(organization).await?);
+        self.output_records_batches_then(EntityRole::Member, rows, |ready| {
+            let ids = &ids;
+            async move {
+                let mut indices = Vec::new();
+                let mut organizations = Vec::new();
+                for (index, _) in ready {
+                    let id = ids.get(index).ok_or_else(|| {
+                        AuthError::internal("Member projection lost its stored join index")
+                    })?;
+                    if let Some(organization) = self.lock()?.organizations.get(id)? {
+                        indices.push(index);
+                        organizations.push(organization);
+                    }
+                }
+                Ok(indices
+                    .into_iter()
+                    .zip(self.output_organizations(organizations).await?)
+                    .collect())
             }
-        }
-        Ok(result)
+        })
+        .await
     }
 }
 #[async_trait]

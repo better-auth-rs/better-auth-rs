@@ -10,7 +10,7 @@ use better_auth_core::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
     VerificationUpdate,
 };
-use better_auth_core::store::{AuthStore, RuntimeStore};
+use better_auth_core::store::{AuthStore, OrganizationStore, RuntimeStore};
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema, CreateAccount, CreateSession, CreateUser,
     CreateVerification, UpdateAccount, UpdateUser,
@@ -56,6 +56,11 @@ where
         store.config = config;
         store.model_fields = model_fields;
         store.organization_fields = Arc::new(RwLock::new(self.organization_fields()?));
+        store.configure_organization_fields(
+            store
+                .model_fields
+                .organization_fields(self.organization_fields()?),
+        )?;
         store.hooks = hooks
             .into_iter()
             .map(|hook| Arc::new(PluginHook(hook)) as Arc<dyn SeaOrmHooks<S>>)

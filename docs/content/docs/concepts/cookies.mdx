@@ -168,3 +168,7 @@ Optional [cookie caching](/docs/authentication/sessions#cookie-cache) stores sig
 - [Sessions](/docs/authentication/sessions) — Session lifecycle and endpoints
 - [Security](/docs/reference/security) — Security best practices
 - [Middleware](/docs/concepts/middleware) — CORS configuration
+
+Cookie attributes accept fractional `max_age` seconds, for example `Some(3600.5)`. The resolver preserves that value through browser-cookie exports and cache issuance. HTTP `Max-Age` is an integer and floors the resolved value. The order remains global defaults, caller attributes, then per-cookie overrides. Session-token issuance supplies its effective session lifetime after the resolved attributes, as upstream does; TestUtils browser exports use the resolved cookie lifetime.
+
+Session and account cache JWT/JWE issuance preserves fractional lifetimes. Authenticated cache reads retain millisecond precision. The existing cryptographic validators, algorithm restrictions, clock tolerance, and session binding checks are unchanged. The JWT dependency still applies its own NumericDate rounding during validation; subsecond expiry-boundary equivalence is not established by the ordinary future-cookie contracts.

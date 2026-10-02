@@ -1,0 +1,165 @@
+{
+  "omitted": {
+    "input": {},
+    "resolvedMaxAge": 604800,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 604800
+    },
+    "httpMaxAge": "604800"
+  },
+  "integer": {
+    "input": {
+      "sessionExpiresIn": 3600
+    },
+    "resolvedMaxAge": 3600,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 3600
+    },
+    "httpMaxAge": "3600"
+  },
+  "fractional": {
+    "input": {
+      "sessionExpiresIn": 3600.5
+    },
+    "resolvedMaxAge": 3600.5,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 3600.5
+    },
+    "httpMaxAge": "3600"
+  },
+  "subsecond": {
+    "input": {
+      "sessionExpiresIn": 0.5
+    },
+    "resolvedMaxAge": 0.5,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 0.5
+    },
+    "httpMaxAge": "0"
+  },
+  "global": {
+    "input": {
+      "defaultMaxAge": 7200.5
+    },
+    "resolvedMaxAge": 604800,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 604800
+    },
+    "httpMaxAge": "604800"
+  },
+  "globalAndSession": {
+    "input": {
+      "sessionExpiresIn": 3600.5,
+      "defaultMaxAge": 7200.5
+    },
+    "resolvedMaxAge": 3600.5,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 3600.5
+    },
+    "httpMaxAge": "3600"
+  },
+  "cookieOverride": {
+    "input": {
+      "sessionExpiresIn": 3600.5,
+      "cookieMaxAge": 90.5
+    },
+    "resolvedMaxAge": 90.5,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 90.5
+    },
+    "httpMaxAge": "90"
+  },
+  "cookieSubsecond": {
+    "input": {
+      "sessionExpiresIn": 3600.5,
+      "cookieMaxAge": 0.5
+    },
+    "resolvedMaxAge": 0.5,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 0.5
+    },
+    "httpMaxAge": "0"
+  },
+  "cookieZero": {
+    "input": {
+      "sessionExpiresIn": 3600.5,
+      "cookieMaxAge": 0
+    },
+    "resolvedMaxAge": 0,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    "httpMaxAge": "0"
+  },
+  "allOverrides": {
+    "input": {
+      "sessionExpiresIn": 3600.5,
+      "defaultMaxAge": 7200.5,
+      "cookieMaxAge": 90.5
+    },
+    "resolvedMaxAge": 90.5,
+    "browser": {
+      "name": "better-auth.session_token",
+      "domain": "cookie-lifetime.test",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax",
+      "expires": 90.5
+    },
+    "httpMaxAge": "90"
+  }
+}

@@ -138,7 +138,73 @@ impl UserConfig {
         records: Vec<AdapterRecord>,
         supports_native_json: bool,
     ) -> AuthResult<Vec<Map<String, Value>>> {
-        let mut rows = records
+        self.organization_output_records_then(records, supports_native_json, |_, output| {
+            std::future::ready(Ok(output))
+        })
+        .await
+    }
+
+    /// Continue each Organization row after projection without cancelling started peers.
+    pub async fn organization_output_records_then<R: Send, F>(
+        &self,
+        records: Vec<AdapterRecord>,
+        supports_native_json: bool,
+        complete: impl Fn(usize, Map<String, Value>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<R>> + Send,
+    {
+        let mut rows = self.organization_records(records)?;
+        super::batch::project_fields_then(
+            &mut rows,
+            self.fields(),
+            |row, name, field| {
+                Box::pin(project_organization_field(
+                    row,
+                    name,
+                    field,
+                    supports_native_json,
+                ))
+            },
+            |index, (_, output)| complete(index, std::mem::take(output)),
+        )
+        .await
+    }
+
+    /// Decode ready Organization rows before continuing their synchronous adapter reads together.
+    pub async fn organization_output_records_batches_then<V: Send, R: Send, F>(
+        &self,
+        records: Vec<AdapterRecord>,
+        supports_native_json: bool,
+        decode: impl Fn(usize, Map<String, Value>) -> AuthResult<V> + Sync,
+        complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
+        let mut rows = self.organization_records(records)?;
+        super::batch::project_fields_batches_then(
+            &mut rows,
+            self.fields(),
+            |row, name, field| {
+                Box::pin(project_organization_field(
+                    row,
+                    name,
+                    field,
+                    supports_native_json,
+                ))
+            },
+            |index, (_, output)| decode(index, std::mem::take(output)),
+            complete,
+        )
+        .await
+    }
+
+    fn organization_records(
+        &self,
+        records: Vec<AdapterRecord>,
+    ) -> AuthResult<Vec<OrganizationRecord>> {
+        records
             .into_iter()
             .map(|record| {
                 let mut core = Map::new();
@@ -150,29 +216,7 @@ impl UserConfig {
                 core.retain(|name, _| name == "id" || !self.fields().contains_key(name));
                 Ok((record.storage, core))
             })
-            .collect::<AuthResult<Vec<_>>>()?;
-        super::batch::project_fields(
-            &mut rows,
-            self.fields(),
-            |(storage, output), name, field| {
-                Box::pin(async move {
-                    if name == "id" {
-                        return Ok(());
-                    }
-                    let value = storage
-                        .get(field.field_name.as_deref().unwrap_or(name))
-                        .cloned();
-                    super::organization::assign_output(
-                        output,
-                        name,
-                        field,
-                        field.adapter_output(value, supports_native_json).await?,
-                    )
-                })
-            },
-        )
-        .await?;
-        Ok(rows.into_iter().map(|(_, output)| output).collect())
+            .collect()
     }
 
     /// Resolve a logical field in an adapter-owned record.
@@ -232,26 +276,41 @@ impl UserConfig {
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
     {
-        let records = storage
-            .iter()
-            .map(|storage| {
-                let mut core = Map::new();
-                if let Some(id) = storage.get("id") {
-                    let _ = core.insert(
-                        "id".into(),
-                        Value::String(
-                            crate::SchemaValue::<String>::from_json(Some(id.clone()))
-                                .display_string()?,
-                        ),
-                    );
-                }
-                Ok(AdapterRecord::new(core, storage.clone()))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
+        let records = adapter_records(storage)?;
         self.project_adapter_records_then(
             records,
             supports_native_json,
             supports_native_dates,
+            complete,
+        )
+        .await
+    }
+
+    /// Continue ready raw records as a batch, retaining each original row index.
+    pub async fn project_records_batches_then<R: Send, F>(
+        &self,
+        storage: &[Map<String, Value>],
+        supports_native_json: bool,
+        supports_native_dates: bool,
+        complete: impl Fn(Vec<(usize, indexmap::IndexMap<String, SchemaValue<Value>>)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
+        let mut records = adapter_records(storage)?;
+        super::batch::project_fields_batches_then(
+            &mut records,
+            self.fields(),
+            |record, name, field| {
+                Box::pin(project_adapter_field(
+                    record,
+                    name,
+                    field,
+                    supports_native_json,
+                    supports_native_dates,
+                ))
+            },
+            |_, record| Ok(std::mem::take(&mut record.output)),
             complete,
         )
         .await
@@ -348,43 +407,96 @@ impl UserConfig {
             &mut records,
             self.fields(),
             |record, name, field| {
-                Box::pin(async move {
-                    if name == "id" {
-                        return Ok(());
-                    }
-                    let value = record
-                        .storage
-                        .get(field.field_name.as_deref().unwrap_or(name))
-                        .cloned();
-                    let value = field.adapter_output(value, supports_native_json).await?;
-                    let value = if !supports_native_dates
-                        && !field.references_id()
-                        && matches!(field.field_type, UserFieldType::Date)
-                    {
-                        match value {
-                            Some(Value::String(text)) => {
-                                match crate::utils::date::parse_adapter_date(&text) {
-                                    Some(date) => SchemaValue::Typed(Value::String(
-                                        date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                                    )),
-                                    None => SchemaValue::InvalidDate,
-                                }
-                            }
-                            value => SchemaValue::from_json(value),
-                        }
-                    } else {
-                        SchemaValue::from_json(value)
-                    };
-                    if value.is_undefined() {
-                        let _ = record.output.shift_remove(name);
-                    } else {
-                        let _ = record.output.insert(name.to_owned(), value);
-                    }
-                    Ok(())
-                })
+                Box::pin(project_adapter_field(
+                    record,
+                    name,
+                    field,
+                    supports_native_json,
+                    supports_native_dates,
+                ))
             },
             |index, record| complete(index, std::mem::take(&mut record.output)),
         )
         .await
     }
+}
+
+type OrganizationRecord = (Map<String, Value>, Map<String, Value>);
+
+async fn project_organization_field(
+    (storage, output): &mut OrganizationRecord,
+    name: &str,
+    field: &UserFieldConfig,
+    supports_native_json: bool,
+) -> AuthResult<()> {
+    if name == "id" {
+        return Ok(());
+    }
+    let value = storage
+        .get(field.field_name.as_deref().unwrap_or(name))
+        .cloned();
+    super::organization::assign_output(
+        output,
+        name,
+        field,
+        field.adapter_output(value, supports_native_json).await?,
+    )
+}
+
+fn adapter_records(storage: &[Map<String, Value>]) -> AuthResult<Vec<AdapterRecord>> {
+    storage
+        .iter()
+        .map(|storage| {
+            let mut core = Map::new();
+            if let Some(id) = storage.get("id") {
+                let _ = core.insert(
+                    "id".into(),
+                    Value::String(
+                        crate::SchemaValue::<String>::from_json(Some(id.clone()))
+                            .display_string()?,
+                    ),
+                );
+            }
+            Ok(AdapterRecord::new(core, storage.clone()))
+        })
+        .collect()
+}
+
+async fn project_adapter_field(
+    record: &mut AdapterRecord,
+    name: &str,
+    field: &UserFieldConfig,
+    supports_native_json: bool,
+    supports_native_dates: bool,
+) -> AuthResult<()> {
+    if name == "id" {
+        return Ok(());
+    }
+    let value = record
+        .storage
+        .get(field.field_name.as_deref().unwrap_or(name))
+        .cloned();
+    let value = field.adapter_output(value, supports_native_json).await?;
+    let value = if !supports_native_dates
+        && !field.references_id()
+        && matches!(field.field_type, UserFieldType::Date)
+    {
+        match value {
+            Some(Value::String(text)) => match crate::utils::date::parse_adapter_date(&text) {
+                Some(date) => SchemaValue::Typed(Value::String(
+                    date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                )),
+                None => SchemaValue::InvalidDate,
+            },
+            value => SchemaValue::from_json(value),
+        }
+    } else {
+        SchemaValue::from_json(value)
+    };
+    if value.is_undefined() {
+        let _ = record.output.shift_remove(name);
+    } else {
+        let _ = record.output.insert(name.to_owned(), value);
+    }
+    Ok(())
 }

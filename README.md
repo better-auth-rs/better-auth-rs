@@ -33,6 +33,8 @@ Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification an
 
 For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
+Cookie lifetime configuration accepts fractional seconds; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence.
+
 ## Quick start
 
 These examples use the current `master` branch. The DX changes are not yet published as a new crate release. Add these dependencies to your application's `Cargo.toml`:

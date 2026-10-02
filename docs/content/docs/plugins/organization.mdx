@@ -76,6 +76,8 @@ Trusted native `/organization/create-team` and `/organization/remove-team` calls
 
 Set `OrganizationConfig::schema` to an `OrganizationFields` value. The `organization`, `member`, `invitation`, `team`, and `organization_role` members each use `UserConfig::additional_fields`. Define the corresponding typed SeaORM columns and select the application's organization models as described in the [database guide](/docs/concepts/database). The plugin configures the store during initialization.
 
+Other plugins can register Organization and Team adapter fields through `AuthInitContext::register_model_fields`. Registration order includes the Organization plugin's own schema. Each later declaration replaces the entire field policy. The final adapter policies retain typed column validation; route validation and visibility continue to use this plugin's configuration.
+
 ```rust
 use better_auth::plugins::organization::{OrganizationConfig, OrganizationFields};
 use better_auth::config::{UserConfig, UserFieldConfig};
@@ -105,6 +107,8 @@ Invitation team checks run only when teams are enabled and the supplied `teamId`
 Adapter writes apply creation defaults and `on_update`, including implicit owner/default-team creation, invitation acceptance, and pending-invitation changes during team deletion. Adapter reads apply `transform.output` and `field_name` mapping once. Organization and team responses hide `returned: Some(false)` fields. Member, invitation, and dynamic-role responses retain those fields; full-organization responses hide them in their nested lists. Hooks receive the same entity visibility as the corresponding upstream adapter operation.
 
 Use `UserFieldTransform::new_async` for awaited Organization input and output callbacks. Each row retains field order; asynchronous list projections can complete out of order while results retain query order. An input error prevents the write. An ordinary output error follows the write and leaves the stored row. Compound team and invitation operations retain their transaction and compensation boundaries.
+
+User organization and team lists use the default fallback-join sequence. Each successful membership projection starts its associated record read with the stored join key. Memory projects currently ready associated records together; SeaORM continues each database read independently. Results retain the selected membership page's order. A failed row skips its continuation, while other started rows finish before Rust returns the original error. These methods do not implement the upstream `advanced.database.joins` query-snapshot branch.
 
 The Memory adapter releases its state lock before awaiting field callbacks. Compound operations prepare field deltas, then check the latest membership, invitation state, capacity, and staged Serial allocation before publishing. A full team retains the existing capacity rejection. Another concurrent change that invalidates a prepared calculation returns `AuthError::Conflict`; callbacks are not replayed and completed output projections remain intact. Unrelated row updates remain intact. This explicit conflict is a Rust concurrency boundary, not an exact reproduction of JavaScript scheduling. Mutation guards retain accurate counts even when list queries have a default limit.
 

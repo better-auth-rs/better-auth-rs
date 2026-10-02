@@ -139,22 +139,36 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .map(|record| record.get(fields.record_storage_key("userId")).cloned())
             .collect();
         let owners = fields
-            .project_records_then(&records, true, true, |index, output| {
+            .project_records_batches_then(&records, true, true, |ready| {
                 let owner_ids = &owner_ids;
                 async move {
-                    let owner_id = owner_ids.get(index).ok_or_else(|| {
-                        AuthError::internal("Account projection lost its stored owner index")
-                    })?;
-                    let stored_owner_id = crate::SchemaValue::from_json(owner_id.clone());
-                    let user = match owner_id {
-                        Some(id) if !id.is_null() => self.get_user_by_id_value(id).await?,
-                        _ => None,
-                    };
-                    crate::store::AccountOwner::new(
-                        AccountView::from_adapter_fields(output),
-                        user,
-                        &stored_owner_id,
-                    )
+                    let mut pending = Vec::new();
+                    let mut users = Vec::new();
+                    for (index, output) in ready {
+                        let owner_id = owner_ids.get(index).ok_or_else(|| {
+                            AuthError::internal("Account projection lost its stored owner index")
+                        })?;
+                        let stored_owner_id = crate::SchemaValue::from_json(owner_id.clone());
+                        let user = match owner_id {
+                            Some(id) if !id.is_null() => self.user_record_by_id_value(id).await?,
+                            _ => None,
+                        };
+                        let has_user = user.is_some();
+                        users.extend(user);
+                        pending.push((index, output, stored_owner_id, has_user));
+                    }
+                    let mut users = self.output_users(users).await?.into_iter();
+                    pending
+                        .into_iter()
+                        .map(|(index, output, stored_owner_id, has_user)| {
+                            crate::store::AccountOwner::new(
+                                AccountView::from_adapter_fields(output),
+                                if has_user { users.next() } else { None },
+                                &stored_owner_id,
+                            )
+                            .map(|owner| (index, owner))
+                        })
+                        .collect()
                 }
             })
             .await?;

@@ -257,7 +257,7 @@ fn encode_account_cookie(
         .unwrap(),
         TEST_SECRET,
         "better-auth-account",
-        300,
+        300.0,
     )
     .unwrap()
 }
