@@ -1,0 +1,230 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "omitted",
+      "operation": "send",
+      "status": 200,
+      "body": {
+        "message": "code sent"
+      },
+      "sender": [
+        {
+          "kind": "verification",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001",
+          "lifetimeMillis": 300000,
+          "attemptSuffix": true
+        }
+      ]
+    },
+    {
+      "name": "omitted",
+      "operation": "signIn",
+      "status": 401,
+      "body": {
+        "message": "Phone number not verified",
+        "code": "PHONE_NUMBER_NOT_VERIFIED"
+      },
+      "sender": [
+        {
+          "kind": "verification",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001",
+          "lifetimeMillis": 300000,
+          "attemptSuffix": false
+        }
+      ]
+    },
+    {
+      "name": "omitted",
+      "operation": "reset",
+      "status": 200,
+      "body": {
+        "status": true
+      },
+      "sender": [
+        {
+          "kind": "reset",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001-request-password-reset",
+          "lifetimeMillis": 300000,
+          "attemptSuffix": true
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "send",
+      "status": 200,
+      "body": {
+        "message": "code sent"
+      },
+      "sender": [
+        {
+          "kind": "verification",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001",
+          "lifetimeMillis": 0,
+          "attemptSuffix": true
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "signIn",
+      "status": 401,
+      "body": {
+        "message": "Phone number not verified",
+        "code": "PHONE_NUMBER_NOT_VERIFIED"
+      },
+      "sender": [
+        {
+          "kind": "verification",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001",
+          "lifetimeMillis": 0,
+          "attemptSuffix": false
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "reset",
+      "status": 200,
+      "body": {
+        "status": true
+      },
+      "sender": [
+        {
+          "kind": "reset",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001-request-password-reset",
+          "lifetimeMillis": 0,
+          "attemptSuffix": true
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "send",
+      "status": 200,
+      "body": {
+        "message": "code sent"
+      },
+      "sender": [
+        {
+          "kind": "verification",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001",
+          "lifetimeMillis": 1500,
+          "attemptSuffix": true
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "signIn",
+      "status": 401,
+      "body": {
+        "message": "Phone number not verified",
+        "code": "PHONE_NUMBER_NOT_VERIFIED"
+      },
+      "sender": [
+        {
+          "kind": "verification",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001",
+          "lifetimeMillis": 1500,
+          "attemptSuffix": false
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "reset",
+      "status": 200,
+      "body": {
+        "status": true
+      },
+      "sender": [
+        {
+          "kind": "reset",
+          "phone": "+15551230001",
+          "codeLength": 6,
+          "decimalCode": true,
+          "matchesStored": true
+        }
+      ],
+      "records": [
+        {
+          "identifier": "+15551230001-request-password-reset",
+          "lifetimeMillis": 1500,
+          "attemptSuffix": true
+        }
+      ]
+    }
+  ]
+}

@@ -56,7 +56,7 @@ pub struct PhoneNumberPlugin {
     callback_on_verification: Option<Arc<VerifiedCallback>>,
     temp_email: Option<Arc<TempField>>,
     temp_name: Option<Arc<TempField>>,
-    expires_in: i64,
+    expires_in: f64,
     otp_length: usize,
     allowed_attempts: u64,
     require_verification: bool,
@@ -71,7 +71,7 @@ impl Default for PhoneNumberPlugin {
             callback_on_verification: None,
             temp_email: None,
             temp_name: None,
-            expires_in: 300,
+            expires_in: 300.0,
             otp_length: 6,
             allowed_attempts: 3,
             require_verification: false,
@@ -88,8 +88,9 @@ impl PhoneNumberPlugin {
         self.otp_length = length;
         self
     }
-    /// Set code validity in seconds; the default is 300.
-    pub fn expires_in(mut self, seconds: i64) -> Self {
+    /// Set code validity in seconds, including fractional values; the default is 300.
+    /// An explicit zero remains zero.
+    pub fn expires_in(mut self, seconds: f64) -> Self {
         self.expires_in = seconds;
         self
     }
@@ -190,7 +191,11 @@ impl PhoneNumberPlugin {
                     code.clone()
                 })
                 .into(),
-                expires_at: (Utc::now() + Duration::seconds(self.expires_in)).into(),
+                expires_at: better_auth_core::utils::date::from_milliseconds(
+                    Utc::now().timestamp_millis() as f64 + self.expires_in * 1000.0,
+                )
+                .ok_or_else(|| AuthError::config("Phone OTP expiry is out of range"))?
+                .into(),
                 ..Default::default()
             })
             .await?;

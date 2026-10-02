@@ -781,7 +781,7 @@ mod tests {
             organization_limit: None,
             membership_limit: Some(100),
             creator_role: "owner".to_string(),
-            invitation_expires_in: 60 * 60 * 48,
+            invitation_expires_in: 172800.0,
             invitation_limit: Some(100),
             disable_organization_deletion: false,
             roles: None,

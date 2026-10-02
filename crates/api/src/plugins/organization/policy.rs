@@ -93,11 +93,18 @@ impl OrganizationConfig {
                 .unwrap_or(100)
         }
     }
-    pub(crate) fn invitation_lifetime(&self) -> u64 {
-        if self.invitation_expires_in == 0 {
-            48 * 60 * 60
+    pub(crate) fn invitation_expires_at(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> AuthResult<chrono::DateTime<chrono::Utc>> {
+        let seconds = if self.invitation_expires_in == 0.0 || self.invitation_expires_in.is_nan() {
+            172800.0
         } else {
             self.invitation_expires_in
-        }
+        };
+        better_auth_core::utils::date::from_milliseconds(
+            now.timestamp_millis() as f64 + seconds * 1000.0,
+        )
+        .ok_or_else(|| better_auth_core::AuthError::config("Invitation expiry is out of range"))
     }
 }

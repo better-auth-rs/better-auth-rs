@@ -39,6 +39,8 @@ mod organization;
 #[cfg(test)]
 mod organization_async_tests;
 mod organization_joins;
+#[cfg(test)]
+mod organization_parent_tests;
 mod passkeys;
 mod rate_limits;
 mod rows;

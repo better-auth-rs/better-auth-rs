@@ -1,0 +1,1630 @@
+{
+  "cases": [
+    {
+      "joins": false,
+      "path": "member-org",
+      "mode": "read",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail-after"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-after-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "member-org",
+      "mode": "wait",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail-after"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-after-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "member-org",
+      "mode": "error",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "member-id",
+      "mode": "read",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail-after"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-after-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "member-id",
+      "mode": "wait",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail-after"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-after-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "member-id",
+      "mode": "error",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "full",
+      "mode": "read",
+      "events": [
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail"
+        ],
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "name": "O-A-visible",
+        "logo": "O-A-logo-after-visible",
+        "members": [
+          {
+            "label": "M-A-visible",
+            "detail": "M-A-detail-visible",
+            "user": {
+              "name": "U-A-visible",
+              "image": "U-A-image-visible"
+            }
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A-visible",
+            "detail": "I-A-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo-after"
+      }
+    },
+    {
+      "joins": false,
+      "path": "full",
+      "mode": "wait",
+      "events": [
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail"
+        ],
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "name": "O-A-visible",
+        "logo": "O-A-logo-after-visible",
+        "members": [
+          {
+            "label": "M-A-visible",
+            "detail": "M-A-detail-visible",
+            "user": {
+              "name": "U-A-visible",
+              "image": "U-A-image-visible"
+            }
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A-visible",
+            "detail": "I-A-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo-after"
+      }
+    },
+    {
+      "joins": false,
+      "path": "full",
+      "mode": "error",
+      "events": [
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo-after"
+      }
+    },
+    {
+      "joins": false,
+      "path": "organizations",
+      "mode": "read",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-A-detail-after"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo-visible"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "organizations",
+      "mode": "wait",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail-after"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo-visible"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "organizations",
+      "mode": "error",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "invitations",
+      "mode": "read",
+      "events": [
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "display-write",
+          "invitation",
+          {
+            "detail": "I-A-detail-after"
+          }
+        ],
+        [
+          "invitation.label",
+          "I-B"
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail-after"
+        ],
+        [
+          "invitation.detail",
+          "I-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ]
+      ],
+      "result": [
+        {
+          "label": "I-A-visible",
+          "detail": "I-A-detail-after-visible",
+          "organizationName": "O-A-visible"
+        },
+        {
+          "label": "I-B-visible",
+          "detail": "I-B-detail-visible",
+          "organizationName": "O-B-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail-after",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "invitations",
+      "mode": "wait",
+      "events": [
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.label",
+          "I-B"
+        ],
+        [
+          "invitation.detail",
+          "I-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "invitation",
+          {
+            "detail": "I-A-detail-after"
+          }
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail-after"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ]
+      ],
+      "result": [
+        {
+          "label": "I-A-visible",
+          "detail": "I-A-detail-after-visible",
+          "organizationName": "O-A-visible"
+        },
+        {
+          "label": "I-B-visible",
+          "detail": "I-B-detail-visible",
+          "organizationName": "O-B-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail-after",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": false,
+      "path": "invitations",
+      "mode": "error",
+      "events": [
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.label",
+          "I-B"
+        ],
+        [
+          "invitation.detail",
+          "I-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "invitation",
+          {
+            "detail": "I-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail-after",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "member-org",
+      "mode": "read",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "member-org",
+      "mode": "wait",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "member-org",
+      "mode": "error",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "member-id",
+      "mode": "read",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "member-id",
+      "mode": "wait",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "label": "M-A-visible",
+        "detail": "M-A-detail-visible",
+        "user": {
+          "name": "U-A-visible",
+          "image": "U-A-image-visible"
+        }
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "member-id",
+      "mode": "error",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "full",
+      "mode": "read",
+      "events": [
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ],
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail"
+        ],
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "name": "O-A-visible",
+        "logo": "O-A-logo-visible",
+        "members": [
+          {
+            "label": "M-A-visible",
+            "detail": "M-A-detail-visible",
+            "user": {
+              "name": "U-A-visible",
+              "image": "U-A-image-visible"
+            }
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A-visible",
+            "detail": "I-A-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo-after"
+      }
+    },
+    {
+      "joins": true,
+      "path": "full",
+      "mode": "wait",
+      "events": [
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ],
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail"
+        ],
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "user.name",
+          "U-A"
+        ],
+        [
+          "user.image",
+          "U-A-image"
+        ]
+      ],
+      "result": {
+        "name": "O-A-visible",
+        "logo": "O-A-logo-visible",
+        "members": [
+          {
+            "label": "M-A-visible",
+            "detail": "M-A-detail-visible",
+            "user": {
+              "name": "U-A-visible",
+              "image": "U-A-image-visible"
+            }
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A-visible",
+            "detail": "I-A-detail-visible"
+          }
+        ]
+      },
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo-after"
+      }
+    },
+    {
+      "joins": true,
+      "path": "full",
+      "mode": "error",
+      "events": [
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "controller",
+          "parent-blocked"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo-after"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo-after"
+      }
+    },
+    {
+      "joins": true,
+      "path": "organizations",
+      "mode": "read",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo-visible"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "organizations",
+      "mode": "wait",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo-visible"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "organizations",
+      "mode": "error",
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "member",
+          {
+            "detail": "M-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail-after",
+        "invitationDetail": "I-A-detail",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "invitations",
+      "mode": "read",
+      "events": [
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "display-write",
+          "invitation",
+          {
+            "detail": "I-A-detail-after"
+          }
+        ],
+        [
+          "invitation.label",
+          "I-B"
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail"
+        ],
+        [
+          "invitation.detail",
+          "I-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ]
+      ],
+      "result": [
+        {
+          "label": "I-A-visible",
+          "detail": "I-A-detail-visible",
+          "organizationName": "O-A-visible"
+        },
+        {
+          "label": "I-B-visible",
+          "detail": "I-B-detail-visible",
+          "organizationName": "O-B-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail-after",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "invitations",
+      "mode": "wait",
+      "events": [
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.label",
+          "I-B"
+        ],
+        [
+          "invitation.detail",
+          "I-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "invitation",
+          {
+            "detail": "I-A-detail-after"
+          }
+        ],
+        [
+          "invitation.detail",
+          "I-A-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.logo",
+          "O-A-logo"
+        ]
+      ],
+      "result": [
+        {
+          "label": "I-A-visible",
+          "detail": "I-A-detail-visible",
+          "organizationName": "O-A-visible"
+        },
+        {
+          "label": "I-B-visible",
+          "detail": "I-B-detail-visible",
+          "organizationName": "O-B-visible"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail-after",
+        "logo": "O-A-logo"
+      }
+    },
+    {
+      "joins": true,
+      "path": "invitations",
+      "mode": "error",
+      "events": [
+        [
+          "invitation.label",
+          "I-A"
+        ],
+        [
+          "invitation.label",
+          "I-B"
+        ],
+        [
+          "invitation.detail",
+          "I-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.logo",
+          "O-B-logo"
+        ],
+        [
+          "controller",
+          "peer-finished"
+        ],
+        [
+          "display-write",
+          "invitation",
+          {
+            "detail": "I-A-detail-after"
+          }
+        ]
+      ],
+      "error": {
+        "status": "BAD_REQUEST",
+        "code": "ORDINARY_PARENT_DISPLAY_FAILURE",
+        "message": "Ordinary parent display callback failed"
+      },
+      "originalError": true,
+      "stored": {
+        "memberDetail": "M-A-detail",
+        "invitationDetail": "I-A-detail-after",
+        "logo": "O-A-logo"
+      }
+    }
+  ]
+}

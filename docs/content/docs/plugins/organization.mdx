@@ -32,7 +32,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
             .organization_limit(5)
             .membership_limit(50)
             .creator_role("owner")
-            .invitation_expires_in(172800) // 48 hours
+            .invitation_expires_in(172800.0) // 48 hours
             .invitation_limit(100)
     )
     .build()
@@ -45,7 +45,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `organization_limit` | `Option<usize>` | `None` | Max organizations per user |
 | `membership_limit` | `Option<usize>` | `Some(100)` | Max members per organization |
 | `creator_role` | `String` | `"owner"` | Role assigned to organization creator |
-| `invitation_expires_in` | `u64` | `172800` (48h) | Invitation expiration in seconds |
+| `invitation_expires_in` | `f64` | `172800.0` (48h) | Invitation expiration in seconds, including fractions; zero uses the default |
 | `invitation_limit` | `Option<usize>` | `Some(100)` | Max pending invitations per org |
 | `cancel_pending_invitations_on_re_invite` | `bool` | `false` | Cancel the old pending invitation before creating a replacement |
 | `require_email_verification_on_invitation` | `bool` | `false` | Require a verified recipient email for lookup, acceptance, and rejection |
@@ -110,7 +110,7 @@ Adapter writes apply creation defaults and `on_update`, including implicit owner
 
 Use `UserFieldTransform::new_async` for awaited Organization input and output callbacks. Each row retains field order; asynchronous list projections can complete out of order while results retain query order. An input error prevents the write. An ordinary output error follows the write and leaves the stored row. Compound team and invitation operations retain their transaction and compensation boundaries.
 
-When `advanced.database.joins` is omitted or `Some(false)`, user organization, team, and received-invitation lists use the fallback join sequence. Each successful membership projection starts its associated record read with the stored join key. Memory projects currently ready associated records together; SeaORM continues each database read independently. Results retain the selected membership page's order. A failed row skips its continuation, while other started rows finish before Rust returns the original error.
+When `advanced.database.joins` is omitted or `Some(false)`, user organization, team, and received-invitation lists use the fallback join sequence. Each successful membership projection starts its associated record read with the stored join key. Memory projects currently ready associated records together; SeaORM continues each database read independently. Results retain the selected membership page's order. A failed row skips its continuation, while other started rows finish before Rust returns the original error. Memory reads each fallback parent field when its projection reaches that field. A completed parent starts its child read while another parent awaits an asynchronous callback. Native joins retain the parent snapshot selected before projection.
 
 Set `config.advanced.database.joins = Some(true)` to select native Organization joins. SeaORM selects the parent page and its child records in one SQL statement before output callbacks. Full organization reads join invitations, members, and optional teams in that statement, then run the separate member-user query after those child projections. Memory captures child row references at selection time and reads each field when its output callback runs. A callback can therefore observe a later ordinary display-field update in Memory while SQLite retains the selected values. Both adapters preserve stored relation keys, parent page order, independent child caps, and original callback errors.
 
@@ -166,7 +166,7 @@ Configure asynchronous options with these interfaces:
 | `MembershipLimitPolicy` through `.membership_limit_callback(...)` | Organization capacity for the user being added or accepting an invitation |
 | `TeamMemberLimitPolicy` through `teams.maximum_members_per_team_callback` | Team capacity for the authenticated actor and destination team |
 
-Optional `OrganizationPolicy` methods return `None` to retain the static setting. The organization-limit callback returns `true` when the limit has been reached. Membership and team member callbacks return numeric limits. Static `membership_limit: Some(0)` uses the default of 100; a callback returning zero rejects admission. A dynamic membership limit does not change the default list size of 100. A zero invitation limit rejects new invitations, while `invitation_expires_in: 0` uses 48 hours. A zero maximum-team limit disables that limit.
+Optional `OrganizationPolicy` methods return `None` to retain the static setting. The organization-limit callback returns `true` when the limit has been reached. Membership and team member callbacks return numeric limits. Static `membership_limit: Some(0)` uses the default of 100; a callback returning zero rejects admission. A dynamic membership limit does not change the default list size of 100. A zero invitation limit rejects new invitations, while `invitation_expires_in: 0.0` uses 48 hours. Invitation creation and resend accept fractional seconds, for example `invitation_expires_in(1.5)`, and preserve millisecond date precision. A zero maximum-team limit disables that limit.
 
 Endpoint-aware hooks and policies receive `OrganizationEndpoint`, which exposes the request, global configuration, and organization persistence. A custom default-team callback must persist its team and return that record. Returning `None` uses normal team creation, including the before-hook changes. The returned team's identity controls owner membership and the active team.
 

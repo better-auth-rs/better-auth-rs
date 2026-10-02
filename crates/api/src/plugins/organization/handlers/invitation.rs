@@ -171,8 +171,7 @@ pub(crate) async fn invite_member_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let expires_at =
-        chrono::Utc::now() + chrono::Duration::seconds(config.invitation_lifetime() as i64);
+    let expires_at = config.invitation_expires_at(chrono::Utc::now())?;
     let user_view = ctx.user_view(user).await?;
     let session_view = ctx.session_view(session).await?;
     let is_resend = existing.is_some() && resend;
@@ -307,8 +306,7 @@ pub(crate) async fn invite_member_core(
                 )
                 .await?;
         }
-        let expires_at =
-            chrono::Utc::now() + chrono::Duration::seconds(config.invitation_lifetime() as i64);
+        let expires_at = config.invitation_expires_at(chrono::Utc::now())?;
         ctx.database
             .create_invitation(draft.into_create(expires_at, user.id().typed()?)?)
             .await?

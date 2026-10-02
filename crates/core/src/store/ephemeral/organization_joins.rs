@@ -35,11 +35,12 @@ impl EphemeralStore {
         predicate: impl Fn(&Member) -> AuthResult<bool> + Send,
         require_user: bool,
     ) -> AuthResult<Option<MemberUser>> {
-        let (member, owner_id, native_user) = {
+        let native = self.config.advanced.database.joins == Some(true);
+        let (member, native_member, owner_id, native_user) = {
             let state = self.lock()?;
             let mut selected = None;
-            for row in state.members.snapshot()? {
-                if predicate(&row)? {
+            for row in state.members.select_refs(|_| true)? {
+                if row.read(&predicate)? {
                     selected = Some(row);
                     break;
                 }
@@ -47,15 +48,26 @@ impl EphemeralStore {
             let Some(member) = selected else {
                 return Ok(None);
             };
-            let owner_id = member.user_id.clone();
-            let native_user = if self.config.advanced.database.joins == Some(true) {
+            let owner_id = member.read(|row| Ok(row.user_id.clone()))?;
+            let native_member = native
+                .then(|| member.read(|row| Ok(row.clone())))
+                .transpose()?;
+            let native_user = if native {
                 Some(state.users.first_ref(|user| user.id == owner_id)?)
             } else {
                 None
             };
-            (member, owner_id, native_user)
+            (member, native_member, owner_id, native_user)
         };
-        let member = self.output_member(member).await?;
+        let member = match native_member {
+            Some(member) => self.output_member(member).await?,
+            None => self
+                .output_record_refs(EntityRole::Member, vec![member])
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| AuthError::internal("Member projection lost its selected row"))?,
+        };
         let user = match native_user {
             Some(user) => user,
             None => self.lock()?.users.first_ref(|user| user.id == owner_id)?,
@@ -79,26 +91,33 @@ impl EphemeralStore {
     ) -> AuthResult<Option<OrganizationDetails>> {
         let default_limit = self.config.advanced.database.find_many_limit();
         let members_limit = query.members_limit.unwrap_or(default_limit);
-        let (organization, children) = {
+        let native = self.config.advanced.database.joins == Some(true);
+        let (organization, native_organization, organization_id, children) = {
             let state = self.lock()?;
-            let organization = state.organizations.find(|row| match query.organization {
-                OrganizationKey::Id(id) => row.id == id,
-                OrganizationKey::Slug(slug) => row.slug == slug,
-            })?;
+            let organization = state
+                .organizations
+                .first_ref(|row| match query.organization {
+                    OrganizationKey::Id(id) => row.id == id,
+                    OrganizationKey::Slug(slug) => row.slug == slug,
+                })?;
             let Some(organization) = organization else {
                 return Ok(None);
             };
-            let children = if self.config.advanced.database.joins == Some(true) {
+            let organization_id = organization.read(|row| Ok(row.id.clone()))?;
+            let native_organization = native
+                .then(|| organization.read(|row| Ok(row.clone())))
+                .transpose()?;
+            let children = if native {
                 let invitations = child_page(
                     state
                         .invitations
-                        .select_refs(|row| row.organization_id == organization.id)?,
+                        .select_refs(|row| row.organization_id == organization_id)?,
                     default_limit,
                 )?;
                 let members = child_page(
                     state
                         .members
-                        .select_refs(|row| row.organization_id == organization.id)?,
+                        .select_refs(|row| row.organization_id == organization_id)?,
                     members_limit,
                 )?
                 .into_iter()
@@ -111,7 +130,7 @@ impl EphemeralStore {
                     Some(child_page(
                         state
                             .teams
-                            .select_refs(|row| row.organization_id == organization.id)?,
+                            .select_refs(|row| row.organization_id == organization_id)?,
                         default_limit,
                     )?)
                 } else {
@@ -125,10 +144,19 @@ impl EphemeralStore {
             } else {
                 None
             };
-            (organization, children)
+            (organization, native_organization, organization_id, children)
         };
-        let organization_id = organization.id.clone();
-        let organization = self.output_organization(organization).await?;
+        let organization = match native_organization {
+            Some(organization) => self.output_organization(organization).await?,
+            None => self
+                .output_record_refs(EntityRole::Organization, vec![organization])
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    AuthError::internal("Organization projection lost its selected row")
+                })?,
+        };
         let (invitations, members, teams) = if let Some(children) = children {
             let mut invitations = Vec::with_capacity(children.invitations.len());
             for row in children.invitations {

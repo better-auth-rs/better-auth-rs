@@ -146,9 +146,9 @@ pub struct OrganizationConfig {
     /// Role assigned to organization creator (default: "owner")
     #[config(default = "owner".to_string())]
     pub creator_role: String,
-    /// Invitation expiration in seconds (default: 48 hours)
-    #[config(default = 60 * 60 * 48)]
-    pub invitation_expires_in: u64,
+    /// Invitation expiration in seconds, including fractions (default: 48 hours).
+    #[config(default = 172800.0)]
+    pub invitation_expires_in: f64,
     /// Maximum pending invitations per organization (None uses upstream default 100)
     #[config(default = Some(100))]
     pub invitation_limit: Option<usize>,

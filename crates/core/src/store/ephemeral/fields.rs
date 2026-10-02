@@ -322,12 +322,33 @@ impl EphemeralStore {
         role: EntityRole,
         values: Vec<super::rows::RowRef<T>>,
     ) -> AuthResult<Vec<T>> {
+        self.output_record_refs_batches_then(role, values, |rows| std::future::ready(Ok(rows)))
+            .await
+    }
+
+    pub(super) async fn output_record_refs_batches_then<
+        T: MemoryOrganizationRecord + Clone,
+        R: Send,
+        F,
+    >(
+        &self,
+        role: EntityRole,
+        values: Vec<super::rows::RowRef<T>>,
+        complete: impl Fn(Vec<(usize, T)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
         let schema = self.field_config(role)?;
         if schema.fields().is_empty() {
-            return values
+            let rows = values
                 .iter()
-                .map(|row| row.read(|value| Ok(value.clone())))
-                .collect();
+                .enumerate()
+                .map(|(index, row)| row.read(|value| Ok((index, value.clone()))))
+                .collect::<AuthResult<Vec<_>>>()?;
+            let mut rows = complete(rows).await?;
+            rows.sort_unstable_by_key(|(index, _)| *index);
+            return Ok(rows.into_iter().map(|(_, row)| row).collect());
         }
         let fields: IndexMap<_, _> = self
             .model_fields
@@ -342,7 +363,7 @@ impl EphemeralStore {
             .into_iter()
             .map(|row| (row, Map::new()))
             .collect::<Vec<_>>();
-        crate::user_fields::project_source_fields_then(
+        crate::user_fields::project_source_fields_batches_then(
             &mut rows,
             &fields,
             |(source, _), name, field| {
@@ -373,6 +394,7 @@ impl EphemeralStore {
                 })
             },
             |_, (_, output)| decode_record(&schema, std::mem::take(output)),
+            complete,
         )
         .await
     }

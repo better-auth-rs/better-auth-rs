@@ -1,0 +1,279 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "omitted",
+      "operation": "create",
+      "status": 200,
+      "body": {
+        "email": "invitee@organization-duration.test",
+        "role": "member",
+        "status": "pending",
+        "organizationId": "org",
+        "inviterId": "owner",
+        "teamId": null,
+        "lifetimeMillis": 172800000
+      },
+      "records": [
+        {
+          "email": "invitee@organization-duration.test",
+          "role": "member",
+          "status": "pending",
+          "organizationId": "org",
+          "inviterId": "owner",
+          "teamId": null,
+          "lifetimeMillis": 172800000
+        }
+      ],
+      "responseMatchesStored": true,
+      "resendPreservedRecord": null,
+      "sender": [
+        {
+          "invitation": {
+            "email": "invitee@organization-duration.test",
+            "role": "member",
+            "status": "pending",
+            "organizationId": "org",
+            "inviterId": "owner",
+            "teamId": null,
+            "lifetimeMillis": 172800000
+          },
+          "matchesResponse": true,
+          "organizationName": "Ordinary Organization",
+          "inviterName": "Ordinary Owner",
+          "method": "POST",
+          "path": "/api/auth/organization/invite-member"
+        }
+      ]
+    },
+    {
+      "name": "omitted",
+      "operation": "resend",
+      "status": 200,
+      "body": {
+        "email": "invitee@organization-duration.test",
+        "role": "member",
+        "status": "pending",
+        "organizationId": "org",
+        "inviterId": "owner",
+        "teamId": null,
+        "lifetimeMillis": 172800000
+      },
+      "records": [
+        {
+          "email": "invitee@organization-duration.test",
+          "role": "member",
+          "status": "pending",
+          "organizationId": "org",
+          "inviterId": "owner",
+          "teamId": null,
+          "lifetimeMillis": 172800000
+        }
+      ],
+      "responseMatchesStored": true,
+      "resendPreservedRecord": true,
+      "sender": [
+        {
+          "invitation": {
+            "email": "invitee@organization-duration.test",
+            "role": "member",
+            "status": "pending",
+            "organizationId": "org",
+            "inviterId": "owner",
+            "teamId": null,
+            "lifetimeMillis": 172800000
+          },
+          "matchesResponse": true,
+          "organizationName": "Ordinary Organization",
+          "inviterName": "Ordinary Owner",
+          "method": "POST",
+          "path": "/api/auth/organization/invite-member"
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "create",
+      "status": 200,
+      "body": {
+        "email": "invitee@organization-duration.test",
+        "role": "member",
+        "status": "pending",
+        "organizationId": "org",
+        "inviterId": "owner",
+        "teamId": null,
+        "lifetimeMillis": 172800000
+      },
+      "records": [
+        {
+          "email": "invitee@organization-duration.test",
+          "role": "member",
+          "status": "pending",
+          "organizationId": "org",
+          "inviterId": "owner",
+          "teamId": null,
+          "lifetimeMillis": 172800000
+        }
+      ],
+      "responseMatchesStored": true,
+      "resendPreservedRecord": null,
+      "sender": [
+        {
+          "invitation": {
+            "email": "invitee@organization-duration.test",
+            "role": "member",
+            "status": "pending",
+            "organizationId": "org",
+            "inviterId": "owner",
+            "teamId": null,
+            "lifetimeMillis": 172800000
+          },
+          "matchesResponse": true,
+          "organizationName": "Ordinary Organization",
+          "inviterName": "Ordinary Owner",
+          "method": "POST",
+          "path": "/api/auth/organization/invite-member"
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "operation": "resend",
+      "status": 200,
+      "body": {
+        "email": "invitee@organization-duration.test",
+        "role": "member",
+        "status": "pending",
+        "organizationId": "org",
+        "inviterId": "owner",
+        "teamId": null,
+        "lifetimeMillis": 172800000
+      },
+      "records": [
+        {
+          "email": "invitee@organization-duration.test",
+          "role": "member",
+          "status": "pending",
+          "organizationId": "org",
+          "inviterId": "owner",
+          "teamId": null,
+          "lifetimeMillis": 172800000
+        }
+      ],
+      "responseMatchesStored": true,
+      "resendPreservedRecord": true,
+      "sender": [
+        {
+          "invitation": {
+            "email": "invitee@organization-duration.test",
+            "role": "member",
+            "status": "pending",
+            "organizationId": "org",
+            "inviterId": "owner",
+            "teamId": null,
+            "lifetimeMillis": 172800000
+          },
+          "matchesResponse": true,
+          "organizationName": "Ordinary Organization",
+          "inviterName": "Ordinary Owner",
+          "method": "POST",
+          "path": "/api/auth/organization/invite-member"
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "create",
+      "status": 200,
+      "body": {
+        "email": "invitee@organization-duration.test",
+        "role": "member",
+        "status": "pending",
+        "organizationId": "org",
+        "inviterId": "owner",
+        "teamId": null,
+        "lifetimeMillis": 1500
+      },
+      "records": [
+        {
+          "email": "invitee@organization-duration.test",
+          "role": "member",
+          "status": "pending",
+          "organizationId": "org",
+          "inviterId": "owner",
+          "teamId": null,
+          "lifetimeMillis": 1500
+        }
+      ],
+      "responseMatchesStored": true,
+      "resendPreservedRecord": null,
+      "sender": [
+        {
+          "invitation": {
+            "email": "invitee@organization-duration.test",
+            "role": "member",
+            "status": "pending",
+            "organizationId": "org",
+            "inviterId": "owner",
+            "teamId": null,
+            "lifetimeMillis": 1500
+          },
+          "matchesResponse": true,
+          "organizationName": "Ordinary Organization",
+          "inviterName": "Ordinary Owner",
+          "method": "POST",
+          "path": "/api/auth/organization/invite-member"
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "operation": "resend",
+      "status": 200,
+      "body": {
+        "email": "invitee@organization-duration.test",
+        "role": "member",
+        "status": "pending",
+        "organizationId": "org",
+        "inviterId": "owner",
+        "teamId": null,
+        "lifetimeMillis": 1500
+      },
+      "records": [
+        {
+          "email": "invitee@organization-duration.test",
+          "role": "member",
+          "status": "pending",
+          "organizationId": "org",
+          "inviterId": "owner",
+          "teamId": null,
+          "lifetimeMillis": 1500
+        }
+      ],
+      "responseMatchesStored": true,
+      "resendPreservedRecord": true,
+      "sender": [
+        {
+          "invitation": {
+            "email": "invitee@organization-duration.test",
+            "role": "member",
+            "status": "pending",
+            "organizationId": "org",
+            "inviterId": "owner",
+            "teamId": null,
+            "lifetimeMillis": 1500
+          },
+          "matchesResponse": true,
+          "organizationName": "Ordinary Organization",
+          "inviterName": "Ordinary Owner",
+          "method": "POST",
+          "path": "/api/auth/organization/invite-member"
+        }
+      ]
+    }
+  ]
+}

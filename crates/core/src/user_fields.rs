@@ -7,7 +7,8 @@ use std::sync::{Arc, LazyLock};
 mod adapter;
 mod batch;
 pub(crate) use batch::{
-    project_fields_batches_then, project_fields_then, project_source_fields_then,
+    project_fields_batches_then, project_fields_then, project_source_fields_batches_then,
+    project_source_fields_then,
 };
 pub use record::AdapterRecord;
 pub(crate) use record::project_adapter_value;

@@ -27,6 +27,8 @@ Public body schemas run before authentication and OTP consumption. Before and af
 
 Codes expire after 300 seconds and permit three incorrect attempts by default. Verification consumes the database record atomically. A failed attempt recreates the code with its original expiry and an incremented attempt count. `allowed_attempts`, `otp_length`, and `expires_in` configure these limits.
 
+`expires_in` accepts `f64` seconds, including fractional values such as `.expires_in(1.5)`. Omission keeps 300 seconds; `.expires_in(0.0)` retains zero. OTP issuance stores millisecond-precision dates for direct sending, verification-required password sign-in, and password-reset delivery. Existing integer arguments must use floating-point literals, such as `300.0`.
+
 Configure `phone_number_validator` to validate numbers. The upstream default accepts any string. Configure `verify_otp` when the SMS provider performs verification. `send_password_reset_otp` sends password reset codes. `callback_on_verification` runs after the user is updated. `require_verification(true)` blocks password sign-in until the phone is verified.
 
 `updatePhoneNumber: true` binds a verified number to the current session owner. `/update-user` rejects non-null phone changes. Setting `phoneNumber` to `null` clears the number and sets `phoneNumberVerified` to false.

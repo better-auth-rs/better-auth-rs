@@ -293,20 +293,26 @@ impl OrganizationStore for EphemeralStore {
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_user_organizations(user_id).await;
         }
-        let rows = self
-            .lock()?
-            .members
-            .snapshot()?
-            .into_iter()
-            .filter(|row| row.user_id == user_id)
-            .collect();
-        let rows = crate::query::paginate_memory(
-            rows,
+        let selected = {
+            let state = self.lock()?;
+            state
+                .members
+                .select_refs(|row| row.user_id == user_id)?
+                .into_iter()
+                .map(|row| {
+                    let id = row.read(|row| Ok(row.organization_id.clone()))?;
+                    Ok((row, id))
+                })
+                .collect::<AuthResult<Vec<_>>>()?
+        };
+        let (rows, ids): (Vec<_>, Vec<_>) = crate::query::paginate_memory(
+            selected,
             Some(self.config.advanced.database.find_many_limit()),
             None,
-        );
-        let ids: Vec<_> = rows.iter().map(|row| row.organization_id.clone()).collect();
-        self.output_records_batches_then(EntityRole::Member, rows, |ready| {
+        )
+        .into_iter()
+        .unzip();
+        self.output_record_refs_batches_then(EntityRole::Member, rows, |ready| {
             let ids = &ids;
             async move {
                 let mut indices = Vec::new();
@@ -834,20 +840,26 @@ impl InvitationStore for EphemeralStore {
             return self.joined_user_invitations(email).await;
         }
         let email = email.to_lowercase();
-        let rows = self
-            .lock()?
-            .invitations
-            .snapshot()?
-            .into_iter()
-            .filter(|row| row.email == email)
-            .collect();
-        let rows = crate::query::paginate_memory(
-            rows,
+        let selected = {
+            let state = self.lock()?;
+            state
+                .invitations
+                .select_refs(|row| row.email == email)?
+                .into_iter()
+                .map(|row| {
+                    let id = row.read(|row| Ok(row.organization_id.clone()))?;
+                    Ok((row, id))
+                })
+                .collect::<AuthResult<Vec<_>>>()?
+        };
+        let (rows, ids): (Vec<_>, Vec<_>) = crate::query::paginate_memory(
+            selected,
             Some(self.config.advanced.database.find_many_limit()),
             None,
-        );
-        let ids: Vec<_> = rows.iter().map(|row| row.organization_id.clone()).collect();
-        self.output_records_batches_then(EntityRole::Invitation, rows, |ready| {
+        )
+        .into_iter()
+        .unzip();
+        self.output_record_refs_batches_then(EntityRole::Invitation, rows, |ready| {
             let ids = &ids;
             async move {
                 let mut pending = Vec::new();
