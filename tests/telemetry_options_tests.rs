@@ -52,6 +52,9 @@ mod storage;
 #[path = "telemetry_options/fields.rs"]
 mod fields;
 
+#[path = "telemetry_options/durations.rs"]
+mod durations;
+
 #[derive(Default)]
 struct Reports(Mutex<Vec<Value>>);
 #[async_trait]
@@ -313,7 +316,7 @@ async fn plugin_scalars_preserve_omitted_and_explicit_options() -> AuthResult<()
                 } else {
                     3600
                 }));
-            reset = reset.reset_password_token_expires_in(if custom { 0 } else { 3600 });
+            reset = reset.reset_password_token_expires_in(if custom { 0.0 } else { 3600.0 });
             user = user.change_email_enabled(custom);
         }
         let _auth = BetterAuth::stateless(config)

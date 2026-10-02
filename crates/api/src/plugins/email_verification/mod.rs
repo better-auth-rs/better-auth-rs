@@ -94,7 +94,7 @@ better_auth_core::impl_auth_plugin! {
 
         fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
             let options = &mut options.email_verification;
-            options.expires_in = self.config.verification_token_expiry.map(|age| age.num_seconds());
+            options.expires_in = self.config.verification_token_expiry;
             options.send_verification_email = self.config.send_verification_email.is_some();
             options.send_on_sign_up = self.config.send_on_sign_up == Some(true);
             options.send_on_sign_in = self.config.send_on_sign_in;

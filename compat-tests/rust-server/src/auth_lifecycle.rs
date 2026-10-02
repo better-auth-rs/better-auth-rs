@@ -83,10 +83,10 @@ impl AuthLifecycleFixture {
                 })
             }));
         if profile == "auth-lifecycle-confirmation" {
-            plugin = plugin.reset_password_token_expires_in(90);
+            plugin = plugin.reset_password_token_expires_in(90.0);
         }
         if profile == "auth-lifecycle-zero" {
-            plugin = plugin.reset_password_token_expires_in(0);
+            plugin = plugin.reset_password_token_expires_in(0.0);
         }
         plugin
     }

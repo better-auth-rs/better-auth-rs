@@ -46,6 +46,27 @@ pub(super) fn build_authorization_url(
     };
     let options = generic.map(|generic| &generic.config);
     if generic.is_none()
+        && let Some(options) = provider.config.cognito_options()
+    {
+        let missing = if provider.config.client_id.is_empty() {
+            Some((
+                "ClientId is required for Amazon Cognito. Make sure to provide them in the options.",
+                "CLIENT_ID_AND_SECRET_REQUIRED",
+            ))
+        } else if options.require_client_secret && provider.config.client_secret.is_empty() {
+            Some((
+                "Client Secret is required when requireClientSecret is true. Make sure to provide it in the options.",
+                "CLIENT_SECRET_REQUIRED",
+            ))
+        } else {
+            None
+        };
+        if let Some((message, code)) = missing {
+            better_auth_core::observability::logger::current().error(message, &[]);
+            return Err(AuthError::internal(code));
+        }
+    }
+    if generic.is_none()
         && (provider.config.client_id.is_empty() || provider.config.client_secret.is_empty())
         && let Some(message) = provider.config.required_credentials_message()
     {
@@ -101,53 +122,71 @@ pub(super) fn build_authorization_url(
             params.push((name.to_owned(), value.to_owned()));
         }
     };
-    set(
-        "response_type",
-        options
-            .and_then(|options| options.response_type.as_deref())
-            .filter(|value| !value.is_empty())
-            .unwrap_or("code"),
-    );
-    set("client_id", &provider.config.client_id);
-    set("state", input.state);
-    if !scopes.is_empty() {
-        set("scope", &scopes.join(" "));
-    }
-    set(
-        "redirect_uri",
-        provider
-            .config
-            .redirect_uri
-            .as_deref()
-            .filter(|value| !value.is_empty())
-            .unwrap_or(input.callback_url),
-    );
-    for (name, value) in [
-        ("login_hint", input.login_hint),
-        ("nonce", input.nonce),
-        (
-            "prompt",
-            options.map_or_else(
-                || provider.config.social_prompt(),
-                |options| options.prompt.as_deref(),
-            ),
-        ),
-        (
-            "access_type",
-            options.and_then(|options| options.access_type.as_deref()),
-        ),
-        (
-            "response_mode",
-            options.and_then(|options| options.response_mode.as_deref()),
-        ),
-    ] {
-        if let Some(value) = value.filter(|value| !value.is_empty()) {
-            set(name, value);
+    let wechat = generic.is_none() && provider.config.wechat_refresh_url().is_some();
+    if wechat {
+        set("scope", &scopes.join(","));
+        set("response_type", "code");
+        set("appid", &provider.config.client_id);
+        set(
+            "redirect_uri",
+            provider
+                .config
+                .redirect_uri
+                .as_deref()
+                .filter(|uri| !uri.is_empty())
+                .unwrap_or(input.callback_url),
+        );
+        set("state", input.state);
+        set("lang", "cn");
+    } else {
+        set(
+            "response_type",
+            options
+                .and_then(|options| options.response_type.as_deref())
+                .filter(|value| !value.is_empty())
+                .unwrap_or("code"),
+        );
+        set("client_id", &provider.config.client_id);
+        set("state", input.state);
+        if !scopes.is_empty() {
+            set("scope", &scopes.join(" "));
         }
-    }
-    if provider.uses_pkce() {
-        set("code_challenge_method", "S256");
-        set("code_challenge", input.code_challenge);
+        set(
+            "redirect_uri",
+            provider
+                .config
+                .redirect_uri
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .unwrap_or(input.callback_url),
+        );
+        for (name, value) in [
+            ("login_hint", input.login_hint),
+            ("nonce", input.nonce),
+            (
+                "prompt",
+                options.map_or_else(
+                    || provider.config.social_prompt(),
+                    |options| options.prompt.as_deref(),
+                ),
+            ),
+            (
+                "access_type",
+                options.and_then(|options| options.access_type.as_deref()),
+            ),
+            (
+                "response_mode",
+                options.and_then(|options| options.response_mode.as_deref()),
+            ),
+        ] {
+            if let Some(value) = value.filter(|value| !value.is_empty()) {
+                set(name, value);
+            }
+        }
+        if provider.uses_pkce() {
+            set("code_challenge_method", "S256");
+            set("code_challenge", input.code_challenge);
+        }
     }
     for (key, value) in provider
         .config
@@ -156,7 +195,7 @@ pub(super) fn build_authorization_url(
         .map(|(key, value)| (key, value))
         .chain(input.additional_params.into_iter().flatten())
     {
-        if !RESERVED_PARAMS.contains(&key.as_str()) {
+        if !RESERVED_PARAMS.contains(&key.as_str()) && !(wechat && key == "appid") {
             set(key, value);
         }
     }
@@ -165,7 +204,29 @@ pub(super) fn build_authorization_url(
             set(key, value);
         }
     }
+    let cognito_scope = if generic.is_none() && provider.config.cognito_options().is_some() {
+        let scope = params
+            .iter()
+            .find(|(key, value)| key == "scope" && !value.is_empty())
+            .map(|(_, value)| value.clone());
+        if scope.is_some() {
+            params.retain(|(key, _)| key != "scope");
+        }
+        scope
+    } else {
+        None
+    };
     let _ = url.query_pairs_mut().clear().extend_pairs(params);
+    if wechat {
+        url.set_fragment(Some("wechat_redirect"));
+    }
+    if let Some(scope) = cognito_scope {
+        // Cognito uses encodeURIComponent and places scope after the other query parameters.
+        return Ok(format!(
+            "{url}&scope={}",
+            better_auth_core::utils::cookie_utils::encode_cookie_value(&scope)
+        ));
+    }
     Ok(url.to_string())
 }
 

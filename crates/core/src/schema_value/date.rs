@@ -97,11 +97,7 @@ impl SchemaValue<DateTime<Utc>> {
             }
             value => value.relational_milliseconds(),
         };
-        // JavaScript TimeClip truncates fractions and rejects dates outside ±100 million days.
-        if !millis.is_finite() || millis.abs() > 8_640_000_000_000_000.0 {
-            return Self::InvalidDate;
-        }
-        chrono::DateTime::from_timestamp_millis(millis.trunc() as i64)
+        crate::utils::date::from_milliseconds(millis)
             .map(Self::Typed)
             .unwrap_or(Self::InvalidDate)
     }

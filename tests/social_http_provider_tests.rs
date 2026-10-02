@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use better_auth::plugins::oauth::{
-    OAuthPlugin, OAuthProfile, OAuthProfileMapper, OAuthProvider, TokenEndpointAuth,
+    CognitoOptions, OAuthPlugin, OAuthProfile, OAuthProfileMapper, OAuthProvider, TokenEndpointAuth,
 };
 use better_auth::{AuthBuilder, AuthConfig, BetterAuth, server_api::EndpointInput};
 use better_auth_core::{AuthResult, HttpMethod, SchemaValue, UpdateAccount};
@@ -230,6 +230,15 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
         "profileForm": profile_form,
         "subjectField": "user_id",
     });
+    let cognito: Value = serde_json::from_str(include_str!("fixtures/cognito-1.7.6.json")).unwrap();
+    let cognito_sample = &cognito["profileCases"][0];
+    let cognito_case = json!({
+        "profile": cognito_sample["profile"],
+        "defaultUser": cognito_sample["result"]["user"],
+        "mappedUser": cognito_sample["result"]["user"],
+        "mapperPatch": cognito_sample["mapperPatch"],
+        "subjectField": "sub",
+    });
     for redirect in redirects["cases"].as_array().unwrap() {
         let providers = [
             "gitlab",
@@ -251,6 +260,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             "zoom",
             "twitter",
             "vk",
+            "cognito",
         ]
         .into_iter()
         .map(|id| (id, None, true));
@@ -265,6 +275,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 &twitter_case
             } else if id == "vk" {
                 &vk_case
+            } else if id == "cognito" {
+                &cognito_case
             } else {
                 &fixture["providers"][id]
             };
@@ -321,6 +333,16 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     vk["metadata"]["clientId"].as_str().unwrap(),
                     vk["metadata"]["clientSecret"].as_str().unwrap(),
                 ),
+                "cognito" => OAuthProvider::cognito(
+                    "social-http-client",
+                    "ordinary-client-secret",
+                    CognitoOptions::new(
+                        cognito["metadata"]["domain"].as_str().unwrap(),
+                        cognito["metadata"]["region"].as_str().unwrap(),
+                        cognito["metadata"]["userPoolId"].as_str().unwrap(),
+                    ),
+                )
+                .unwrap(),
                 "cloudflare" => {
                     OAuthProvider::cloudflare("social-http-client", "ordinary-client-secret")
                 }
@@ -387,6 +409,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "zoom"
                     | "twitter"
                     | "vk"
+                    | "cognito"
             ) {
                 sign_in["loginHint"] = json!("owner@example.test");
                 sign_in["additionalParams"] = json!({"request_marker":"request-value"});
@@ -472,6 +495,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "zoom"
                     | "twitter"
                     | "vk"
+                    | "cognito"
             ) {
                 callback_query["device_id"] = json!("ordinary-device");
             }
@@ -685,7 +709,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 7);
                     assert_eq!(form["device_id"], vk["grants"][0]["input"]["deviceId"]);
-                } else if matches!(id, "dropbox" | "kick" | "atlassian" | "salesforce" | "zoom") {
+                } else if matches!(
+                    id,
+                    "dropbox" | "kick" | "atlassian" | "salesforce" | "zoom" | "cognito"
+                ) {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 6);
                     assert!(!form.contains_key("device_id"));
@@ -737,6 +764,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "zoom"
                     | "twitter"
                     | "vk"
+                    | "cognito"
                     | "cloudflare"
                     | "salesforce"
             ) {

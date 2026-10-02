@@ -13,7 +13,11 @@ pub(super) struct GoogleFixture {
 }
 
 impl GoogleFixture {
-    pub(super) async fn start(mut claims: Value) -> Self {
+    pub(super) async fn start(claims: Value) -> Self {
+        Self::start_with_userinfo(claims, None).await
+    }
+
+    pub(super) async fn start_with_userinfo(mut claims: Value, userinfo: Option<Value>) -> Self {
         let mut key = Jwk::generate_rsa_key(2048).unwrap();
         key.set_key_id("google-normal-fixture");
         let mut public = key.to_public_key().unwrap();
@@ -53,6 +57,7 @@ impl GoogleFixture {
                 let body = match path {
                     "/jwks" => json!({"keys":[public]}),
                     "/token" => json!({"id_token":signed_token,"access_token":"normal-access","expires_in":3600}),
+                    "/userinfo" if userinfo.is_some() => userinfo.clone().unwrap(),
                     _ => panic!("unexpected Google fixture request: {path}"),
                 }
                 .to_string();

@@ -5,8 +5,9 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
 
-mod defaults;
+pub(super) mod defaults;
 pub(super) mod twitter;
+pub(super) mod wechat;
 use super::OAuthProfileMapper;
 use super::token::{TokenEndpointAuth, TokenEndpointSecretAuthentication};
 use defaults::ProviderKind;
@@ -176,6 +177,48 @@ pub struct OAuthProvider {
 }
 
 impl OAuthProvider {
+    /// Configure a Cognito hosted domain and its fixed user-pool issuer and JWKS.
+    /// Set `identity_provider` through `authorization_params` to select a federated provider.
+    pub fn cognito(
+        client_id: &str,
+        client_secret: &str,
+        options: super::CognitoOptions,
+    ) -> AuthResult<Self> {
+        if options.domain.is_empty() || options.region.is_empty() || options.user_pool_id.is_empty()
+        {
+            better_auth_core::observability::logger::current().error(
+                "Domain, region and userPoolId are required for Amazon Cognito. Make sure to provide them in the options.",
+                &[],
+            );
+            return Err(AuthError::internal("DOMAIN_AND_REGION_REQUIRED"));
+        }
+        let domain = options
+            .domain
+            .strip_prefix("https://")
+            .or_else(|| options.domain.strip_prefix("http://"))
+            .unwrap_or(&options.domain);
+        let provider = Self {
+            user_info_url: Some(format!("https://{domain}/oauth2/userinfo")),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                &format!("https://{domain}/oauth2/authorize"),
+                &format!("https://{domain}/oauth2/token"),
+            )
+        };
+        Ok(Self {
+            kind: ProviderKind::Cognito(options),
+            ..provider
+        })
+    }
+
+    pub(super) fn cognito_options(&self) -> Option<&super::CognitoOptions> {
+        match &self.kind {
+            ProviderKind::Cognito(options) => Some(options),
+            _ => None,
+        }
+    }
+
     /// Configure a custom social provider with explicit endpoints and profile handling.
     pub fn custom(client_id: &str, client_secret: &str, auth_url: &str, token_url: &str) -> Self {
         Self {
@@ -392,7 +435,7 @@ impl OAuthProvider {
             .bearer_auth(access_token)
             .header(
                 "Accept",
-                if self.is_twitter() {
+                if self.is_twitter() || self.cognito_options().is_some() {
                     "*/*"
                 } else {
                     "application/json"
@@ -610,6 +653,44 @@ impl OAuthProvider {
         }
     }
 
+    /// Configure WeChat WebsiteApp with GET grants and its HTTP profile lookup.
+    /// Set `authorization_params`'s `lang` to `en` for the English authorization page.
+    pub fn wechat(client_id: &str, client_secret: &str) -> Self {
+        Self::wechat_with_endpoints(
+            client_id,
+            client_secret,
+            "https://open.weixin.qq.com/connect/qrconnect",
+            "https://api.weixin.qq.com/sns/oauth2/access_token",
+            "https://api.weixin.qq.com/sns/oauth2/refresh_token",
+            "https://api.weixin.qq.com/sns/userinfo",
+        )
+    }
+
+    /// Configure WeChat endpoints while retaining its GET grants and profile semantics.
+    pub fn wechat_with_endpoints(
+        client_id: &str,
+        client_secret: &str,
+        auth_url: &str,
+        token_url: &str,
+        refresh_url: &str,
+        user_info_url: &str,
+    ) -> Self {
+        Self {
+            kind: ProviderKind::WeChat {
+                refresh_url: refresh_url.into(),
+            },
+            user_info_url: Some(user_info_url.into()),
+            ..Self::custom(client_id, client_secret, auth_url, token_url)
+        }
+    }
+
+    pub(super) fn wechat_refresh_url(&self) -> Option<&str> {
+        match &self.kind {
+            ProviderKind::WeChat { refresh_url } => Some(refresh_url),
+            _ => None,
+        }
+    }
+
     pub(super) fn is_twitter(&self) -> bool {
         matches!(self.kind, ProviderKind::Twitter)
     }
@@ -646,6 +727,7 @@ impl OAuthProvider {
                 | ProviderKind::Reddit
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { pkce: false }
+                | ProviderKind::WeChat { .. }
         )
     }
 
@@ -656,7 +738,8 @@ impl OAuthProvider {
     pub(super) fn omits_request_hints(&self) -> bool {
         matches!(
             self.kind,
-            ProviderKind::Cloudflare
+            ProviderKind::Cognito(_)
+                | ProviderKind::Cloudflare
                 | ProviderKind::Slack
                 | ProviderKind::Naver
                 | ProviderKind::Atlassian
@@ -665,6 +748,7 @@ impl OAuthProvider {
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { .. }
                 | ProviderKind::Twitter
+                | ProviderKind::WeChat { .. }
                 | ProviderKind::Vk
         )
     }
@@ -672,7 +756,8 @@ impl OAuthProvider {
     pub(super) fn omits_device_id(&self) -> bool {
         matches!(
             self.kind,
-            ProviderKind::Cloudflare
+            ProviderKind::Cognito(_)
+                | ProviderKind::Cloudflare
                 | ProviderKind::LinkedIn
                 | ProviderKind::Slack
                 | ProviderKind::Naver
@@ -683,6 +768,7 @@ impl OAuthProvider {
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { .. }
                 | ProviderKind::Twitter
+                | ProviderKind::WeChat { .. }
         )
     }
 
@@ -854,6 +940,7 @@ impl OAuthProvider {
             | ProviderKind::GitHub { .. }
             | ProviderKind::Discord
             | ProviderKind::Polar
+            | ProviderKind::Cognito(_)
             | ProviderKind::Atlassian => self
                 .prompt
                 .as_deref()
@@ -875,6 +962,7 @@ impl OAuthProvider {
             | ProviderKind::Salesforce
             | ProviderKind::Kakao
             | ProviderKind::Twitter
+            | ProviderKind::WeChat { .. }
             | ProviderKind::Vk
             | ProviderKind::Zoom { .. } => None,
         }

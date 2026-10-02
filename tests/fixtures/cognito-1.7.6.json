@@ -1,0 +1,1876 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "clientId": "ordinary-client",
+    "clientIds": [
+      "ordinary-client",
+      "ordinary-secondary-client"
+    ],
+    "clientSecret": "ordinary-client-secret",
+    "domain": "ordinary.auth.us-east-1.amazoncognito.com",
+    "region": "us-east-1",
+    "userPoolId": "us-east-1_Ordinary",
+    "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+    "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+    "authorizationEndpoint": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+    "tokenEndpoint": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/token",
+    "profileEndpoint": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+    "issuer": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary"
+  },
+  "localSigning": {
+    "publicJwk": {
+      "e": "AQAB",
+      "kty": "RSA",
+      "n": "rrZqd_ttBuNGB-iCm79QR9BfyaOWOt9jo383x6zDLYxndqTSOKf1UZsPISQYCbsxGVCFpk-yKx71rHuuGE6C9CUlZwV97SG7WZhaoKpDQr1ksN5dy1XF-p0RtfbEB2LxI2ZdymqQnD4-cR-hR0Qm1B_g0n7zi9N_KXUq4llwl4vcANJJsm2NPsN47iG8z5eibLLDfdRAMjJdMm9m2Bm9bB-div-0h5Djh-1YWHD70ic1pj0toGXuZc9Sa8Q8JuJcuAaTOSH1kY87-3pNOj8OjCcI8cm6okeihFEelwwO7YYG2pLXGI3RoyqEHfTa4tJ01AlBXmcT0xvW4Nf2yhp9tQ"
+    },
+    "issuedAt": 1790898021,
+    "expiresAt": 1790901621
+  },
+  "scopeCases": [
+    {
+      "name": "default",
+      "options": {},
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-unused-nonce"
+      },
+      "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&code_challenge_method=S256&code_challenge=RPaFp39N7MPv61fl01Op2Aw7zv5XD8i27McIy69GiZM&scope=openid%20profile%20email"
+    },
+    {
+      "name": "append",
+      "options": {
+        "prompt": "consent",
+        "scope": [
+          "phone",
+          "email"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-unused-nonce",
+        "scopes": [
+          "profile",
+          "custom/read"
+        ]
+      },
+      "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&prompt=consent&code_challenge_method=S256&code_challenge=RPaFp39N7MPv61fl01Op2Aw7zv5XD8i27McIy69GiZM&scope=openid%20profile%20email%20phone%20email%20profile%20custom%2Fread"
+    },
+    {
+      "name": "disabled",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": [
+          "phone"
+        ]
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-unused-nonce",
+        "scopes": [
+          "email"
+        ]
+      },
+      "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&code_challenge_method=S256&code_challenge=RPaFp39N7MPv61fl01Op2Aw7zv5XD8i27McIy69GiZM&scope=phone%20email"
+    },
+    {
+      "name": "empty",
+      "options": {
+        "disableDefaultScope": true
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-unused-nonce"
+      },
+      "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&code_challenge_method=S256&code_challenge=RPaFp39N7MPv61fl01Op2Aw7zv5XD8i27McIy69GiZM"
+    },
+    {
+      "name": "configured identity provider",
+      "options": {
+        "identityProvider": "COGNITO",
+        "domain": "https://ordinary.auth.us-east-1.amazoncognito.com"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-unused-nonce",
+        "additionalParams": {
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&code_challenge_method=S256&code_challenge=RPaFp39N7MPv61fl01Op2Aw7zv5XD8i27McIy69GiZM&identity_provider=COGNITO&request_marker=ordinary&scope=openid%20profile%20email"
+    },
+    {
+      "name": "request identity provider",
+      "options": {
+        "identityProvider": "COGNITO"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "loginHint": "ordinary@example.test",
+        "idTokenNonce": "ordinary-unused-nonce",
+        "additionalParams": {
+          "identity_provider": "Google",
+          "request_marker": "ordinary"
+        }
+      },
+      "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/authorize?response_type=code&client_id=ordinary-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&code_challenge_method=S256&code_challenge=RPaFp39N7MPv61fl01Op2Aw7zv5XD8i27McIy69GiZM&identity_provider=Google&request_marker=ordinary&scope=openid%20profile%20email"
+    }
+  ],
+  "grants": [
+    {
+      "name": "code",
+      "input": {
+        "code": "ordinary-code",
+        "codeVerifier": "ordinary-cognito-verifier-with-at-least-43-characters",
+        "redirectURI": "http://app.example.test/api/auth/callback/cognito",
+        "deviceId": "ordinary-unused-device"
+      },
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-cognito-verifier-with-at-least-43-characters&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fcognito&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "events": [
+        "code"
+      ],
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "ordinary-scope"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "ordinary-scope"
+        }
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "ordinary-scope"
+      }
+    },
+    {
+      "name": "refresh",
+      "input": "ordinary-refresh",
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/token",
+          "method": "POST",
+          "authorization": null,
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=ordinary-client&client_secret=ordinary-client-secret"
+        }
+      ],
+      "events": [
+        "refresh"
+      ],
+      "response": {
+        "accessToken": "rotated-access",
+        "refreshToken": "rotated-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "rawResponse": {
+        "access_token": "rotated-access",
+        "refresh_token": "rotated-refresh",
+        "token_type": "Bearer",
+        "scope": "refreshed-scope"
+      }
+    }
+  ],
+  "profileCases": [
+    {
+      "name": "http default",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "Cognito Owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http given name fallback",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "Given Owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http username fallback",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "",
+          "given_name": "",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http empty name fallback",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "",
+          "given_name": "",
+          "username": "",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http optional fields omitted",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner"
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner"
+      },
+      "result": {
+        "user": {
+          "name": "Given Owner"
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner"
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": true
+        }
+      }
+    },
+    {
+      "name": "http nullable fields",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": null,
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": null,
+        "picture": null,
+        "email_verified": null
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": null,
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": null,
+        "picture": null,
+        "email_verified": null
+      },
+      "result": {
+        "user": {
+          "name": "Given Owner",
+          "email": null,
+          "image": null,
+          "emailVerified": null
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": null,
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": null,
+          "picture": null,
+          "email_verified": null
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http mapper fills email",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "name": "Mapped Cognito Owner",
+        "email": "mapped@example.test",
+        "image": "https://images.example.test/mapped-cognito.png",
+        "emailVerified": false,
+        "locale": "en"
+      },
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "Mapped Cognito Owner",
+          "email": "mapped@example.test",
+          "image": "https://images.example.test/mapped-cognito.png",
+          "emailVerified": false,
+          "locale": "en"
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http mapped email null",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "null",
+      "mapperPatch": {
+        "email": null
+      },
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "Cognito Owner",
+          "email": null,
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http mapped email undefined",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "undefined",
+      "mapperPatch": {},
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "Cognito Owner",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "http mapped email empty",
+      "source": "http",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperEmailMode": "empty",
+      "mapperPatch": {
+        "email": ""
+      },
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "name": "Cognito Owner",
+          "email": "",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "signed default",
+      "source": "id-token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "result": {
+        "user": {
+          "name": "Cognito Owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "signed given name enrichment",
+      "source": "id-token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwiZ2l2ZW5fbmFtZSI6IkdpdmVuIE93bmVyIiwidXNlcm5hbWUiOiJjb2duaXRvLW93bmVyIiwiZW1haWwiOiJjb2duaXRvLW93bmVyQGV4YW1wbGUudGVzdCIsInBpY3R1cmUiOiJodHRwczovL2ltYWdlcy5leGFtcGxlLnRlc3QvY29nbml0by5wbmciLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbS91cy1lYXN0LTFfT3JkaW5hcnkiLCJhdWQiOiJvcmRpbmFyeS1jbGllbnQiLCJpYXQiOjE3OTA4OTgwMjEsImV4cCI6MTc5MDkwMTYyMX0.BVjsvxegHdQ3_hZgDUK0wrvr4CGT8sinQBEZ0jyZ3tMDyNMqUAcwgt8lowN17VfTdzZa6AXVqdvRprZa9aDKFT04seTCiNerZ9BrLGRoQwRegVODnTpZMq-vrPnJoVkva7NeDqFcZgV16vY11obN-kH-_TMwHXui1a47YLOc_zjagMe05nk9UOtC-rP72b3429lQOpaxqhm51fXFvINwFGqyOoHiCDtu-hPXRCsrarZqtgnd1scoc2q8zTND3HS5iYpUIIalnYJG_JJ7dw-jThBwrgibRK6_sXiKT-D7Cxpp8nBeSoKccQoRmyeEnQFfe2Dkt3GVBY8ii-VwhryPeg",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621,
+        "name": "Given Owner"
+      },
+      "result": {
+        "user": {
+          "name": "Given Owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621,
+          "name": "Given Owner"
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "signed username enrichment",
+      "source": "id-token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IiIsImdpdmVuX25hbWUiOiIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.A1YGnQjuweR5qLF5EAkcnhUUMO3Y_ZbF_r6irxt--LKJZnjo_fjNpSs6tI8Zgi2S5wlpPfWW1Z3ZtFkCrOKvexecR84NtyyKTt2pXmd2xRX6jFpfxewqXkcWGt-vuE0TdZ9QF-RcGIIsU1zmKRyBsAIhfR53D8KnjCPbVy_ppOZJ9ZPxQDMo-13LZSAWc3AdCdMs2pLDaK8TOZUG7U53Jddsgkojk7A6GkbSO6t9KTMS4uxLuGg-y63bM6YmOFJJMyEBrflHa1cKign6bTpPS_-hg2YQkAsvFjZIg7w1gNGmt_1HUOPh-HcNflpN9m5lQ5sLwtBaU1i6MdDSkF_uSA",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "cognito-owner",
+        "given_name": "",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "result": {
+        "user": {
+          "name": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "cognito-owner",
+          "given_name": "",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "signed empty name enrichment",
+      "source": "id-token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IiIsImdpdmVuX25hbWUiOiIiLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiY29nbml0by1vd25lckBleGFtcGxlLnRlc3QiLCJwaWN0dXJlIjoiaHR0cHM6Ly9pbWFnZXMuZXhhbXBsZS50ZXN0L2NvZ25pdG8ucG5nIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImlzcyI6Imh0dHBzOi8vY29nbml0by1pZHAudXMtZWFzdC0xLmFtYXpvbmF3cy5jb20vdXMtZWFzdC0xX09yZGluYXJ5IiwiYXVkIjoib3JkaW5hcnktY2xpZW50IiwiaWF0IjoxNzkwODk4MDIxLCJleHAiOjE3OTA5MDE2MjF9.EbwJ9hOgvgOEoq905vEN9dnGjsSfthootqB1DmlnomyzYvVEF4773qK6Ox9xxJcZAFQyn5rI9GP9xkTeUOoDfxEg3zdwrAEqDFK17rmrrRphJ1p1UkVw9mFQeb0H2QdTDz8nCBx3b8Z_cZwjHjA2q7-ihDC_yXbalu5BBYylE-8Nj8UwN11nYMJCGh7zA8kVKt-S5ucqytDzXKx4V0kfXzT-EFEe1mz--6S1A3b6WJ2H0cqefgxEWSBbzOWkjUxs1SQlz525jhUeiTbLwt91ZfwhYQH--lAg5vb0WCkEh0pZr4CQC_vYlkGYDWoPREadG6rknAUFBVmYHSgXNZ5nLw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "",
+        "given_name": "",
+        "username": "",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "",
+          "given_name": "",
+          "username": "",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    },
+    {
+      "name": "signed optional fields omitted",
+      "source": "id-token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.IOYA9ZKPO5BDzPCR3zNneyiT_V_IkqMn4zKQNkjod4pHS7THWbdM_IAnnwgWeGB2a9jqqBBWDk4xmUOC4_xfXtTPX5p0wz9cVLTqoUrg2sthXd1pB1vFu3thAN4pk16gCC7coFfECxEY080qPUensf2y5f51FU-hy4dbaq4bmTfSEMRwh8INDPmT4yLW-Irl96D1BhGKYgkXrUaKxsD407RW1AGpcxy7v3GiK8XhmBwzsioB3jZb6aJLiPPOteKd0fcAlwem0fuGGbhHfe-8o0-FRUO3FsjgBhgBVCCwjvC3qOC1znH7fDXefUjDcRFrbqfFXcE0cvgYTLm9kFUyLw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "omitted",
+      "mapperPatch": {},
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "result": {
+        "user": {
+          "name": "Cognito Owner"
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": true
+        },
+        "image": {
+          "own": true,
+          "undefined": true
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": true
+        }
+      }
+    },
+    {
+      "name": "signed mapper fields",
+      "source": "id-token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperEmailMode": "string",
+      "mapperPatch": {
+        "name": "Mapped Cognito Owner",
+        "email": "mapped@example.test",
+        "image": null,
+        "emailVerified": false
+      },
+      "requests": [],
+      "events": [
+        "map:start",
+        "map:end",
+        "returned"
+      ],
+      "logs": [],
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true,
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+        "aud": "ordinary-client",
+        "iat": 1790898021,
+        "exp": 1790901621
+      },
+      "result": {
+        "user": {
+          "name": "Mapped Cognito Owner",
+          "email": "mapped@example.test",
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        }
+      },
+      "presence": {
+        "name": {
+          "own": true,
+          "undefined": false
+        },
+        "email": {
+          "own": true,
+          "undefined": false
+        },
+        "image": {
+          "own": true,
+          "undefined": false
+        },
+        "emailVerified": {
+          "own": true,
+          "undefined": false
+        }
+      }
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "empty access token",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": ""
+      },
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "requests": [],
+      "events": [
+        "returned"
+      ],
+      "logs": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "http503",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 503,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "returned"
+      ],
+      "logs": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "http mapper error",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "accessToken": "ordinary-access"
+      },
+      "mapperCalls": 1,
+      "mapperProfiles": [
+        {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      ],
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "log:error",
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Failed to fetch user info from Cognito:",
+          "error": {
+            "name": "Error",
+            "message": "Ordinary Cognito http mapper error",
+            "sameError": true
+          }
+        }
+      ],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "signed mapper fallback",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperCalls": 2,
+      "mapperProfiles": [
+        {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        },
+        {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      ],
+      "requests": [
+        {
+          "url": "https://ordinary.auth.us-east-1.amazoncognito.com/oauth2/userinfo",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access",
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "mapper",
+        "log:error",
+        "profile",
+        "mapper",
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Failed to decode ID token:",
+          "error": {
+            "name": "Error",
+            "message": "Ordinary Cognito signed mapper fallback",
+            "sameError": true
+          }
+        }
+      ],
+      "result": {
+        "user": {
+          "name": "Fallback Cognito Owner",
+          "email": "cognito-owner@example.test",
+          "image": "https://images.example.test/cognito.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "sameCustom": false
+    },
+    {
+      "mode": "signed mapper error without access",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": ""
+      },
+      "signatureVerifiedLocally": true,
+      "mapperCalls": 1,
+      "mapperProfiles": [
+        {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true,
+          "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Ordinary",
+          "aud": "ordinary-client",
+          "iat": 1790898021,
+          "exp": 1790901621
+        }
+      ],
+      "requests": [],
+      "events": [
+        "mapper",
+        "log:error",
+        "returned"
+      ],
+      "logs": [
+        {
+          "message": "Failed to decode ID token:",
+          "error": {
+            "name": "Error",
+            "message": "Ordinary Cognito signed mapper error without access",
+            "sameError": true
+          }
+        }
+      ],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "custom success",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "requests": [],
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "logs": [],
+      "result": {
+        "user": {
+          "name": "Custom Cognito Owner",
+          "email": "custom@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-cognito-owner",
+          "name": "Cognito Owner",
+          "given_name": "Given Owner",
+          "username": "cognito-owner",
+          "email": "cognito-owner@example.test",
+          "picture": "https://images.example.test/cognito.png",
+          "email_verified": true
+        }
+      },
+      "sameCustom": true
+    },
+    {
+      "mode": "custom null",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "requests": [],
+      "events": [
+        "custom",
+        "returned"
+      ],
+      "logs": [],
+      "result": null,
+      "sameCustom": false
+    },
+    {
+      "mode": "custom error",
+      "profile": {
+        "sub": "ordinary-cognito-owner",
+        "name": "Cognito Owner",
+        "given_name": "Given Owner",
+        "username": "cognito-owner",
+        "email": "cognito-owner@example.test",
+        "picture": "https://images.example.test/cognito.png",
+        "email_verified": true
+      },
+      "profileStatus": 200,
+      "input": {
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6Im9yZGluYXJ5LWxvY2FsLWNvZ25pdG8ifQ.eyJzdWIiOiJvcmRpbmFyeS1jb2duaXRvLW93bmVyIiwibmFtZSI6IkNvZ25pdG8gT3duZXIiLCJnaXZlbl9uYW1lIjoiR2l2ZW4gT3duZXIiLCJ1c2VybmFtZSI6ImNvZ25pdG8tb3duZXIiLCJlbWFpbCI6ImNvZ25pdG8tb3duZXJAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9jb2duaXRvLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczovL2NvZ25pdG8taWRwLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tL3VzLWVhc3QtMV9PcmRpbmFyeSIsImF1ZCI6Im9yZGluYXJ5LWNsaWVudCIsImlhdCI6MTc5MDg5ODAyMSwiZXhwIjoxNzkwOTAxNjIxfQ.bbor4e2BDa_Mf4K_MQ0DBi3_T9ty_SV77_bj7FIjli6Qf6CRqgTg7R19XJhA49Oo1Kxc1-rjLJp5g4Y0Ft6yu1JnBJ0EyC0qfV7KUZHJJzpg2Rhum_5C8vDCBVYMl6pAGp_sUWgaudIFrx7wLHwuGecWEn_llroVDKQHYVNPjbsraiEfUZodceF-sZHhSgLP-yW3wibG4s1PqnNXsjxSPGZ054p5WHirijT6TSrZEP9yJZapHLEPaTFAm9sBY2kS1t6TebAmk6L5_k-MZKH3OVhZS-j559Ic49m0Oqd2j6t7NNXTfxoszbvrDHF89CsoZVhTV_xxHDQs5VOWy8diWw",
+        "accessToken": "ordinary-access"
+      },
+      "signatureVerifiedLocally": true,
+      "mapperCalls": 0,
+      "mapperProfiles": [],
+      "requests": [],
+      "events": [
+        "custom",
+        "rejected"
+      ],
+      "logs": [],
+      "error": {
+        "name": "Error",
+        "message": "Ordinary Cognito custom error",
+        "sameError": true
+      }
+    }
+  ]
+}

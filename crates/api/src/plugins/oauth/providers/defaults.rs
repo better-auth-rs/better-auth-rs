@@ -5,6 +5,7 @@ use serde_json::Value;
 
 #[derive(Clone)]
 pub(super) enum ProviderKind {
+    Cognito(super::super::CognitoOptions),
     Custom,
     Google {
         jwks_url: String,
@@ -37,6 +38,9 @@ pub(super) enum ProviderKind {
     Salesforce,
     Twitter,
     Vk,
+    WeChat {
+        refresh_url: String,
+    },
 }
 
 impl ProviderKind {
@@ -48,7 +52,9 @@ impl ProviderKind {
             Self::Discord => &["identify", "email"],
             Self::GitLab => &["read_user"],
             Self::Spotify => &["user-read-email"],
-            Self::HuggingFace | Self::Polar | Self::Slack => &["openid", "profile", "email"],
+            Self::HuggingFace | Self::Polar | Self::Slack | Self::Cognito(_) => {
+                &["openid", "profile", "email"]
+            }
             Self::Figma => &["current_user:read"],
             Self::Dropbox => &["account_info.read"],
             Self::Kick => &["user:read"],
@@ -62,10 +68,12 @@ impl ProviderKind {
             Self::Salesforce => &["openid", "email", "profile"],
             Self::Twitter => &["users.read", "tweet.read", "offline.access", "users.email"],
             Self::Vk => &["email", "phone"],
+            Self::WeChat { .. } => &["snsapi_login"],
         }
     }
     pub(super) fn decode_profile(&self, profile: Value) -> AuthResult<Option<OAuthUserInfo>> {
         let mapper = match self {
+            Self::Cognito(_) => super::super::cognito::decode_profile,
             Self::Google { .. } => google_profile,
             Self::Discord => discord_profile,
             Self::GitLab => {
@@ -101,6 +109,7 @@ impl ProviderKind {
             Self::Salesforce => salesforce_profile,
             Self::Twitter => super::twitter::decode_profile,
             Self::Vk => vk_profile,
+            Self::WeChat { .. } => super::wechat::decode_profile,
             Self::GitHub { .. } | Self::Custom => {
                 return Err(AuthError::internal("Missing user-info mapper for provider"));
             }
@@ -109,7 +118,9 @@ impl ProviderKind {
     }
 }
 
-pub(super) fn profile_email(profile: &Value) -> Result<SchemaValue<Option<String>>, String> {
+pub(in crate::plugins::oauth) fn profile_email(
+    profile: &Value,
+) -> Result<SchemaValue<Option<String>>, String> {
     profile
         .get("email")
         .cloned()

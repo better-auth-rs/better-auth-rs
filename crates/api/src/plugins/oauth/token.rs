@@ -265,28 +265,21 @@ impl TokenRequest {
     }
 
     pub(super) async fn send(self, token_endpoint: &str) -> AuthResult<serde_json::Value> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|error| AuthError::internal(format!("OAuth HTTP client failed: {error}")))?;
-        let response = client
-            .post(token_endpoint)
-            .headers(self.headers)
-            .form(&self.body)
-            .send()
-            .await
-            .map_err(|error| AuthError::internal(format!("Token request failed: {error}")))?;
-        if matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
-            return Err(AuthError::internal(format!(
-                "The OAuth endpoint \"{token_endpoint}\" returned an HTTP redirect. Server-side OAuth fetches refuse redirects to prevent SSRF; configure the final endpoint URL."
-            )));
-        }
-        let response = response
-            .error_for_status()
-            .map_err(|error| AuthError::internal(format!("Token request failed: {error}")))?;
-        response.json().await.map_err(|error| {
-            AuthError::internal(format!("Failed to parse token response: {error}"))
-        })
+        send_request(
+            client()?
+                .post(token_endpoint)
+                .headers(self.headers)
+                .form(&self.body),
+            token_endpoint,
+        )
+        .await
+    }
+
+    pub(super) async fn send_query(
+        token_endpoint: &str,
+        params: &[(&str, &str)],
+    ) -> AuthResult<serde_json::Value> {
+        send_request(client()?.get(token_endpoint).query(params), token_endpoint).await
     }
 
     fn has(&self, name: &str) -> bool {
@@ -359,6 +352,37 @@ fn require_client_secret<'a>(method: &str, client_secret: Option<&'a str>) -> Au
 
 fn form_encode(value: &str) -> String {
     url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
+}
+
+fn client() -> AuthResult<reqwest::Client> {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| AuthError::internal(format!("OAuth HTTP client failed: {error}")))
+}
+
+async fn send_request(
+    request: reqwest::RequestBuilder,
+    token_endpoint: &str,
+) -> AuthResult<serde_json::Value> {
+    // GET grants carry credentials in the query. Keep request URLs out of errors.
+    let response = request.send().await.map_err(|error| {
+        AuthError::internal(format!("Token request failed: {}", error.without_url()))
+    })?;
+    if matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
+        return Err(AuthError::internal(format!(
+            "The OAuth endpoint \"{token_endpoint}\" returned an HTTP redirect. Server-side OAuth fetches refuse redirects to prevent SSRF; configure the final endpoint URL."
+        )));
+    }
+    let response = response.error_for_status().map_err(|error| {
+        AuthError::internal(format!("Token request failed: {}", error.without_url()))
+    })?;
+    response.json().await.map_err(|error| {
+        AuthError::internal(format!(
+            "Failed to parse token response: {}",
+            error.without_url()
+        ))
+    })
 }
 
 #[cfg(test)]

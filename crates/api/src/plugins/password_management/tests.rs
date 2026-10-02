@@ -189,7 +189,7 @@ impl SendResetPassword for ResetTokenCapture {
 )]
 async fn request_reset_persists_omitted_zero_and_explicit_lifetimes() -> AuthResult<()> {
     let (ctx, _, _) = create_test_context_with_user().await;
-    for configured in [None, Some(0), Some(3600), Some(90)] {
+    for configured in [None, Some(0.0), Some(3600.0), Some(90.0)] {
         let sender = Arc::new(ResetTokenCapture(std::sync::Mutex::new(None)));
         let plugin = PasswordManagementPlugin::with_config(PasswordManagementConfig {
             reset_password_token_expires_in: configured,
@@ -226,7 +226,7 @@ async fn request_reset_persists_omitted_zero_and_explicit_lifetimes() -> AuthRes
             .get_verification_by_identifier(&format!("reset-password:{token}"))
             .await?
             .ok_or_else(|| AuthError::internal("reset token was not persisted"))?;
-        let expected = Duration::seconds(if configured == Some(90) { 90 } else { 3600 });
+        let expected = Duration::seconds(if configured == Some(90.0) { 90 } else { 3600 });
         let expires_at = stored.expires_at.typed()?;
         // Adapter dates retain the upstream millisecond precision.
         assert!(expires_at.timestamp_millis() >= (before + expected).timestamp_millis());
@@ -925,14 +925,14 @@ async fn test_plugin_on_request_routing() {
 #[tokio::test]
 async fn test_configuration() {
     let config = PasswordManagementConfig {
-        reset_password_token_expires_in: Some(172800),
+        reset_password_token_expires_in: Some(172800.0),
         require_current_password: false,
         send_email_notifications: false,
         ..Default::default()
     };
 
     let plugin = PasswordManagementPlugin::with_config(config);
-    assert_eq!(plugin.config.reset_password_token_expires_in(), 172800);
+    assert_eq!(plugin.config.reset_password_token_expires_in(), 172800.0);
     assert!(!plugin.config.require_current_password);
     assert!(!plugin.config.send_email_notifications);
 }

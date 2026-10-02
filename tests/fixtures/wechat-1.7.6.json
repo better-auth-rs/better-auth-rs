@@ -1,0 +1,872 @@
+{
+  "metadata": {
+    "version": "1.7.6",
+    "clientId": "ordinary-client",
+    "clientSecret": "ordinary-secret",
+    "authorizationEndpoint": "https://open.weixin.qq.com/connect/qrconnect",
+    "tokenEndpoint": "https://api.weixin.qq.com/sns/oauth2/access_token",
+    "refreshEndpoint": "https://api.weixin.qq.com/sns/oauth2/refresh_token",
+    "profileEndpoint": "https://api.weixin.qq.com/sns/userinfo",
+    "now": 1700000000000
+  },
+  "scopeCases": [
+    {
+      "name": "defaults",
+      "options": {},
+      "input": {
+        "state": "ordinary-state",
+        "redirectURI": "https://app.example/api/auth/callback/wechat",
+        "codeVerifier": "ordinary-verifier",
+        "loginHint": "ordinary@example.com",
+        "nonce": "ordinary-nonce",
+        "additionalParams": {
+          "theme": "light"
+        }
+      },
+      "url": "https://open.weixin.qq.com/connect/qrconnect?scope=snsapi_login&response_type=code&appid=ordinary-client&redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fauth%2Fcallback%2Fwechat&state=ordinary-state&lang=cn&theme=light#wechat_redirect"
+    },
+    {
+      "name": "configured and requested scopes",
+      "options": {
+        "scope": [
+          "snsapi_userinfo"
+        ],
+        "lang": "en",
+        "prompt": "consent"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "redirectURI": "https://app.example/api/auth/callback/wechat",
+        "codeVerifier": "ordinary-verifier",
+        "loginHint": "ordinary@example.com",
+        "nonce": "ordinary-nonce",
+        "additionalParams": {
+          "lang": "cn",
+          "theme": "dark"
+        },
+        "scopes": [
+          "snsapi_login"
+        ]
+      },
+      "url": "https://open.weixin.qq.com/connect/qrconnect?scope=snsapi_login%2Csnsapi_userinfo%2Csnsapi_login&response_type=code&appid=ordinary-client&redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fauth%2Fcallback%2Fwechat&state=ordinary-state&lang=cn&theme=dark#wechat_redirect"
+    },
+    {
+      "name": "disabled defaults",
+      "options": {
+        "disableDefaultScope": true
+      },
+      "input": {
+        "state": "ordinary-state",
+        "redirectURI": "https://app.example/api/auth/callback/wechat",
+        "codeVerifier": "ordinary-verifier",
+        "loginHint": "ordinary@example.com",
+        "nonce": "ordinary-nonce",
+        "additionalParams": {
+          "theme": "light"
+        }
+      },
+      "url": "https://open.weixin.qq.com/connect/qrconnect?scope=&response_type=code&appid=ordinary-client&redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fauth%2Fcallback%2Fwechat&state=ordinary-state&lang=cn&theme=light#wechat_redirect"
+    },
+    {
+      "name": "configured redirect",
+      "options": {
+        "redirectURI": "https://app.example/custom/wechat",
+        "lang": "en"
+      },
+      "input": {
+        "state": "ordinary-state",
+        "redirectURI": "https://app.example/api/auth/callback/wechat",
+        "codeVerifier": "ordinary-verifier",
+        "loginHint": "ordinary@example.com",
+        "nonce": "ordinary-nonce",
+        "additionalParams": {
+          "theme": "light"
+        }
+      },
+      "url": "https://open.weixin.qq.com/connect/qrconnect?scope=snsapi_login&response_type=code&appid=ordinary-client&redirect_uri=https%3A%2F%2Fapp.example%2Fcustom%2Fwechat&state=ordinary-state&lang=en&theme=light#wechat_redirect"
+    },
+    {
+      "name": "empty redirect",
+      "options": {
+        "redirectURI": ""
+      },
+      "input": {
+        "state": "ordinary-state",
+        "redirectURI": "https://app.example/api/auth/callback/wechat",
+        "codeVerifier": "ordinary-verifier",
+        "loginHint": "ordinary@example.com",
+        "nonce": "ordinary-nonce",
+        "additionalParams": {
+          "theme": "light"
+        }
+      },
+      "url": "https://open.weixin.qq.com/connect/qrconnect?scope=snsapi_login&response_type=code&appid=ordinary-client&redirect_uri=https%3A%2F%2Fapp.example%2Fapi%2Fauth%2Fcallback%2Fwechat&state=ordinary-state&lang=cn&theme=light#wechat_redirect"
+    }
+  ],
+  "grants": [
+    {
+      "name": "code",
+      "input": {
+        "code": "ordinary-code",
+        "redirectURI": "https://app.example/api/auth/callback/wechat",
+        "codeVerifier": "ordinary-verifier",
+        "deviceId": "ordinary-device"
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "expires_in": 7200,
+        "scope": "snsapi_login,snsapi_userinfo",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "accessTokenExpiresAt": "2023-11-15T00:13:20.000Z",
+        "scopes": [
+          "snsapi_login",
+          "snsapi_userinfo"
+        ],
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/oauth2/access_token?appid=ordinary-client&secret=ordinary-secret&code=ordinary-code&grant_type=authorization_code",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "code"
+      ]
+    },
+    {
+      "name": "refresh",
+      "input": "ordinary-refresh",
+      "rawResponse": {
+        "access_token": "refreshed-access",
+        "refresh_token": "rotated-refresh",
+        "expires_in": 7200,
+        "scope": "refreshed-scope",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "response": {
+        "tokenType": "Bearer",
+        "accessToken": "refreshed-access",
+        "refreshToken": "rotated-refresh",
+        "accessTokenExpiresAt": "2023-11-15T00:13:20.000Z",
+        "scopes": [
+          "refreshed-scope"
+        ]
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=ordinary-client&grant_type=refresh_token&refresh_token=ordinary-refresh",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "refresh"
+      ]
+    }
+  ],
+  "grantFailures": [
+    {
+      "grant": "code",
+      "mode": "application error",
+      "status": 200,
+      "rawResponse": {
+        "errcode": 40029,
+        "errmsg": "Ordinary expired authorization"
+      },
+      "error": {
+        "name": "Error",
+        "message": "Failed to validate authorization code: Ordinary expired authorization"
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/oauth2/access_token?appid=ordinary-client&secret=ordinary-secret&code=ordinary-code&grant_type=authorization_code",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "code"
+      ]
+    },
+    {
+      "grant": "code",
+      "mode": "HTTP 503",
+      "status": 503,
+      "rawResponse": {
+        "message": "Ordinary service unavailable"
+      },
+      "error": {
+        "name": "Error",
+        "message": "Failed to validate authorization code: Ordinary service unavailable"
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/oauth2/access_token?appid=ordinary-client&secret=ordinary-secret&code=ordinary-code&grant_type=authorization_code",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "code"
+      ]
+    },
+    {
+      "grant": "refresh",
+      "mode": "application error",
+      "status": 200,
+      "rawResponse": {
+        "errcode": 40029,
+        "errmsg": "Ordinary expired authorization"
+      },
+      "error": {
+        "name": "Error",
+        "message": "Failed to refresh access token: Ordinary expired authorization"
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=ordinary-client&grant_type=refresh_token&refresh_token=ordinary-refresh",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "refresh"
+      ]
+    },
+    {
+      "grant": "refresh",
+      "mode": "HTTP 503",
+      "status": 503,
+      "rawResponse": {
+        "message": "Ordinary service unavailable"
+      },
+      "error": {
+        "name": "Error",
+        "message": "Failed to refresh access token: Ordinary service unavailable"
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=ordinary-client&grant_type=refresh_token&refresh_token=ordinary-refresh",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "refresh"
+      ]
+    }
+  ],
+  "profileCases": [
+    {
+      "status": 200,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "unionid placeholder",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary-unionid@wechat.placeholder.invalid",
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "unionid": "ordinary-unionid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": []
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "emailOwn": true,
+      "emailUndefined": false,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "openid placeholder",
+      "profile": {
+        "openid": "ordinary-openid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "ordinary-openid@wechat.placeholder.invalid",
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": []
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "emailOwn": true,
+      "emailUndefined": false,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "profile email",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": [],
+        "email": "profile@example.com"
+      },
+      "result": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "profile@example.com",
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "unionid": "ordinary-unionid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": [],
+          "email": "profile@example.com"
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": [],
+        "email": "profile@example.com"
+      },
+      "emailOwn": true,
+      "emailUndefined": false,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {
+        "email": "mapped@example.com",
+        "name": "Mapped User"
+      },
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "mapped email",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": {
+        "user": {
+          "name": "Mapped User",
+          "email": "mapped@example.com",
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "unionid": "ordinary-unionid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": []
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "emailOwn": true,
+      "emailUndefined": false,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {
+        "email": null
+      },
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "mapped null",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": {
+        "user": {
+          "name": "Ordinary User",
+          "email": null,
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "unionid": "ordinary-unionid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": []
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "emailOwn": true,
+      "emailUndefined": false,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {
+        "email": ""
+      },
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "mapped empty",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": {
+        "user": {
+          "name": "Ordinary User",
+          "email": "",
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "unionid": "ordinary-unionid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": []
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "emailOwn": true,
+      "emailUndefined": false,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "mapped undefined",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "mapperEmailMode": "undefined",
+      "result": {
+        "user": {
+          "name": "Ordinary User",
+          "image": "https://images.example/avatar.png",
+          "emailVerified": false
+        },
+        "data": {
+          "openid": "ordinary-openid",
+          "unionid": "ordinary-unionid",
+          "nickname": "Ordinary User",
+          "headimgurl": "https://images.example/avatar.png",
+          "privilege": []
+        }
+      },
+      "mapperCalls": 1,
+      "mapperProfile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "emailOwn": true,
+      "emailUndefined": true,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper",
+        "returned"
+      ]
+    },
+    {
+      "status": 503,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "HTTP 503",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": null,
+      "mapperCalls": 0,
+      "emailOwn": null,
+      "emailUndefined": null,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access",
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid"
+      },
+      "name": "application error",
+      "profile": {
+        "errcode": 40003,
+        "errmsg": "Ordinary provider unavailable"
+      },
+      "result": null,
+      "mapperCalls": 0,
+      "emailOwn": null,
+      "emailUndefined": null,
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "returned"
+      ]
+    },
+    {
+      "status": 200,
+      "mapperPatch": {},
+      "token": {
+        "accessToken": "ordinary-access"
+      },
+      "name": "saved account token",
+      "profile": {
+        "openid": "ordinary-openid",
+        "unionid": "ordinary-unionid",
+        "nickname": "Ordinary User",
+        "headimgurl": "https://images.example/avatar.png",
+        "privilege": []
+      },
+      "result": null,
+      "mapperCalls": 0,
+      "emailOwn": null,
+      "emailUndefined": null,
+      "requests": [],
+      "events": [
+        "returned"
+      ]
+    }
+  ],
+  "specialCases": [
+    {
+      "mode": "custom success",
+      "result": {
+        "user": {
+          "id": "ordinary-unionid",
+          "name": "Custom User",
+          "email": "custom@example.com",
+          "emailVerified": false
+        },
+        "data": {
+          "source": "custom"
+        }
+      },
+      "requests": [],
+      "events": [
+        "custom"
+      ]
+    },
+    {
+      "mode": "custom null",
+      "result": null,
+      "requests": [],
+      "events": [
+        "custom"
+      ]
+    },
+    {
+      "mode": "custom error",
+      "sameError": true,
+      "error": {
+        "message": "Ordinary callback failure"
+      },
+      "requests": [],
+      "events": [
+        "custom"
+      ]
+    },
+    {
+      "mode": "custom API error",
+      "sameError": true,
+      "error": {
+        "message": "Ordinary callback limit",
+        "status": "TOO_MANY_REQUESTS",
+        "body": {
+          "code": "ORDINARY_CALLBACK_LIMIT",
+          "message": "Ordinary callback limit"
+        }
+      },
+      "requests": [],
+      "events": [
+        "custom"
+      ]
+    },
+    {
+      "mode": "mapper error",
+      "sameError": true,
+      "error": {
+        "message": "Ordinary callback failure"
+      },
+      "requests": [
+        {
+          "url": "https://api.weixin.qq.com/sns/userinfo?access_token=ordinary-access&openid=ordinary-openid&lang=zh_CN",
+          "method": "GET",
+          "authorization": null,
+          "contentType": null,
+          "accept": "*/*",
+          "body": ""
+        }
+      ],
+      "events": [
+        "profile",
+        "mapper"
+      ]
+    },
+    {
+      "mode": "refresh custom",
+      "result": {
+        "accessToken": "custom-access"
+      },
+      "requests": [],
+      "events": [
+        "custom:ordinary-refresh"
+      ]
+    }
+  ]
+}

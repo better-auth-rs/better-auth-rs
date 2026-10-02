@@ -23,6 +23,12 @@ pub(super) async fn refresh_tokens_via_provider(
             .await
             .map_err(AuthError::internal);
     }
+    if provider.generic.is_none()
+        && let Some(endpoint) = provider.config.wechat_refresh_url()
+    {
+        return super::providers::wechat::refresh_tokens(&provider.config, endpoint, refresh_token)
+            .await;
+    }
     let token_endpoint = token_endpoint(provider)?;
     let extra = match provider
         .generic
@@ -61,6 +67,9 @@ pub(super) async fn validate_authorization_code_via_provider(
             })
             .await?;
         return apply_default_expiry(tokens, provider);
+    }
+    if generic.is_none() && provider.config.wechat_refresh_url().is_some() {
+        return super::providers::wechat::exchange_code(&provider.config, code).await;
     }
     let token_endpoint = token_endpoint(provider)?;
     let mut social_headers = HeaderMap::new();
@@ -141,13 +150,16 @@ fn expiry(seconds: f64) -> AuthResult<Option<DateTime<Utc>>> {
     if seconds == 0.0 {
         return Ok(None);
     }
+    expiry_at(seconds).map(Some)
+}
+
+pub(super) fn expiry_at(seconds: f64) -> AuthResult<DateTime<Utc>> {
     let millis = seconds * 1000.0;
     if !millis.is_finite() || millis.abs() > i64::MAX as f64 {
         return Err(AuthError::internal("Invalid OAuth token lifetime"));
     }
     Utc::now()
         .checked_add_signed(Duration::milliseconds(millis as i64))
-        .map(Some)
         .ok_or_else(|| AuthError::internal("OAuth token lifetime is out of range"))
 }
 

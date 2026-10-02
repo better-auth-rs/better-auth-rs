@@ -2,7 +2,7 @@ mod metadata;
 mod options;
 pub use options::{
     EmailPasswordTelemetry, EmailVerificationTelemetry, PasswordTelemetry, PluginTelemetry,
-    SocialProviderTelemetry,
+    SocialProviderTelemetry, duration_seconds,
 };
 
 use std::sync::{Arc, OnceLock};

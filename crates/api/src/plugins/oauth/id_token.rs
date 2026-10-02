@@ -1,12 +1,13 @@
 use better_auth_core::{AuthError, AuthResult};
 
-use super::google::{self, AcceptedGoogleToken, VerifiedGoogleClaims};
+use super::google::{self, AcceptedIdToken, VerifiedGoogleClaims};
 use super::resolved::ResolvedProvider;
 use super::types::OAuthIdTokenRequest;
 
 pub(super) enum VerifiedIdToken {
     Google(VerifiedGoogleClaims),
     Generic(serde_json::Value),
+    Cognito(serde_json::Value),
 }
 
 pub(super) async fn verify(
@@ -19,13 +20,17 @@ pub(super) async fn verify(
     let token = &request.token;
     let nonce = request.nonce.as_deref();
     if let Some(verifier) = &provider.config.verify_id_token {
-        let accepted = AcceptedGoogleToken::verify(verifier.as_ref(), token, nonce)
+        let accepted = AcceptedIdToken::verify(verifier.as_ref(), token, nonce)
             .await
             .ok_or_else(invalid)?;
         return if provider.config.google_jwks_url().is_some()
             && provider.config.get_user_info.is_none()
         {
             accepted.claims().map(VerifiedIdToken::Google).map(Some)
+        } else if provider.config.cognito_options().is_some()
+            && provider.config.get_user_info.is_none()
+        {
+            accepted.value().map(VerifiedIdToken::Cognito).map(Some)
         } else {
             Ok(None)
         };
@@ -37,6 +42,13 @@ pub(super) async fn verify(
     {
         let claims = verifier.verify(token, nonce).await.map_err(|_| invalid())?;
         return Ok(Some(VerifiedIdToken::Generic(claims)));
+    }
+    if let Some(options) = provider.config.cognito_options() {
+        return options
+            .verify(&provider.config.client_id, token, nonce)
+            .await
+            .map(VerifiedIdToken::Cognito)
+            .map(Some);
     }
     if let Some(jwks_url) = provider.config.google_jwks_url() {
         let claims = google::verify(
@@ -63,7 +75,7 @@ fn unsupported() -> AuthError {
     }
 }
 
-fn invalid() -> AuthError {
+pub(super) fn invalid() -> AuthError {
     AuthError::Upstream {
         status: 401,
         code: "INVALID_TOKEN",

@@ -3,6 +3,14 @@
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Serialize, Serializer};
 
+/// Convert JavaScript milliseconds using TimeClip within Chrono's supported date range.
+pub fn from_milliseconds(millis: f64) -> Option<DateTime<Utc>> {
+    if !millis.is_finite() || millis.abs() > 8_640_000_000_000_000.0 {
+        return None;
+    }
+    DateTime::from_timestamp_millis(millis.trunc() as i64)
+}
+
 /// Serialize an auth timestamp as an ISO 8601 string with three fractional digits.
 pub fn serialize<S: Serializer>(value: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&value.to_rfc3339_opts(SecondsFormat::Millis, true))

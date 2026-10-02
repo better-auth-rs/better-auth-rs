@@ -11,6 +11,12 @@ use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 mod account;
 mod authorization;
 mod callback;
+mod cognito;
+#[cfg(test)]
+mod cognito_contract_tests;
+#[cfg(test)]
+mod cognito_signed_tests;
+pub use cognito::CognitoOptions;
 pub mod encryption;
 mod generic;
 mod generic_profile;
@@ -44,6 +50,8 @@ mod twitter_tests;
 mod types;
 #[cfg(test)]
 mod vk_tests;
+#[cfg(test)]
+mod wechat_tests;
 
 #[cfg(test)]
 mod google_test_support;

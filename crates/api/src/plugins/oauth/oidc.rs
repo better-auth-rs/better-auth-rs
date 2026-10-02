@@ -92,7 +92,8 @@ pub(super) struct OidcVerifier {
     client: Client,
     jwks_url: Url,
     issuer: String,
-    audience: String,
+    audiences: Vec<String>,
+    max_token_age: Option<Duration>,
     algorithms: Option<Vec<Value>>,
     cache: RwLock<Option<Arc<CachedJwks>>>,
     reload: Semaphore,
@@ -107,6 +108,16 @@ impl OidcVerifier {
         audience: String,
         algorithms: Option<Vec<Value>>,
     ) -> Result<Self, OidcError> {
+        Self::with_policy(jwks_url, issuer, vec![audience], algorithms, None)
+    }
+
+    pub(super) fn with_policy(
+        jwks_url: Url,
+        issuer: String,
+        audiences: Vec<String>,
+        algorithms: Option<Vec<Value>>,
+        max_token_age: Option<Duration>,
+    ) -> Result<Self, OidcError> {
         Ok(Self {
             client: Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
@@ -114,7 +125,8 @@ impl OidcVerifier {
                 .build()?,
             jwks_url,
             issuer,
-            audience,
+            audiences,
+            max_token_age,
             algorithms,
             cache: RwLock::new(None),
             reload: Semaphore::new(1),
@@ -163,7 +175,13 @@ impl OidcVerifier {
             .ok_or(OidcError::Invalid("ID token must be a compact JWT"))?;
         verify_signature(algorithm, &key, signature, message.as_bytes())?;
         let claims: Map<String, Value> = serde_json::from_slice(&decode_base64(payload)?)?;
-        validate_claims(&claims, &self.issuer, &self.audience, nonce)?;
+        validate_claims(
+            &claims,
+            &self.issuer,
+            &self.audiences,
+            nonce,
+            self.max_token_age,
+        )?;
         Ok(Value::Object(claims))
     }
 
@@ -407,22 +425,39 @@ fn verify_signature(
 fn validate_claims(
     claims: &Map<String, Value>,
     issuer: &str,
-    audience: &str,
+    audiences: &[String],
     nonce: Option<&str>,
+    max_token_age: Option<Duration>,
 ) -> Result<(), OidcError> {
     if claims.get("iss").and_then(Value::as_str) != Some(issuer) {
         return Err(OidcError::Invalid("ID token issuer does not match"));
     }
     let matches_audience = claims.get("aud").is_some_and(|claim| {
-        claim.as_str() == Some(audience)
-            || claim
-                .as_array()
-                .is_some_and(|values| values.iter().any(|value| value.as_str() == Some(audience)))
+        audiences.iter().any(|audience| {
+            claim.as_str() == Some(audience.as_str())
+                || claim.as_array().is_some_and(|values| {
+                    values
+                        .iter()
+                        .any(|value| value.as_str() == Some(audience.as_str()))
+                })
+        })
     });
     if !matches_audience {
         return Err(OidcError::Invalid("ID token audience does not match"));
     }
     let now = chrono::Utc::now().timestamp() as f64;
+    if let Some(max_age) = max_token_age {
+        let issued = claims
+            .get("iat")
+            .and_then(Value::as_f64)
+            .ok_or(OidcError::Invalid(
+                "ID token issued-at timestamp is required",
+            ))?;
+        let age = now - issued;
+        if age < 0.0 || age > max_age.as_secs_f64() {
+            return Err(OidcError::Invalid("ID token exceeds its maximum age"));
+        }
+    }
     for claim in ["iat", "nbf", "exp"] {
         if let Some(value) = claims.get(claim) {
             let value = value

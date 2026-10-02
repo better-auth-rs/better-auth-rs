@@ -60,6 +60,8 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Zoom | `OAuthProvider::zoom(client_id, client_secret)` | None; configured and request scopes are ignored |
 | Twitter | `OAuthProvider::twitter(client_id, client_secret)` | `users.read`, `tweet.read`, `offline.access`, `users.email` |
 | VK | `OAuthProvider::vk(client_id, client_secret)` | `email`, `phone` |
+| WeChat | `OAuthProvider::wechat(client_id, client_secret)` | `snsapi_login` |
+| Cognito | `OAuthProvider::cognito(client_id, client_secret, options)?` | `openid`, `profile`, `email` |
 
 ### Social provider inputs
 
@@ -91,7 +93,7 @@ Provider defaults remain separate from mapped values. Discord, Google, and Slack
 
 Discord prepares `image_url` before invoking the mapper. The default decoder reuses that value for PNG, animated GIF, and default avatars. Display names use `global_name`, then `username`, then an empty string.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, Kakao, Zoom, Twitter, and VK ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, Cognito, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, Kakao, Zoom, Twitter, VK, and WeChat ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
 
 Set `redirect_uri` when the provider callback URI differs from the route URI. Authorization and code exchange use the same configured value. Omitted or empty values use the route URI. Register the configured URI with the provider and route the callback to Better Auth; the option does not create another HTTP route.
 
@@ -447,3 +449,22 @@ The async mapper receives the complete profile once. After the mapper completes,
 The default name joins the documented string first and last names with one space, without trimming. The profile preserves email/image presence and the present `first_name`, `last_name`, `birthday`, and `sex` values as additional fields. Mapper additional fields override those defaults. Account-info returns these display fields without requiring application schema registration; signup storage still uses the configured user schema.
 
 The constructor adds no ID-token verifier. These ordinary typed contracts do not emulate arbitrary JavaScript name coercion or undefined values inside mapper additional-field JSON.
+
+
+### WeChat
+
+`OAuthProvider::wechat(client_id, client_secret)` configures the WebsiteApp code flow. Authorization uses `appid`, comma-separated scopes, and the `wechat_redirect` fragment. Default scopes precede configured and request scopes without deduplication. Set `authorization_params` to include `("lang".into(), "en".into())` for the English authorization page; the default is `cn`, and request additional parameters can override it. Configured `redirect_uri` retains the common nonempty override. The fixed provider protocol omits PKCE, configured prompt, standalone hints/nonces, and callback device IDs. Generic OAuth retains its separate behavior.
+
+Code exchange and refresh send GET query parameters to separate endpoints. `wechat_with_endpoints(client_id, client_secret, auth_url, token_url, refresh_url, user_info_url)` configures those endpoints without changing the protocol. Both grants normalize the token type to Bearer, split returned scopes on commas, and calculate expiry from `expires_in`. The code result retains `openid`/`unionid` in `OAuthTokenSet.raw` for the immediate profile lookup. Refresh results do not retain those fields.
+
+The default profile lookup sends `access_token`, the code result's `openid`, and fixed `lang=zh_CN` as GET parameters. The original profile reaches the async mapper. After the mapper completes, a missing or empty profile email gets a WeChat placeholder; mapped fields then apply, including explicit null, undefined, or empty email. The default verification value is false. Custom user-info and refresh handlers retain priority. HTTP failures and provider application errors produce a missing profile before mapping; original mapper and custom-handler errors propagate.
+
+Stored accounts contain standard token fields, without WeChat raw metadata. A later default `/account-info` lookup therefore has no `openid` and returns `FAILED_TO_GET_USER_INFO`, matching the pinned upstream flow. The adapter does not derive that metadata from the stored account subject. Ordinary local HTTP and SQLite contracts cover callback persistence, this saved-account result, and token refresh with the stored scope retained. Grant HTTP errors use the existing Rust Internal transport boundary; upstream's provider-specific transport error text, malformed JavaScript response shapes, and arbitrary coercions are not claimed equivalent. The constructor does not install an ID-token verifier.
+
+### Amazon Cognito
+
+Use `CognitoOptions::new(domain, region, user_pool_id)` with `OAuthProvider::cognito(client_id, client_secret, options)?`. The hosted domain selects authorization, token, and userinfo endpoints. The region and user pool select the fixed issuer and JWKS URL. `additional_client_ids` adds accepted audiences; the provider’s current `client_id` remains the primary client for authorization and token requests. Set `require_client_secret` to reject an authorization request without a secret. Use `authorization_params` for `identity_provider`; a request parameter overrides the configured value.
+
+Cognito uses PKCE, client-secret-post for both grants, ordered scopes, and `%20` scope separators. A verified ID token supplies the default profile before an access-token userinfo request. The ID-token path fills the name before mapping and returns that enriched data; the userinfo path passes the original data to the mapper. Both paths retain email, image, and verification-field presence. An ID-profile mapper error is logged and may continue to userinfo; a userinfo mapper error is logged and returns no profile. Custom userinfo handlers run before both default paths and retain their errors.
+
+Default ID-token handling verifies the signature, user-pool issuer, accepted audience, timestamps, supplied nonce, and a maximum token age of one hour. This verification also applies to default code and account-info reads; verification errors do not fall through to userinfo. An explicit `OAuthIdTokenVerifier` remains the application’s delegated direct-token trust policy. The default authorization URL does not introduce a nonce parameter. Ordinary missing or null email reaches the mapper before the unchanged endpoint email checks.

@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use url::Url;
 use uuid::Uuid;
 
@@ -58,13 +58,7 @@ pub(crate) async fn request_password_reset_core(
     };
 
     let reset_token = Uuid::new_v4().simple().to_string();
-    let expires_in = config.reset_password_token_expires_in();
-    let expires_at = Utc::now()
-        .checked_add_signed(
-            Duration::try_seconds(expires_in)
-                .ok_or_else(|| AuthError::config("Reset token expiry is out of range"))?,
-        )
-        .ok_or_else(|| AuthError::config("Reset token expiry is out of range"))?;
+    let expires_at = config.reset_token_expires_at(Utc::now())?;
 
     let _ = ctx
         .database

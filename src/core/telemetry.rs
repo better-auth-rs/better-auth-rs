@@ -3,7 +3,7 @@ mod fields;
 use better_auth_core::config::{CookieCacheStrategy, SameSite};
 use better_auth_core::middleware::{RateLimitConfig, RateLimitStorageKind};
 use better_auth_core::observability::database::{DatabaseHook, DatabaseHookMetadata};
-use better_auth_core::observability::telemetry::{PluginTelemetry, Telemetry};
+use better_auth_core::observability::telemetry::{PluginTelemetry, Telemetry, duration_seconds};
 use better_auth_core::{AuthConfig, AuthPlugin, AuthResult, AuthSchema};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -30,14 +30,6 @@ fn option(
         let _ = value.insert(key.to_owned(), serde_json::to_value(configured)?);
     }
     Ok(())
-}
-
-fn duration_seconds(age: chrono::Duration) -> Value {
-    if age.subsec_nanos() == 0 {
-        json!(age.num_seconds())
-    } else {
-        json!(age.num_seconds() as f64 + f64::from(age.subsec_nanos()) / 1e9)
-    }
 }
 
 pub(super) fn init_payload<S: AuthSchema>(

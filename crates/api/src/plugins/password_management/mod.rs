@@ -18,6 +18,8 @@ mod request;
 pub(super) mod types;
 
 #[cfg(test)]
+mod duration_tests;
+#[cfg(test)]
 mod tests;
 
 use handlers::*;
@@ -59,9 +61,9 @@ pub struct PasswordManagementPlugin {
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "PasswordManagementPlugin")]
 pub struct PasswordManagementConfig {
-    /// Reset token lifetime in seconds. Zero selects the one-hour default.
+    /// Reset token lifetime in seconds, including fractions. Zero and NaN select one hour.
     #[config(default = None)]
-    pub reset_password_token_expires_in: Option<i64>,
+    pub reset_password_token_expires_in: Option<f64>,
     #[config(default = true)]
     pub require_current_password: bool,
     #[config(default = true)]
@@ -83,12 +85,22 @@ pub struct PasswordManagementConfig {
 }
 
 impl PasswordManagementConfig {
-    /// Read the reset-token lifetime in seconds. Omission and zero use one hour.
-    pub fn reset_password_token_expires_in(&self) -> i64 {
+    /// Read the reset-token lifetime in seconds. Omission, zero and NaN use one hour.
+    pub fn reset_password_token_expires_in(&self) -> f64 {
         match self.reset_password_token_expires_in {
-            None | Some(0) => 3600,
-            Some(seconds) => seconds,
+            Some(seconds) if seconds != 0.0 && !seconds.is_nan() => seconds,
+            _ => 3600.0,
         }
+    }
+
+    fn reset_token_expires_at(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> AuthResult<chrono::DateTime<chrono::Utc>> {
+        better_auth_core::utils::date::from_milliseconds(
+            now.timestamp_millis() as f64 + self.reset_password_token_expires_in() * 1000.0,
+        )
+        .ok_or_else(|| AuthError::config("Reset token expiry is out of range"))
     }
 }
 

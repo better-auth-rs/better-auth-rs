@@ -23,9 +23,9 @@ pub(super) async fn fetch_user_info_with_claims(
         let claims = match claims {
             Some(VerifiedIdToken::Generic(claims)) => Some(claims),
             None => None,
-            Some(VerifiedIdToken::Google(_)) => {
+            Some(VerifiedIdToken::Google(_) | VerifiedIdToken::Cognito(_)) => {
                 return Err(AuthError::internal(
-                    "Google claims supplied to a Generic provider",
+                    "Social claims supplied to a Generic provider",
                 ));
             }
         };
@@ -33,15 +33,6 @@ pub(super) async fn fetch_user_info_with_claims(
             .await
             .map(Some);
     }
-    let claims = match claims {
-        Some(VerifiedIdToken::Google(claims)) => Some(claims),
-        None => None,
-        Some(VerifiedIdToken::Generic(_)) => {
-            return Err(AuthError::internal(
-                "Generic claims supplied to a Social provider",
-            ));
-        }
-    };
     if let Some(handler) = &provider.config.get_user_info {
         let response = handler.get_user_info(request).await?;
         if let Some(response) = &response {
@@ -50,6 +41,38 @@ pub(super) async fn fetch_user_info_with_claims(
         }
         return Ok(response);
     }
+    if let Some(options) = provider.config.cognito_options() {
+        let claims = match claims {
+            Some(VerifiedIdToken::Cognito(claims)) => Some(claims),
+            None => match request
+                .id_token
+                .as_deref()
+                .filter(|token| !token.is_empty())
+            {
+                Some(token) => Some(
+                    options
+                        .verify(&provider.config.client_id, token, expected_nonce)
+                        .await?,
+                ),
+                None => None,
+            },
+            Some(_) => {
+                return Err(AuthError::internal(
+                    "Non-Cognito claims supplied to Cognito",
+                ));
+            }
+        };
+        return super::cognito::fetch_user_info(&provider.config, request, claims).await;
+    }
+    let claims = match claims {
+        Some(VerifiedIdToken::Google(claims)) => Some(claims),
+        None => None,
+        Some(_) => {
+            return Err(AuthError::internal(
+                "Non-Google claims supplied to a Social provider",
+            ));
+        }
+    };
     if (provider.config.is_atlassian() || provider.config.is_vk())
         && request.access_token.as_deref().is_none_or(str::is_empty)
     {
@@ -146,26 +169,20 @@ async fn fetch_default_user_info(
             return Ok(None);
         }
     }
-    if provider.config.is_twitter() && response.user.email()?.is_none_or(str::is_empty) {
-        response.user.email = Some(placeholder_email(&response.user.id, "twitter")?).into();
+    let placeholder_namespace = if provider.config.is_twitter() {
+        Some("twitter")
+    } else if provider.config.wechat_refresh_url().is_some() {
+        Some("wechat")
+    } else {
+        None
+    };
+    if let Some(namespace) = placeholder_namespace
+        && response.user.email()?.is_none_or(str::is_empty)
+    {
+        response.user.email = Some(placeholder_email(&response.user.id, namespace)?).into();
     }
     if let Some(mapped) = mapped {
-        response
-            .user
-            .additional_fields
-            .extend(mapped.additional_fields);
-        if let Some(email) = mapped.email {
-            response.user.email = email;
-        }
-        if let Some(name) = mapped.name {
-            response.user.name = name;
-        }
-        if let Some(image) = mapped.image {
-            response.user.image = Some(image);
-        }
-        if let Some(verified) = mapped.email_verified {
-            response.user.email_verified = verified;
-        }
+        apply_mapped_profile(&mut response, mapped);
     }
     if provider.config.is_reddit() && response.user.email()?.is_none_or(str::is_empty) {
         response.user.email = Some(placeholder_email(&response.user.id, "reddit")?).into();
@@ -178,6 +195,28 @@ async fn fetch_default_user_info(
     Ok(Some(response))
 }
 
+pub(super) fn apply_mapped_profile(
+    response: &mut OAuthUserInfoResponse,
+    mapped: super::OAuthProfile,
+) {
+    response
+        .user
+        .additional_fields
+        .extend(mapped.additional_fields);
+    if let Some(email) = mapped.email {
+        response.user.email = email;
+    }
+    if let Some(name) = mapped.name {
+        response.user.name = name;
+    }
+    if let Some(image) = mapped.image {
+        response.user.image = Some(image);
+    }
+    if let Some(verified) = mapped.email_verified {
+        response.user.email_verified = verified;
+    }
+}
+
 async fn fetch_social_user_info(
     provider: &ResolvedProvider,
     request: OAuthUserInfoRequest,
@@ -188,6 +227,9 @@ async fn fetch_social_user_info(
     }
     if provider.config.is_twitter() {
         return super::providers::twitter::fetch_user_info(&provider.config, &request).await;
+    }
+    if provider.config.wechat_refresh_url().is_some() {
+        return super::providers::wechat::fetch_user_info(&provider.config, &request).await;
     }
     let data = if let Some(claims) = claims {
         let claims = claims.into_value();

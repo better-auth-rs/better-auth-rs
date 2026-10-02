@@ -20,9 +20,9 @@ impl VerifiedGoogleClaims {
     }
 }
 
-pub(super) struct AcceptedGoogleToken(String);
+pub(super) struct AcceptedIdToken(String);
 
-impl AcceptedGoogleToken {
+impl AcceptedIdToken {
     pub(super) async fn verify(
         verifier: &dyn OAuthIdTokenVerifier,
         token: &str,
@@ -37,16 +37,20 @@ impl AcceptedGoogleToken {
     }
 
     pub(super) fn claims(self) -> AuthResult<VerifiedGoogleClaims> {
+        self.value().map(VerifiedGoogleClaims)
+    }
+
+    pub(super) fn value(self) -> AuthResult<Value> {
         let payload = self
             .0
             .split('.')
             .nth(1)
-            .ok_or_else(|| AuthError::internal("Verified Google token has no claims"))?;
+            .ok_or_else(|| AuthError::internal("Verified ID token has no claims"))?;
         let bytes = URL_SAFE_NO_PAD.decode(payload).map_err(|error| {
-            AuthError::internal(format!("Invalid verified Google claims encoding: {error}"))
+            AuthError::internal(format!("Invalid verified ID claims encoding: {error}"))
         })?;
         let claims = serde_json::from_slice(&bytes)?;
-        Ok(VerifiedGoogleClaims(claims))
+        Ok(claims)
     }
 }
 

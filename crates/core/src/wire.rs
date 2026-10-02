@@ -572,10 +572,10 @@ pub struct ApiKeyView {
     #[serde(rename = "configId")]
     pub config_id: String,
     #[serde(rename = "refillInterval")]
-    #[serde(serialize_with = "serialize_api_key_number")]
+    #[serde(serialize_with = "serialize_optional_number")]
     pub refill_interval: Option<f64>,
     #[serde(rename = "refillAmount")]
-    #[serde(serialize_with = "serialize_api_key_number")]
+    #[serde(serialize_with = "serialize_optional_number")]
     pub refill_amount: Option<f64>,
     #[serde(rename = "lastRefillAt")]
     pub last_refill_at: Option<String>,
@@ -583,15 +583,15 @@ pub struct ApiKeyView {
     #[serde(rename = "rateLimitEnabled")]
     pub rate_limit_enabled: bool,
     #[serde(rename = "rateLimitTimeWindow")]
-    #[serde(serialize_with = "serialize_api_key_number")]
+    #[serde(serialize_with = "serialize_optional_number")]
     pub rate_limit_time_window: Option<f64>,
     #[serde(rename = "rateLimitMax")]
-    #[serde(serialize_with = "serialize_api_key_number")]
+    #[serde(serialize_with = "serialize_optional_number")]
     pub rate_limit_max: Option<f64>,
     #[serde(rename = "requestCount")]
-    #[serde(serialize_with = "serialize_api_key_number")]
+    #[serde(serialize_with = "serialize_optional_number")]
     pub request_count: Option<f64>,
-    #[serde(serialize_with = "serialize_api_key_number")]
+    #[serde(serialize_with = "serialize_optional_number")]
     pub remaining: Option<f64>,
     #[serde(rename = "lastRequest")]
     pub last_request: Option<String>,
@@ -606,7 +606,7 @@ pub struct ApiKeyView {
 }
 
 // JSON.stringify emits safe integral JavaScript numbers without a decimal suffix.
-fn serialize_api_key_number<S: Serializer>(
+pub(crate) fn serialize_optional_number<S: Serializer>(
     value: &Option<f64>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {

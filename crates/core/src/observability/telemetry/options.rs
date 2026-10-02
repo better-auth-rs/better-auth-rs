@@ -1,4 +1,21 @@
-use serde::Serialize;
+use serde::{Serialize, Serializer};
+use serde_json::{Value, json};
+
+/// Project duration seconds without changing the JSON representation of whole seconds.
+pub fn duration_seconds(age: chrono::Duration) -> Value {
+    if age.subsec_nanos() == 0 {
+        json!(age.num_seconds())
+    } else {
+        json!(age.num_seconds() as f64 + f64::from(age.subsec_nanos()) / 1e9)
+    }
+}
+
+fn serialize_optional_duration<S: Serializer>(
+    value: &Option<chrono::Duration>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    value.map(duration_seconds).serialize(serializer)
+}
 
 /// Read-only projection of configured plugin capabilities before initialization.
 #[derive(Default, Serialize)]
@@ -21,8 +38,11 @@ pub struct EmailVerificationTelemetry {
     pub send_on_sign_up: bool,
     pub send_on_sign_in: bool,
     pub auto_sign_in_after_verification: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_in: Option<i64>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_optional_duration"
+    )]
+    pub expires_in: Option<chrono::Duration>,
     pub before_email_verification: bool,
     pub after_email_verification: bool,
 }
@@ -39,8 +59,11 @@ pub struct EmailPasswordTelemetry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_password_length: Option<usize>,
     pub send_reset_password: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reset_password_token_expires_in: Option<i64>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::wire::serialize_optional_number"
+    )]
+    pub reset_password_token_expires_in: Option<f64>,
     pub on_password_reset: bool,
     pub password: PasswordTelemetry,
     pub auto_sign_in: bool,

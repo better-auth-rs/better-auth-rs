@@ -1,0 +1,305 @@
+{
+  "omitted": {
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700003600123,
+    "lifetimeMillis": 3600000,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "zero": {
+    "configured": 0,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700003600123,
+    "lifetimeMillis": 3600000,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 0,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": 0,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "default": {
+    "configured": 3600,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700003600123,
+    "lifetimeMillis": 3600000,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 3600,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": 3600,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "integer": {
+    "configured": 90,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700000090123,
+    "lifetimeMillis": 90000,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 90,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": 90,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "fractional": {
+    "configured": 1.5,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700000001623,
+    "lifetimeMillis": 1500,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 1.5,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": 1.5,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "negative": {
+    "configured": -1.5,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1699999998623,
+    "lifetimeMillis": -1500,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": -1.5,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": -1.5,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "submillisecond": {
+    "configured": 0.0005,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700000000123,
+    "lifetimeMillis": 0,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": 0.0005,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": 0.0005,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "negative-submillisecond": {
+    "configured": -0.0005,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700000000122,
+    "lifetimeMillis": -1,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": -0.0005,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": -0.0005,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  },
+  "nan": {
+    "configured": null,
+    "now": 1700000000123,
+    "response": {
+      "status": true,
+      "message": "If this email exists in our system, check your email for the reset link"
+    },
+    "senderCalls": 1,
+    "expiresAt": 1700003600123,
+    "lifetimeMillis": 3600000,
+    "emailVerification": {
+      "sendVerificationEmail": false,
+      "sendOnSignUp": false,
+      "sendOnSignIn": false,
+      "autoSignInAfterVerification": false,
+      "expiresIn": null,
+      "beforeEmailVerification": false,
+      "afterEmailVerification": false
+    },
+    "emailAndPassword": {
+      "enabled": true,
+      "disableSignUp": false,
+      "requireEmailVerification": false,
+      "sendResetPassword": true,
+      "resetPasswordTokenExpiresIn": null,
+      "onPasswordReset": false,
+      "password": {
+        "hash": false,
+        "verify": false
+      },
+      "autoSignIn": false,
+      "revokeSessionsOnPasswordReset": false
+    }
+  }
+}
