@@ -1487,7 +1487,7 @@ async fn check_device_operations(
                 last_polled_at: None,
                 polling_interval: Some(5_000),
                 client_id: Some("client".into()),
-                scope: None,
+                scope: Default::default(),
             })
             .await?;
         assert_eq!(

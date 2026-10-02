@@ -1,0 +1,251 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "cases": [
+        {
+          "name": "create supplied",
+          "scope": "\"Read:out\"",
+          "stored": "\"Read\"",
+          "events": [
+            "input:\" Read \"",
+            "output:\"Read\""
+          ]
+        },
+        {
+          "name": "create omitted",
+          "scope": "\"Default:out\"",
+          "stored": "\"Default\"",
+          "events": [
+            "input:\" Default \"",
+            "output:\"Default\""
+          ]
+        },
+        {
+          "name": "create null",
+          "scope": "null",
+          "stored": "null",
+          "events": [
+            "input:null",
+            "output:null"
+          ]
+        },
+        {
+          "name": "find deviceCode",
+          "scope": "\"Read:out\"",
+          "events": [
+            "output:\"Read\""
+          ]
+        },
+        {
+          "name": "find userCode",
+          "scope": "\"Read:out\"",
+          "events": [
+            "output:\"Read\""
+          ]
+        },
+        {
+          "name": "update supplied",
+          "scope": "\"Changed:out\"",
+          "stored": "\"Changed\"",
+          "events": [
+            "input:\" Changed \"",
+            "output:\"Changed\""
+          ]
+        },
+        {
+          "name": "update omitted",
+          "scope": "\"Renewed:out\"",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \"",
+            "output:\"Renewed\""
+          ]
+        },
+        {
+          "name": "update null",
+          "scope": "null",
+          "stored": "null",
+          "events": [
+            "input:null",
+            "output:null"
+          ]
+        },
+        {
+          "name": "claim",
+          "success": true,
+          "scope": "\"Renewed:out\"",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \"",
+            "output:\"Renewed\""
+          ]
+        },
+        {
+          "name": "conditional update",
+          "success": true,
+          "scope": "\"Renewed:out\"",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \"",
+            "output:\"Renewed\""
+          ]
+        },
+        {
+          "name": "conditional no match",
+          "success": false,
+          "scope": "undefined",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \""
+          ]
+        },
+        {
+          "name": "input error",
+          "sameError": true,
+          "stored": "\"Renewed\"",
+          "events": [
+            "input:\" input value \""
+          ]
+        },
+        {
+          "name": "output error",
+          "sameError": true,
+          "stored": "\"output value\"",
+          "events": [
+            "input:\" output value \"",
+            "output:\"output value\""
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "cases": [
+        {
+          "name": "create supplied",
+          "scope": "\"Read:out\"",
+          "stored": "\"Read\"",
+          "events": [
+            "input:\" Read \"",
+            "output:\"Read\""
+          ]
+        },
+        {
+          "name": "create omitted",
+          "scope": "\"Default:out\"",
+          "stored": "\"Default\"",
+          "events": [
+            "input:\" Default \"",
+            "output:\"Default\""
+          ]
+        },
+        {
+          "name": "create null",
+          "scope": "null",
+          "stored": "null",
+          "events": [
+            "input:null",
+            "output:null"
+          ]
+        },
+        {
+          "name": "find deviceCode",
+          "scope": "\"Read:out\"",
+          "events": [
+            "output:\"Read\""
+          ]
+        },
+        {
+          "name": "find userCode",
+          "scope": "\"Read:out\"",
+          "events": [
+            "output:\"Read\""
+          ]
+        },
+        {
+          "name": "update supplied",
+          "scope": "\"Changed:out\"",
+          "stored": "\"Changed\"",
+          "events": [
+            "input:\" Changed \"",
+            "output:\"Changed\""
+          ]
+        },
+        {
+          "name": "update omitted",
+          "scope": "\"Renewed:out\"",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \"",
+            "output:\"Renewed\""
+          ]
+        },
+        {
+          "name": "update null",
+          "scope": "null",
+          "stored": "null",
+          "events": [
+            "input:null",
+            "output:null"
+          ]
+        },
+        {
+          "name": "claim",
+          "success": true,
+          "scope": "\"Renewed:out\"",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \"",
+            "output:\"Renewed\""
+          ]
+        },
+        {
+          "name": "conditional update",
+          "success": true,
+          "scope": "\"Renewed:out\"",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \"",
+            "output:\"Renewed\""
+          ]
+        },
+        {
+          "name": "conditional no match",
+          "success": false,
+          "scope": "undefined",
+          "stored": "\"Renewed\"",
+          "events": [
+            "onUpdate",
+            "input:\" Renewed \""
+          ]
+        },
+        {
+          "name": "input error",
+          "sameError": true,
+          "stored": "\"Renewed\"",
+          "events": [
+            "input:\" input value \""
+          ]
+        },
+        {
+          "name": "output error",
+          "sameError": true,
+          "stored": "\"output value\"",
+          "events": [
+            "input:\" output value \"",
+            "output:\"output value\""
+          ]
+        }
+      ]
+    }
+  ]
+}

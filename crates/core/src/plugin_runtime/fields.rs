@@ -1,6 +1,6 @@
 use crate::store::schema::EntityRole;
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
-use crate::{ApiKey, AuthConfig, AuthError, AuthResult, Passkey, SchemaValue};
+use crate::{ApiKey, AuthConfig, AuthError, AuthResult, DeviceCode, Passkey, SchemaValue};
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
@@ -45,10 +45,14 @@ impl ModelFields {
             | EntityRole::Session
             | EntityRole::Account
             | EntityRole::Verification => {}
-            EntityRole::Passkey | EntityRole::ApiKey => {
+            EntityRole::Passkey | EntityRole::ApiKey | EntityRole::DeviceCode => {
                 for (name, field) in fields.fields() {
-                    if !(name == "name" || role == EntityRole::Passkey && name == "aaguid")
-                        || !matches!(field.field_type, UserFieldType::String)
+                    if !matches!(
+                        (role, name.as_str()),
+                        (EntityRole::Passkey, "name" | "aaguid")
+                            | (EntityRole::ApiKey, "name")
+                            | (EntityRole::DeviceCode, "scope")
+                    ) || !matches!(field.field_type, UserFieldType::String)
                         || field.references.is_some()
                         || field
                             .field_name
@@ -56,7 +60,7 @@ impl ModelFields {
                             .is_some_and(|alias| alias != name)
                     {
                         return Err(AuthError::config(format!(
-                            "{role:?} field registration supports only name (and aaguid for Passkey) as ordinary strings without reference or field-name replacement",
+                            "{role:?} field registration supports only its ordinary string fields (Passkey name/aaguid, ApiKey name, DeviceCode scope) without reference or field-name replacement",
                         )));
                     }
                 }
@@ -147,6 +151,25 @@ impl ModelFields {
         optional_string(&mut fields, "name")
     }
 
+    /// Prepare a DeviceCode scope patch with omitted, null, or string input.
+    /// Defaults and `on_update` use the shared adapter field conversion.
+    pub async fn device_code_scope_for_storage(
+        &self,
+        scope: SchemaValue<Option<String>>,
+        create: bool,
+    ) -> AuthResult<Option<Option<String>>> {
+        let core = scope
+            .json()?
+            .into_iter()
+            .map(|value| ("scope".into(), value))
+            .collect();
+        let mut fields = self
+            .fields(EntityRole::DeviceCode)
+            .organization_storage_fields(core, Map::new(), create)
+            .await?;
+        optional_string(&mut fields, "scope")
+    }
+
     pub(crate) async fn passkey_fields_for_storage(
         &self,
         name: SchemaValue<Option<String>>,
@@ -181,6 +204,14 @@ impl ModelFields {
     pub async fn project_api_keys(&self, rows: Vec<ApiKey>) -> AuthResult<Vec<ApiKey>> {
         self.project_strings(EntityRole::ApiKey, rows, |row| [("name", &mut row.name)])
             .await
+    }
+
+    /// Project DeviceCode scopes while retaining credentials and authorization state.
+    pub async fn project_device_codes(&self, rows: Vec<DeviceCode>) -> AuthResult<Vec<DeviceCode>> {
+        self.project_strings(EntityRole::DeviceCode, rows, |row| {
+            [("scope", &mut row.scope)]
+        })
+        .await
     }
 
     async fn project_strings<T: Send, const N: usize>(

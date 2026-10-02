@@ -256,7 +256,11 @@ impl DeviceAuthorizationPlugin {
                     last_polled_at: None,
                     polling_interval: Some(polling_interval),
                     client_id: Some(body.client_id.clone()),
-                    scope: body.scope.clone(),
+                    scope: body
+                        .scope
+                        .clone()
+                        .map(|scope| Some(scope).into())
+                        .unwrap_or_default(),
                 })
                 .await
             {

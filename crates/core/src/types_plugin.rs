@@ -166,12 +166,15 @@ pub struct CreateDeviceCode {
     pub last_polled_at: Option<DateTime<Utc>>,
     pub polling_interval: Option<i64>,
     pub client_id: Option<String>,
-    pub scope: Option<String>,
+    /// Omit with `Undefined`, clear with `Typed(None)`, or supply a string.
+    pub scope: crate::SchemaValue<Option<String>>,
 }
 
 /// Input for updating an existing device authorization code.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateDeviceCode {
+    /// Omit with `Undefined`; supplied null and string values pass through field policies.
+    pub scope: crate::SchemaValue<Option<String>>,
     /// Update the status. `None` leaves it unchanged.
     pub status: Option<String>,
     /// Update the approving/denying user. `Some(None)` clears it, `None` leaves

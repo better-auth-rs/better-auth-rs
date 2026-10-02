@@ -4,10 +4,10 @@ use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use sea_orm::sea_query::Expr;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, ExprTrait, QueryFilter};
 use serde_json::{Map, json};
 
-use better_auth_core::store::DeviceCodeStore;
+use better_auth_core::store::{DeviceCodeStore, schema::EntityRole};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -22,36 +22,44 @@ where
     S: AuthSchema + Send + Sync,
 {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(input.scope, true)
+            .await?;
+        let mut fields = Map::from_iter([
+            ("device_code".to_owned(), json!(input.device_code)),
+            ("user_code".to_owned(), json!(input.user_code)),
+            ("user_id".to_owned(), json!(input.user_id)),
+            ("expires_at".to_owned(), json!(input.expires_at)),
+            ("status".to_owned(), json!(input.status)),
+            ("last_polled_at".to_owned(), json!(input.last_polled_at)),
+            ("polling_interval".to_owned(), json!(input.polling_interval)),
+            ("client_id".to_owned(), json!(input.client_id)),
+        ]);
+        if let Some(scope) = scope {
+            let _ = fields.insert("scope".into(), json!(scope));
+        }
         let active = super::plugin_models::active::<P::DeviceCode>(
-            self.create_fields(
-                "deviceCode",
-                None,
-                Map::from_iter([
-                    ("device_code".to_owned(), json!(input.device_code)),
-                    ("user_code".to_owned(), json!(input.user_code)),
-                    ("user_id".to_owned(), json!(input.user_id)),
-                    ("expires_at".to_owned(), json!(input.expires_at)),
-                    ("status".to_owned(), json!(input.status)),
-                    ("last_polled_at".to_owned(), json!(input.last_polled_at)),
-                    ("polling_interval".to_owned(), json!(input.polling_interval)),
-                    ("client_id".to_owned(), json!(input.client_id)),
-                    ("scope".to_owned(), json!(input.scope)),
-                ]),
-            )?,
+            self.create_fields("deviceCode", None, fields)?,
             self.config().advanced.database.generate_id(),
         )?;
-        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "create", async {
+        let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "create", async {
             active.insert(self.connection()).await.map_err(map_db_err)
         })
         .await?
-        .record()
+        .record()?;
+        Ok(self
+            .model_fields
+            .project_device_codes(vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn get_device_code_by_device_code(
         &self,
         device_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "findOne", async {
+        let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "findOne", async {
             Entity::<P::DeviceCode>::find()
                 .filter(P::DeviceCode::column("device_code")?.eq(device_code))
                 .one(self.connection())
@@ -60,14 +68,19 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn get_device_code_by_user_code(
         &self,
         user_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "findOne", async {
+        let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "findOne", async {
             Entity::<P::DeviceCode>::find()
                 .filter(P::DeviceCode::column("user_code")?.eq(user_code))
                 .one(self.connection())
@@ -76,7 +89,12 @@ where
         })
         .await?
         .map(|model| model.record())
-        .transpose()
+        .transpose()?;
+        Ok(self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn update_device_code(
@@ -85,36 +103,11 @@ where
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
         let id = id.typed()?;
-        let mut active = <<P::DeviceCode as SeaOrmPluginModel>::ActiveModel as Default>::default();
-
-        if let Some(status) = update.status {
-            set::<P::DeviceCode>(
-                &mut active,
-                "status",
-                status,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
-        if let Some(user_id) = update.user_id {
-            set::<P::DeviceCode>(
-                &mut active,
-                "user_id",
-                user_id,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
-        if let Some(last_polled_at) = update.last_polled_at {
-            set::<P::DeviceCode>(
-                &mut active,
-                "last_polled_at",
-                last_polled_at,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
+        let active = self.prepare_device_code_update(update).await?;
 
         let filter = P::DeviceCode::column("id")?
             .eq_id(id, self.config().advanced.database.generate_id())?;
-        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
+        let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
             super::updates::update_returning_one::<Entity<P::DeviceCode>, _>(
                 self.connection(),
                 active,
@@ -125,7 +118,12 @@ where
         })
         .await?
         .ok_or_else(|| AuthError::not_found("Device code not found"))?
-        .record()
+        .record()?;
+        Ok(self
+            .model_fields
+            .project_device_codes(vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn update_device_code_if_status(
@@ -135,41 +133,49 @@ where
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
         let id = id.typed()?;
-        let mut update_many = Entity::<P::DeviceCode>::update_many();
-        if let Some(status) = update.status {
-            update_many =
-                update_many.col_expr(P::DeviceCode::column("status")?, Expr::value(status));
+        let active = self.prepare_device_code_update(update).await?;
+        let reselect = P::DeviceCode::column("id")?
+            .eq_id(id, self.config().advanced.database.generate_id())?;
+        let query = Entity::<P::DeviceCode>::update_many()
+            .set(active)
+            .filter(reselect.clone())
+            .filter(P::DeviceCode::column("status")?.eq(current_status));
+        if self
+            .model_fields
+            .fields(EntityRole::DeviceCode)
+            .fields()
+            .is_empty()
+        {
+            return database_operation::<Entity<P::DeviceCode>, _>(
+                self.config(),
+                "update",
+                async {
+                    query
+                        .exec(self.connection())
+                        .await
+                        .map(|result| result.rows_affected == 1)
+                        .map_err(map_db_err)
+                },
+            )
+            .await;
         }
-        if let Some(user_id) = update.user_id {
-            let mut active = Default::default();
-            set::<P::DeviceCode>(
-                &mut active,
-                "user_id",
-                user_id,
-                self.config().advanced.database.generate_id(),
-            )?;
-            update_many = update_many.set(active);
-        }
-        if let Some(last_polled_at) = update.last_polled_at {
-            update_many = update_many.col_expr(
-                P::DeviceCode::column("last_polled_at")?,
-                Expr::value(last_polled_at),
-            );
-        }
-
-        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
-            update_many
-                .filter(
-                    P::DeviceCode::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
-                )
-                .filter(P::DeviceCode::column("status")?.eq(current_status))
-                .exec(self.connection())
-                .await
-                .map(|result| result.rows_affected == 1)
-                .map_err(map_db_err)
+        let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
+            super::updates::execute_update_returning_one::<Entity<P::DeviceCode>, _>(
+                self.connection(),
+                query,
+                reselect,
+            )
+            .await
         })
-        .await
+        .await?
+        .map(|model| model.record())
+        .transpose()?;
+        // Successful boolean writes still await the adapter output policy.
+        Ok(!self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .is_empty())
     }
 
     async fn claim_device_code(
@@ -178,27 +184,62 @@ where
         user_id: &str,
     ) -> AuthResult<bool> {
         let id = id.typed()?;
-        database_operation::<Entity<P::DeviceCode>, _>(self.config(), "incrementOne", async {
-            let column = P::DeviceCode::column("user_id")?;
-            Entity::<P::DeviceCode>::update_many()
-                .col_expr(
-                    column,
-                    Expr::value(
-                        column.id_value(user_id, self.config().advanced.database.generate_id())?,
-                    ),
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(Default::default(), false)
+            .await?;
+        let column = P::DeviceCode::column("user_id")?;
+        let reselect = P::DeviceCode::column("id")?
+            .eq_id(id, self.config().advanced.database.generate_id())?;
+        let guard = reselect
+            .clone()
+            .and(P::DeviceCode::column("status")?.eq("pending"))
+            .and(column.is_null());
+        let mut query = Entity::<P::DeviceCode>::update_many().col_expr(
+            column,
+            Expr::value(column.id_value(user_id, self.config().advanced.database.generate_id())?),
+        );
+        if let Some(scope) = scope {
+            query = query.col_expr(P::DeviceCode::column("scope")?, Expr::value(scope));
+        }
+        if self
+            .model_fields
+            .fields(EntityRole::DeviceCode)
+            .fields()
+            .is_empty()
+        {
+            return database_operation::<Entity<P::DeviceCode>, _>(
+                self.config(),
+                "incrementOne",
+                async {
+                    query
+                        .filter(guard)
+                        .exec(self.connection())
+                        .await
+                        .map(|result| result.rows_affected == 1)
+                        .map_err(map_db_err)
+                },
+            )
+            .await;
+        }
+        let row =
+            database_operation::<Entity<P::DeviceCode>, _>(self.config(), "incrementOne", async {
+                super::updates::increment_returning_one::<Entity<P::DeviceCode>>(
+                    self.connection(),
+                    query.filter(guard.clone()),
+                    guard,
+                    reselect,
                 )
-                .filter(
-                    P::DeviceCode::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
-                )
-                .filter(P::DeviceCode::column("status")?.eq("pending"))
-                .filter(P::DeviceCode::column("user_id")?.is_null())
-                .exec(self.connection())
                 .await
-                .map(|result| result.rows_affected == 1)
-                .map_err(map_db_err)
-        })
-        .await
+            })
+            .await?
+            .map(|model| model.record())
+            .transpose()?;
+        Ok(!self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .is_empty())
     }
 
     async fn delete_device_code(
@@ -239,5 +280,55 @@ where
                 .map_err(map_db_err)
         })
         .await
+    }
+}
+
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmStore<S, O, P>
+{
+    async fn prepare_device_code_update(
+        &self,
+        update: UpdateDeviceCode,
+    ) -> AuthResult<<P::DeviceCode as SeaOrmPluginModel>::ActiveModel> {
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(update.scope, false)
+            .await?;
+        let mut active = <<P::DeviceCode as SeaOrmPluginModel>::ActiveModel as Default>::default();
+
+        if let Some(status) = update.status {
+            set::<P::DeviceCode>(
+                &mut active,
+                "status",
+                status,
+                self.config().advanced.database.generate_id(),
+            )?;
+        }
+        if let Some(user_id) = update.user_id {
+            set::<P::DeviceCode>(
+                &mut active,
+                "user_id",
+                user_id,
+                self.config().advanced.database.generate_id(),
+            )?;
+        }
+        if let Some(last_polled_at) = update.last_polled_at {
+            set::<P::DeviceCode>(
+                &mut active,
+                "last_polled_at",
+                last_polled_at,
+                self.config().advanced.database.generate_id(),
+            )?;
+        }
+
+        if let Some(scope) = scope {
+            set::<P::DeviceCode>(
+                &mut active,
+                "scope",
+                scope,
+                self.config().advanced.database.generate_id(),
+            )?;
+        }
+        Ok(active)
     }
 }

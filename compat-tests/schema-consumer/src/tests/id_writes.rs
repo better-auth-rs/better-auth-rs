@@ -210,7 +210,7 @@ pub(super) async fn reference_writes<
             last_polled_at: None,
             polling_interval: Some(5),
             client_id: None,
-            scope: None,
+            scope: Default::default(),
         })
         .await
         .unwrap();

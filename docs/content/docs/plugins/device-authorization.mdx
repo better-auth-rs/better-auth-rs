@@ -23,3 +23,12 @@ The generator methods now accept asynchronous closures. Change a synchronous clo
 All four POST routes validate their bodies before authentication and endpoint middleware. `/device/code` returns OAuth `invalid_request` validation errors. The other routes use `VALIDATION_ERROR`. Empty `client_id` is rejected; empty `user_id` and `scope` are omitted before callbacks and persistence. Form requests reject repeated nonempty values for these three fields. Endpoint hooks retain the original input.
 
 `DeviceCode.client_id` and `DeviceCode.scope` use `SchemaValue<Option<String>>` so native store reads retain omitted memory fields and SQL null values. Use `json()` to inspect presence and `typed()` for a present nullable string. Device review responses preserve the same distinction.
+
+
+## Adapter scope policies
+
+Custom plugins can register the ordinary `scope` string field through `AuthInitContext::register_model_fields(EntityRole::DeviceCode, UserConfig)`. Memory and SeaORM consume defaults, `on_update`, and synchronous or asynchronous input/output transforms. Other DeviceCode fields, reference declarations, replacement types, and field aliases are rejected during initialization. The field policy does not replace route validation or authorization decisions.
+
+`CreateDeviceCode.scope` and `UpdateDeviceCode.scope` use `SchemaValue<Option<String>>`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a supplied string. Migrate an old absent create scope to `Default::default()`; append `.into()` to an old supplied `Some(value)`. An omitted update can still receive `on_update`. Explicit null reaches the input transform as null. Memory retains omitted fields, while SQL nullable columns read back as null.
+
+Create, ordinary update, and both code lookups project the returned scope. Conditional update and claim operations also await the successful row's output callback before returning their boolean result. Input failure prevents the write. Output failure propagates after persistence. A condition that matches no row returns false without an output callback. Input callbacks run outside storage locks; the existing atomic write conditions remain part of the write. The public `AuthTransaction` interface does not expose DeviceCode operations, so this slice adds no general DeviceCode transaction API.

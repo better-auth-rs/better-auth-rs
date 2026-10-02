@@ -305,7 +305,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
             last_polled_at: None,
             polling_interval: Some(5),
             client_id: None,
-            scope: None,
+            scope: Default::default(),
         })
         .await
         .unwrap();

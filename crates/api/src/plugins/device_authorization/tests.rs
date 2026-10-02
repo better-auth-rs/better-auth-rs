@@ -275,7 +275,7 @@ async fn test_device_token_expired_returns_error_and_deletes_record() {
             last_polled_at: None,
             polling_interval: Some(5000),
             client_id: Some("test-client".to_string()),
-            scope: None,
+            scope: Default::default(),
         })
         .await
         .unwrap();
@@ -373,7 +373,7 @@ async fn test_device_verify_strips_hyphens_and_preserves_input_shape() {
             last_polled_at: None,
             polling_interval: Some(5000),
             client_id: Some("test-client".to_string()),
-            scope: None,
+            scope: Default::default(),
         })
         .await
         .unwrap();

@@ -33,6 +33,9 @@ mod create_order;
 #[path = "plugin_model_fields_tests/core.rs"]
 mod core;
 
+#[path = "plugin_model_fields_tests/device_scope.rs"]
+mod device_scope;
+
 #[path = "plugin_model_fields_tests/presence.rs"]
 mod presence;
 #[path = "plugin_model_fields_tests/presence_cache.rs"]

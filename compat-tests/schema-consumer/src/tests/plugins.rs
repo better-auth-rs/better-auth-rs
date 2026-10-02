@@ -214,7 +214,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             last_polled_at: None,
             polling_interval: Some(5),
             client_id: Some("consumer".into()),
-            scope: Some("read".into()),
+            scope: Some("read".into()).into(),
         })
         .await
         .unwrap();

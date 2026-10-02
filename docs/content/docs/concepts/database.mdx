@@ -269,6 +269,8 @@ Passkey `name` and `aaguid`, and API Key `name`, use `SchemaValue<Option<String>
 
 `CreatePasskey` uses the same representation for `name` and `aaguid`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a string. The input callback receives omission separately from null. Memory retains omitted stored fields; SQL nullable columns read back as null. Application-owned SeaORM columns remain `Option<String>`, and `AuthEntity` preserves database null when building the runtime record. No column migration is needed.
 
+`CreateDeviceCode.scope` and `UpdateDeviceCode.scope` use the same omitted/null/string input representation. DeviceCode scope field policies run through the shared adapter conversion, including successful conditional updates and claims. The returned boolean waits for output conversion; failed input conversion performs no write, and failed output conversion propagates after persistence.
+
 API Key creation without a name retains its explicit null default. Database field policies run before fallback-cache population; cache reads preserve the projected omission or null without repeating callbacks. Secondary-only API Key operations continue to bypass database field policies.
 
 `build().await` rejects a plugin when the user or session entity cannot persist its required fields. `AuthEntity` derives this capability list from the model fields.

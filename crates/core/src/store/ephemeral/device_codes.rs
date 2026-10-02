@@ -3,6 +3,10 @@ use super::*;
 #[async_trait]
 impl DeviceCodeStore for EphemeralStore {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(input.scope, true)
+            .await?;
         let device_code = DeviceCode {
             id: self
                 .generated_id("deviceCode", None, self.lock()?.device_codes.len())?
@@ -19,46 +23,61 @@ impl DeviceCodeStore for EphemeralStore {
                 .client_id
                 .map(|value| crate::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
-            scope: input
-                .scope
-                .map(|value| crate::SchemaValue::Typed(Some(value)))
-                .unwrap_or_default(),
+            scope: scope.map(Into::into).unwrap_or_default(),
         };
-        self.raw("deviceCode", "create", |state| {
-            state.device_codes.push(device_code.clone());
-            Ok(device_code)
-        })
-        .await
+        let row = self
+            .raw("deviceCode", "create", |state| {
+                state.device_codes.push(device_code.clone());
+                Ok(device_code)
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_device_codes(vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn get_device_code_by_device_code(
         &self,
         device_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        self.raw("deviceCode", "findOne", |state| {
-            Ok(state
-                .device_codes
-                .snapshot()?
-                .iter()
-                .find(|value| value.device_code == device_code)
-                .cloned())
-        })
-        .await
+        let row = self
+            .raw("deviceCode", "findOne", |state| {
+                Ok(state
+                    .device_codes
+                    .snapshot()?
+                    .iter()
+                    .find(|value| value.device_code == device_code)
+                    .cloned())
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn get_device_code_by_user_code(
         &self,
         user_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        self.raw("deviceCode", "findOne", |state| {
-            Ok(state
-                .device_codes
-                .snapshot()?
-                .iter()
-                .find(|value| value.user_code == user_code)
-                .cloned())
-        })
-        .await
+        let row = self
+            .raw("deviceCode", "findOne", |state| {
+                Ok(state
+                    .device_codes
+                    .snapshot()?
+                    .iter()
+                    .find(|value| value.user_code == user_code)
+                    .cloned())
+            })
+            .await?;
+        Ok(self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn update_device_code(
@@ -66,25 +85,38 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
-        self.raw("deviceCode", "update", |state| {
-            let Some(mut device_code) = state.device_codes.get_mut(id)? else {
-                return Ok(None);
-            };
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(update.scope, false)
+            .await?;
+        let row = self
+            .raw("deviceCode", "update", |state| {
+                let Some(mut device_code) = state.device_codes.get_mut(id)? else {
+                    return Ok(None);
+                };
 
-            if let Some(status) = update.status {
-                device_code.status = status;
-            }
-            if let Some(user_id) = update.user_id {
-                device_code.user_id = user_id;
-            }
-            if let Some(last_polled_at) = update.last_polled_at {
-                device_code.last_polled_at = last_polled_at;
-            }
+                if let Some(scope) = scope {
+                    device_code.scope = scope.into();
+                }
+                if let Some(status) = update.status {
+                    device_code.status = status;
+                }
+                if let Some(user_id) = update.user_id {
+                    device_code.user_id = user_id;
+                }
+                if let Some(last_polled_at) = update.last_polled_at {
+                    device_code.last_polled_at = last_polled_at;
+                }
 
-            Ok(Some(device_code.clone()))
-        })
-        .await?
-        .ok_or_else(|| AuthError::not_found("Device code not found"))
+                Ok(Some(device_code.clone()))
+            })
+            .await?
+            .ok_or_else(|| AuthError::not_found("Device code not found"))?;
+        Ok(self
+            .model_fields
+            .project_device_codes(vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn update_device_code_if_status(
@@ -93,28 +125,42 @@ impl DeviceCodeStore for EphemeralStore {
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
-        self.raw("deviceCode", "update", |state| {
-            let Some(mut device_code) = state.device_codes.get_mut(id)? else {
-                return Ok(false);
-            };
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(update.scope, false)
+            .await?;
+        let row = self
+            .raw("deviceCode", "update", |state| {
+                let Some(mut device_code) = state.device_codes.get_mut(id)? else {
+                    return Ok(None);
+                };
 
-            if device_code.status != current_status {
-                return Ok(false);
-            }
+                if device_code.status != current_status {
+                    return Ok(None);
+                }
 
-            if let Some(status) = update.status {
-                device_code.status = status;
-            }
-            if let Some(user_id) = update.user_id {
-                device_code.user_id = user_id;
-            }
-            if let Some(last_polled_at) = update.last_polled_at {
-                device_code.last_polled_at = last_polled_at;
-            }
+                if let Some(scope) = scope {
+                    device_code.scope = scope.into();
+                }
+                if let Some(status) = update.status {
+                    device_code.status = status;
+                }
+                if let Some(user_id) = update.user_id {
+                    device_code.user_id = user_id;
+                }
+                if let Some(last_polled_at) = update.last_polled_at {
+                    device_code.last_polled_at = last_polled_at;
+                }
 
-            Ok(true)
-        })
-        .await
+                Ok(Some(device_code.clone()))
+            })
+            .await?;
+        // Successful boolean writes still await the adapter output policy.
+        Ok(!self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .is_empty())
     }
 
     async fn claim_device_code(
@@ -122,19 +168,33 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         user_id: &str,
     ) -> AuthResult<bool> {
-        self.raw("deviceCode", "incrementOne", |state| {
-            let Some(mut device_code) = state.device_codes.get_mut(id)? else {
-                return Ok(false);
-            };
+        let scope = self
+            .model_fields
+            .device_code_scope_for_storage(Default::default(), false)
+            .await?;
+        let row = self
+            .raw("deviceCode", "incrementOne", |state| {
+                let Some(mut device_code) = state.device_codes.get_mut(id)? else {
+                    return Ok(None);
+                };
 
-            if device_code.status != "pending" || device_code.user_id.is_some() {
-                return Ok(false);
-            }
+                if device_code.status != "pending" || device_code.user_id.is_some() {
+                    return Ok(None);
+                }
 
-            device_code.user_id = Some(user_id.to_string());
-            Ok(true)
-        })
-        .await
+                if let Some(scope) = scope {
+                    device_code.scope = scope.into();
+                }
+                device_code.user_id = Some(user_id.to_string());
+                Ok(Some(device_code.clone()))
+            })
+            .await?;
+        // Successful boolean writes still await the adapter output policy.
+        Ok(!self
+            .model_fields
+            .project_device_codes(row.into_iter().collect())
+            .await?
+            .is_empty())
     }
 
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
