@@ -1,8 +1,8 @@
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use super::{SeaOrmTransaction, map_db_err};
+use crate::schema::AuthSchema;
 use crate::types::{CreateDeviceCode, DeviceCode, UpdateDeviceCode};
-use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use async_trait::async_trait;
 use better_auth_core::{
     AuthResult,
@@ -128,13 +128,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .await
             },
         )
-        .await?
-        .map(|row| row.record())
-        .transpose()?;
+        .await?;
         Ok(!self
             .store
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_models(row.into_iter().collect())
             .await?
             .is_empty())
     }

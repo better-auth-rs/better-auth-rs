@@ -206,6 +206,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
     let device = auth
         .store()
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "device-secret".into(),
             user_code: "ABCD2345".into(),
             user_id: None,

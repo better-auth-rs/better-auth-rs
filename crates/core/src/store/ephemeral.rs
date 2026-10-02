@@ -27,6 +27,7 @@ use crate::wire::{AccountView, SessionView, UserView, VerificationView};
 mod accounts;
 mod api_keys;
 mod device_codes;
+mod field_bindings;
 mod fields;
 mod hooks;
 mod invitation_accept;

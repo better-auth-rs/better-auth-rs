@@ -127,6 +127,7 @@ impl From<&entities::passkey::Model> for Passkey {
 impl From<&entities::device_code::Model> for DeviceCode {
     fn from(model: &entities::device_code::Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id.clone().into(),
             device_code: model.device_code.clone(),
             user_code: model.user_code.clone(),

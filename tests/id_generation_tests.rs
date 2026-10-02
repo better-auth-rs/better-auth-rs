@@ -297,6 +297,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
     assert_eq!(team_member.id, "teamMember-generated");
     let device = store
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "credential".into(),
             user_code: "ABCD2345".into(),
             user_id: None,

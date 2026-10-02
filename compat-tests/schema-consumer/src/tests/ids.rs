@@ -294,6 +294,7 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
     }
     let device = store
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "generated-device".into(),
             user_code: "generated-user-code".into(),
             user_id: None,

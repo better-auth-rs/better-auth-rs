@@ -31,14 +31,16 @@ impl EphemeralStore {
             .config
             .verification
             .field_schema()
-            .record_storage_fields_for_adapter(update.fields()?, false, true, |_| true)
+            .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
+                self.memory_record_input(field, value)
+            })
             .await?;
+        let bound_identifier = self.verification_query("identifier", identifier)?;
         let record = self
             .raw("verification", "update", |state| {
                 Ok({
                     let row = state.verifications.find_mut(|row| {
-                        self.verification_field(row, "identifier")
-                            == Some(&Value::String(identifier.to_owned()))
+                        self.verification_field(row, "identifier") == Some(&bound_identifier)
                     })?;
                     if let Some(mut record) = row {
                         record.extend(patch);
@@ -172,10 +174,10 @@ impl EphemeralStore {
             return Ok(None);
         };
         let consumed = self.output_verification(&consumed).await?;
+        let bound_identifier = self.verification_query("identifier", identifier)?;
         self.raw("verification", "deleteMany", |state| {
             state.verifications.retain(|row| {
-                self.verification_field(row, "identifier")
-                    != Some(&Value::String(identifier.to_owned()))
+                self.verification_field(row, "identifier") != Some(&bound_identifier)
             })?;
             Ok(())
         })

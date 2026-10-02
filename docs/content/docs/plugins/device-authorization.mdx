@@ -29,13 +29,17 @@ All four POST routes validate their bodies before authentication and endpoint mi
 SeaORM models use `Option<better_auth::seaorm::SqlNumber>` with `#[sea_orm(column_type = "Integer", nullable)]`. The generated and bundled initial schemas declare nullable INTEGER, matching the pinned schema. Existing SQLite BIGINT columns can retain integer and fractional values through `SqlNumber`; this change does not automatically narrow existing database columns. PostgreSQL and MySQL parameter behavior for fractional values in integer columns remains unverified. MySQL also requires its driver feature and a numeric decode path before that backend can claim support.
 
 
-## Adapter scope policies
+## Adapter field policies
 
-Custom plugins can register the ordinary `scope` string field through `AuthInitContext::register_model_fields(EntityRole::DeviceCode, UserConfig)`. Memory and SeaORM consume defaults, `on_update`, and synchronous or asynchronous input/output transforms. Other DeviceCode fields, reference declarations, replacement types, and field aliases are rejected during initialization. The field policy does not replace route validation or authorization decisions.
+Custom plugins can register declared additional fields through `AuthInitContext::register_model_fields(EntityRole::DeviceCode, UserConfig)`. `DeviceCode`, `CreateDeviceCode`, and `UpdateDeviceCode` expose an `additional_fields` map keyed by logical field names. Add `additional_fields: Default::default()` to existing struct literals. `DeviceCode` serializes returned additional fields at the top level. Memory and SeaORM apply defaults, `on_update`, and synchronous or asynchronous input/output transforms through the shared adapter rules.
+
+SeaORM requires a typed column for each declaration. Generate these columns with `deviceCode.additionalFields` in the CLI schema configuration, or declare the columns in an `AuthEntity` model. Use `field_name` to select a declared physical column. Runtime schema validation checks the configured columns. Additional fields cannot replace native logical names, Rust field names, or native physical columns. The typed ID, device code, client, user, and status remain authoritative during atomic consumption.
+
+The existing `scope` string policy remains available. The policy cannot replace its type, declare a reference, or rename its column. Supply scope through the typed `scope` member; an `additional_fields` entry named `scope` cannot supply or replace that member. Field policies do not install route validation or authorization decisions.
 
 `CreateDeviceCode.scope` and `UpdateDeviceCode.scope` use `SchemaValue<Option<String>>`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a supplied string. Migrate an old absent create scope to `Default::default()`; append `.into()` to an old supplied `Some(value)`. An omitted update can still receive `on_update`. Explicit null reaches the input transform as null. Memory retains omitted fields, while SQL nullable columns read back as null.
 
-Create, ordinary update, and both code lookups project the returned scope. Conditional update and claim operations also await the successful row's output callback before returning their boolean result. Input failure prevents the write. Output failure propagates after persistence. A condition that matches no row returns false without an output callback. Input callbacks run outside storage locks; the existing atomic write conditions remain part of the write.
+Create, ordinary update, both code lookups, and consumption project scope and declared additional fields. Conditional update and claim operations also await the successful row's output callback before returning their boolean result. Input failure prevents the write. Output failure propagates after persistence. A condition that matches no row returns false without an output callback. Input callbacks run outside storage locks; the existing atomic write conditions remain part of the write.
 
 ## Server-only redemption
 
@@ -45,7 +49,7 @@ The helper authorizes the issuer, enforces the polling interval, updates `lastPo
 
 Set `EndpointContext.transaction` when the caller runs inside an active transaction. The helper uses that transaction for every store operation, including user lookup. `AuthTransaction` exposes the DeviceCode store operations. The default `/device/token` route uses the same helper and creates its session after consumption, using the consumed row's bound user ID.
 
-The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates, grant request fields, additional DeviceCode schema fields, and grant verification callbacks remain outside this API slice.
+The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates, grant request fields, and grant verification callbacks remain outside this API slice.
 
 ## Atomic consumption and transactions
 
@@ -53,4 +57,4 @@ The ownership condition currently supports `DeviceCodeOwnership::ClientId(String
 
 `AuthTransaction` includes DeviceCode operations. Memory and SeaORM execute these operations through the active transaction; secondary storage forwards them to that transaction. Memory validates consumed records against the original transaction state before merging any changes. A code created and consumed in the same transaction needs no existing live record. An output error from an ordinary consumption propagates after deletion. An output error propagated out of a transaction aborts that transaction.
 
-Issuer ownership currently supports only `ClientId`. Grant-owned schema fields and additional ownership predicates remain unsupported.
+Issuer ownership currently supports only `ClientId`. Additional fields registered by a custom plugin use the same store operations. Grant callback configuration and additional ownership predicates remain unsupported.

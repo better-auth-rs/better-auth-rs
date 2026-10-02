@@ -112,3 +112,23 @@ pub fn random_id(size: Option<usize>) -> String {
         size.filter(|size| *size != 0).unwrap_or(32),
     )
 }
+
+pub(crate) fn serial_reference_value(value: serde_json::Value) -> AuthResult<serde_json::Value> {
+    let convert = |value: serde_json::Value| -> AuthResult<serde_json::Value> {
+        if value.is_null() {
+            return Ok(value);
+        }
+        let number = crate::query::number(&value)?;
+        Ok(serde_json::from_str(&crate::schema_value::number_string(
+            number,
+        ))?)
+    };
+    match value {
+        serde_json::Value::Array(values) => values
+            .into_iter()
+            .map(convert)
+            .collect::<AuthResult<Vec<_>>>()
+            .map(Into::into),
+        value => convert(value),
+    }
+}

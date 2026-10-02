@@ -202,6 +202,7 @@ pub(super) async fn reference_writes<
     }
     let device = store
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "alias-device".into(),
             user_code: "0x10".into(),
             user_id: None,

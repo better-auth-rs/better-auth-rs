@@ -5,6 +5,7 @@ mod api_key_numbers;
 mod api_keys;
 mod bundled_schema;
 mod device_code_consume;
+mod device_code_fields;
 mod device_code_transactions;
 mod device_codes;
 pub mod entities;

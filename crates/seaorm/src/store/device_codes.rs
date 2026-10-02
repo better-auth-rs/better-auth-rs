@@ -3,7 +3,6 @@ use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
-use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, QueryFilter,
     TransactionTrait,
@@ -105,12 +104,9 @@ where
                 )
                 .await
             })
-            .await?
-            .map(|model| model.record())
-            .transpose()?;
+            .await?;
         Ok(!self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_models(row.into_iter().collect())
             .await?
             .is_empty())
     }
@@ -165,11 +161,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         connection: &impl ConnectionTrait,
         input: CreateDeviceCode,
     ) -> AuthResult<DeviceCode> {
-        let scope = self
-            .model_fields
-            .device_code_scope_for_storage(input.scope, true)
+        let mut active = self
+            .prepare_device_code_fields(input.scope, input.additional_fields, true)
             .await?;
-        let mut fields = Map::from_iter([
+        let fields = Map::from_iter([
             ("device_code".to_owned(), json!(input.device_code)),
             ("user_code".to_owned(), json!(input.user_code)),
             ("user_id".to_owned(), json!(input.user_id)),
@@ -179,23 +174,16 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             ("polling_interval".to_owned(), json!(input.polling_interval)),
             ("client_id".to_owned(), json!(input.client_id)),
         ]);
-        if let Some(scope) = scope {
-            let _ = fields.insert("scope".into(), json!(scope));
-        }
-        let active = super::plugin_models::active::<P::DeviceCode>(
+        super::plugin_models::apply::<P::DeviceCode>(
+            &mut active,
             self.create_fields("deviceCode", None, fields)?,
             self.config().advanced.database.generate_id(),
         )?;
         let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "create", async {
             active.insert(connection).await.map_err(map_db_err)
         })
-        .await?
-        .record()?;
-        Ok(self
-            .model_fields
-            .project_device_codes(vec![row])
-            .await?
-            .remove(0))
+        .await?;
+        Ok(self.project_device_code_models(vec![row]).await?.remove(0))
     }
 
     pub(super) async fn get_device_code_by_device_code_with_connection(
@@ -210,12 +198,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .await
                 .map_err(map_db_err)
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         Ok(self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_models(row.into_iter().collect())
             .await?
             .pop())
     }
@@ -232,12 +217,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .await
                 .map_err(map_db_err)
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         Ok(self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_models(row.into_iter().collect())
             .await?
             .pop())
     }
@@ -263,13 +245,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .await
         })
         .await?
-        .ok_or_else(|| AuthError::not_found("Device code not found"))?
-        .record()?;
-        Ok(self
-            .model_fields
-            .project_device_codes(vec![row])
-            .await?
-            .remove(0))
+        .ok_or_else(|| AuthError::not_found("Device code not found"))?;
+        Ok(self.project_device_code_models(vec![row]).await?.remove(0))
     }
 
     pub(super) async fn update_device_code_if_status_with_connection(
@@ -312,13 +289,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         // Successful boolean writes still await the adapter output policy.
         Ok(!self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_models(row.into_iter().collect())
             .await?
             .is_empty())
     }
@@ -375,9 +349,11 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         sea_orm::sea_query::SimpleExpr,
     )> {
         let id = id.typed()?;
-        let scope = self
-            .model_fields
-            .device_code_scope_for_storage(Default::default(), false)
+        let active = self
+            .prepare_device_code_update(UpdateDeviceCode {
+                user_id: Some(Some(user_id.to_owned())),
+                ..Default::default()
+            })
             .await?;
         let column = P::DeviceCode::column("user_id")?;
         let reselect = P::DeviceCode::column("id")?
@@ -386,13 +362,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .clone()
             .and(P::DeviceCode::column("status")?.eq("pending"))
             .and(column.is_null());
-        let mut query = Entity::<P::DeviceCode>::update_many().col_expr(
-            column,
-            Expr::value(column.id_value(user_id, self.config().advanced.database.generate_id())?),
-        );
-        if let Some(scope) = scope {
-            query = query.col_expr(P::DeviceCode::column("scope")?, Expr::value(scope));
-        }
+        let query = Entity::<P::DeviceCode>::update_many().set(active);
         Ok((query, guard, reselect))
     }
 
@@ -400,11 +370,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self,
         update: UpdateDeviceCode,
     ) -> AuthResult<<P::DeviceCode as SeaOrmPluginModel>::ActiveModel> {
-        let scope = self
-            .model_fields
-            .device_code_scope_for_storage(update.scope, false)
+        let mut active = self
+            .prepare_device_code_fields(update.scope, update.additional_fields, false)
             .await?;
-        let mut active = <<P::DeviceCode as SeaOrmPluginModel>::ActiveModel as Default>::default();
 
         if let Some(status) = update.status {
             set::<P::DeviceCode>(
@@ -431,14 +399,6 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )?;
         }
 
-        if let Some(scope) = scope {
-            set::<P::DeviceCode>(
-                &mut active,
-                "scope",
-                scope,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
         Ok(active)
     }
 }

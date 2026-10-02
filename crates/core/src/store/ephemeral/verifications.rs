@@ -33,6 +33,14 @@ impl EphemeralStore {
                 .await?,
         ))
     }
+    pub(super) fn verification_query(&self, name: &str, value: &str) -> AuthResult<Value> {
+        self.memory_field_query(
+            &self.config.verification.field_schema(),
+            name,
+            Value::String(value.to_owned()),
+        )
+    }
+
     pub(super) fn verification_field<'a>(
         &self,
         record: &'a Map<String, Value>,
@@ -88,11 +96,10 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .config
             .verification
             .field_schema()
-            .record_storage_fields_for_adapter(
+            .record_storage_fields_with_binding(
                 input.with_timestamps(Utc::now()).fields()?,
                 true,
-                true,
-                |_| true,
+                |_, field, value| self.memory_record_input(field, value),
             )
             .await?;
         let _ = record.insert("id".into(), Value::String(id.to_owned()));
@@ -135,7 +142,9 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .config
             .verification
             .field_schema()
-            .record_storage_fields_for_adapter(input.fields()?, true, true, |_| true)
+            .record_storage_fields_with_binding(input.fields()?, true, |_, field, value| {
+                self.memory_record_input(field, value)
+            })
             .await?;
         let supplied = record
             .remove("id")
@@ -165,6 +174,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
+        let bound_identifier = self.verification_query("identifier", identifier)?;
         let records: Vec<_> = self
             .raw("verification", "findMany", |state| {
                 Ok(state
@@ -172,8 +182,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .snapshot()?
                     .iter()
                     .filter(|row| {
-                        self.verification_field(row, "identifier")
-                            == Some(&Value::String(identifier.to_owned()))
+                        self.verification_field(row, "identifier") == Some(&bound_identifier)
                     })
                     .cloned()
                     .collect())
@@ -194,6 +203,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         identifier: &str,
         value: &str,
     ) -> AuthResult<Option<VerificationView>> {
+        let bound_identifier = self.verification_query("identifier", identifier)?;
+        let bound_value = self.verification_query("value", value)?;
         let record = self
             .raw("verification", "findOne", |state| {
                 Ok(state
@@ -201,10 +212,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .snapshot()?
                     .iter()
                     .find(|row| {
-                        self.verification_field(row, "identifier")
-                            == Some(&Value::String(identifier.to_owned()))
-                            && self.verification_field(row, "value")
-                                == Some(&Value::String(value.to_owned()))
+                        self.verification_field(row, "identifier") == Some(&bound_identifier)
+                            && self.verification_field(row, "value") == Some(&bound_value)
                     })
                     .cloned())
             })
@@ -218,16 +227,14 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         .transpose()
     }
     async fn get_verification_by_value(&self, value: &str) -> AuthResult<Option<VerificationView>> {
+        let bound_value = self.verification_query("value", value)?;
         let record = self
             .raw("verification", "findOne", |state| {
                 Ok(state
                     .verifications
                     .snapshot()?
                     .iter()
-                    .find(|row| {
-                        self.verification_field(row, "value")
-                            == Some(&Value::String(value.to_owned()))
-                    })
+                    .find(|row| self.verification_field(row, "value") == Some(&bound_value))
                     .cloned())
             })
             .await?;
@@ -243,6 +250,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
+        let bound_identifier = self.verification_query("identifier", identifier)?;
         let record = self
             .raw("verification", "findOne", |state| {
                 Ok(state
@@ -250,8 +258,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .snapshot()?
                     .iter()
                     .find(|row| {
-                        self.verification_field(row, "identifier")
-                            == Some(&Value::String(identifier.to_owned()))
+                        self.verification_field(row, "identifier") == Some(&bound_identifier)
                     })
                     .cloned())
             })
@@ -292,12 +299,10 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
+        let bound_identifier = self.verification_query("identifier", identifier)?;
         let _ = self
             .delete_verifications_with_hooks(
-                |row| {
-                    self.verification_field(row, "identifier")
-                        == Some(&Value::String(identifier.to_owned()))
-                },
+                |row| self.verification_field(row, "identifier") == Some(&bound_identifier),
                 false,
             )
             .await?;

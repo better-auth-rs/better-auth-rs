@@ -9,16 +9,18 @@ impl EphemeralStore {
         account_id: &str,
     ) -> AuthResult<Vec<serde_json::Map<String, Value>>> {
         let fields = self.config.account.field_schema();
+        let provider =
+            self.memory_field_query(&fields, "providerId", Value::String(provider.to_owned()))?;
+        let account_id =
+            self.memory_field_query(&fields, "accountId", Value::String(account_id.to_owned()))?;
         self.raw("account", "findMany", |state| {
             Ok(state
                 .accounts
                 .snapshot()?
                 .iter()
                 .filter(|record| {
-                    record.get(fields.record_storage_key("providerId"))
-                        == Some(&Value::String(provider.to_owned()))
-                        && record.get(fields.record_storage_key("accountId"))
-                            == Some(&Value::String(account_id.to_owned()))
+                    record.get(fields.record_storage_key("providerId")) == Some(&provider)
+                        && record.get(fields.record_storage_key("accountId")) == Some(&account_id)
                 })
                 .take(2)
                 .cloned()
@@ -32,6 +34,8 @@ impl EphemeralStore {
         user_id: &str,
     ) -> AuthResult<Vec<Map<String, Value>>> {
         let fields = self.config.account.field_schema();
+        let user_id =
+            self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;
         let records: Vec<_> = self
             .raw("account", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -40,8 +44,7 @@ impl EphemeralStore {
                         .snapshot()?
                         .iter()
                         .filter(|record| {
-                            record.get(fields.record_storage_key("userId"))
-                                == Some(&Value::String(user_id.to_owned()))
+                            record.get(fields.record_storage_key("userId")) == Some(&user_id)
                         })
                         .cloned()
                         .collect(),
@@ -116,7 +119,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .config
             .account
             .field_schema()
-            .record_storage_fields_for_adapter(input.fields()?, true, true, |_| true)
+            .record_storage_fields_with_binding(input.fields()?, true, |_, field, value| {
+                self.memory_record_input(field, value)
+            })
             .await?;
         let supplied = fields
             .remove("id")
@@ -177,7 +182,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                         let owner_id = owner_ids.get(index).ok_or_else(|| {
                             AuthError::internal("Account projection lost its stored owner index")
                         })?;
-                        let stored_owner_id = crate::SchemaValue::from_json(owner_id.clone());
+                        let stored_owner_id = self.stored_account_owner_id(owner_id.clone())?;
                         let user = match owner_id {
                             Some(id) if !id.is_null() => self.user_ref_by_id_value(id).await?,
                             _ => None,
@@ -212,14 +217,21 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
 
     async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {
         let fields = self.config.account.field_schema();
-        let user_id = Value::String(user_id.to_owned());
-        let provider = Value::String("credential".to_owned());
+        let account_id =
+            self.memory_field_query(&fields, "accountId", Value::String(user_id.to_owned()))?;
+        let user_id =
+            self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;
+        let provider = self.memory_field_query(
+            &fields,
+            "providerId",
+            Value::String("credential".to_owned()),
+        )?;
         let record = self
             .raw("account", "findOne", |state| {
                 Ok(state.accounts.snapshot()?.into_iter().find(|record| {
                     record.get(fields.record_storage_key("userId")) == Some(&user_id)
                         && record.get(fields.record_storage_key("providerId")) == Some(&provider)
-                        && record.get(fields.record_storage_key("accountId")) == Some(&user_id)
+                        && record.get(fields.record_storage_key("accountId")) == Some(&account_id)
                 }))
             })
             .await?;
@@ -268,7 +280,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .config
             .account
             .field_schema()
-            .record_storage_fields_for_adapter(update.fields()?, false, true, |_| true)
+            .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
+                self.memory_record_input(field, value)
+            })
             .await?;
         let record = self
             .raw("account", "update", |state| {
@@ -365,10 +379,11 @@ impl EphemeralStore {
             }
         }
         let schema = self.config.account.field_schema();
+        let user_id =
+            self.memory_field_query(&schema, "userId", Value::String(user_id.to_owned()))?;
         self.raw("account", "deleteMany", |state| {
             state.accounts.retain(|record| {
-                record.get(schema.record_storage_key("userId"))
-                    != Some(&Value::String(user_id.to_owned()))
+                record.get(schema.record_storage_key("userId")) != Some(&user_id)
             })?;
             Ok(())
         })

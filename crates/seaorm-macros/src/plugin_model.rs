@@ -30,7 +30,15 @@ pub(super) fn generate(
         quote!(#core_root::#record)
     };
     let core = registry::core_field_names(role);
+    let rename_all = serde_serialized_name(&input.attrs, "rename_all")?
+        .map(|rule| {
+            serde_rename_rule::RenameRule::from_rename_all_str(&rule)
+                .map_err(|error| syn::Error::new_spanned(input, error.to_string()))
+        })
+        .transpose()?;
     let mut columns = Vec::new();
+    let mut core_columns = Vec::new();
+    let mut values = Vec::new();
     let mut references = Vec::new();
     let mut assignments = Vec::new();
     let mut output = Vec::new();
@@ -45,9 +53,12 @@ pub(super) fn generate(
             name.clone(),
             serde_rename_rule::RenameRule::CamelCase.apply_to_field(&name),
         ];
-        if let Some(serialized) = serde_serialized_name(&field.attrs, "rename")? {
-            aliases.push(serialized);
-        }
+        let serialized = serde_serialized_name(&field.attrs, "rename")?.unwrap_or_else(|| {
+            rename_all
+                .as_ref()
+                .map_or_else(|| name.clone(), |rule| rule.apply_to_field(&name))
+        });
+        aliases.push(serialized);
         if role == EntityRole::ApiKey && name == "key_hash" {
             aliases.push("key".to_owned());
         }
@@ -65,9 +76,14 @@ pub(super) fn generate(
             quote!(#core_root::serde_json::from_value(value)?)
         };
         assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
+        let stored_value = adapter_record::field_value(field, core_root);
+        values.push(quote!(Column::#column => #stored_value,));
         if !core.contains(&name.as_str()) {
+            core_columns.push(quote!(Column::#column => None,));
             continue;
         }
+        let logical = serde_rename_rule::RenameRule::CamelCase.apply_to_field(&name);
+        core_columns.push(quote!(Column::#column => Some(#logical),));
         let value = if name == "id" {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_string()))
         } else if reference {
@@ -77,7 +93,11 @@ pub(super) fn generate(
                 quote!(self.#ident.to_string())
             }
         } else if role == EntityRole::DeviceCode && matches!(name.as_str(), "client_id" | "scope") {
-            quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
+            if identity::optional_inner(&field.ty).is_some() {
+                quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
+            } else {
+                quote!(#core_root::SchemaValue::Typed(Some(self.#ident.to_owned())))
+            }
         } else if role == EntityRole::DeviceCode && name == "polling_interval" {
             quote!(self.#ident.map(f64::from))
         } else if role == EntityRole::RateLimit && name == "count" {
@@ -105,6 +125,9 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
+    if role == EntityRole::DeviceCode {
+        output.push(quote!(additional_fields: Default::default(),));
+    }
     let declaration = model_name.map(|name| {
         quote! {
             fn model_declaration() -> Option<#core_root::schema::ModelDeclaration> {
@@ -126,6 +149,18 @@ pub(super) fn generate(
             #declaration
             fn column(name: &str) -> #core_root::AuthResult<Column> {
                 match name { #(#columns)* _ => Err(#core_root::AuthError::config(format!("Unknown plugin model column: {name}"))) }
+            }
+            fn core_field_name(column: &Column) -> Option<&'static str> {
+                match column { #(#core_columns)* }
+            }
+            fn record_fields(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<#core_root::user_fields::AdapterRecord> {
+                let mut storage = #core_root::serde_json::Map::new();
+                for (name, field) in fields.fields() {
+                    let name = field.field_name.as_deref().unwrap_or(name);
+                    let value = match Self::column(name)? { #(#values)* };
+                    let _ = storage.insert(name.to_owned(), value);
+                }
+                Ok(#core_root::user_fields::AdapterRecord::new(Default::default(), storage))
             }
             fn record(&self) -> #core_root::AuthResult<Self::Record> {
                 Ok(#record { #(#output)* })

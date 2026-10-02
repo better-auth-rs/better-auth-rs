@@ -1,0 +1,141 @@
+{
+  "families": {
+    "user": {
+      "created": {
+        "reference": "2",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "3"
+      },
+      "updated": {
+        "reference": "5",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "4"
+      },
+      "trace": [
+        [
+          "input",
+          " 002 "
+        ],
+        [
+          "output",
+          2
+        ],
+        [
+          "input",
+          " 005 "
+        ],
+        [
+          "output",
+          5
+        ]
+      ]
+    },
+    "session": {
+      "created": {
+        "reference": "2",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "3"
+      },
+      "updated": {
+        "reference": "5",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "4"
+      },
+      "trace": [
+        [
+          "input",
+          " 002 "
+        ],
+        [
+          "output",
+          2
+        ],
+        [
+          "input",
+          " 005 "
+        ],
+        [
+          "output",
+          5
+        ]
+      ]
+    },
+    "account": {
+      "created": {
+        "reference": "2",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "3"
+      },
+      "updated": {
+        "reference": "5",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "4"
+      },
+      "trace": [
+        [
+          "input",
+          " 002 "
+        ],
+        [
+          "output",
+          2
+        ],
+        [
+          "input",
+          " 005 "
+        ],
+        [
+          "output",
+          5
+        ]
+      ]
+    },
+    "verification": {
+      "created": {
+        "reference": "2",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "3"
+      },
+      "updated": {
+        "reference": "5",
+        "references": "2,,1",
+        "nullable": null,
+        "boolean": "1",
+        "defaulted": "4"
+      },
+      "trace": [
+        [
+          "input",
+          " 002 "
+        ],
+        [
+          "output",
+          2
+        ],
+        [
+          "input",
+          " 005 "
+        ],
+        [
+          "output",
+          5
+        ]
+      ]
+    }
+  },
+  "random": "002"
+}

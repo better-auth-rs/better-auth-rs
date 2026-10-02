@@ -78,10 +78,10 @@ fn organization<M: SeaOrmOrganizationModel>(
     )?))
 }
 
-fn plugin<M: SeaOrmPluginModel>(role: EntityRole) -> AuthResult<SchemaTable> {
+fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
     Ok(model::<M::Entity>(columns(
         role,
-        &UserConfig::default(),
+        fields,
         M::column,
         &[],
         Vec::new(),
@@ -91,6 +91,7 @@ fn plugin<M: SeaOrmPluginModel>(role: EntityRole) -> AuthResult<SchemaTable> {
 pub(super) fn tables<S, O, P>(
     settings: &SchemaConfiguration,
     organization_fields: &OrganizationFields,
+    model_fields: &better_auth_core::plugin_runtime::ModelFields,
 ) -> AuthResult<Vec<SchemaTable>>
 where
     S: AuthSchema,
@@ -181,19 +182,38 @@ where
                     )?);
                 }
             }
-            "api-key" => expected.push(plugin::<P::ApiKey>(EntityRole::ApiKey)?),
-            "device-authorization" => {
-                expected.push(plugin::<P::DeviceCode>(EntityRole::DeviceCode)?)
-            }
-            "passkey" => expected.push(plugin::<P::Passkey>(EntityRole::Passkey)?),
-            "two-factor" => expected.push(plugin::<P::TwoFactor>(EntityRole::TwoFactor)?),
-            "jwt" => expected.push(plugin::<P::Jwk>(EntityRole::Jwk)?),
-            "siwe" => expected.push(plugin::<P::WalletAddress>(EntityRole::WalletAddress)?),
+            "api-key" => expected.push(plugin::<P::ApiKey>(
+                EntityRole::ApiKey,
+                model_fields.fields(EntityRole::ApiKey),
+            )?),
+            "device-authorization" => expected.push(plugin::<P::DeviceCode>(
+                EntityRole::DeviceCode,
+                model_fields.fields(EntityRole::DeviceCode),
+            )?),
+            "passkey" => expected.push(plugin::<P::Passkey>(
+                EntityRole::Passkey,
+                model_fields.fields(EntityRole::Passkey),
+            )?),
+            "two-factor" => expected.push(plugin::<P::TwoFactor>(
+                EntityRole::TwoFactor,
+                model_fields.fields(EntityRole::TwoFactor),
+            )?),
+            "jwt" => expected.push(plugin::<P::Jwk>(
+                EntityRole::Jwk,
+                model_fields.fields(EntityRole::Jwk),
+            )?),
+            "siwe" => expected.push(plugin::<P::WalletAddress>(
+                EntityRole::WalletAddress,
+                model_fields.fields(EntityRole::WalletAddress),
+            )?),
             _ => {}
         }
     }
     if settings.database_rate_limit {
-        expected.push(plugin::<P::RateLimit>(EntityRole::RateLimit)?);
+        expected.push(plugin::<P::RateLimit>(
+            EntityRole::RateLimit,
+            model_fields.fields(EntityRole::RateLimit),
+        )?);
     }
     Ok(expected)
 }

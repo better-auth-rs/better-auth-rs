@@ -183,6 +183,7 @@ impl SchemaConfig {
                 name.as_str(),
                 "account"
                     | "verification"
+                    | "deviceCode"
                     | "organization"
                     | "member"
                     | "invitation"
@@ -294,6 +295,38 @@ impl Entity {
                 }
             }
             for (name, field) in &config.additional_fields {
+                if entity.role == Some(EntityRole::DeviceCode) {
+                    if name == "scope" {
+                        if !matches!(&field.field_type, FieldType::Name(name) if name == "string")
+                            || field.references.is_some()
+                            || field
+                                .field_name
+                                .as_deref()
+                                .is_some_and(|column| column != "scope")
+                        {
+                            return Err("DeviceCode scope requires its ordinary string column without reference or field-name replacement".into());
+                        }
+                    } else {
+                        let storage = field.field_name.as_deref().unwrap_or(name);
+                        if entity
+                            .fields
+                            .iter()
+                            .filter(|core| core.registry_column.is_some())
+                            .any(|core| {
+                                let rust = core.ident.to_string();
+                                [name.as_str(), storage].into_iter().any(|name| {
+                                    name == rust
+                                        || name == rust.to_lower_camel_case()
+                                        || name == core.column
+                                })
+                            })
+                        {
+                            return Err(format!(
+                                "DeviceCode additional field {name} cannot replace native field {storage}"
+                            ));
+                        }
+                    }
+                }
                 if let Some((definition, existing)) = fields
                     .iter()
                     .zip(&mut entity.fields)

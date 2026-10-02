@@ -66,10 +66,11 @@ impl EphemeralStore {
             })
             .await?;
         let schema = self.config.account.field_schema();
+        let account_user_id =
+            self.memory_field_query(&schema, "userId", Value::String(user_id.to_owned()))?;
         self.raw("account", "deleteMany", |state| {
             state.accounts.retain(|row| {
-                row.get(schema.record_storage_key("userId"))
-                    != Some(&Value::String(user_id.to_owned()))
+                row.get(schema.record_storage_key("userId")) != Some(&account_user_id)
             })?;
             Ok(())
         })

@@ -192,7 +192,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             additional_fields: self
                 .session_config
                 .field_schema()
-                .storage_fields(fields, true)
+                .storage_fields_with_binding(fields, true, |_, field, value| {
+                    self.memory_field_input(field, value)
+                })
                 .await?,
         };
         for (field, target) in [

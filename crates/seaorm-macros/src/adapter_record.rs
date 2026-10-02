@@ -60,15 +60,7 @@ pub(super) fn generate(
         setters.push(
             quote!(#(#aliases)|* => active.#ident = #seaorm::sea_orm::ActiveValue::Set(#decoded),),
         );
-        let value = match date_field(&field.ty) {
-            Some(false) => {
-                quote!(#core::utils::date::serialize(&self.#ident, #core::serde_json::value::Serializer)?)
-            }
-            Some(true) => {
-                quote!(#core::utils::date::serialize_option(&self.#ident, #core::serde_json::value::Serializer)?)
-            }
-            None => quote!(#core::serde_json::to_value(&self.#ident)?),
-        };
+        let value = field_value(field, core);
         values.push(quote!(Column::#column => #value,));
         if known.contains(&rust_name.as_str()) {
             core_values.push(quote!((#logical.to_owned(), #value),));
@@ -174,6 +166,19 @@ pub(super) fn generate(
             }
         }
     })
+}
+
+pub(super) fn field_value(field: &syn::Field, core: &TokenStream) -> TokenStream {
+    let ident = &field.ident;
+    match date_field(&field.ty) {
+        Some(false) => {
+            quote!(#core::utils::date::serialize(&self.#ident, #core::serde_json::value::Serializer)?)
+        }
+        Some(true) => {
+            quote!(#core::utils::date::serialize_option(&self.#ident, #core::serde_json::value::Serializer)?)
+        }
+        None => quote!(#core::serde_json::to_value(&self.#ident)?),
+    }
 }
 
 fn date_field(ty: &syn::Type) -> Option<bool> {

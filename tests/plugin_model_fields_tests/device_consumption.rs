@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 fn input(label: &str, owner: Option<String>) -> CreateDeviceCode {
     CreateDeviceCode {
+        additional_fields: Default::default(),
         device_code: format!("ordinary-device-consumption:{label}"),
         user_code: format!("ordinary-user-consumption:{label}"),
         user_id: owner,

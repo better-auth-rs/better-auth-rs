@@ -101,7 +101,9 @@ impl EphemeralStore {
         update.additional_fields = self
             .session_config
             .field_schema()
-            .storage_fields(update.additional_fields, false)
+            .storage_fields_with_binding(update.additional_fields, false, |_, field, value| {
+                self.memory_field_input(field, value)
+            })
             .await?;
         let session = self
             .raw("session", "update", |state| {
@@ -167,7 +169,9 @@ impl EphemeralStore {
             let fields = self
                 .session_config
                 .field_schema()
-                .storage_fields(Default::default(), false)
+                .storage_fields_with_binding(Default::default(), false, |_, field, value| {
+                    self.memory_field_input(field, value)
+                })
                 .await?;
             self.raw("session", "updateMany", |state| {
                 let mut count = 0;

@@ -32,3 +32,11 @@ Read `typed()?` only when an operation needs the default type. Use `json()?` to 
 Custom adapters must return the runtime views from AccountStore and VerificationStore methods. Implement `create_verification_with_writer` to place the runtime cache writer between adapter output and the after hook. A transaction must enqueue the after hook only after that writer succeeds. The default implementation rejects an installed writer rather than changing the write order.
 
 Creation and update inputs use `SchemaValue<T>` too. `Undefined` omits a field, `Typed(None)` supplies null for a nullable field, and `Dynamic` supplies a replacement value. Input `additional_fields` use logical public names; the adapter applies `field_name` once before binding columns.
+
+## Memory Serial References
+
+With `IdGeneration::Serial`, Memory converts declared references to an `id` field after defaults and input transforms. User and Session additional fields, Account fields, and Verification fields accept finite JSON numbers and values that convert to finite numbers. Null remains null. Arrays preserve null entries and convert each non-null value. Output transforms receive the numeric storage values before the adapter formats references as strings.
+
+Account owner and identity queries apply the same declared reference policy. Verification identifier and value queries also apply the policy. Account relationship checks retain the canonical owner captured from storage before output transforms.
+
+Organization reference conversion remains unsupported in Memory. Values that convert to JavaScript `NaN` or infinity also remain unsupported because JSON cannot represent those numbers. Conversion errors propagate without substituting null.

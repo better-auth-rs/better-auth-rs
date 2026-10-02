@@ -98,11 +98,12 @@ impl EphemeralStore {
 
     pub(super) async fn user_account_refs(&self, user_id: &str) -> AuthResult<Vec<AccountRef>> {
         let fields = self.config.account.field_schema();
+        let user_id =
+            self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;
         self.raw("account", "findMany", |state| {
             Ok(crate::query::paginate_memory(
                 state.accounts.select_refs(|record| {
-                    record.get(fields.record_storage_key("userId"))
-                        == Some(&Value::String(user_id.to_owned()))
+                    record.get(fields.record_storage_key("userId")) == Some(&user_id)
                 })?,
                 Some(self.config.advanced.database.find_many_limit()),
                 None,
@@ -127,9 +128,10 @@ impl EphemeralStore {
                 let stored_id = user.id.clone();
                 let mut accounts = Vec::new();
                 if let Some(id) = stored_id.as_str() {
+                    let id =
+                        self.memory_field_query(&fields, "userId", Value::String(id.to_owned()))?;
                     let matching = state.accounts.select_refs(|row| {
-                        row.get(fields.record_storage_key("userId"))
-                            == Some(&Value::String(id.to_owned()))
+                        row.get(fields.record_storage_key("userId")) == Some(&id)
                     })?;
                     let mut seen = Vec::new();
                     for row in matching {
@@ -164,6 +166,10 @@ impl EphemeralStore {
         account_id: &str,
     ) -> AuthResult<Option<AccountOwner>> {
         let fields = self.config.account.field_schema();
+        let bound_provider =
+            self.memory_field_query(&fields, "providerId", Value::String(provider.to_owned()))?;
+        let account_id =
+            self.memory_field_query(&fields, "accountId", Value::String(account_id.to_owned()))?;
         let rows = self
             .raw("account", "findMany", |state| {
                 let mut rows = Vec::new();
@@ -172,21 +178,23 @@ impl EphemeralStore {
                     .snapshot()?
                     .into_iter()
                     .filter(|record| {
-                        record.get(fields.record_storage_key("providerId"))
-                            == Some(&Value::String(provider.to_owned()))
+                        record.get(fields.record_storage_key("providerId")) == Some(&bound_provider)
                             && record.get(fields.record_storage_key("accountId"))
-                                == Some(&Value::String(account_id.to_owned()))
+                                == Some(&account_id)
                     })
                     .take(2)
                 {
                     let owner = account.get(fields.record_storage_key("userId")).cloned();
                     let user = match &owner {
-                        Some(id) if !id.is_null() => state
-                            .users
-                            .first_ref(|user| serde_json::json!(user.id) == *id)?,
+                        Some(id) if !id.is_null() => {
+                            let id = self.memory_user_id_query(id)?;
+                            state
+                                .users
+                                .first_ref(|user| serde_json::json!(user.id) == id)?
+                        }
                         _ => None,
                     };
-                    rows.push((account, SchemaValue::from_json(owner), user));
+                    rows.push((account, self.stored_account_owner_id(owner)?, user));
                 }
                 Ok(rows)
             })

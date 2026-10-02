@@ -58,6 +58,7 @@ fn policy(trace: Arc<Mutex<Trace>>, failure: Arc<AtomicU8>) -> UserFieldConfig {
 
 fn input(label: &str, scope: SchemaValue<Option<String>>) -> CreateDeviceCode {
     CreateDeviceCode {
+        additional_fields: Default::default(),
         device_code: format!("ordinary-device:{label}"),
         user_code: format!("ordinary-user:{label}"),
         user_id: None,
@@ -352,25 +353,20 @@ async fn sqlite_device_scope_callbacks_surround_real_storage() -> AuthResult<()>
 
 #[tokio::test]
 async fn unsupported_device_scope_declarations_fail_at_initialization() {
-    for (name, field_type) in [
-        ("label", UserFieldType::String),
-        ("scope", UserFieldType::Json),
-    ] {
-        let result = BetterAuth::new(config())
-            .store_arc(memory())
-            .plugin(Fields(vec![(
-                EntityRole::DeviceCode,
-                fields(
-                    name,
-                    UserFieldConfig {
-                        field_type,
-                        required: Some(false),
-                        ..Default::default()
-                    },
-                ),
-            )]))
-            .build()
-            .await;
-        assert!(matches!(result, Err(AuthError::Config(_))));
-    }
+    let result = BetterAuth::new(config())
+        .store_arc(memory())
+        .plugin(Fields(vec![(
+            EntityRole::DeviceCode,
+            fields(
+                "scope",
+                UserFieldConfig {
+                    field_type: UserFieldType::Json,
+                    required: Some(false),
+                    ..Default::default()
+                },
+            ),
+        )]))
+        .build()
+        .await;
+    assert!(matches!(result, Err(AuthError::Config(_))));
 }

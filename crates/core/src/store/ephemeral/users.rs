@@ -23,8 +23,8 @@ impl EphemeralStore {
         &self,
         id: &serde_json::Value,
     ) -> AuthResult<Option<RowRef<UserView>>> {
-        self.user_ref(|user| serde_json::json!(user.id) == *id)
-            .await
+        let id = self.memory_user_id_query(id)?;
+        self.user_ref(|user| serde_json::json!(user.id) == id).await
     }
 
     async fn output_optional_user_ref(
@@ -119,7 +119,13 @@ impl EphemeralStore {
             }
         }
         let fields = update.take_user_field_input(&self.config.user)?;
-        update.additional_fields = self.config.user.storage_fields(fields, false).await?;
+        update.additional_fields = self
+            .config
+            .user
+            .storage_fields_with_binding(fields, false, |_, field, value| {
+                self.memory_field_input(field, value)
+            })
+            .await?;
         for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
             if let Some(field) = self.config.user.fields().get(name) {
                 *target = crate::SchemaValue::from_json(
@@ -295,7 +301,13 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             create_user.prepare_user_fields(&self.config.user)?;
         }
         let fields = create_user.take_user_field_input(&self.config.user)?;
-        let mut fields = self.config.user.storage_fields(fields, true).await?;
+        let mut fields = self
+            .config
+            .user
+            .storage_fields_with_binding(fields, true, |_, field, value| {
+                self.memory_field_input(field, value)
+            })
+            .await?;
         for (name, target) in [
             ("name", &mut create_user.name),
             ("image", &mut create_user.image),

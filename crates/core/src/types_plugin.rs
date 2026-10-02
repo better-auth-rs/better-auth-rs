@@ -153,6 +153,9 @@ pub struct DeviceCode {
     pub client_id: crate::SchemaValue<Option<String>>,
     #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub scope: crate::SchemaValue<Option<String>>,
+    /// Declared application fields after adapter output projection.
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Issuer ownership required by atomic device-code consumption.
@@ -175,11 +178,15 @@ pub struct CreateDeviceCode {
     pub client_id: Option<String>,
     /// Omit with `Undefined`, clear with `Typed(None)`, or supply a string.
     pub scope: crate::SchemaValue<Option<String>>,
+    /// Declared application fields before adapter input policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Input for updating an existing device authorization code.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateDeviceCode {
+    /// Declared application fields to update; omitted keys retain their stored values.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     /// Omit with `Undefined`; supplied null and string values pass through field policies.
     pub scope: crate::SchemaValue<Option<String>>,
     /// Update the status. `None` leaves it unchanged.

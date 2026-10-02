@@ -37,6 +37,12 @@
       "pollingInterval": "stored_polling_interval",
       "clientId": "stored_client_id",
       "scope": "stored_scope"
+    },
+    "additionalFields": {
+      "label": { "type": "string", "fieldName": "stored_label", "required": false },
+      "activatedAt": { "type": "date", "fieldName": "stored_activation", "required": false },
+      "details": { "type": "json", "fieldName": "stored_details", "required": false },
+      "revision": { "type": "number", "fieldName": "stored_revision", "required": false }
     }
   },
   "passkey": {

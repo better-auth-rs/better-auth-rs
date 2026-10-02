@@ -26,6 +26,7 @@ async fn observe<S: AuthSchema>(
     let token = format!("ordinary-device:{mode}");
     let _ = store
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: token.clone(),
             user_code: format!("ordinary-user:{mode}"),
             user_id: Some(owner.into()),

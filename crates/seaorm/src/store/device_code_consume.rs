@@ -72,10 +72,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self,
         row: Option<P::DeviceCode>,
     ) -> AuthResult<Option<DeviceCode>> {
-        let row = row.map(|row| row.record()).transpose()?;
         Ok(self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_models(row.into_iter().collect())
             .await?
             .pop())
     }

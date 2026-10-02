@@ -205,25 +205,12 @@ pub(super) fn validate_fields<M: SeaOrmOrganizationModel>(
     entity: &str,
     fields: &UserConfig,
 ) -> AuthResult<()> {
-    for (name, field) in fields.fields() {
-        if name == "id" {
-            continue;
-        }
-        let storage_name = field.field_name.as_deref().unwrap_or(name);
-        let column = M::column(storage_name)?;
-        let logical = M::column(name)
-            .ok()
-            .and_then(|column| M::core_field_name(&column));
-        let stored = M::core_field_name(&column);
-        if logical.is_some_and(|public| public != name)
-            || ((logical.is_some() || stored.is_some()) && logical != stored)
-        {
-            return Err(AuthError::config(format!(
-                "Organization schema {entity}.{name} maps to a different typed field {storage_name}; built-in policies must use the same column"
-            )));
-        }
-    }
-    Ok(())
+    super::plugin_models::validate_field_columns(
+        &format!("Organization schema {entity}"),
+        fields,
+        M::column,
+        M::core_field_name,
+    )
 }
 
 /// Read a stored join key before output policies can replace its public value.

@@ -73,7 +73,11 @@ where
         Ok(Some(Arc::new(SchemaCheck::new(Arc::new(Inspector {
             catalog,
             db: self.db.clone(),
-            expected: mapping::tables::<S, O, P>(config, &self.organization_fields()?)?,
+            expected: mapping::tables::<S, O, P>(
+                config,
+                &self.organization_fields()?,
+                &self.model_fields,
+            )?,
             revision: self.schema_revision.clone(),
         })))))
     }

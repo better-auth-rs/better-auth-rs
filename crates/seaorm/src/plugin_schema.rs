@@ -25,8 +25,15 @@ pub trait SeaOrmPluginModel:
     }
     /// Resolve a logical field name to its typed column.
     fn column(name: &str) -> AuthResult<Self::Column>;
+    /// Return the canonical public name of a built-in column.
+    fn core_field_name(column: &Self::Column) -> Option<&'static str>;
     /// Project the stored model into its plugin record.
     fn record(&self) -> AuthResult<Self::Record>;
+    /// Extract configured storage values before adapter output policies run.
+    fn record_fields(
+        &self,
+        fields: &better_auth_core::user_fields::UserConfig,
+    ) -> AuthResult<better_auth_core::user_fields::AdapterRecord>;
     /// Return whether the column references another model ID.
     fn is_id_reference(column: &Self::Column) -> bool;
     /// Assign fields through the application's typed model.

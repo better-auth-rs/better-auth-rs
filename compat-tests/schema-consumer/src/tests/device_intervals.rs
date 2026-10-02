@@ -32,6 +32,7 @@ async fn check<S: AuthSchema>(
     assert_eq!(declaration.try_get::<i64>("", "required")?, 0);
     let created = store
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "ordinary-generated-device".into(),
             user_code: "ORDINARY".into(),
             user_id: None,

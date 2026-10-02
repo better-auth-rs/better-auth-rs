@@ -70,19 +70,26 @@ async fn memory_serial_uses_current_length_and_retains_duplicate_ids() {
     let mut config = AuthConfig::default();
     config.advanced.database.generate_id = Some(IdGeneration::Serial);
     let store = EphemeralStore::new(Arc::new(config));
+    let serial_account = |subject: &str| CreateAccount {
+        user_id: "1".into(),
+        ..account(subject)
+    };
     for (subject, expected) in [("first", "1"), ("second", "2"), ("third", "3")] {
-        let created = store.create_account(account(subject)).await.unwrap();
+        let created = store.create_account(serial_account(subject)).await.unwrap();
         assert_eq!(created.id, expected);
     }
     store.delete_account("2").await.unwrap();
-    let next = store.create_account(account("fourth")).await.unwrap();
+    let next = store
+        .create_account(serial_account("fourth"))
+        .await
+        .unwrap();
     assert_eq!(next.id, "3");
-    let rows = store.get_user_accounts("owner").await.unwrap();
+    let rows = store.get_user_accounts("1").await.unwrap();
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[1].account_id, "third");
     assert_eq!(rows[2].account_id, "fourth");
     store.delete_account("3").await.unwrap();
-    let rows = store.get_user_accounts("owner").await.unwrap();
+    let rows = store.get_user_accounts("1").await.unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[1].account_id, "fourth");
 }

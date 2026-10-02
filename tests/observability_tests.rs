@@ -1509,6 +1509,7 @@ async fn check_device_operations(
     async {
         let code = store
             .create_device_code(better_auth_core::CreateDeviceCode {
+                additional_fields: Default::default(),
                 device_code: "device-secret".into(),
                 user_code: "ABCD2345".into(),
                 user_id: None,

@@ -1,13 +1,39 @@
 use super::*;
+use crate::store::schema::EntityRole;
+
+impl EphemeralStore {
+    fn prepare_device_code_references(
+        &self,
+        values: &mut serde_json::Map<String, serde_json::Value>,
+    ) -> AuthResult<()> {
+        if !matches!(
+            self.config.advanced.database.generate_id(),
+            crate::id::IdGeneration::Serial
+        ) {
+            return Ok(());
+        }
+        for (name, field) in self.model_fields.fields(EntityRole::DeviceCode).fields() {
+            if field.references_id()
+                && let Some(value) = values.get_mut(field.field_name.as_deref().unwrap_or(name))
+            {
+                *value = crate::id::serial_reference_value(std::mem::take(value))?;
+            }
+        }
+        Ok(())
+    }
+}
 
 #[async_trait]
 impl DeviceCodeStore for EphemeralStore {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
-        let scope = self
+        let mut fields = self
             .model_fields
-            .device_code_scope_for_storage(input.scope, true)
+            .device_code_fields_for_storage(input.scope, input.additional_fields, true)
             .await?;
+        self.prepare_device_code_references(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
         let device_code = DeviceCode {
+            additional_fields: fields,
             id: self
                 .generated_id("deviceCode", None, self.lock()?.device_codes.len())?
                 .map(crate::SchemaValue::Typed)
@@ -85,16 +111,19 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
-        let scope = self
+        let mut fields = self
             .model_fields
-            .device_code_scope_for_storage(update.scope, false)
+            .device_code_fields_for_storage(update.scope, update.additional_fields, false)
             .await?;
+        self.prepare_device_code_references(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
         let row = self
             .raw("deviceCode", "update", |state| {
                 let Some(mut device_code) = state.device_codes.get_mut(id)? else {
                     return Ok(None);
                 };
 
+                device_code.additional_fields.extend(fields);
                 if let Some(scope) = scope {
                     device_code.scope = scope.into();
                 }
@@ -125,10 +154,12 @@ impl DeviceCodeStore for EphemeralStore {
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
-        let scope = self
+        let mut fields = self
             .model_fields
-            .device_code_scope_for_storage(update.scope, false)
+            .device_code_fields_for_storage(update.scope, update.additional_fields, false)
             .await?;
+        self.prepare_device_code_references(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
         let row = self
             .raw("deviceCode", "update", |state| {
                 let Some(mut device_code) = state.device_codes.get_mut(id)? else {
@@ -139,6 +170,7 @@ impl DeviceCodeStore for EphemeralStore {
                     return Ok(None);
                 }
 
+                device_code.additional_fields.extend(fields);
                 if let Some(scope) = scope {
                     device_code.scope = scope.into();
                 }
@@ -168,10 +200,12 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         user_id: &str,
     ) -> AuthResult<bool> {
-        let scope = self
+        let mut fields = self
             .model_fields
-            .device_code_scope_for_storage(Default::default(), false)
+            .device_code_fields_for_storage(Default::default(), Default::default(), false)
             .await?;
+        self.prepare_device_code_references(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
         let row = self
             .raw("deviceCode", "incrementOne", |state| {
                 let Some(mut device_code) = state.device_codes.get_mut(id)? else {
@@ -182,6 +216,7 @@ impl DeviceCodeStore for EphemeralStore {
                     return Ok(None);
                 }
 
+                device_code.additional_fields.extend(fields);
                 if let Some(scope) = scope {
                     device_code.scope = scope.into();
                 }

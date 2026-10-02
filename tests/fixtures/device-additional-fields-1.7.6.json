@@ -1,0 +1,199 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "cases": [
+        {
+          "name": "create",
+          "scope": "read",
+          "fields": {
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5
+          }
+        },
+        {
+          "name": "read",
+          "scope": "read",
+          "fields": {
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5
+          }
+        },
+        {
+          "name": "update",
+          "scope": "read",
+          "fields": {
+            "label": "Changed:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "claim",
+          "scope": "read",
+          "fields": {
+            "label": "Changed:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "approve",
+          "scope": "read",
+          "fields": {
+            "label": "Changed:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "consume",
+          "scope": "read",
+          "fields": {
+            "label": "Final:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "input-error",
+          "sameError": true,
+          "persisted": false
+        },
+        {
+          "name": "output-error",
+          "sameError": true,
+          "persisted": true
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "cases": [
+        {
+          "name": "create",
+          "scope": "read",
+          "fields": {
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5
+          }
+        },
+        {
+          "name": "read",
+          "scope": "read",
+          "fields": {
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5
+          }
+        },
+        {
+          "name": "update",
+          "scope": "read",
+          "fields": {
+            "label": "Changed:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "claim",
+          "scope": "read",
+          "fields": {
+            "label": "Changed:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "approve",
+          "scope": "read",
+          "fields": {
+            "label": "Changed:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "consume",
+          "scope": "read",
+          "fields": {
+            "label": "Final:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5
+          }
+        },
+        {
+          "name": "input-error",
+          "sameError": true,
+          "persisted": false
+        },
+        {
+          "name": "output-error",
+          "sameError": true,
+          "persisted": true
+        }
+      ]
+    }
+  ],
+  "serialReference": {
+    "created": "2",
+    "read": "2",
+    "outputInputs": [
+      2,
+      2
+    ]
+  }
+}

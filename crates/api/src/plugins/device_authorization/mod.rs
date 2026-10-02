@@ -256,6 +256,7 @@ impl DeviceAuthorizationPlugin {
             match ctx
                 .database
                 .create_device_code(CreateDeviceCode {
+                    additional_fields: Default::default(),
                     device_code: device_code.clone(),
                     user_code: user_code.clone(),
                     user_id: body.user_id.clone().filter(|id| !id.is_empty()),

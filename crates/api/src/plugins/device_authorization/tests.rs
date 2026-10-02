@@ -267,6 +267,7 @@ async fn test_device_token_expired_returns_error_and_deletes_record() {
     let stored = ctx
         .database
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "expired-device-code".to_string(),
             user_code: "EXPIRED12".to_string(),
             user_id: None,
@@ -365,6 +366,7 @@ async fn test_device_verify_strips_hyphens_and_preserves_input_shape() {
 
     ctx.database
         .create_device_code(CreateDeviceCode {
+            additional_fields: Default::default(),
             device_code: "verify-device-code".to_string(),
             user_code: "ABCD2345".to_string(),
             user_id: None,
