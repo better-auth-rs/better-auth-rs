@@ -125,7 +125,10 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
-    if role == EntityRole::DeviceCode {
+    if matches!(
+        role,
+        EntityRole::DeviceCode | EntityRole::Jwk | EntityRole::WalletAddress
+    ) {
         output.push(quote!(additional_fields: Default::default(),));
     }
     let declaration = model_name.map(|name| {

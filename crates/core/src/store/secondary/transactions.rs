@@ -374,6 +374,24 @@ impl<S: AuthSchema> crate::store::JwksStore for Transaction<S> {
 }
 
 #[async_trait]
+impl<S: AuthSchema> crate::store::WalletStore for Transaction<S> {
+    async fn get_wallet_address(
+        &self,
+        address: &str,
+        chain_id: Option<i64>,
+    ) -> AuthResult<Option<crate::WalletAddress>> {
+        crate::store::WalletStore::get_wallet_address(self.inner.as_ref(), address, chain_id).await
+    }
+
+    async fn create_wallet_address(
+        &self,
+        input: crate::CreateWalletAddress,
+    ) -> AuthResult<crate::WalletAddress> {
+        crate::store::WalletStore::create_wallet_address(self.inner.as_ref(), input).await
+    }
+}
+
+#[async_trait]
 impl<S: AuthSchema> crate::store::DeviceCodeStore for Transaction<S> {
     async fn create_device_code(
         &self,

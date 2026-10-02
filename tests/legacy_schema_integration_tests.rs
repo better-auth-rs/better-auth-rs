@@ -32,6 +32,8 @@ use serde_json::json;
 
 #[path = "common/postgres_numeric_ids.rs"]
 mod postgres_numeric_ids;
+#[path = "support/username_alias_projection.rs"]
+mod username_alias_projection;
 
 mod user {
     use super::*;

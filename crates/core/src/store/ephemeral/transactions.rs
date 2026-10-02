@@ -361,3 +361,21 @@ impl crate::store::JwksStore for EphemeralTransaction {
         crate::store::JwksStore::create_jwk(&self.store, input).await
     }
 }
+
+#[async_trait]
+impl crate::store::WalletStore for EphemeralTransaction {
+    async fn get_wallet_address(
+        &self,
+        address: &str,
+        chain_id: Option<i64>,
+    ) -> AuthResult<Option<crate::WalletAddress>> {
+        crate::store::WalletStore::get_wallet_address(&self.store, address, chain_id).await
+    }
+
+    async fn create_wallet_address(
+        &self,
+        input: crate::CreateWalletAddress,
+    ) -> AuthResult<crate::WalletAddress> {
+        crate::store::WalletStore::create_wallet_address(&self.store, input).await
+    }
+}

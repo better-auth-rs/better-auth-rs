@@ -1,5 +1,5 @@
 use super::*;
-use crate::user_fields::{UserConfig, UserFieldConfig};
+use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth_schema_registry::EntityRole;
 
 impl EphemeralStore {
@@ -69,6 +69,21 @@ impl EphemeralStore {
             crate::id::serial_reference_value(value)
         } else {
             Ok(field.adapter_input(value, true, true))
+        }
+    }
+
+    pub(super) fn memory_plugin_field_input(
+        &self,
+        field: &UserFieldConfig,
+        value: Value,
+    ) -> AuthResult<Value> {
+        if self.uses_serial_reference(field) {
+            self.memory_field_input(field, value)
+        } else if matches!(field.field_type, UserFieldType::Json) {
+            // Memory stores JSON text but retains native arrays, booleans and dates.
+            Ok(field.adapter_input(value, false, false))
+        } else {
+            Ok(value)
         }
     }
 

@@ -89,6 +89,8 @@ The Admin plugin exposes 15 endpoints. For full request/response details, see th
 
 Creating a user with an explicit role also requires `user:set-role`. Supplying `banned`, `banReason`, or `banExpires` during creation or update requires `user:ban`. Updating `email` or `emailVerified` requires `user:set-email`. These checks apply when a field is present, including explicit null or false values. `/admin/update-user` rejects a `password` field; use `/admin/set-user-password` instead.
 
+When a before-update database hook cancels `/admin/update-user`, the endpoint preserves the stored user and skips after-update hooks. The response is HTTP 200 with JSON `null`; a native endpoint call also returns a null body. A callback error remains an error. Successful updates retain the user response and configured output policies.
+
 Trusted server code can provision a user without a session:
 
 ```rust
@@ -116,7 +118,7 @@ With a dynamic base URL, supplied host headers resolve the runtime before authen
 
 An explicit `banReason: null` or `banExpires: null` clears that field. Updating only `banned: false` preserves the reason and expiration; `/admin/unban-user` clears both. Store callers express these updates through `UpdateUser` using `None` to preserve a field and `Some(None)` to clear it.
 
-An update with `banned: true` revokes the user's sessions after the user update and its after hooks succeed. An after-hook error leaves the completed user update in place and prevents session revocation. Self-banning is rejected.
+An update with `banned: true` revokes the user's sessions after the update operation returns, including a cancelled `/admin/update-user` operation. An after-hook error leaves the completed user update in place and prevents session revocation. Self-banning is rejected. The dedicated role, ban, and unban endpoints still use strict store operations; their cancellation response alignment remains separate work.
 
 ### Impersonation
 

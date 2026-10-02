@@ -1,0 +1,533 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": "success",
+      "events": [
+        [
+          "operation",
+          "create-1"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "create-2"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "list"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ]
+      ],
+      "result": {
+        "created": [
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          },
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          }
+        ],
+        "read": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        "listed": [
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          },
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          }
+        ]
+      },
+      "stored": [
+        {
+          "label": "Display",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        {
+          "label": "Display",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "scenario": "input-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary JWK input-error"
+      },
+      "stored": []
+    },
+    {
+      "backend": "memory",
+      "scenario": "output-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary JWK output-error"
+      },
+      "stored": [
+        {
+          "label": "Display",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "success",
+      "events": [
+        [
+          "operation",
+          "create-1"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "create-2"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "list"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ]
+      ],
+      "result": {
+        "created": [
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          },
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          }
+        ],
+        "read": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        "listed": [
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          },
+          {
+            "label": "Display:out",
+            "note": "default-note",
+            "settings": {
+              "compact": true,
+              "theme": "dark"
+            }
+          }
+        ]
+      },
+      "stored": [
+        {
+          "label": "Display",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        {
+          "label": "Display",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "input-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary JWK input-error"
+      },
+      "stored": []
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "output-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary JWK output-error"
+      },
+      "stored": [
+        {
+          "label": "Display",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        }
+      ]
+    }
+  ]
+}

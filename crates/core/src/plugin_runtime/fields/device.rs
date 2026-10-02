@@ -19,7 +19,7 @@ fn native_name(name: &str) -> bool {
 
 pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
     for (name, field) in fields.fields() {
-        let storage = field.field_name.as_deref().unwrap_or(name);
+        let storage = resolve_field_name(field.field_name.as_deref(), name);
         if name == "scope" {
             if !matches!(field.field_type, UserFieldType::String)
                 || field.references.is_some()

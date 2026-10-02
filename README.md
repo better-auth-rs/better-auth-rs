@@ -13,7 +13,7 @@ Sessions use signed cookies. Response headers preserve repeated cookie writes in
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 
-Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. Ordinary additional fields use their logical name when `field_name` is omitted or empty. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
+Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. Configured fields use their logical name when `field_name` is omitted or empty, including username projections. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
@@ -115,6 +115,8 @@ Memory Serial mode applies Organization reference conversion to stored fields, q
 
 The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence. Default device codes contain ASCII letters and digits; verification links replace any existing user-code query parameter.
 
+The [Admin plugin](docs/content/docs/plugins/admin.mdx) preserves a cancelled user update as a nullable response. Database-hook errors continue to propagate.
+
 [HTTP rate limits](docs/content/docs/reference/configuration-options.mdx#ratelimitconfig) support memory, database, secondary, and custom storage. Use `BetterAuth::call_endpoint` for trusted [native endpoint calls](docs/content/docs/concepts/plugins.mdx) with the registered plugin hooks.
 
 Passwords use Better Auth's scrypt format by default. The [password guide](docs/content/docs/authentication/email-password.mdx) explains explicit Argon2 migration. Add [HaveIBeenPwnedPlugin](docs/content/docs/plugins/have-i-been-pwned.mdx) to reject compromised passwords before hashing.
@@ -127,7 +129,7 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
 
-Plugins can register adapter field policies for supported typed model fields and declared DeviceCode additional fields; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Memory Device create, ordinary update, and code lookups read each additional field when its output callback runs; see [Device field policies](docs/content/docs/plugins/device-authorization.mdx#adapter-field-policies). Direct Organization store configuration also resolves built-in field order.
+Plugins can register adapter field policies for supported typed model fields and declared DeviceCode, JWK, or WalletAddress additional fields. Supported native display fields use their logical name when `field_name` is omitted or empty; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Wallet create and lookup methods are also available through `AuthTransaction`. Memory Device create, ordinary update, and code lookups read each additional field when its output callback runs; see [Device field policies](docs/content/docs/plugins/device-authorization.mdx#adapter-field-policies). Direct Organization store configuration also resolves built-in field order.
 
 Optional configuration fields use `Option` to distinguish omission from an explicit value. Construct social providers with a built-in constructor or `OAuthProvider::custom`. See [configuration options](docs/content/docs/reference/configuration-options.mdx) for defaults and [OAuth](docs/content/docs/plugins/oauth.mdx) for provider configuration. [Observability](docs/content/docs/concepts/observability.mdx) documents logging, tracing, opt-in telemetry, and the current alignment boundaries.
 

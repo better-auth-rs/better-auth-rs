@@ -324,6 +324,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
 
     auth.store()
         .create_wallet_address(CreateWalletAddress {
+            additional_fields: Default::default(),
             user_id: user_id.into(),
             address: "0x1234".into(),
             chain_id: 1,

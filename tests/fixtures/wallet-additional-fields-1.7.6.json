@@ -1,0 +1,365 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": "success",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "read-exact"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "read-address"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ]
+      ],
+      "result": {
+        "created": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        "readExact": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        "readAddress": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        }
+      },
+      "stored": {
+        "label": "Display",
+        "note": "default-note",
+        "settings": {
+          "compact": true,
+          "theme": "dark"
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "input-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary Wallet input-error"
+      },
+      "stored": null
+    },
+    {
+      "backend": "memory",
+      "scenario": "output-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary Wallet output-error"
+      },
+      "stored": {
+        "label": "Display",
+        "note": "default-note",
+        "settings": {
+          "compact": true,
+          "theme": "dark"
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "success",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "read-exact"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ],
+        [
+          "operation",
+          "read-address"
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ],
+        [
+          "output",
+          "note",
+          "default-note"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"compact\":true,\"theme\":\"dark\"}"
+        ]
+      ],
+      "result": {
+        "created": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        "readExact": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        },
+        "readAddress": {
+          "label": "Display:out",
+          "note": "default-note",
+          "settings": {
+            "compact": true,
+            "theme": "dark"
+          }
+        }
+      },
+      "stored": {
+        "label": "Display",
+        "note": "default-note",
+        "settings": {
+          "compact": true,
+          "theme": "dark"
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "input-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary Wallet input-error"
+      },
+      "stored": null
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "output-error",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "label",
+          " Display "
+        ],
+        [
+          "input",
+          "note",
+          "default-note"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "compact": true,
+            "theme": "dark"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "Display"
+        ]
+      ],
+      "result": {
+        "sameError": true,
+        "message": "ordinary Wallet output-error"
+      },
+      "stored": {
+        "label": "Display",
+        "note": "default-note",
+        "settings": {
+          "compact": true,
+          "theme": "dark"
+        }
+      }
+    }
+  ]
+}

@@ -1417,6 +1417,7 @@ async fn check_plugin_operations(
         assert!(store.list_passkeys_by_user("owner").await?.is_empty());
         let key = store
             .create_jwk(better_auth_core::CreateJwk {
+                additional_fields: Default::default(),
                 created_at: chrono::Utc::now(),
                 public_key: "public".into(),
                 private_key: "private".into(),
@@ -1432,6 +1433,7 @@ async fn check_plugin_operations(
         assert_eq!(store.list_jwks().await?.len(), 1);
         let wallet = store
             .create_wallet_address(better_auth_core::CreateWalletAddress {
+                additional_fields: Default::default(),
                 user_id: "owner".into(),
                 address: "0x123".into(),
                 chain_id: 1,

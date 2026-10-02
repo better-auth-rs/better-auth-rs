@@ -285,7 +285,7 @@ pub(crate) async fn update_user_core(
     acting_user: &UserView,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<AdminUserView> {
+) -> AuthResult<Option<AdminUserView>> {
     if body.data.is_empty() {
         return Err(AuthError::bad_request(MESSAGE_NO_DATA_TO_UPDATE));
     }
@@ -413,11 +413,17 @@ pub(crate) async fn update_user_core(
         update.metadata = Some(serde_json::Value::Object(value.clone()));
     }
 
-    let updated_user = ctx.database.update_user(&body.user_id, update).await?;
+    let updated_user = ctx
+        .database
+        .update_user_optional(&body.user_id, update)
+        .await?;
     if body.data.get("banned") == Some(&serde_json::Value::Bool(true)) {
         ctx.database.delete_user_sessions(&body.user_id).await?;
     }
-    ctx.user_view(&updated_user).await
+    match updated_user {
+        Some(user) => ctx.user_view(&user).await.map(Some),
+        None => Ok(None),
+    }
 }
 
 pub(crate) async fn list_users_core(

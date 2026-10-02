@@ -324,6 +324,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
     assert_eq!(two_factor.id, "twoFactor-generated");
     let key = store
         .create_jwk(CreateJwk {
+            additional_fields: Default::default(),
             created_at: Utc::now(),
             public_key: "{}".into(),
             private_key: "{}".into(),
@@ -336,6 +337,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
     assert_eq!(key.id, "jwks-generated");
     let wallet = store
         .create_wallet_address(better_auth_core::types::CreateWalletAddress {
+            additional_fields: Default::default(),
             user_id: user.id.typed().unwrap().clone(),
             address: "0x1234".into(),
             chain_id: 1,

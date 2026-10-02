@@ -58,7 +58,9 @@ pub type VerificationCreateWriter =
     Box<dyn FnOnce(crate::wire::VerificationView) -> TypedTransactionFuture<'static, ()> + Send>;
 
 #[async_trait]
-pub trait AuthTransaction<S: AuthSchema>: JwksStore + DeviceCodeStore + Send + Sync {
+pub trait AuthTransaction<S: AuthSchema>:
+    JwksStore + DeviceCodeStore + WalletStore + Send + Sync
+{
     /// Query a user ID through this transaction without string coercion.
     async fn get_user_by_id_value(
         &self,

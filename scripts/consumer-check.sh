@@ -11,6 +11,10 @@ cargo run --locked -p better-auth-cli -- generate --plugins organization --schem
 export BETTER_AUTH_ORGANIZATION_SCHEMA="$schema_dir/organization_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins all --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
+cargo run --locked -p better-auth-cli -- generate --plugins jwt --schema-config compat-tests/schema-consumer/jwk-fields-schema.json --output "$schema_dir/jwk_fields_schema.rs"
+export BETTER_AUTH_JWK_FIELDS_SCHEMA="$schema_dir/jwk_fields_schema.rs"
+cargo run --locked -p better-auth-cli -- generate --plugins siwe --schema-config compat-tests/schema-consumer/wallet-fields-schema.json --output "$schema_dir/wallet_fields_schema.rs"
+export BETTER_AUTH_WALLET_FIELDS_SCHEMA="$schema_dir/wallet_fields_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins organization --schema-config compat-tests/schema-consumer/dynamic-schema.json --output "$schema_dir/dynamic_schema.rs"
 export BETTER_AUTH_DYNAMIC_SCHEMA="$schema_dir/dynamic_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins organization --schema-config compat-tests/schema-consumer/field-attributes-schema.json --output "$schema_dir/field_attributes_schema.rs"
@@ -57,8 +61,9 @@ cargo run --locked -p better-auth-cli -- generate --plugins all --generate-id se
 export BETTER_AUTH_POSTGRES_SERIAL_SCHEMA="$schema_dir/postgres_serial_schema.rs"
 cargo fmt --manifest-path compat-tests/schema-consumer/Cargo.toml -- --check
 cargo clippy --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --all-targets -- -D warnings
-cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml
-if [[ -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
+# Forward test filters and harness options. Filtered runs omit the live PostgreSQL block.
+cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml "$@"
+if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
   cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml tests::ids::live_postgres_generated_ids -- --ignored --exact
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests live_postgres -- --ignored
 fi

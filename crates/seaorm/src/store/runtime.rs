@@ -56,6 +56,8 @@ where
         store.config = config;
         store.model_fields = model_fields;
         store.validate_device_code_fields()?;
+        store.validate_jwk_fields()?;
+        store.validate_wallet_fields()?;
         store.organization_fields = Arc::new(RwLock::new(self.organization_fields()?));
         store.set_organization_fields(
             store

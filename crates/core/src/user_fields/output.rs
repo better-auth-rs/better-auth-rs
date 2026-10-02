@@ -228,15 +228,14 @@ impl UserView {
                             _ => projected.get(name).cloned(),
                         }
                     } else {
+                        let storage_name = resolve_field_name(field.field_name.as_deref(), name);
                         let value = model
                             .as_ref()
-                            .and_then(|model| {
-                                model.get(resolve_field_name(field.field_name.as_deref(), name))
-                            })
+                            .and_then(|model| model.get(storage_name))
                             .cloned()
-                            .or_else(|| match (name, &field.field_name) {
-                                ("username", None) => Some(json!(user.username())),
-                                ("displayUsername", None) => Some(json!(user.display_username())),
+                            .or_else(|| match (name, storage_name == name) {
+                                ("username", true) => Some(json!(user.username())),
+                                ("displayUsername", true) => Some(json!(user.display_username())),
                                 _ => None,
                             });
                         field.adapter_output(value, supports_native_json).await?

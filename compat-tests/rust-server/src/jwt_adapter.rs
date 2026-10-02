@@ -159,7 +159,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                 fields.sort();
                 events.lock().unwrap().push(json!({"event":"create","fields":fields,"date":true,"context":context(endpoint, native_context)?}));
                 if fail_create { return Err(AuthError::internal("JWT adapter create failed")); }
-                if no_store { return Ok(Jwk {id:"unstored-key".into(),public_key:data.public_key,private_key:data.private_key,created_at:data.created_at,expires_at:data.expires_at,alg:Some(data.alg),crv:data.crv}); }
+                if no_store { return Ok(Jwk {id:"unstored-key".into(),public_key:data.public_key,private_key:data.private_key,created_at:data.created_at,expires_at:data.expires_at,alg:Some(data.alg),crv:data.crv,additional_fields:data.additional_fields}); }
                 match endpoint.transaction {
                     Some(transaction) => transaction.create_jwk(data).await,
                     None => endpoint.auth.database.create_jwk(data).await,

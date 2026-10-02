@@ -1,6 +1,7 @@
 use crate::SeaOrmPluginModel;
-use better_auth_core::store::schema::resolve_field_name;
-use better_auth_core::{AuthResult, id::IdGeneration};
+use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
+use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
+use sea_orm::{ColumnTrait, DbBackend, IdenStatic};
 use serde::Serialize;
 use serde_json::Map;
 
@@ -31,6 +32,61 @@ pub(super) fn active<M: SeaOrmPluginModel>(
 ) -> AuthResult<M::ActiveModel> {
     crate::reference_id::prepare_fields(&mut fields, policy, None, M::column, M::is_id_reference)?;
     M::active(fields)
+}
+
+pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
+    config: &UserConfig,
+    input: Map<String, serde_json::Value>,
+    policy: &IdGeneration,
+    backend: DbBackend,
+) -> AuthResult<M::ActiveModel> {
+    let fields = config
+        .storage_fields_with_binding(input, true, |name, field, value| {
+            crate::reference_id::input_binding(
+                name,
+                field,
+                value,
+                policy,
+                M::column,
+                |name| {
+                    M::column(name).is_ok_and(|column| {
+                        matches!(
+                            column.def().get_column_type(),
+                            sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+                        )
+                    })
+                },
+                backend,
+            )
+        })
+        .await?;
+    let mut active = M::active(fields)?;
+    crate::reference_id::apply_bindings(&mut active, config, backend, M::column)?;
+    Ok(active)
+}
+
+pub(super) fn validate_additional_field_columns<M: SeaOrmPluginModel>(
+    role: EntityRole,
+    fields: &UserConfig,
+) -> AuthResult<()> {
+    validate_field_columns(
+        &format!("{role:?} schema"),
+        fields,
+        M::column,
+        M::core_field_name,
+    )?;
+    for (name, field) in fields.fields() {
+        let storage = resolve_field_name(field.field_name.as_deref(), name);
+        for core in core_fields(role) {
+            let column = M::column(core.name)?;
+            if [name.as_str(), storage].contains(&column.as_str()) {
+                return Err(AuthError::config(format!(
+                    "{role:?} additional field {name} cannot replace native column {storage}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Resolve configured policies before accepting writes to typed columns.

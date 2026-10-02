@@ -190,6 +190,8 @@ impl SchemaConfig {
                 "account"
                     | "verification"
                     | "deviceCode"
+                    | "jwks"
+                    | "walletAddress"
                     | "organization"
                     | "member"
                     | "invitation"
@@ -301,8 +303,11 @@ impl Entity {
                 }
             }
             for (name, field) in &config.additional_fields {
-                if entity.role == Some(EntityRole::DeviceCode) {
-                    if name == "scope" {
+                if let Some(
+                    role @ (EntityRole::DeviceCode | EntityRole::Jwk | EntityRole::WalletAddress),
+                ) = entity.role
+                {
+                    if entity.role == Some(EntityRole::DeviceCode) && name == "scope" {
                         if !matches!(&field.field_type, FieldType::Name(name) if name == "string")
                             || field.references.is_some()
                             || field
@@ -328,7 +333,7 @@ impl Entity {
                             })
                         {
                             return Err(format!(
-                                "DeviceCode additional field {name} cannot replace native field {storage}"
+                                "{role:?} additional field {name} cannot replace native field {storage}"
                             ));
                         }
                     }

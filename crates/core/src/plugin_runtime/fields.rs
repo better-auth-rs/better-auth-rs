@@ -1,6 +1,8 @@
 mod device;
+mod jwk;
+mod wallet;
 
-use crate::store::schema::EntityRole;
+use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{ApiKey, AuthConfig, AuthError, AuthResult, Passkey, SchemaValue};
 use indexmap::{IndexMap, IndexSet};
@@ -49,6 +51,8 @@ impl ModelFields {
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
+            EntityRole::Jwk => jwk::validate_fields(&fields)?,
+            EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
             EntityRole::User
             | EntityRole::Session
             | EntityRole::Account
@@ -62,10 +66,7 @@ impl ModelFields {
                         (EntityRole::Passkey, "name" | "aaguid") | (EntityRole::ApiKey, "name")
                     ) || !matches!(field.field_type, UserFieldType::String)
                         || field.references.is_some()
-                        || field
-                            .field_name
-                            .as_deref()
-                            .is_some_and(|alias| alias != name)
+                        || resolve_field_name(field.field_name.as_deref(), name) != name
                     {
                         return Err(AuthError::config(format!(
                             "{role:?} field registration supports only its ordinary string fields (Passkey name/aaguid, ApiKey name) without reference or field-name replacement",

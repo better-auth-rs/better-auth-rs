@@ -20,6 +20,8 @@ let auth = builder
 
 Generate the user fields with the CLI's `username` plugin selection. Application models need `username: Option<String>` and, when enabled, `display_username: Option<String>`. `display_username: false` removes the display field requirement and its public output. `username_field_name` and `display_username_field_name` select serialized storage fields; map the corresponding SeaORM columns in the application model.
 
+Omitted or empty field names use the logical `username` or `displayUsername` name. For raw application models, a present serialized value takes precedence, including explicit null. If that logical field is absent, projection uses the corresponding typed accessor. A nonempty custom alias reads only its selected serialized field. Output transforms and public visibility apply after field selection.
+
 | Option | Default | Behavior |
 | --- | --- | --- |
 | `min_username_length`, `max_username_length` | `3.0`, `30.0` | Compare UTF-16 length; preserve upstream fractional limits and zero/NaN defaults |

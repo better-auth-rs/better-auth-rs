@@ -1,0 +1,307 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "channel": "http",
+      "mode": "success",
+      "outcome": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": {
+          "name": "Changed",
+          "email": "target@admin-update-cancel.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": "2025-01-01T00:00:00.000Z",
+          "updatedAt": "<timestamp>",
+          "role": "user",
+          "banned": false,
+          "id": "target"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        },
+        {
+          "phase": "after",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Changed",
+      "storedUnchanged": false,
+      "responseMatchesStored": true
+    },
+    {
+      "backend": "memory",
+      "channel": "http",
+      "mode": "cancel",
+      "outcome": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": null
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "memory",
+      "channel": "http",
+      "mode": "error",
+      "outcome": {
+        "status": 500,
+        "headers": [],
+        "bodyText": ""
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "memory",
+      "channel": "native",
+      "mode": "success",
+      "outcome": {
+        "body": {
+          "name": "Changed",
+          "email": "target@admin-update-cancel.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": "2025-01-01T00:00:00.000Z",
+          "updatedAt": "<timestamp>",
+          "role": "user",
+          "banned": false,
+          "id": "target"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        },
+        {
+          "phase": "after",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Changed",
+      "storedUnchanged": false,
+      "responseMatchesStored": true
+    },
+    {
+      "backend": "memory",
+      "channel": "native",
+      "mode": "cancel",
+      "outcome": {
+        "body": null
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "memory",
+      "channel": "native",
+      "mode": "error",
+      "outcome": {
+        "error": {
+          "message": "ordinary display hook error",
+          "original": true
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "sqlite",
+      "channel": "http",
+      "mode": "success",
+      "outcome": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": {
+          "name": "Changed",
+          "email": "target@admin-update-cancel.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": "2025-01-01T00:00:00.000Z",
+          "updatedAt": "<timestamp>",
+          "role": "user",
+          "banned": false,
+          "banReason": null,
+          "banExpires": null,
+          "id": "target"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        },
+        {
+          "phase": "after",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Changed",
+      "storedUnchanged": false,
+      "responseMatchesStored": true
+    },
+    {
+      "backend": "sqlite",
+      "channel": "http",
+      "mode": "cancel",
+      "outcome": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": null
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "sqlite",
+      "channel": "http",
+      "mode": "error",
+      "outcome": {
+        "status": 500,
+        "headers": [],
+        "bodyText": ""
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "sqlite",
+      "channel": "native",
+      "mode": "success",
+      "outcome": {
+        "body": {
+          "name": "Changed",
+          "email": "target@admin-update-cancel.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": "2025-01-01T00:00:00.000Z",
+          "updatedAt": "<timestamp>",
+          "role": "user",
+          "banned": false,
+          "banReason": null,
+          "banExpires": null,
+          "id": "target"
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        },
+        {
+          "phase": "after",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Changed",
+      "storedUnchanged": false,
+      "responseMatchesStored": true
+    },
+    {
+      "backend": "sqlite",
+      "channel": "native",
+      "mode": "cancel",
+      "outcome": {
+        "body": null
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    },
+    {
+      "backend": "sqlite",
+      "channel": "native",
+      "mode": "error",
+      "outcome": {
+        "error": {
+          "message": "ordinary display hook error",
+          "original": true
+        }
+      },
+      "events": [
+        {
+          "phase": "before",
+          "name": "Changed"
+        }
+      ],
+      "storedName": "Original",
+      "storedUnchanged": true,
+      "responseMatchesStored": null
+    }
+  ]
+}

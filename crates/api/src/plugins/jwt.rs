@@ -341,6 +341,7 @@ impl JwtPlugin {
         };
         self.persist_key(
             CreateJwk {
+                additional_fields: Default::default(),
                 public_key,
                 private_key,
                 created_at: Utc::now(),

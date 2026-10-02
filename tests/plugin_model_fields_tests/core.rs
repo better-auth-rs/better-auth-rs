@@ -199,10 +199,6 @@ async fn sqlite_core_registration_keeps_application_adapter_precedence() -> Auth
 async fn unsupported_model_fields_fail_during_initialization() {
     let cases = [
         (
-            EntityRole::WalletAddress,
-            fields("label", UserFieldConfig::default()),
-        ),
-        (
             EntityRole::Passkey,
             fields("label", UserFieldConfig::default()),
         ),
@@ -238,5 +234,41 @@ async fn unsupported_model_fields_fail_during_initialization() {
             .build()
             .await;
         assert!(matches!(result, Err(AuthError::Config(_))));
+    }
+}
+
+#[test]
+fn display_field_registration_preserves_omitted_empty_and_logical_aliases() {
+    for (role, name) in [
+        (EntityRole::Passkey, "name"),
+        (EntityRole::Passkey, "aaguid"),
+        (EntityRole::ApiKey, "name"),
+        (EntityRole::DeviceCode, "scope"),
+    ] {
+        for alias in [None, Some(""), Some(name)] {
+            let mut context = AuthInitContext::new(Arc::new(config()), memory());
+            let result = context.register_model_fields(
+                role,
+                fields(
+                    name,
+                    UserFieldConfig {
+                        field_name: alias.map(str::to_owned),
+                        ..Default::default()
+                    },
+                ),
+            );
+            assert!(
+                result.is_ok(),
+                "registration: {role:?}.{name}, alias={alias:?}: {result:?}"
+            );
+            let registered = context.into_parts().plugin_fields;
+            let declared = registered.fields(role).fields();
+            assert_eq!(declared.len(), 1);
+            assert_eq!(
+                declared.get(name).map(|field| field.field_name.as_deref()),
+                Some(alias),
+                "raw declaration: {role:?}.{name}, alias={alias:?}"
+            );
+        }
     }
 }

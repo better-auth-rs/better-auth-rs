@@ -295,6 +295,7 @@ impl SiwePlugin {
             let _ = ctx
                 .database
                 .create_wallet_address(CreateWalletAddress {
+                    additional_fields: Default::default(),
                     user_id: user.id().typed()?.to_string(),
                     address: address.clone(),
                     chain_id,

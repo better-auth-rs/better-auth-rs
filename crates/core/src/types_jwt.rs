@@ -21,6 +21,8 @@ pub struct Jwk {
     pub alg: Option<String>,
     /// Elliptic curve identifier, when applicable.
     pub crv: Option<String>,
+    /// Declared application fields returned by the adapter; excluded from public JWKS discovery.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Key material to persist after generation.
@@ -37,4 +39,6 @@ pub struct CreateJwk {
     pub alg: String,
     /// Elliptic curve identifier, when applicable.
     pub crv: Option<String>,
+    /// Logical application fields consumed by registered adapter policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }

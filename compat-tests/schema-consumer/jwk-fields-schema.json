@@ -1,0 +1,10 @@
+{
+  "jwks": {
+    "modelName": "ordinary_jwk_fields",
+    "additionalFields": {
+      "label": { "type": "string", "fieldName": "stored_label", "required": false },
+      "note": { "type": "string", "required": false },
+      "settings": { "type": "json", "fieldName": "stored_settings", "required": false }
+    }
+  }
+}

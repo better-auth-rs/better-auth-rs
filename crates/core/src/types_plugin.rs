@@ -508,6 +508,9 @@ pub struct WalletAddress {
     pub chain_id: i64,
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
+    /// Declared application fields returned by the adapter.
+    #[serde(default, flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// SIWE wallet creation data. The adapter generates the model ID.
@@ -518,4 +521,6 @@ pub struct CreateWalletAddress {
     pub chain_id: i64,
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
+    /// Logical application fields consumed by registered adapter policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
