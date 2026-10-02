@@ -33,7 +33,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
             skip_verification_on_enable: false,
             two_factor_cookie_max_age: 600.0,
             trust_device_max_age: 30.0 * 24.0 * 60.0 * 60.0,
-            totp_period: 30,
+            totp_period: 30.0,
             totp_digits: 6,
             send_otp: None,
             account_lockout: Default::default(),
@@ -50,7 +50,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 | `skip_verification_on_enable` | `bool` | `false` | Marks the user as 2FA-enabled immediately during enrollment. |
 | `two_factor_cookie_max_age` | `f64` | `600.0` | Lifetime of the pending 2FA cookie in seconds, including fractions. |
 | `trust_device_max_age` | `f64` | `2592000.0` | Lifetime of the trusted-device cookie in seconds, including fractions. |
-| `totp_period` | `u64` | `30` | TOTP time step in seconds |
+| `totp_period` | `f64` | `30.0` | TOTP time step in seconds, including fractions; zero uses 30 seconds |
 | `totp_digits` | `usize` | `6` | Number of digits in TOTP code |
 | `send_otp` | `Option<Arc<dyn SendTwoFactorOtp>>` | `None` | Callback used by `/two-factor/send-otp`. |
 | `account_lockout` | `AccountLockout` | Enabled, 10 failures, 900 seconds | Shared failure budget across sign-in factors and challenges. |
@@ -90,6 +90,8 @@ Pass `method: "otp"` with the password to enable email/SMS codes when `send_otp`
 A pending TOTP enrollment can be restarted. Once verified, another enable request returns `TOTP_ALREADY_ENABLED` and preserves the existing secret and backup codes. Disable 2FA before replacing a verified authenticator.
 
 The two cookie lifetime fields preserve an explicit `0.0`. Stored verification dates use millisecond precision; HTTP `Max-Age` uses whole seconds. Cookie attribute overrides follow the shared [cookie configuration](/docs/concepts/cookies) rules and do not change the stored verification lifetime. Integer assignments from earlier alpha APIs must use floating-point literals, such as `600.0`.
+
+`totp_period` accepts a positive finite number of seconds, such as `30.5`; zero retains the 30-second default. Generation and verification use the same millisecond clock conversion and the existing one-step window. The effective period must resolve to positive finite milliseconds, and the counter plus its one-step window must fit `u64`; other values return a configuration error. The URI includes the effective digits and period, never the library's internal counter step. Update previous integer assignments to floating-point literals. Fractional periods require an authenticator that supports the same configured period; this API does not establish compatibility with every authenticator.
 
 ### Sign-In Flow with 2FA
 

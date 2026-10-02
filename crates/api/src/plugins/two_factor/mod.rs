@@ -38,6 +38,7 @@ pub use options::{
     BackupCodeOptions, BackupCodeStorage, TwoFactorCipher, TwoFactorHasher, TwoFactorOtpStorage,
 };
 mod security;
+mod totp;
 use actions::*;
 use helpers::*;
 use security::*;
@@ -56,7 +57,7 @@ const METADATA_TOTP_DISABLED: &str = "two_factor.totp_disabled";
 const METADATA_OTP_ENABLED: &str = "two_factor.otp_enabled";
 const DEFAULT_TWO_FACTOR_COOKIE_MAX_AGE_SECS: f64 = 600.0;
 const DEFAULT_TRUST_DEVICE_MAX_AGE_SECS: f64 = 2_592_000.0;
-const DEFAULT_TOTP_PERIOD_SECS: u64 = 30;
+const DEFAULT_TOTP_PERIOD_SECS: f64 = 30.0;
 const DEFAULT_TOTP_DIGITS: usize = 6;
 const CHALLENGE_ATTEMPT_LIMIT: usize = 5;
 
@@ -118,9 +119,9 @@ pub struct TwoFactorConfig {
     /// Trusted-device cookie lifetime in seconds, including fractions. Zero is preserved.
     #[config(default = DEFAULT_TRUST_DEVICE_MAX_AGE_SECS)]
     pub trust_device_max_age: f64,
-    /// TOTP period in seconds.
+    /// TOTP period in fractional seconds. Zero uses 30 seconds.
     #[config(default = DEFAULT_TOTP_PERIOD_SECS)]
-    pub totp_period: u64,
+    pub totp_period: f64,
     /// TOTP digit count.
     #[config(default = DEFAULT_TOTP_DIGITS)]
     pub totp_digits: usize,
@@ -440,7 +441,7 @@ impl TwoFactorPlugin {
     /// Generate a TOTP from a supplied secret in trusted server code.
     pub fn generate_totp(&self, secret: &str) -> AuthResult<String> {
         require_totp(&self.config)?;
-        totp_rs::TOTP::new_unchecked(
+        let inner = TOTP::new_unchecked(
             Algorithm::SHA1,
             if self.config.totp_digits == 0 {
                 6
@@ -448,17 +449,12 @@ impl TwoFactorPlugin {
                 self.config.totp_digits
             },
             1,
-            if self.config.totp_period == 0 {
-                30
-            } else {
-                self.config.totp_period
-            },
+            1,
             secret.as_bytes().to_vec(),
             None,
             String::new(),
-        )
-        .generate_current()
-        .map_err(|error| AuthError::internal(format!("Generate TOTP: {error}")))
+        );
+        totp::Totp::new(inner, self.config.totp_period)?.generate_current()
     }
 
     /// Install a custom OTP sender.

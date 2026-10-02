@@ -1,0 +1,124 @@
+{
+  "version": "1.7.6",
+  "secret": "ordinary-totp-period-fixture",
+  "issuer": "Ordinary TOTP",
+  "account": "ordinary@totp-period.test",
+  "cases": [
+    {
+      "name": "omitted-digits-6-time-1",
+      "options": {
+        "digits": 6
+      },
+      "timestampMillis": 1700000025125,
+      "server": {
+        "code": "991428"
+      },
+      "helper": {
+        "code": "991428",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30"
+      }
+    },
+    {
+      "name": "omitted-digits-6-time-2",
+      "options": {
+        "digits": 6
+      },
+      "timestampMillis": 1700000002625,
+      "server": {
+        "code": "341652"
+      },
+      "helper": {
+        "code": "341652",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30"
+      }
+    },
+    {
+      "name": "omitted-digits-8-time-1",
+      "options": {
+        "digits": 8
+      },
+      "timestampMillis": 1700000025125,
+      "server": {
+        "code": "33991428"
+      },
+      "helper": {
+        "code": "33991428",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=8&period=30"
+      }
+    },
+    {
+      "name": "omitted-digits-8-time-2",
+      "options": {
+        "digits": 8
+      },
+      "timestampMillis": 1700000002625,
+      "server": {
+        "code": "23341652"
+      },
+      "helper": {
+        "code": "23341652",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=8&period=30"
+      }
+    },
+    {
+      "name": "fractional-digits-6-time-1",
+      "options": {
+        "period": 30.5,
+        "digits": 6
+      },
+      "timestampMillis": 1700000025125,
+      "server": {
+        "code": "255325"
+      },
+      "helper": {
+        "code": "255325",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30.5"
+      }
+    },
+    {
+      "name": "fractional-digits-6-time-2",
+      "options": {
+        "period": 30.5,
+        "digits": 6
+      },
+      "timestampMillis": 1700000002625,
+      "server": {
+        "code": "255325"
+      },
+      "helper": {
+        "code": "255325",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30.5"
+      }
+    },
+    {
+      "name": "fractional-digits-8-time-1",
+      "options": {
+        "period": 30.5,
+        "digits": 8
+      },
+      "timestampMillis": 1700000025125,
+      "server": {
+        "code": "17255325"
+      },
+      "helper": {
+        "code": "17255325",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=8&period=30.5"
+      }
+    },
+    {
+      "name": "fractional-digits-8-time-2",
+      "options": {
+        "period": 30.5,
+        "digits": 8
+      },
+      "timestampMillis": 1700000002625,
+      "server": {
+        "code": "17255325"
+      },
+      "helper": {
+        "code": "17255325",
+        "uri": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=8&period=30.5"
+      }
+    }
+  ]
+}

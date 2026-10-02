@@ -48,7 +48,7 @@ pub fn configure(profile: &str) -> TwoFactorConfig {
         skip_verification_on_enable: true,
         issuer: Some("Enrollment Issuer".into()),
         totp_digits: 8,
-        totp_period: 60,
+        totp_period: 60.0,
         otp_digits: 8,
         otp_period: Duration::minutes(2),
         otp_allowed_attempts: 2,

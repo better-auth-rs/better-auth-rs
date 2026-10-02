@@ -5,7 +5,7 @@ pub(super) fn build_totp(
     request_issuer: Option<&str>,
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<TOTP> {
+) -> AuthResult<totp::Totp> {
     let issuer = request_issuer
         .map(str::to_owned)
         .unwrap_or_else(|| ctx.config.app_name.clone());
@@ -18,16 +18,13 @@ pub(super) fn build_totp(
             config.totp_digits
         },
         1,
-        if config.totp_period == 0 {
-            30
-        } else {
-            config.totp_period
-        },
+        1,
         secret.as_bytes().to_vec(),
         Some(issuer),
         account_name,
     )
     .map_err(|error| AuthError::internal(format!("Failed to create TOTP: {}", error)))
+    .and_then(|inner| totp::Totp::new(inner, config.totp_period))
 }
 
 pub(super) async fn verify_user_password(

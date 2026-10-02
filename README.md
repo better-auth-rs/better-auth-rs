@@ -35,7 +35,7 @@ Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification an
 
 For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
-Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. HTTP cookie constructors return `AuthResult` and reject effective lifetimes above 400 days before rounding; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero.
+Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. HTTP cookie constructors return `AuthResult` and reject effective lifetimes above 400 days before rounding; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero. The TOTP period also accepts fractional seconds; see the same configuration guide for its counter and authenticator boundaries.
 
 ## Quick start
 
