@@ -327,6 +327,7 @@ async fn live_postgres_device_scope_preserves_storage_and_projection()
             Arc::new(SeaOrmStore::<BundledSchema>::new(config(), worker));
         // Reuse the captured SQL contract without claiming an upstream PostgreSQL capture.
         contract(raw.clone(), "sqlite").await?;
+        super::device_consumption::contract(raw.clone()).await?;
         awaited_contract(raw).await?;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     })

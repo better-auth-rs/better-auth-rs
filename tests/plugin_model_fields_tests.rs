@@ -36,6 +36,11 @@ mod core;
 #[path = "plugin_model_fields_tests/device_scope.rs"]
 mod device_scope;
 
+#[path = "plugin_model_fields_tests/device_consumption.rs"]
+mod device_consumption;
+#[path = "plugin_model_fields_tests/device_redemption.rs"]
+mod device_redemption;
+
 #[path = "plugin_model_fields_tests/organization.rs"]
 mod organization;
 

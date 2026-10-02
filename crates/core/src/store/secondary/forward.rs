@@ -452,6 +452,13 @@ impl<S: AuthSchema> DeviceCodeStore for SecondaryStore<S> {
     ) -> AuthResult<bool> {
         self.inner.claim_device_code(id, user_id).await
     }
+    async fn consume_device_code(
+        &self,
+        expected: &DeviceCode,
+        ownership: &crate::DeviceCodeOwnership,
+    ) -> AuthResult<Option<DeviceCode>> {
+        self.inner.consume_device_code(expected, ownership).await
+    }
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
         self.inner.delete_device_code(id).await
     }

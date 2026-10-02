@@ -58,7 +58,7 @@ pub type VerificationCreateWriter =
     Box<dyn FnOnce(crate::wire::VerificationView) -> TypedTransactionFuture<'static, ()> + Send>;
 
 #[async_trait]
-pub trait AuthTransaction<S: AuthSchema>: JwksStore + Send + Sync {
+pub trait AuthTransaction<S: AuthSchema>: JwksStore + DeviceCodeStore + Send + Sync {
     /// Query a user ID through this transaction without string coercion.
     async fn get_user_by_id_value(
         &self,
@@ -1182,6 +1182,13 @@ pub trait DeviceCodeStore: Send + Sync {
         id: &crate::SchemaValue<String>,
         user_id: &str,
     ) -> AuthResult<bool>;
+    /// Consume an approved code while preserving its original identity and owner bindings.
+    /// Return and project the actual consumed row, including changes to its scope or poll timestamp.
+    async fn consume_device_code(
+        &self,
+        expected: &DeviceCode,
+        ownership: &crate::DeviceCodeOwnership,
+    ) -> AuthResult<Option<DeviceCode>>;
     /// Delete a device code record.
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()>;
     /// Delete a device code only when it still has the expected status.

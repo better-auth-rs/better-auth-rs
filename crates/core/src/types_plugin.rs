@@ -155,6 +155,13 @@ pub struct DeviceCode {
     pub scope: crate::SchemaValue<Option<String>>,
 }
 
+/// Issuer ownership required by atomic device-code consumption.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeviceCodeOwnership {
+    /// Require the stored client binding to equal this client identifier.
+    ClientId(String),
+}
+
 /// Input for creating a new device authorization code.
 #[derive(Debug, Clone)]
 pub struct CreateDeviceCode {

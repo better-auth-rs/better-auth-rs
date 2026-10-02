@@ -35,4 +35,22 @@ Custom plugins can register the ordinary `scope` string field through `AuthInitC
 
 `CreateDeviceCode.scope` and `UpdateDeviceCode.scope` use `SchemaValue<Option<String>>`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a supplied string. Migrate an old absent create scope to `Default::default()`; append `.into()` to an old supplied `Some(value)`. An omitted update can still receive `on_update`. Explicit null reaches the input transform as null. Memory retains omitted fields, while SQL nullable columns read back as null.
 
-Create, ordinary update, and both code lookups project the returned scope. Conditional update and claim operations also await the successful row's output callback before returning their boolean result. Input failure prevents the write. Output failure propagates after persistence. A condition that matches no row returns false without an output callback. Input callbacks run outside storage locks; the existing atomic write conditions remain part of the write. The public `AuthTransaction` interface does not expose DeviceCode operations, so this slice adds no general DeviceCode transaction API.
+Create, ordinary update, and both code lookups project the returned scope. Conditional update and claim operations also await the successful row's output callback before returning their boolean result. Input failure prevents the write. Output failure propagates after persistence. A condition that matches no row returns false without an output callback. Input callbacks run outside storage locks; the existing atomic write conditions remain part of the write.
+
+## Server-only redemption
+
+Use `better_auth::plugins::device_authorization::redeem_device_code` when an application issues credentials after device approval. Pass an `EndpointContext`, the device code, an authorization callback, and a preparation callback. Both callbacks return `DeviceRedemptionFuture` with `Box::pin(async move { ... })` and borrow the active endpoint. The authorization callback returns `DeviceCodeRedemptionAuthorization { ownership, context }`. The preparation callback receives the code and the authorization context.
+
+The helper authorizes the issuer, enforces the polling interval, updates `lastPolledAt`, checks expiry and approval, prepares issuance, looks up the bound user, and atomically consumes the code. The result contains the actual consumed row, both callback contexts, and the user. Issue application credentials only after the helper succeeds. If the caller uses a transaction, issue credentials only after that transaction commits. Callback errors propagate unchanged. Authorization errors leave the poll timestamp unchanged; preparation errors retain the completed poll update. Polling comparison, timestamp assignment, and the post-update expiry check each read the current time at their own stage.
+
+Set `EndpointContext.transaction` when the caller runs inside an active transaction. The helper uses that transaction for every store operation, including user lookup. `AuthTransaction` exposes the DeviceCode store operations. The default `/device/token` route uses the same helper and creates its session after consumption, using the consumed row's bound user ID.
+
+The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates, grant request fields, additional DeviceCode schema fields, and grant verification callbacks remain outside this API slice.
+
+## Atomic consumption and transactions
+
+`DeviceCodeStore::consume_device_code(&expected, &DeviceCodeOwnership::ClientId(client_id))` consumes one approved record while retaining the original ID, device code, client, user, and status bindings. The method returns the actual consumed record and awaits its output projection. Scope and poll timestamp changes are included in that result. The method does not replace endpoint authentication, expiry, or polling checks.
+
+`AuthTransaction` includes DeviceCode operations. Memory and SeaORM execute these operations through the active transaction; secondary storage forwards them to that transaction. Memory validates consumed records against the original transaction state before merging any changes. A code created and consumed in the same transaction needs no existing live record. An output error from an ordinary consumption propagates after deletion. An output error propagated out of a transaction aborts that transaction.
+
+Issuer ownership currently supports only `ClientId`. Grant-owned schema fields and additional ownership predicates remain unsupported.

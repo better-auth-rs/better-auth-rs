@@ -372,3 +372,66 @@ impl<S: AuthSchema> crate::store::JwksStore for Transaction<S> {
         crate::store::JwksStore::create_jwk(self.inner.as_ref(), input).await
     }
 }
+
+#[async_trait]
+impl<S: AuthSchema> crate::store::DeviceCodeStore for Transaction<S> {
+    async fn create_device_code(
+        &self,
+        input: crate::CreateDeviceCode,
+    ) -> AuthResult<crate::DeviceCode> {
+        self.inner.create_device_code(input).await
+    }
+    async fn get_device_code_by_device_code(
+        &self,
+        device_code: &str,
+    ) -> AuthResult<Option<crate::DeviceCode>> {
+        self.inner.get_device_code_by_device_code(device_code).await
+    }
+    async fn get_device_code_by_user_code(
+        &self,
+        user_code: &str,
+    ) -> AuthResult<Option<crate::DeviceCode>> {
+        self.inner.get_device_code_by_user_code(user_code).await
+    }
+    async fn update_device_code(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: crate::UpdateDeviceCode,
+    ) -> AuthResult<crate::DeviceCode> {
+        self.inner.update_device_code(id, update).await
+    }
+    async fn update_device_code_if_status(
+        &self,
+        id: &crate::SchemaValue<String>,
+        current_status: &str,
+        update: crate::UpdateDeviceCode,
+    ) -> AuthResult<bool> {
+        self.inner
+            .update_device_code_if_status(id, current_status, update)
+            .await
+    }
+    async fn claim_device_code(
+        &self,
+        id: &crate::SchemaValue<String>,
+        user_id: &str,
+    ) -> AuthResult<bool> {
+        self.inner.claim_device_code(id, user_id).await
+    }
+    async fn consume_device_code(
+        &self,
+        expected: &crate::DeviceCode,
+        ownership: &crate::DeviceCodeOwnership,
+    ) -> AuthResult<Option<crate::DeviceCode>> {
+        self.inner.consume_device_code(expected, ownership).await
+    }
+    async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
+        self.inner.delete_device_code(id).await
+    }
+    async fn delete_device_code_if_status(
+        &self,
+        id: &crate::SchemaValue<String>,
+        status: &str,
+    ) -> AuthResult<bool> {
+        self.inner.delete_device_code_if_status(id, status).await
+    }
+}

@@ -261,6 +261,7 @@ impl EphemeralStore {
             model_fields: self.model_fields.clone(),
             state: Arc::new(Mutex::new(base.deep_clone()?)),
             verification_locks: self.verification_locks.clone(),
+            device_code_consumptions: Some(Arc::default()),
             session_config: self.session_config.clone(),
             organization_fields: Arc::new(RwLock::new(self.organization_fields()?)),
             hooks: self.hooks.clone(),
@@ -276,7 +277,38 @@ impl EphemeralStore {
         pending_hooks: Arc<PendingHookQueue>,
     ) -> AuthResult<()> {
         let committed = isolated.lock()?.clone();
-        self.lock()?.merge(&base, committed)?;
+        let consumed = isolated
+            .device_code_consumptions
+            .as_ref()
+            .map(|consumed| {
+                consumed.lock().map(|rows| rows.clone()).map_err(|_| {
+                    AuthError::internal("Ephemeral device consumption write set poisoned")
+                })
+            })
+            .transpose()?
+            .unwrap_or_default();
+        {
+            let mut live = self.lock()?;
+            for consumed in &consumed {
+                let Some(original) = base
+                    .device_codes
+                    .find(|row| row.id == consumed.id && row.device_code == consumed.device_code)?
+                else {
+                    // A code created and consumed within this transaction has no live baseline.
+                    continue;
+                };
+                if live
+                    .device_codes
+                    .find(|row| super::device_codes::same_bindings(row, &original))?
+                    .is_none()
+                {
+                    return Err(AuthError::internal(
+                        "Device code changed before transaction commit",
+                    ));
+                }
+            }
+            live.merge(&base, committed)?;
+        }
         loop {
             let pending = std::mem::take(&mut *pending_hooks.lock().map_err(|_| {
                 AuthError::internal("Ephemeral transaction hook queue lock poisoned")

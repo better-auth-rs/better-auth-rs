@@ -1,0 +1,97 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "cases": [
+        {
+          "name": "success",
+          "events": [
+            "authorize:initial",
+            "prepare:initial:issuer"
+          ],
+          "result": {
+            "scope": "prepared",
+            "authorizationContext": "issuer",
+            "redemptionContext": "issued:issuer",
+            "userFound": true,
+            "lastPolledAt": true
+          },
+          "error": null,
+          "remaining": null
+        },
+        {
+          "name": "authorization error",
+          "events": [
+            "authorize:initial"
+          ],
+          "result": null,
+          "error": "ordinary authorization error",
+          "remaining": {
+            "scope": "initial",
+            "lastPolledAt": false
+          }
+        },
+        {
+          "name": "preparation error",
+          "events": [
+            "authorize:initial",
+            "prepare:initial:issuer"
+          ],
+          "result": null,
+          "error": "ordinary preparation error",
+          "remaining": {
+            "scope": "initial",
+            "lastPolledAt": true
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "cases": [
+        {
+          "name": "success",
+          "events": [
+            "authorize:initial",
+            "prepare:initial:issuer"
+          ],
+          "result": {
+            "scope": "prepared",
+            "authorizationContext": "issuer",
+            "redemptionContext": "issued:issuer",
+            "userFound": true,
+            "lastPolledAt": true
+          },
+          "error": null,
+          "remaining": null
+        },
+        {
+          "name": "authorization error",
+          "events": [
+            "authorize:initial"
+          ],
+          "result": null,
+          "error": "ordinary authorization error",
+          "remaining": {
+            "scope": "initial",
+            "lastPolledAt": false
+          }
+        },
+        {
+          "name": "preparation error",
+          "events": [
+            "authorize:initial",
+            "prepare:initial:issuer"
+          ],
+          "result": null,
+          "error": "ordinary preparation error",
+          "remaining": {
+            "scope": "initial",
+            "lastPolledAt": true
+          }
+        }
+      ]
+    }
+  ]
+}

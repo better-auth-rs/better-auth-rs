@@ -1,13 +1,20 @@
+mod redemption;
 mod request;
 use base64::Engine as _;
+pub use better_auth_core::DeviceCodeOwnership;
 use chrono::{Duration, Utc};
 use rand::RngCore;
+pub use redemption::{
+    DeviceCodeRedemptionAuthorization, DeviceCodeRedemptionResult, DeviceRedemptionFuture,
+    redeem_device_code,
+};
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use url::Url;
 
+use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{
@@ -308,126 +315,86 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_grant", INVALID_CLIENT_ID);
         }
 
-        let Some(device_code) = ctx
-            .database
-            .get_device_code_by_device_code(&body.device_code)
-            .await?
-        else {
-            return device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE);
+        let endpoint = EndpointContext::new(Some(req), serde_json::to_value(&body)?, ctx);
+        let client_id = body.client_id;
+        let redemption = redeem_device_code(
+            &endpoint,
+            &body.device_code,
+            move |device_code, _endpoint| {
+                Box::pin(async move {
+                    let stored_client_id: Option<String> = serde_json::from_value(
+                        device_code
+                            .client_id
+                            .json()?
+                            .unwrap_or(serde_json::Value::Null),
+                    )?;
+                    if let Some(stored_client_id) = stored_client_id.as_deref()
+                        && stored_client_id != client_id
+                    {
+                        return Err(device_error_response(
+                            400,
+                            "invalid_grant",
+                            CLIENT_ID_MISMATCH,
+                        )?
+                        .into());
+                    }
+                    Ok(DeviceCodeRedemptionAuthorization {
+                        ownership: DeviceCodeOwnership::ClientId(client_id),
+                        context: (),
+                    })
+                })
+            },
+            |_device_code, _authorization, _endpoint| Box::pin(async { Ok(()) }),
+        )
+        .await;
+        let device_code = match redemption {
+            Ok(redemption) => redemption.claimed_device_code,
+            Err(error @ AuthError::Response(_)) => return Ok(error.to_auth_response()),
+            Err(error) => return Err(error),
+        };
+        let Some(user_id) = device_code.user_id.as_deref() else {
+            return device_error_response(500, "server_error", INVALID_DEVICE_CODE_STATUS);
+        };
+        let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
+        let session = match issue_user_session(ctx, user_id, meta.ip_address, meta.user_agent)
+            .await
+            .map_err(SessionIssueError::into_auth_error)
+        {
+            Ok(issued) => issued.session,
+            Err(error) => {
+                better_auth_core::observability::logger::current().error(
+                    "failed to create session after device code redemption",
+                    &[
+                        better_auth_core::observability::LogArgument::Error(&error),
+                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                            device_code.id
+                        )),
+                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
+                            user_id
+                        )),
+                    ],
+                );
+                return device_error_response(500, "server_error", FAILED_TO_CREATE_SESSION);
+            }
         };
 
-        let client_id: Option<String> = serde_json::from_value(
-            device_code
-                .client_id
-                .json()?
-                .unwrap_or(serde_json::Value::Null),
-        )?;
-        if let Some(client_id) = client_id.as_deref()
-            && client_id != body.client_id
-        {
-            return device_error_response(400, "invalid_grant", CLIENT_ID_MISMATCH);
-        }
-
-        let now = Utc::now();
-        if let (Some(last_polled_at), Some(polling_interval)) =
-            (device_code.last_polled_at, device_code.polling_interval)
-        {
-            let elapsed = now.signed_duration_since(last_polled_at).num_milliseconds();
-            if (elapsed as f64) < polling_interval {
-                return device_error_response(400, "slow_down", POLLING_TOO_FREQUENTLY);
-            }
-        }
-
-        let _ = ctx
-            .database
-            .update_device_code(
-                &device_code.id,
-                UpdateDeviceCode {
-                    last_polled_at: Some(Some(now)),
-                    ..Default::default()
-                },
-            )
-            .await?;
-
-        if device_code.expires_at < now {
-            ctx.database.delete_device_code(&device_code.id).await?;
-            return device_error_response(400, "expired_token", EXPIRED_DEVICE_CODE);
-        }
-
-        if device_code.status == DEVICE_STATUS_PENDING {
-            return device_error_response(400, "authorization_pending", AUTHORIZATION_PENDING);
-        }
-
-        if device_code.status == DEVICE_STATUS_DENIED {
-            ctx.database.delete_device_code(&device_code.id).await?;
-            return device_error_response(400, "access_denied", ACCESS_DENIED);
-        }
-
-        if device_code.status == DEVICE_STATUS_APPROVED {
-            let Some(user_id) = device_code.user_id.as_deref() else {
-                return device_error_response(500, "server_error", INVALID_DEVICE_CODE_STATUS);
-            };
-
-            let Some(user) = ctx.database.get_user_by_id(user_id).await? else {
-                return device_error_response(500, "server_error", USER_NOT_FOUND);
-            };
-
-            if !ctx
-                .database
-                .delete_device_code_if_status(&device_code.id, DEVICE_STATUS_APPROVED)
-                .await?
-            {
-                return device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE);
-            }
-
-            let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-            let session =
-                match issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
-                    .await
-                    .map_err(SessionIssueError::into_auth_error)
-                {
-                    Ok(issued) => issued.session,
-                    Err(error) => {
-                        better_auth_core::observability::logger::current().error(
-                            "failed to create session after device code redemption",
-                            &[
-                                better_auth_core::observability::LogArgument::Error(&error),
-                                better_auth_core::observability::LogArgument::Value(
-                                    &serde_json::json!(device_code.id),
-                                ),
-                                better_auth_core::observability::LogArgument::Value(
-                                    &serde_json::json!(user_id),
-                                ),
-                            ],
-                        );
-                        return device_error_response(
-                            500,
-                            "server_error",
-                            FAILED_TO_CREATE_SESSION,
-                        );
-                    }
-                };
-
-            return Ok(AuthResponse::json(
-                200,
-                &DeviceTokenResponse {
-                    access_token: session.token().to_string(),
-                    token_type: "Bearer",
-                    expires_in: (session.expires_at().timestamp_millis()
-                        - Utc::now().timestamp_millis())
-                    .div_euclid(1000)
-                    .max(0),
-                    scope: serde_json::from_value::<Option<String>>(
-                        device_code.scope.json()?.unwrap_or(serde_json::Value::Null),
-                    )?
-                    .unwrap_or_default(),
-                },
-            )?
-            .with_header("Cache-Control", "no-store")
-            .with_header("Pragma", "no-cache"));
-        }
-
-        device_error_response(500, "server_error", INVALID_DEVICE_CODE_STATUS)
+        Ok(AuthResponse::json(
+            200,
+            &DeviceTokenResponse {
+                access_token: session.token().to_string(),
+                token_type: "Bearer",
+                expires_in: (session.expires_at().timestamp_millis()
+                    - Utc::now().timestamp_millis())
+                .div_euclid(1000)
+                .max(0),
+                scope: serde_json::from_value::<Option<String>>(
+                    device_code.scope.json()?.unwrap_or(serde_json::Value::Null),
+                )?
+                .unwrap_or_default(),
+            },
+        )?
+        .with_header("Cache-Control", "no-store")
+        .with_header("Pragma", "no-cache"))
     }
 
     async fn handle_device_verify(
