@@ -61,8 +61,8 @@ async fn partitioned_attributes_follow_resolution_through_all_cookie_writers() -
             format!("{}=display; {}.5=display", resolved.name, resolved.name),
         );
         let chunks = create_chunked_cookies(&request, &resolved, &"x".repeat(8000))?;
-        let clear_chunks = create_clear_chunked_cookies(&request, &resolved);
-        let cleared = vec![create_clear_cookie(&resolved.name, &config)];
+        let clear_chunks = create_clear_chunked_cookies(&request, &resolved)?;
+        let cleared = vec![create_clear_cookie(&resolved.name, &config)?];
         let observer = Arc::new(Observer::default());
         let plugin = LastLoginMethodPlugin::new(LastLoginMethodConfig {
             max_age: 90.5,

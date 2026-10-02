@@ -22,7 +22,7 @@ pub(super) mod types;
 #[cfg(test)]
 mod tests;
 
-use crate::plugins::helpers::{delete_session_cookie_headers, get_cookie};
+use crate::plugins::helpers::{delete_session_cookies, get_cookie};
 use access::{has_permission, is_admin_role, is_admin_user_id};
 use handlers::*;
 use types::*;
@@ -313,9 +313,7 @@ impl AdminPlugin {
         )?;
         let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
 
-        for cookie in delete_session_cookie_headers(req, &ctx.config, false, None)? {
-            req.append_response_header("Set-Cookie", cookie)?;
-        }
+        delete_session_cookies(req, &ctx.config, false, None)?;
         req.append_response_header(
             "Set-Cookie",
             create_session_like_cookie(
@@ -368,7 +366,7 @@ impl AdminPlugin {
         )?;
         auth_response = auth_response.with_appended_header(
             "Set-Cookie",
-            create_clear_cookie(&admin_cookie_name, &ctx.config),
+            create_clear_cookie(&admin_cookie_name, &ctx.config)?,
         );
         Ok(auth_response)
     }

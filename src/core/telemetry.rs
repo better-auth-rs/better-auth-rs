@@ -141,6 +141,13 @@ pub(super) fn init_payload<S: AuthSchema>(
     option(&mut cookies, "path", attributes.path.as_ref())?;
     option(
         &mut cookies,
+        "expires",
+        attributes
+            .expires
+            .map(|date| date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+    )?;
+    option(
+        &mut cookies,
         "sameSite",
         attributes
             .same_site

@@ -10,7 +10,7 @@ use better_auth_core::{
 use chrono::Utc;
 
 use super::{
-    helpers::delete_session_cookie_headers,
+    helpers::delete_session_cookies,
     one_time_token::{
         find_session, response_session_token, session_required, session_token_body, token_body,
     },
@@ -45,7 +45,7 @@ better_auth_core::impl_auth_plugin! {
                 let mut tokens = Vec::new();
                 for (name, token) in device_cookies(req, &ctx.config) {
                     better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, Some(&mut response.headers), &name)?;
-                    response.headers.append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
+                    response.headers.append("Set-Cookie", create_clear_cookie(&name, &ctx.config)?);
                     tokens.push(token);
                 }
                 if !tokens.is_empty() {
@@ -89,7 +89,7 @@ impl MultiSessionPlugin {
         let Some((session, user)) = session.filter(|(session, _)| session.expires_at >= Utc::now())
         else {
             better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
-            req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config))?;
+            req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config)?)?;
             return Err(invalid_session());
         };
         let response = AuthResponse::json(
@@ -120,8 +120,8 @@ impl MultiSessionPlugin {
         let token = signed_device_token(req, &name, &ctx.config).ok_or_else(invalid_session)?;
         ctx.database.delete_session(&token).await?;
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
-        let mut response = AuthResponse::json(200, &serde_json::json!({ "status": true }))?
-            .with_header("Set-Cookie", create_clear_cookie(&name, &ctx.config));
+        req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config)?)?;
+        let response = AuthResponse::json(200, &serde_json::json!({ "status": true }))?;
         if token != current.token {
             return Ok(response);
         }
@@ -134,9 +134,7 @@ impl MultiSessionPlugin {
                 )
                 .await?;
         } else {
-            for cookie in delete_session_cookie_headers(req, &ctx.config, false, None)? {
-                response.headers.append("Set-Cookie", cookie);
-            }
+            delete_session_cookies(req, &ctx.config, false, None)?;
         }
         Ok(response)
     }
@@ -182,7 +180,7 @@ impl MultiSessionPlugin {
             {
                 response
                     .headers
-                    .append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
+                    .append("Set-Cookie", create_clear_cookie(&name, &ctx.config)?);
                 tokens_to_delete.push(previous_token);
             }
         }

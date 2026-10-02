@@ -20,7 +20,7 @@ use better_auth_core::{
 };
 
 use crate::plugins::helpers::{
-    SessionIssueError, delete_session_cookie_headers, get_cookie, get_credential_password_hash,
+    SessionIssueError, delete_session_cookies, get_cookie, get_credential_password_hash,
     issue_user_session, issue_user_session_with_lifetime,
 };
 

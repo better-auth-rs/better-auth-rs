@@ -2,7 +2,6 @@
 //!
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
-use better_auth_core::config::OAuthStateStrategy;
 use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, CreateUser, UpdateUser};
 use chrono::Utc;
@@ -357,69 +356,8 @@ pub fn get_cookie(req: &AuthRequest, name: &str) -> Option<String> {
         .next()
 }
 
-/// TS-style cookie clearing used by `deleteSessionCookie`.
-pub fn delete_session_cookie_headers(
-    req: &AuthRequest,
-    config: &better_auth_core::AuthConfig,
-    skip_dont_remember: bool,
-    mut response_headers: Option<&mut better_auth_core::Headers>,
-) -> AuthResult<Vec<String>> {
-    use better_auth_core::utils::cookie_utils::{
-        create_clear_chunked_cookies, create_clear_cookie, create_clear_session_cookie,
-        related_cookie_name,
-    };
-    let mut cookies = vec![create_clear_session_cookie(config)];
-    cookies.extend(create_clear_chunked_cookies(
-        req,
-        &config.auth_cookie("session_data", Default::default()),
-    ));
-    if !skip_dont_remember {
-        cookies.push(create_clear_cookie(
-            &related_cookie_name(config, "dont_remember"),
-            config,
-        ));
-    }
-    if config.account.store_account_cookie() {
-        cookies.extend(create_clear_chunked_cookies(
-            req,
-            &config.auth_cookie("account_data", Default::default()),
-        ));
-    }
-    if matches!(
-        config.account.store_state_strategy(),
-        OAuthStateStrategy::Cookie
-    ) {
-        cookies.push(create_clear_cookie(
-            &related_cookie_name(config, "oauth_state"),
-            config,
-        ));
-    }
-    for suffix in [
-        "session_token",
-        "session_data",
-        "dont_remember",
-        "account_data",
-        "oauth_state",
-    ] {
-        if suffix == "dont_remember" && skip_dont_remember {
-            continue;
-        }
-        if suffix == "account_data" && !config.account.store_account_cookie() {
-            continue;
-        }
-        if suffix == "oauth_state"
-            && config.account.store_state_strategy() != OAuthStateStrategy::Cookie
-        {
-            continue;
-        }
-        better_auth_core::utils::cookie_utils::remove_set_cookie_entries(
-            req,
-            response_headers.as_deref_mut(),
-            &config.auth_cookie(suffix, Default::default()).name,
-        )?;
-    }
-    Ok(cookies)
-}
+/// Clear session cookies, publishing each header before attempting the next cookie.
+pub use better_auth_core::utils::cookie_utils::delete_session_cookies;
 
 /// Parse the comma-delimited scopes stored on an OAuth account.
 pub(crate) fn parse_stored_scopes(scope: Option<&str>) -> Vec<String> {

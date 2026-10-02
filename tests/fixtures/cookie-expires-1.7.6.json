@@ -1,0 +1,1238 @@
+{
+  "metadata": {
+    "reference": "/private/tmp/better-auth-next43-validation/compat-tests/reference-server",
+    "nodeModules": "/private/tmp/better-auth-next30-final-validation/compat-tests/reference-server/node_modules",
+    "betterAuthVersion": "1.7.6",
+    "capturedAt": 1790921557147,
+    "serializerNow": 1790921557000,
+    "dates": {
+      "futureWhole": "2026-10-12T06:12:37.000Z",
+      "global": "2026-10-12T06:12:37.250Z",
+      "caller": "2026-10-22T06:12:37.250Z",
+      "named": "2026-11-01T06:12:37.250Z",
+      "boundary": "2027-11-06T06:12:37.000Z",
+      "beyondQuarter": "2027-11-06T06:12:37.250Z",
+      "beyondHttp": "2027-11-07T06:12:37.250Z"
+    }
+  },
+  "serializers": {
+    "omitted": {
+      "input": {},
+      "result": {
+        "ok": true,
+        "value": {
+          "name": "ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Path=/",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 48
+        }
+      }
+    },
+    "futureWhole": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.000Z"
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "name": "ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Path=/",
+            "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 87
+        }
+      }
+    },
+    "futureMillis": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.250Z"
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "name": "ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Path=/",
+            "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 87
+        }
+      }
+    },
+    "boundary": {
+      "input": {
+        "expires": "2027-11-06T06:12:37.000Z"
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "name": "ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Path=/",
+            "Expires=Sat, 06 Nov 2027 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 87
+        }
+      }
+    },
+    "beyondQuarter": {
+      "input": {
+        "expires": "2027-11-06T06:12:37.250Z"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "name": "Error",
+          "message": "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+        }
+      }
+    },
+    "maxAgeZero": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.250Z",
+        "maxAge": 0
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "name": "ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Max-Age=0",
+            "Path=/",
+            "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 98
+        }
+      }
+    },
+    "withMaxAge": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.250Z",
+        "maxAge": 45.5
+      },
+      "result": {
+        "ok": true,
+        "value": {
+          "name": "ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Max-Age=45",
+            "Path=/",
+            "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 99
+        }
+      }
+    },
+    "bothBeyond": {
+      "input": {
+        "expires": "2027-11-06T06:12:37.250Z",
+        "maxAge": 34560000.25
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "name": "Error",
+          "message": "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+        }
+      }
+    }
+  },
+  "resolution": {
+    "omitted": {
+      "input": {},
+      "resolved": {
+        "attributes": {
+          "secure": false,
+          "sameSite": "lax",
+          "path": "/",
+          "httpOnly": true,
+          "maxAge": 45.5
+        },
+        "expiresOwn": false,
+        "expiresIsDate": false
+      },
+      "writer": {
+        "ok": true,
+        "value": {
+          "name": "better-auth.ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Max-Age=45",
+            "Path=/",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 72
+        }
+      }
+    },
+    "global": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z"
+      },
+      "resolved": {
+        "attributes": {
+          "secure": false,
+          "sameSite": "lax",
+          "path": "/",
+          "httpOnly": true,
+          "expires": "2026-10-12T06:12:37.250Z",
+          "maxAge": 45.5
+        },
+        "expiresOwn": true,
+        "expiresIsDate": true
+      },
+      "writer": {
+        "ok": true,
+        "value": {
+          "name": "better-auth.ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Max-Age=45",
+            "Path=/",
+            "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 111
+        }
+      }
+    },
+    "caller": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z",
+        "caller": "2026-10-22T06:12:37.250Z"
+      },
+      "resolved": {
+        "attributes": {
+          "secure": false,
+          "sameSite": "lax",
+          "path": "/",
+          "httpOnly": true,
+          "expires": "2026-10-22T06:12:37.250Z",
+          "maxAge": 45.5
+        },
+        "expiresOwn": true,
+        "expiresIsDate": true
+      },
+      "writer": {
+        "ok": true,
+        "value": {
+          "name": "better-auth.ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Max-Age=45",
+            "Path=/",
+            "Expires=Thu, 22 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 111
+        }
+      }
+    },
+    "named": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z",
+        "caller": "2026-10-22T06:12:37.250Z",
+        "named": "2026-11-01T06:12:37.250Z"
+      },
+      "resolved": {
+        "attributes": {
+          "secure": false,
+          "sameSite": "lax",
+          "path": "/",
+          "httpOnly": true,
+          "expires": "2026-11-01T06:12:37.250Z",
+          "maxAge": 45.5
+        },
+        "expiresOwn": true,
+        "expiresIsDate": true
+      },
+      "writer": {
+        "ok": true,
+        "value": {
+          "name": "better-auth.ordinary",
+          "valueLength": 7,
+          "attributes": [
+            "Max-Age=45",
+            "Path=/",
+            "Expires=Sun, 01 Nov 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 111
+        }
+      }
+    }
+  },
+  "chunks": {
+    "omitted": {
+      "input": {
+        "path": "/",
+        "httpOnly": true,
+        "sameSite": "lax"
+      },
+      "emptyChunkHeader": {
+        "ok": true,
+        "value": {
+          "name": "ordinary.99",
+          "valueLength": 0,
+          "attributes": [
+            "Path=/",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 44
+        }
+      },
+      "chunk": {
+        "ok": true,
+        "value": [
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "maxAge": 0
+            },
+            "expiresOwn": false,
+            "expiresIsDate": false,
+            "header": {
+              "name": "ordinary",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 52
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "maxAge": 0
+            },
+            "expiresOwn": false,
+            "expiresIsDate": false,
+            "header": {
+              "name": "ordinary.5",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 54
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax"
+            },
+            "expiresOwn": false,
+            "expiresIsDate": false,
+            "header": {
+              "name": "ordinary.0",
+              "valueLength": 4006,
+              "attributes": [
+                "Path=/",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 4049
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax"
+            },
+            "expiresOwn": false,
+            "expiresIsDate": false,
+            "header": {
+              "name": "ordinary.1",
+              "valueLength": 3994,
+              "attributes": [
+                "Path=/",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 4037
+            }
+          }
+        ]
+      },
+      "clean": {
+        "ok": true,
+        "value": [
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "maxAge": 0
+            },
+            "expiresOwn": false,
+            "expiresIsDate": false,
+            "header": {
+              "name": "ordinary",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 52
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "maxAge": 0
+            },
+            "expiresOwn": false,
+            "expiresIsDate": false,
+            "header": {
+              "name": "ordinary.5",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 54
+            }
+          }
+        ]
+      },
+      "clear": {
+        "ok": true,
+        "value": [
+          {
+            "name": "ordinary",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 52
+          }
+        ]
+      },
+      "events": [
+        {
+          "level": "debug",
+          "args": [
+            "CHUNKING_SESSION_COOKIE",
+            {
+              "message": "Session cookie exceeds the 4050 byte limit and was split into 2 chunks.",
+              "valueSize": 8000,
+              "chunkCount": 2,
+              "chunkSizes": [
+                4006,
+                3994
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "futureMillis": {
+      "input": {
+        "path": "/",
+        "httpOnly": true,
+        "sameSite": "lax",
+        "expires": "2026-10-12T06:12:37.250Z"
+      },
+      "emptyChunkHeader": {
+        "ok": true,
+        "value": {
+          "name": "ordinary.99",
+          "valueLength": 0,
+          "attributes": [
+            "Path=/",
+            "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+            "HttpOnly",
+            "SameSite=Lax"
+          ],
+          "serializedLength": 83
+        }
+      },
+      "chunk": {
+        "ok": true,
+        "value": [
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z",
+              "maxAge": 0
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 91
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z",
+              "maxAge": 0
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary.5",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 93
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z"
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary.0",
+              "valueLength": 3967,
+              "attributes": [
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 4049
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z"
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary.1",
+              "valueLength": 3967,
+              "attributes": [
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 4049
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z"
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary.2",
+              "valueLength": 66,
+              "attributes": [
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 148
+            }
+          }
+        ]
+      },
+      "clean": {
+        "ok": true,
+        "value": [
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z",
+              "maxAge": 0
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 91
+            }
+          },
+          {
+            "attributes": {
+              "path": "/",
+              "httpOnly": true,
+              "sameSite": "lax",
+              "expires": "2026-10-12T06:12:37.250Z",
+              "maxAge": 0
+            },
+            "expiresOwn": true,
+            "expiresIsDate": true,
+            "header": {
+              "name": "ordinary.5",
+              "valueLength": 0,
+              "attributes": [
+                "Max-Age=0",
+                "Path=/",
+                "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+                "HttpOnly",
+                "SameSite=Lax"
+              ],
+              "serializedLength": 93
+            }
+          }
+        ]
+      },
+      "clear": {
+        "ok": true,
+        "value": [
+          {
+            "name": "ordinary",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 91
+          }
+        ]
+      },
+      "events": [
+        {
+          "level": "debug",
+          "args": [
+            "CHUNKING_SESSION_COOKIE",
+            {
+              "message": "Session cookie exceeds the 4050 byte limit and was split into 3 chunks.",
+              "valueSize": 8000,
+              "chunkCount": 3,
+              "chunkSizes": [
+                3967,
+                3967,
+                66
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "beyondQuarter": {
+      "input": {
+        "path": "/",
+        "httpOnly": true,
+        "sameSite": "lax",
+        "expires": "2027-11-06T06:12:37.250Z"
+      },
+      "emptyChunkHeader": {
+        "ok": false,
+        "error": {
+          "name": "Error",
+          "message": "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+        }
+      },
+      "chunk": {
+        "ok": false,
+        "error": {
+          "name": "Error",
+          "message": "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+        }
+      },
+      "clean": {
+        "ok": false,
+        "error": {
+          "name": "Error",
+          "message": "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+        }
+      },
+      "clear": {
+        "ok": false,
+        "error": {
+          "name": "Error",
+          "message": "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+        }
+      },
+      "events": []
+    }
+  },
+  "session": {
+    "rememberFuture": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z",
+        "dontRemember": false
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":null,\"newSession\":true}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          },
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 71,
+            "attributes": [
+              "Max-Age=300",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 181
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:complete"
+      ]
+    },
+    "browserFuture": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z",
+        "dontRemember": true
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":null,\"newSession\":true}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          },
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 71,
+            "attributes": [
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 168
+          },
+          {
+            "name": "better-auth.dont_remember",
+            "valueLength": 55,
+            "attributes": [
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 152
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:complete"
+      ]
+    },
+    "clearFuture": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z",
+        "clear": true
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":null,\"newSession\":false}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          },
+          {
+            "name": "better-auth.ordinary",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 103
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:complete"
+      ]
+    },
+    "tokenError": {
+      "input": {
+        "token": "2027-11-07T06:12:37.250Z",
+        "dontRemember": false
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":{\"name\":\"Error\",\"message\":\"Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future.\"},\"newSession\":false}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:error"
+      ]
+    },
+    "markerError": {
+      "input": {
+        "marker": "2027-11-07T06:12:37.250Z",
+        "dontRemember": true
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":{\"name\":\"Error\",\"message\":\"Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future.\"},\"newSession\":false}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          },
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 71,
+            "attributes": [
+              "Path=/",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 129
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:error"
+      ]
+    },
+    "clearError": {
+      "input": {
+        "global": "2027-11-07T06:12:37.250Z",
+        "clear": true
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":{\"name\":\"Error\",\"message\":\"Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future.\"},\"newSession\":false}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:error"
+      ]
+    },
+    "deleteFuture": {
+      "input": {
+        "global": "2026-10-12T06:12:37.250Z",
+        "deleteSession": true
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":null,\"newSession\":false}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          },
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 108
+          },
+          {
+            "name": "better-auth.session_data",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 107
+          },
+          {
+            "name": "better-auth.account_data",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 107
+          },
+          {
+            "name": "better-auth.oauth_state",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 106
+          },
+          {
+            "name": "better-auth.dont_remember",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 108
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:complete"
+      ]
+    },
+    "deleteSecondError": {
+      "input": {
+        "token": "2026-10-12T06:12:37.250Z",
+        "sessionData": "2027-11-07T06:12:37.250Z",
+        "deleteSession": true
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"error\":{\"name\":\"Error\",\"message\":\"Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future.\"},\"newSession\":false}",
+        "headers": [
+          {
+            "name": "ordinary-prior",
+            "valueLength": 7,
+            "attributes": [
+              "Path=/"
+            ],
+            "serializedLength": 30
+          },
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 0,
+            "attributes": [
+              "Max-Age=0",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 108
+          }
+        ]
+      },
+      "events": [
+        "prior",
+        "writer:error"
+      ]
+    }
+  },
+  "lastLogin": {
+    "future": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.250Z",
+        "hook": "allow"
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"ok\":true}",
+        "headers": [
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 20,
+            "attributes": [
+              "Path=/",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 78
+          },
+          {
+            "name": "better-auth.last_used_login_method",
+            "valueLength": 5,
+            "attributes": [
+              "Max-Age=90",
+              "Path=/",
+              "Expires=Mon, 12 Oct 2026 06:12:37 GMT",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 113
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "endpoint-write"
+        },
+        {
+          "kind": "before",
+          "hook": "allow"
+        }
+      ]
+    },
+    "veto": {
+      "input": {
+        "expires": "2027-11-07T06:12:37.250Z",
+        "hook": "veto"
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"ok\":true}",
+        "headers": [
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 20,
+            "attributes": [
+              "Path=/",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 78
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "endpoint-write"
+        },
+        {
+          "kind": "before",
+          "hook": "veto"
+        }
+      ]
+    },
+    "hookError": {
+      "input": {
+        "expires": "2027-11-07T06:12:37.250Z",
+        "hook": "error"
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"ok\":true}",
+        "headers": [
+          {
+            "name": "better-auth.session_token",
+            "valueLength": 20,
+            "attributes": [
+              "Path=/",
+              "HttpOnly",
+              "SameSite=Lax"
+            ],
+            "serializedLength": 78
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "endpoint-write"
+        },
+        {
+          "kind": "before",
+          "hook": "error"
+        },
+        {
+          "kind": "log",
+          "level": "error",
+          "message": "[LastLoginMethod] Error in beforeStoreCookie hook",
+          "args": [
+            {
+              "name": "Error",
+              "message": "Ordinary expires beforeStoreCookie error"
+            }
+          ]
+        }
+      ]
+    },
+    "writerError": {
+      "input": {
+        "expires": "2027-11-07T06:12:37.250Z",
+        "hook": "allow"
+      },
+      "response": {
+        "status": 500,
+        "body": "",
+        "headers": []
+      },
+      "events": [
+        {
+          "kind": "endpoint-write"
+        },
+        {
+          "kind": "before",
+          "hook": "allow"
+        },
+        {
+          "kind": "api-error",
+          "name": "Error",
+          "message": "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "omitted": {
+      "input": {},
+      "projected": {
+        "attributes": {
+          "domain": false
+        },
+        "expiresOwn": true,
+        "expiresIsDate": false
+      }
+    },
+    "futureWhole": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.000Z"
+      },
+      "projected": {
+        "attributes": {
+          "expires": "2026-10-12T06:12:37.000Z",
+          "domain": false
+        },
+        "expiresOwn": true,
+        "expiresIsDate": true
+      }
+    },
+    "futureMillis": {
+      "input": {
+        "expires": "2026-10-12T06:12:37.250Z"
+      },
+      "projected": {
+        "attributes": {
+          "expires": "2026-10-12T06:12:37.250Z",
+          "domain": false
+        },
+        "expiresOwn": true,
+        "expiresIsDate": true
+      }
+    }
+  }
+}

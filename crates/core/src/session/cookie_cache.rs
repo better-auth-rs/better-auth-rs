@@ -8,7 +8,7 @@ use sha2::Sha256;
 
 use crate::config::{AuthConfig, CookieCacheConfig, CookieCacheStrategy};
 use crate::utils::cookie_utils::{
-    clear_chunked_cookie, create_chunked_cookies, related_cookie_name,
+    clear_existing_cookies, create_chunked_cookies, expire_cookie, related_cookie_name,
 };
 use crate::{AuthError, AuthRequest, AuthResult, CookieAttributes};
 
@@ -222,8 +222,20 @@ pub(super) fn decode(
     Some((payload, expires_at))
 }
 
-pub(super) fn clear(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
-    clear_chunked_cookie(req, &config.auth_cookie("session_data", Default::default()))
+pub(super) fn clear_existing(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
+    clear_existing_cookies(
+        req,
+        &config.auth_cookie("session_data", Default::default()),
+        None,
+    )
+}
+
+pub(super) fn expire(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
+    expire_cookie(
+        req,
+        &config.auth_cookie("session_data", Default::default()),
+        None,
+    )
 }
 
 pub(super) async fn write(
@@ -282,7 +294,9 @@ fn renew_account_cookie(
         return Ok(());
     };
     if bind_account_user && account.get("userId").and_then(Value::as_str) != data.user.id.as_str() {
-        return clear_chunked_cookie(req, &config.auth_cookie("account_data", Default::default()));
+        let cookie = config.auth_cookie("account_data", Default::default());
+        expire_cookie(req, &cookie, None)?;
+        return clear_existing_cookies(req, &cookie, None);
     }
     let cookie = config.auth_cookie(
         "account_data",

@@ -544,6 +544,9 @@ pub struct CookieAttributes {
     /// Override `Max-Age` (seconds).
     /// Cookie lifetime in seconds, including fractional seconds.
     pub max_age: Option<f64>,
+    /// Override the absolute cookie expiration date.
+    /// The HTTP writer rejects dates more than 400 days in the future.
+    pub expires: Option<chrono::DateTime<chrono::Utc>>,
     /// Override cookie `Domain`.
     pub domain: Option<String>,
 }

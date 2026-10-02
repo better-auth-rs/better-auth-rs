@@ -192,7 +192,7 @@ pub(super) async fn handle_callback(
     let clear_state_cookie = better_auth_core::utils::cookie_utils::create_clear_cookie(
         &state_cookie_name(&ctx.config),
         &ctx.config,
-    );
+    )?;
     let error_url = payload
         .error_url
         .clone()

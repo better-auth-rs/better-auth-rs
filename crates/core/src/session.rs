@@ -8,8 +8,7 @@ use crate::schema::AuthSchema;
 use crate::store::AuthStore;
 use crate::types::CreateSession;
 use crate::utils::cookie_utils::{
-    create_clear_cookie, get_cookie, related_cookie_name, session_cookie_headers,
-    verify_cookie_value,
+    get_cookie, related_cookie_name, session_cookie_headers, verify_cookie_value,
 };
 use crate::wire::{SessionView, UserView};
 use crate::{AuthError, AuthRequest, HttpMethod};
@@ -375,7 +374,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let cache_value =
             cookie_cache::read(req, &related_cookie_name(&self.config, "session_data"));
         if cache.is_none() && cache_value.is_some() {
-            cookie_cache::clear(req, &self.config)?;
+            cookie_cache::clear_existing(req, &self.config)?;
         }
         let Some(token) = token else {
             return Ok(none());
@@ -443,7 +442,7 @@ impl<S: AuthSchema> SessionManager<S> {
                     needs_refresh: None,
                 });
             }
-            cookie_cache::clear(req, &self.config)?;
+            cookie_cache::expire(req, &self.config)?;
         }
         let is_post = req.path().ends_with("/get-session") && req.method() == &HttpMethod::Post;
         let stored = self.database.get_session_snapshot(&token).await?;
@@ -583,47 +582,7 @@ impl<S: AuthSchema> SessionManager<S> {
 
     /// Expire session credentials and every cache chunk received on the request.
     pub fn clear_cookies(&self, req: &AuthRequest) -> AuthResult<()> {
-        crate::utils::cookie_utils::remove_set_cookie_entries(
-            req,
-            None,
-            &self
-                .config
-                .auth_cookie("session_token", Default::default())
-                .name,
-        )?;
-        req.append_response_header(
-            "Set-Cookie",
-            create_clear_cookie(
-                &self
-                    .config
-                    .auth_cookie("session_token", Default::default())
-                    .name,
-                &self.config,
-            ),
-        )?;
-        cookie_cache::clear(req, &self.config)?;
-        for suffix in ["dont_remember", "oauth_state", "account_data"] {
-            if suffix == "account_data" && !self.config.account.store_account_cookie() {
-                continue;
-            }
-            if suffix == "oauth_state"
-                && self.config.account.store_state_strategy()
-                    != crate::config::OAuthStateStrategy::Cookie
-            {
-                continue;
-            }
-            let name = related_cookie_name(&self.config, suffix);
-            if suffix == "account_data" {
-                crate::utils::cookie_utils::clear_chunked_cookie(
-                    req,
-                    &self.config.auth_cookie(suffix, Default::default()),
-                )?;
-            } else {
-                crate::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
-                req.append_response_header("Set-Cookie", create_clear_cookie(&name, &self.config))?;
-            }
-        }
-        Ok(())
+        crate::utils::cookie_utils::delete_session_cookies(req, &self.config, false, None)
     }
 
     /// Delete a session

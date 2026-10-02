@@ -679,7 +679,7 @@ impl OAuthProxyPlugin {
         let clear = better_auth_core::utils::cookie_utils::create_clear_cookie(
             &state::state_cookie_name(&ctx.config),
             &ctx.config,
-        );
+        )?;
         let user = OAuthUserInfo {
             additional_fields: profile.user_info.additional_fields,
             id: profile.account.account_id,

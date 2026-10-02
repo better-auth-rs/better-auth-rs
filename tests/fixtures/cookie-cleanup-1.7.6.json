@@ -1,0 +1,578 @@
+[
+  {
+    "input": {
+      "account": false,
+      "state": false,
+      "skip": false,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.7=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": false,
+      "state": false,
+      "skip": true,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.7=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": false,
+      "state": true,
+      "skip": false,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.7=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": false,
+      "state": true,
+      "skip": true,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.7=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": true,
+      "state": false,
+      "skip": false,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.1=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": true,
+      "state": false,
+      "skip": true,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.1=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": true,
+      "state": true,
+      "skip": false,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.1=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  },
+  {
+    "input": {
+      "account": true,
+      "state": true,
+      "skip": true,
+      "incoming": [
+        [
+          "session_data.2",
+          "display-two"
+        ],
+        [
+          "account_data.1",
+          "display-one"
+        ],
+        [
+          "session_data",
+          "display-base"
+        ],
+        [
+          "session_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data",
+          "display-base"
+        ],
+        [
+          "session_data.2",
+          "display-repeat"
+        ],
+        [
+          "account_data.0",
+          "display-zero"
+        ],
+        [
+          "account_data.1",
+          "display-repeat"
+        ]
+      ],
+      "issued": [
+        "ordinary_prior",
+        "session_token",
+        "session_data",
+        "session_data.7",
+        "account_data",
+        "account_data.7",
+        "oauth_state",
+        "dont_remember",
+        "ordinary_after"
+      ]
+    },
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      },
+      "headers": [
+        "better-auth.ordinary_prior=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.dont_remember=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.ordinary_after=display; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_token=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.1=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.account_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.oauth_state=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.2=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "better-auth.session_data.0=; Max-Age=0; Domain=.cookie-cleanup.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ]
+    }
+  }
+]

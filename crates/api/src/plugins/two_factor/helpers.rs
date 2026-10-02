@@ -108,7 +108,7 @@ pub(super) fn clear_cookie_header(
 ) -> AuthResult<String> {
     let name = related_cookie_name(config, suffix);
     better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
-    Ok(create_clear_cookie(&name, config))
+    create_clear_cookie(&name, config)
 }
 
 pub(super) async fn create_trust_device_cookie_header(

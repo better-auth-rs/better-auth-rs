@@ -27,11 +27,7 @@ impl TwoFactorPlugin {
             return Ok(());
         }
 
-        for cookie in
-            delete_session_cookie_headers(req, &ctx.config, true, Some(&mut response.headers))?
-        {
-            response.headers.append("Set-Cookie", cookie);
-        }
+        delete_session_cookies(req, &ctx.config, true, Some(&mut response.headers))?;
         ctx.database.delete_session(&data.session.token).await?;
         req.clear_new_session()?;
         let challenge = begin_sign_in_challenge(&data.user, ctx, &mut response.headers).await?;

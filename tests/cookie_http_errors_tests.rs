@@ -154,7 +154,7 @@ fn cookie_configuration_errors_and_chunk_overhead_match_pinned_writer() {
         }
         // Expiration replaces the configured age with zero before serialization.
         assert_eq!(
-            shape(&create_clear_cookie(cookie_name, &config))["maxAge"],
+            shape(&create_clear_cookie(cookie_name, &config).unwrap())["maxAge"],
             "0",
             "{name}/clear"
         );

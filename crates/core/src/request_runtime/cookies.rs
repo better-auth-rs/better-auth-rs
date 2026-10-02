@@ -103,6 +103,7 @@ impl CookieSettings {
             path: Some("/".to_owned()),
             domain: self.domain.clone(),
             max_age: None,
+            expires: None,
         };
         overlay(&mut attributes, &self.defaults);
         overlay(&mut attributes, &caller);
@@ -121,6 +122,9 @@ impl CookieSettings {
 }
 
 fn overlay(target: &mut CookieAttributes, source: &CookieAttributes) {
+    if let Some(value) = source.expires {
+        target.expires = Some(value);
+    }
     if let Some(value) = source.secure {
         target.secure = Some(value);
     }

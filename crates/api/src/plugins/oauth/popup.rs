@@ -94,7 +94,7 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthPopupPlugin {
                 )?;
                 response
                     .headers
-                    .append("Set-Cookie", create_clear_cookie(&name, &ctx.config));
+                    .append("Set-Cookie", create_clear_cookie(&name, &ctx.config)?);
                 let Ok(marker) = serde_json::from_str::<Value>(&marker) else {
                     return Ok(());
                 };

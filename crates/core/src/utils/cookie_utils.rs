@@ -5,6 +5,7 @@
 //! `admin`, `password_management`, `session_management`, `email_verification`).
 
 mod chunks;
+pub(crate) use chunks::clear_existing_cookies;
 pub use chunks::{
     clear_chunked_cookie, create_chunked_cookies, create_clear_chunked_cookies, get_chunked_cookie,
 };
@@ -72,12 +73,13 @@ pub fn encode_cookie_value(value: &str) -> String {
     utf8_percent_encode(value, COOKIE_COMPONENT).to_string()
 }
 
-/// Current session cookie attributes, without a value or an expiration override.
-pub fn session_cookie_template(config: &AuthConfig) -> Cookie<'static> {
+/// Materialize session cookie attributes without a value or HTTP lifetime validation.
+/// Date conversion errors propagate; the HTTP writer checks the 400-day limit.
+pub fn session_cookie_template(config: &AuthConfig) -> AuthResult<Cookie<'static>> {
     resolved_template(&config.auth_cookie("session_token", Default::default()))
 }
 
-fn resolved_template(resolved: &ResolvedCookie) -> Cookie<'static> {
+fn resolved_template(resolved: &ResolvedCookie) -> AuthResult<Cookie<'static>> {
     let attrs = &resolved.attributes;
     let mut cookie = Cookie::new(resolved.name.clone(), String::new());
     if let Some(value) = &attrs.path {
@@ -99,6 +101,13 @@ fn resolved_template(resolved: &ResolvedCookie) -> Cookie<'static> {
     if let Some(value) = attrs.max_age.filter(|value| *value >= 0.0) {
         cookie.set_max_age(cookie::time::Duration::seconds(value.floor() as i64));
     }
+    if let Some(value) = attrs.expires {
+        let date = cookie::time::OffsetDateTime::from_unix_timestamp_nanos(
+            i128::from(value.timestamp_millis()) * 1_000_000,
+        )
+        .map_err(|error| AuthError::internal(format!("Converting cookie expiration: {error}")))?;
+        cookie.set_expires(date);
+    }
     if cookie.name().starts_with("__Secure-") || cookie.name().starts_with("__Host-") {
         cookie.set_secure(true);
     }
@@ -106,7 +115,7 @@ fn resolved_template(resolved: &ResolvedCookie) -> Cookie<'static> {
         cookie.set_path("/");
         cookie.unset_domain();
     }
-    cookie
+    Ok(cookie)
 }
 
 /// Build a `Set-Cookie` header value for an arbitrary cookie using the auth
@@ -145,11 +154,7 @@ pub fn create_session_cookie_with_max_age(
         .map(|token| sign_cookie_value(token, config.signing_secret()));
     let mut resolved = config.auth_cookie("session_token", Default::default());
     resolved.attributes.max_age = max_age_seconds;
-    serialize_cookie(
-        resolved_template(&resolved),
-        &signed.unwrap_or_default(),
-        &resolved,
-    )
+    render_cookie(&signed.unwrap_or_default(), &resolved)
 }
 
 /// Build session-token cookies and the explicit browser-session preference.
@@ -194,27 +199,15 @@ pub fn create_session_like_cookie(
     config: &AuthConfig,
 ) -> AuthResult<String> {
     let resolved = template_for_name(name, max_age_seconds, config);
-    serialize_cookie(resolved_template(&resolved), value, &resolved)
+    render_cookie(value, &resolved)
 }
 
-fn serialize_cookie(
-    mut cookie: Cookie<'static>,
-    value: &str,
-    resolved: &ResolvedCookie,
-) -> AuthResult<String> {
-    let max_age = resolved.attributes.max_age.filter(|age| *age >= 0.0);
-    if max_age.is_some_and(|age| age > 34_560_000.0) {
-        return Err(AuthError::internal(
-            "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
-        ));
-    }
-    cookie.set_max_age(max_age.map(|age| cookie::time::Duration::seconds(age.floor() as i64)));
+/// Validate and render a cookie from its resolved attributes and encoded value.
+/// Lifetime limits use the original precision before HTTP formatting.
+pub fn render_cookie(value: &str, resolved: &ResolvedCookie) -> AuthResult<String> {
+    validate_lifetime(&resolved.attributes, chrono::Utc::now().timestamp_millis())?;
+    let mut cookie = resolved_template(resolved)?;
     cookie.set_value(value.to_owned());
-    Ok(render_cookie(cookie, resolved))
-}
-
-/// Render cookie attributes while preserving the configured Domain spelling.
-pub fn render_cookie(mut cookie: Cookie<'static>, resolved: &ResolvedCookie) -> String {
     // cookie::Cookie strips a leading dot from Domain; Better Call preserves it on the wire.
     let domain = (!cookie.name().starts_with("__Host-"))
         .then_some(resolved.attributes.domain.as_deref())
@@ -226,29 +219,103 @@ pub fn render_cookie(mut cookie: Cookie<'static>, resolved: &ResolvedCookie) -> 
         rendered.push_str("; Domain=");
         rendered.push_str(domain);
     }
-    rendered
+    Ok(rendered)
+}
+
+fn validate_lifetime(attributes: &crate::CookieAttributes, now_millis: i64) -> AuthResult<()> {
+    let max_age = attributes.max_age.filter(|age| *age >= 0.0);
+    if max_age.is_some_and(|age| age > 34_560_000.0) {
+        return Err(AuthError::internal(
+            "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
+        ));
+    }
+    if attributes
+        .expires
+        .is_some_and(|expires| expires.timestamp_millis() - now_millis > 34_560_000_000)
+    {
+        return Err(AuthError::internal(
+            "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future.",
+        ));
+    }
+    Ok(())
 }
 
 /// Build a `Set-Cookie` header value that clears the session cookie.
-pub fn create_clear_session_cookie(config: &AuthConfig) -> String {
-    let resolved = config.auth_cookie("session_token", Default::default());
-    let mut cookie = resolved_template(&resolved);
-    cookie.set_max_age(cookie::time::Duration::ZERO);
-    cookie.unset_expires();
-    render_cookie(cookie, &resolved)
+pub fn create_clear_session_cookie(config: &AuthConfig) -> AuthResult<String> {
+    let mut resolved = config.auth_cookie("session_token", Default::default());
+    resolved.attributes.max_age = Some(0.0);
+    render_cookie("", &resolved)
 }
 
 /// Build a `Set-Cookie` header value that clears an arbitrary cookie by name,
 /// using the session config's cookie attributes for consistency.
 ///
 /// Mirrors the TypeScript `expireCookie`, which clears a cookie with `Max-Age=0`
-/// while preserving its attributes, and emits no `Expires`.
-pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
-    let resolved = template_for_name(name, None, config);
-    let mut cookie = resolved_template(&resolved);
-    cookie.set_max_age(cookie::time::Duration::seconds(0));
-    cookie.unset_expires();
-    render_cookie(cookie, &resolved)
+/// while preserving its attributes, including an explicit `Expires`.
+pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> AuthResult<String> {
+    let mut resolved = template_for_name(name, None, config);
+    resolved.attributes.max_age = Some(0.0);
+    render_cookie("", &resolved)
+}
+
+/// Clear session cookies, publishing each header before attempting the next cookie.
+pub fn delete_session_cookies(
+    req: &crate::AuthRequest,
+    config: &AuthConfig,
+    skip_dont_remember: bool,
+    mut response_headers: Option<&mut crate::Headers>,
+) -> AuthResult<()> {
+    for logical in ["session_token", "session_data"] {
+        expire_cookie(
+            req,
+            &config.auth_cookie(logical, Default::default()),
+            response_headers.as_deref_mut(),
+        )?;
+    }
+    if config.account.store_account_cookie() {
+        let cookie = config.auth_cookie("account_data", Default::default());
+        expire_cookie(req, &cookie, response_headers.as_deref_mut())?;
+        chunks::clear_existing_cookies(req, &cookie, response_headers.as_deref_mut())?;
+    }
+    if config.account.store_state_strategy() == crate::config::OAuthStateStrategy::Cookie {
+        expire_cookie(
+            req,
+            &config.auth_cookie("oauth_state", Default::default()),
+            response_headers.as_deref_mut(),
+        )?;
+    }
+    // Existing entries append after the base expiration, including an incoming base cookie.
+    // Removing the family here would discard that earlier expiration header.
+    chunks::clear_existing_cookies(
+        req,
+        &config.auth_cookie("session_data", Default::default()),
+        response_headers.as_deref_mut(),
+    )?;
+    if !skip_dont_remember {
+        expire_cookie(
+            req,
+            &config.auth_cookie("dont_remember", Default::default()),
+            response_headers,
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn expire_cookie(
+    req: &crate::AuthRequest,
+    cookie: &ResolvedCookie,
+    mut response_headers: Option<&mut crate::Headers>,
+) -> AuthResult<()> {
+    remove_set_cookie_entries(req, response_headers.as_deref_mut(), &cookie.name)?;
+    let mut cookie = cookie.clone();
+    cookie.attributes.max_age = Some(0.0);
+    let header = render_cookie("", &cookie)?;
+    if let Some(headers) = response_headers {
+        headers.append("Set-Cookie", header);
+    } else {
+        req.append_response_header("Set-Cookie", header)?;
+    }
+    Ok(())
 }
 
 /// Remove a cookie and its chunks from both response scopes before explicit expiration.
@@ -292,3 +359,11 @@ fn map_same_site(s: &crate::config::SameSite) -> CookieSameSite {
         crate::config::SameSite::None => CookieSameSite::None,
     }
 }
+
+#[cfg(test)]
+#[path = "cookie_utils/expires_tests.rs"]
+mod expires_tests;
+
+#[cfg(test)]
+#[path = "cookie_utils/cache_cleanup_tests.rs"]
+mod cache_cleanup_tests;

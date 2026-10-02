@@ -33,7 +33,7 @@ Explicit `secrets`, including an invalid empty vector, takes precedence over `BE
 
 `api_error.throw_errors = Some(true)` rethrows ordinary HTTP endpoint failures. Omission uses `false`, which returns an empty HTTP 500. API errors from an endpoint or after hook remain endpoint responses. Before-hook and body-decoding errors reach the HTTP error policy. Native `call_endpoint` calls bypass the policy, and `on_http_request` and `on_http_response` failures remain outside its catch boundary.
 
-Install `AuthBuilder::on_api_error(Arc<dyn ApiErrorHandler<S>>)` to observe failures with the resolved `AuthContext<S>`. The callback returns `AuthResult<Option<ApiErrorTask>>`. An immediate `Err` replaces the original error. Return `None` after synchronous work, or return a future for detached asynchronous work. The runtime polls that future once before returning the response and preserves request scope while the future continues. A detached failure is logged and cannot replace the response; this is the Rust runtime equivalent of upstream's unawaited callback Promise. `throw_errors = Some(true)` bypasses this callback.
+Install `AuthBuilder::on_api_error(Arc<dyn ApiErrorHandler<S>>)` to observe failures with the resolved `AuthContext<S>`. The callback returns `AuthResult<Option<ApiErrorTask>>`. An immediate `Err` replaces the original error. Return `None` after synchronous work, or return a future for detached asynchronous work. The runtime polls that future once before returning the response and preserves request scope while the future continues. A detached failure is logged and cannot replace the response; this is the Rust runtime equivalent of upstream's unawaited callback Promise. After a successful callback invocation for an ordinary runtime error, the router emits its diagnostic through the default tracing logger and returns an empty 500 without calling the application logger again. `throw_errors = Some(true)` bypasses this callback.
 
 `AuthError::redirect(location)` represents upstream's symbolic `FOUND` error and bypasses the policy. A numeric 302 error made with `AuthError::from(AuthResponse)` follows the ordinary API error policy. Returning a redirect response from an endpoint does not invoke the error policy.
 
@@ -256,6 +256,7 @@ Disabling tracking omits session and CAPTCHA addresses and disables IP rate limi
 | `same_site` | `Option<SameSite>` | `None` |
 | `path` | `Option<String>` | `None` |
 | `max_age` | `Option<f64>` | `None` |
+| `expires` | `Option<chrono::DateTime<chrono::Utc>>` | `None` |
 | `domain` | `Option<String>` | `None` |
 
 ### CookieOverride

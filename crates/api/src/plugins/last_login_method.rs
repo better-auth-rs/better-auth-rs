@@ -9,12 +9,10 @@ use better_auth_core::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
 };
 use better_auth_core::user_fields::{UserConfig, UserFieldConfig};
-use better_auth_core::utils::cookie_utils::{
-    encode_cookie_value, render_cookie, session_cookie_template,
-};
+use better_auth_core::utils::cookie_utils::{encode_cookie_value, render_cookie};
 use better_auth_core::{
-    AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    AuthRoute, AuthSchema, CreateUser, UpdateUser,
+    AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
+    AuthSchema, CreateUser, UpdateUser,
 };
 
 use super::endpoint_context::EndpointContext;
@@ -283,73 +281,63 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
         auth: &AuthContext<S>,
     ) -> AuthResult<()> {
         better_auth_core::observability::instrumentation::with_endpoint_hook(
-        &auth.config, request, "after", "plugin:last-login-method", async {
-        let hook_context = better_auth_core::hooks::current_request_hook_context();
-        let body = match &hook_context {
-            Some(context) => context.body.clone().unwrap_or(serde_json::Value::Null),
-            None if request.body.is_some() => request.body_as_json()?,
-            None => serde_json::Value::Null,
-        };
-        let mut endpoint = EndpointContext::new(Some(request), body, auth);
-        endpoint.path = Some(
-            hook_context
-                .as_ref()
-                .map_or(request.path(), |context| context.path.as_deref().unwrap_or(request.path())),
-        );
-        endpoint.response = Some(response);
-        let Some(method) = self.resolve(&endpoint)?.filter(|value| !value.is_empty()) else {
-            return Ok(());
-        };
-        let template = session_cookie_template(&auth.config);
-        if !response
-            .headers
-            .get_all("set-cookie")
-            .any(|cookie| cookie.contains(template.name()))
-        {
-            return Ok(());
-        }
-        if let Some(callback) = &self.before_store_cookie {
-            match callback.before_store_cookie(&endpoint, &method).await {
-                Ok(true) => {}
-                Ok(false) => return Ok(()),
-                Err(error) => {
-                    better_auth_core::observability::logger::current().error("[LastLoginMethod] Error in beforeStoreCookie hook", &[better_auth_core::observability::LogArgument::Error(&error)]);
+            &auth.config,
+            request,
+            "after",
+            "plugin:last-login-method",
+            async {
+                let hook_context = better_auth_core::hooks::current_request_hook_context();
+                let body = match &hook_context {
+                    Some(context) => context.body.clone().unwrap_or(serde_json::Value::Null),
+                    None if request.body.is_some() => request.body_as_json()?,
+                    None => serde_json::Value::Null,
+                };
+                let mut endpoint = EndpointContext::new(Some(request), body, auth);
+                endpoint.path = Some(hook_context.as_ref().map_or(request.path(), |context| {
+                    context.path.as_deref().unwrap_or(request.path())
+                }));
+                endpoint.response = Some(response);
+                let Some(method) = self.resolve(&endpoint)?.filter(|value| !value.is_empty())
+                else {
+                    return Ok(());
+                };
+                let mut cookie = auth.config.auth_cookie("session_token", Default::default());
+                if !response
+                    .headers
+                    .get_all("set-cookie")
+                    .any(|header| header.contains(&cookie.name))
+                {
                     return Ok(());
                 }
-            }
-        }
-        if self.config.max_age > 34_560_000.0 {
-            return Err(AuthError::internal(
-                "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration.",
-            ));
-        }
-        let mut cookie = template;
-        cookie.set_name(self.config.cookie_name.clone());
-        cookie.set_value(encode_cookie_value(&method));
-        cookie.set_http_only(false);
-        if self.config.cookie_name.starts_with("__Secure-")
-            || self.config.cookie_name.starts_with("__Host-")
-        {
-            cookie.set_secure(true);
-        }
-        if self.config.cookie_name.starts_with("__Host-") {
-            cookie.set_path("/");
-            cookie.unset_domain();
-        }
-        cookie.set_max_age((self.config.max_age >= 0.0).then(|| {
-            cookie::time::Duration::seconds(
-                self.config.max_age.floor() as i64
-            )
-        }));
-        response.headers.append(
-            "Set-Cookie",
-            render_cookie(
-                cookie,
-                &auth.config.auth_cookie("session_token", Default::default()),
-            ),
-        );
-        Ok(())
-     }
-    ).await
+                if let Some(callback) = &self.before_store_cookie {
+                    match callback.before_store_cookie(&endpoint, &method).await {
+                        Ok(true) => {}
+                        Ok(false) => return Ok(()),
+                        Err(error) => {
+                            better_auth_core::observability::logger::current().error(
+                                "[LastLoginMethod] Error in beforeStoreCookie hook",
+                                &[better_auth_core::observability::LogArgument::Error(&error)],
+                            );
+                            return Ok(());
+                        }
+                    }
+                }
+                if cookie.name.starts_with("__Secure-") || cookie.name.starts_with("__Host-") {
+                    cookie.attributes.secure = Some(true);
+                }
+                if cookie.name.starts_with("__Host-") {
+                    cookie.attributes.path = Some("/".into());
+                }
+                cookie.name = self.config.cookie_name.clone();
+                cookie.attributes.http_only = Some(false);
+                cookie.attributes.max_age = Some(self.config.max_age);
+                response.headers.append(
+                    "Set-Cookie",
+                    render_cookie(&encode_cookie_value(&method), &cookie)?,
+                );
+                Ok(())
+            },
+        )
+        .await
     }
 }

@@ -52,6 +52,14 @@ pub async fn handle_http_error<S: AuthSchema>(
                 }
             }
         }
+        if !error.is_api_error() {
+            // The callback replaces instance logging; the outer router still reports runtime errors.
+            crate::observability::LoggerConfig::default().error(
+                "Authentication request failed",
+                &[crate::observability::LogArgument::Error(&error)],
+            );
+            return Ok(AuthResponse::new(500));
+        }
     }
     Ok(error.to_http_response())
 }

@@ -1,7 +1,9 @@
 use super::*;
 use crate::config::{BearerConfig, CookieCacheConfig};
 use crate::test_store::{BundledSchema, test_database};
-use crate::utils::cookie_utils::{create_session_cookie_with_max_age, sign_cookie_value};
+use crate::utils::cookie_utils::{
+    create_clear_cookie, create_session_cookie_with_max_age, sign_cookie_value,
+};
 use crate::{AuthResponse, CreateUser};
 use chrono::Duration;
 
@@ -122,11 +124,12 @@ async fn challenge_expiration_supersedes_earlier_refresh_credentials() {
                     .auth_cookie("session_token", Default::default())
                     .name,
                 &manager.config,
-            ),
+            )
+            .unwrap(),
         )
         .with_appended_header(
             "Set-Cookie",
-            create_clear_cookie("better-auth.session_data", &manager.config),
+            create_clear_cookie("better-auth.session_data", &manager.config).unwrap(),
         );
     manager.finish_response(&req, &mut response).unwrap();
     assert!(!response.headers.contains_key("set-auth-token"));
@@ -146,7 +149,7 @@ async fn explicit_remember_marker_expiration_survives_browser_session_cookie() {
         )
         .with_appended_header(
             "Set-Cookie",
-            create_clear_cookie("better-auth.dont_remember", &manager.config),
+            create_clear_cookie("better-auth.dont_remember", &manager.config).unwrap(),
         );
     manager.finish_response(&req, &mut response).unwrap();
     let marker = response
