@@ -1,0 +1,180 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "model": "user",
+      "views": [
+        {
+          "view": "omitted",
+          "hasModelName": false,
+          "modelName": null,
+          "tableName": "user",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification"
+          ]
+        },
+        {
+          "view": "empty",
+          "hasModelName": true,
+          "modelName": "",
+          "tableName": "user",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification"
+          ]
+        },
+        {
+          "view": "custom",
+          "hasModelName": true,
+          "modelName": "display_user",
+          "tableName": "display_user",
+          "schemaTableNames": [
+            "display_user",
+            "session",
+            "account",
+            "verification"
+          ]
+        },
+        {
+          "view": "space",
+          "hasModelName": true,
+          "modelName": " ",
+          "tableName": " ",
+          "schemaTableNames": [
+            " ",
+            "session",
+            "account",
+            "verification"
+          ]
+        }
+      ]
+    },
+    {
+      "model": "organization",
+      "views": [
+        {
+          "view": "omitted",
+          "hasModelName": false,
+          "modelName": null,
+          "tableName": "organization",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            "organization",
+            "member",
+            "invitation"
+          ]
+        },
+        {
+          "view": "empty",
+          "hasModelName": true,
+          "modelName": "",
+          "tableName": "organization",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            "organization",
+            "member",
+            "invitation"
+          ]
+        },
+        {
+          "view": "custom",
+          "hasModelName": true,
+          "modelName": "display_organization",
+          "tableName": "display_organization",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            "display_organization",
+            "member",
+            "invitation"
+          ]
+        },
+        {
+          "view": "space",
+          "hasModelName": true,
+          "modelName": " ",
+          "tableName": " ",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            " ",
+            "member",
+            "invitation"
+          ]
+        }
+      ]
+    },
+    {
+      "model": "rateLimit",
+      "views": [
+        {
+          "view": "omitted",
+          "hasModelName": false,
+          "modelName": null,
+          "tableName": "rateLimit",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            "rateLimit"
+          ]
+        },
+        {
+          "view": "empty",
+          "hasModelName": true,
+          "modelName": "",
+          "tableName": "rateLimit",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            "rateLimit"
+          ]
+        },
+        {
+          "view": "custom",
+          "hasModelName": true,
+          "modelName": "display_rateLimit",
+          "tableName": "display_rateLimit",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            "display_rateLimit"
+          ]
+        },
+        {
+          "view": "space",
+          "hasModelName": true,
+          "modelName": " ",
+          "tableName": " ",
+          "schemaTableNames": [
+            "user",
+            "session",
+            "account",
+            "verification",
+            " "
+          ]
+        }
+      ]
+    }
+  ]
+}

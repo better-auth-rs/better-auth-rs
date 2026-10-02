@@ -141,6 +141,29 @@ The tests create and remove isolated schemas. They do not establish upstream dri
 
 ## Map plugin tables and columns
 
+An omitted or empty `modelName` keeps the generator's default table name. Nonempty strings, including whitespace, remain unchanged. The original optional declaration remains unchanged for generated metadata.
+
+The CLI and bundled entities currently have these default table-name differences from Better Auth 1.7.6 when upstream `modelName` and adapter `usePlural` are omitted:
+
+| Model | Rust default | Upstream default |
+| --- | --- | --- |
+| User | `users` | `user` |
+| Session | `sessions` | `session` |
+| Account | `accounts` | `account` |
+| Verification | `verifications` | `verification` |
+| RateLimit | `rate_limit` | `rateLimit` |
+| WalletAddress | `wallet_address` | `walletAddress` |
+| TwoFactor | `two_factor` | `twoFactor` |
+| DeviceCode | `device_code` | `deviceCode` |
+| TeamMember | `team_member` | `teamMember` |
+| OrganizationRole | `organization_role` | `organizationRole` |
+| ApiKey | `api_keys` | `apikey` |
+| Passkey | `passkeys` | `passkey` |
+
+Jwk, Organization, Member, Invitation, and Team have matching default table names. These are current representation differences and remain alignment work. Database interchangeability has not been established. Default column names and types also differ, so table-name-only renames would not establish interchangeability. Applications still own entity mappings and versioned migrations; this empty-name change does not rename existing tables or run a migration.
+
+The schema-only empty-name contract covers User, Organization, and RateLimit. The contract retains each runtime's actual defaults and proves that empty equals omission within that runtime. Organization, custom names, and whitespace provide direct cross-runtime controls. The other default-name comparisons above are source evidence, not additional runtime coverage.
+
 Use upstream model names in `--schema-config`: `apikey`, `deviceCode`, `passkey`, `twoFactor`, `jwks`, and `walletAddress`. Enable the corresponding plugins when generating the schema. For example:
 
 ```json

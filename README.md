@@ -17,6 +17,8 @@ Configure application user fields with `AuthConfig.user.fields_mut()` and matchi
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
+The schema generator keeps its default table name when `modelName` is omitted or empty. See [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns) for configuration and preserved declarations.
+
 Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display values through `SchemaValue<Option<String>>`; see [plugin fields](docs/content/docs/concepts/database.mdx#plugin-fields).
 
 API Key expiration configuration accepts fractional seconds for its default and fractional days for its bounds; see [API Key configuration](docs/content/docs/plugins/api-key.mdx#expiration-configuration) for units and the floating-point field migration.

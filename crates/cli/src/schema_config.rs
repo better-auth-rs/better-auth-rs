@@ -7,6 +7,8 @@ use serde::Deserialize;
 
 #[cfg(test)]
 mod empty_field_name_tests;
+#[cfg(test)]
+mod empty_model_name_tests;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub(crate) enum IdGeneration {
@@ -273,7 +275,7 @@ impl Entity {
                 .collect::<Result<_, String>>()?,
         };
         if let Some(config) = config {
-            if let Some(table) = &config.model_name {
+            if let Some(table) = config.model_name.as_ref().filter(|name| !name.is_empty()) {
                 entity.table.clone_from(table);
             }
             for (name, column) in config.fields.iter().flatten() {
