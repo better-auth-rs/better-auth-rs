@@ -19,7 +19,7 @@ impl EphemeralStore {
             .await
     }
 
-    async fn output_sessions_batches_then<R: Send, F>(
+    pub(super) async fn output_sessions_batches_then<R: Send, F>(
         &self,
         sessions: Vec<SessionView>,
         complete: impl Fn(Vec<(usize, SessionView)>) -> F + Sync,
@@ -231,11 +231,27 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         .transpose()
     }
 
+    async fn get_session_snapshot(
+        &self,
+        token: &str,
+    ) -> AuthResult<Option<(SessionView, Option<crate::session::SessionData>)>> {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_session_snapshot(token).await;
+        }
+        Ok(self
+            .get_session(token)
+            .await?
+            .map(|session| (session, None)))
+    }
+
     async fn get_session_snapshots(
         &self,
         tokens: &[String],
         only_active: bool,
     ) -> AuthResult<Vec<(SessionView, Option<crate::session::SessionData>)>> {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_session_snapshots(tokens, only_active).await;
+        }
         let now = Utc::now();
         let sessions = self
             .raw("session", "findMany", |state| {
@@ -268,14 +284,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                         let owner_id = owner_ids.get(index).ok_or_else(|| {
                             AuthError::internal("Session projection lost its stored join index")
                         })?;
-                        let user = self
-                            .raw("user", "findOne", |state| state.users.get(owner_id))
-                            .await?;
+                        let user = self.user_ref(|user| user.id == *owner_id).await?;
                         let has_user = user.is_some();
                         users.extend(user);
                         pending.push((index, session, has_user));
                     }
-                    let mut users = self.output_users(users).await?.into_iter();
+                    let mut users = self.output_user_refs(users).await?.into_iter();
                     Ok(pending
                         .into_iter()
                         .map(|(index, session, has_user)| {

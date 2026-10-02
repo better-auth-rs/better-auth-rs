@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
+    organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
 }
 
@@ -212,6 +213,30 @@ impl ModelFields {
         self.models.get(&role).unwrap_or(&EMPTY)
     }
 
+    pub(crate) fn organization_output_field_names(
+        &self,
+        role: EntityRole,
+        policies: &UserConfig,
+    ) -> Vec<String> {
+        let mut names = self
+            .organization_output_order
+            .get(&role)
+            .cloned()
+            .unwrap_or_else(|| {
+                let mut fields = Self::default();
+                fields.register_organization_schema(&Default::default(), true);
+                fields.fields(role).fields().keys().cloned().collect()
+            });
+        for name in policies.fields().keys() {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        names.retain(|name| name != "id");
+        names.push("id".into());
+        names
+    }
+
     /// Merge core policies and retain plugin-table policies for `RuntimeStore::with_runtime`.
     /// Application fields win at the adapter; plugin fields win at existing endpoint parsers.
     pub fn resolve(mut self, application: &AuthConfig) -> (AuthConfig, AuthConfig, Self) {
@@ -243,6 +268,10 @@ impl ModelFields {
         endpoint.verification.additional_fields = public.additional_fields.unwrap_or_default();
         for (role, native) in &self.native_fields {
             if let Some(fields) = self.models.get_mut(role) {
+                // Native slots determine read timing but are not configured adapter policies.
+                let _ = self
+                    .organization_output_order
+                    .insert(*role, fields.fields().keys().cloned().collect());
                 fields.fields_mut().retain(|name, _| !native.contains(name));
             }
         }

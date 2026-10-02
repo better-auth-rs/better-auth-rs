@@ -226,11 +226,11 @@ fn record_input<T: MemoryOrganizationRecord>(
     Ok(core)
 }
 
-fn record_output<T: MemoryOrganizationRecord>(
+fn record_fields<T: MemoryOrganizationRecord>(
     role: EntityRole,
     value: &T,
     schema: &crate::user_fields::UserConfig,
-) -> AuthResult<crate::user_fields::AdapterRecord> {
+) -> AuthResult<(Map<String, Value>, Map<String, Value>)> {
     let raw = object(value)?;
     let mut core: Map<_, _> = core_fields(role)
         .iter()
@@ -249,6 +249,15 @@ fn record_output<T: MemoryOrganizationRecord>(
             );
         }
     }
+    Ok((core, storage))
+}
+
+fn record_output<T: MemoryOrganizationRecord>(
+    role: EntityRole,
+    value: &T,
+    schema: &crate::user_fields::UserConfig,
+) -> AuthResult<crate::user_fields::AdapterRecord> {
+    let (core, storage) = record_fields(role, value, schema)?;
     Ok(crate::user_fields::AdapterRecord::new(core, storage))
 }
 
@@ -306,6 +315,66 @@ impl EphemeralStore {
             create,
         }
         .apply(value)
+    }
+
+    pub(super) async fn output_record_refs<T: MemoryOrganizationRecord + Clone>(
+        &self,
+        role: EntityRole,
+        values: Vec<super::rows::RowRef<T>>,
+    ) -> AuthResult<Vec<T>> {
+        let schema = self.field_config(role)?;
+        if schema.fields().is_empty() {
+            return values
+                .iter()
+                .map(|row| row.read(|value| Ok(value.clone())))
+                .collect();
+        }
+        let fields: IndexMap<_, _> = self
+            .model_fields
+            .organization_output_field_names(role, &schema)
+            .into_iter()
+            .map(|name| {
+                let field = schema.fields().get(&name).cloned().unwrap_or_default();
+                (name, field)
+            })
+            .collect();
+        let mut rows = values
+            .into_iter()
+            .map(|row| (row, Map::new()))
+            .collect::<Vec<_>>();
+        crate::user_fields::project_source_fields_then(
+            &mut rows,
+            &fields,
+            |(source, _), name, field| {
+                let configured = name != "id" && schema.fields().contains_key(name);
+                source.read(|row| {
+                    let (_, storage) = record_fields(role, row, &schema)?;
+                    let key = if configured {
+                        field.field_name.as_deref().unwrap_or(name)
+                    } else {
+                        name
+                    };
+                    Ok(storage.get(key).cloned())
+                })
+            },
+            |(_, output), name, field, value| {
+                let configured = name != "id" && schema.fields().contains_key(name);
+                Box::pin(async move {
+                    if configured {
+                        let value =
+                            crate::user_fields::project_adapter_value(value, field, true, true)
+                                .await?
+                                .json()?;
+                        crate::user_fields::assign_output(output, name, field, value)?;
+                    } else if let Some(value) = value {
+                        let _ = output.insert(name.to_owned(), value);
+                    }
+                    Ok(())
+                })
+            },
+            |_, (_, output)| decode_record(&schema, std::mem::take(output)),
+        )
+        .await
     }
 
     pub(super) async fn output_records<T: MemoryOrganizationRecord + Send>(

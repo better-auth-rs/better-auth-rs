@@ -76,6 +76,12 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
+    async fn get_organization_details(
+        &self,
+        query: OrganizationDetailsQuery<'_>,
+    ) -> AuthResult<Option<OrganizationDetails>> {
+        self.inner.get_organization_details(query).await
+    }
     async fn insert_organization(&self, record: Organization) -> AuthResult<Organization> {
         self.inner.insert_organization(record).await
     }
@@ -148,6 +154,27 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     }
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
         self.inner.get_member(organization_id, user_id).await
+    }
+    async fn get_member_with_user(
+        &self,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<Option<MemberUser>> {
+        self.inner
+            .get_member_with_user(organization_id, user_id)
+            .await
+    }
+    async fn get_member_with_user_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<MemberUser>> {
+        self.inner
+            .get_member_with_user_value(organization_id, user_id)
+            .await
+    }
+    async fn get_member_by_id_with_user(&self, id: &str) -> AuthResult<Option<MemberUser>> {
+        self.inner.get_member_by_id_with_user(id).await
     }
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         self.inner.get_member_by_id(id).await

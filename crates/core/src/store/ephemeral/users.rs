@@ -1,32 +1,41 @@
 use super::hooks::CommittedWrite;
+use super::rows::RowRef;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 
 impl EphemeralStore {
-    async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
-        self.raw("user", "findOne", |state| {
-            Ok(state
-                .users
-                .snapshot()?
-                .into_iter()
-                .find(|user| user.email.as_deref() == Some(&email.to_lowercase())))
+    async fn user_ref_by_email(&self, email: &str) -> AuthResult<Option<RowRef<UserView>>> {
+        self.user_ref(|user| user.email.as_deref() == Some(&email.to_lowercase()))
+            .await
+    }
+
+    pub(super) async fn user_ref(
+        &self,
+        predicate: impl Fn(&UserView) -> bool + Send,
+    ) -> AuthResult<Option<RowRef<UserView>>> {
+        self.raw("user", "findOne", move |state| {
+            state.users.first_ref(predicate)
         })
         .await
     }
 
-    pub(super) async fn user_record_by_id_value(
+    pub(super) async fn user_ref_by_id_value(
         &self,
         id: &serde_json::Value,
+    ) -> AuthResult<Option<RowRef<UserView>>> {
+        self.user_ref(|user| serde_json::json!(user.id) == *id)
+            .await
+    }
+
+    async fn output_optional_user_ref(
+        &self,
+        user: Option<RowRef<UserView>>,
     ) -> AuthResult<Option<UserView>> {
-        self.raw("user", "findOne", |state| {
-            Ok(state
-                .users
-                .snapshot()?
-                .iter()
-                .find(|user| serde_json::json!(user.id) == *id)
-                .cloned())
-        })
-        .await
+        Ok(self
+            .output_user_refs(user.into_iter().collect())
+            .await?
+            .into_iter()
+            .next())
     }
 
     async fn finish_user_update(
@@ -40,7 +49,7 @@ impl EphemeralStore {
         Ok(user)
     }
 
-    async fn output_user(&self, user: UserView) -> AuthResult<UserView> {
+    pub(super) async fn output_user(&self, user: UserView) -> AuthResult<UserView> {
         // Projection preserves the one input row.
         Ok(self.output_users(vec![user]).await?.remove(0))
     }
@@ -62,16 +71,20 @@ impl EphemeralStore {
             })
             .collect::<AuthResult<Vec<_>>>()?;
         let fields = self.config.user.output_fields_many(&storage).await?;
-        for (user, mut fields) in users.iter_mut().zip(fields) {
-            if self.config.user.fields().contains_key("name") {
-                user.name = crate::SchemaValue::from_json(fields.remove("name"));
-            }
-            if self.config.user.fields().contains_key("image") {
-                user.image = crate::SchemaValue::from_json(fields.remove("image"));
-            }
-            user.additional_fields = fields;
+        for (user, fields) in users.iter_mut().zip(fields) {
+            self.assign_user_output(user, fields);
         }
         Ok(users)
+    }
+
+    pub(super) fn assign_user_output(&self, user: &mut UserView, mut fields: Map<String, Value>) {
+        if self.config.user.fields().contains_key("name") {
+            user.name = crate::SchemaValue::from_json(fields.remove("name"));
+        }
+        if self.config.user.fields().contains_key("image") {
+            user.image = crate::SchemaValue::from_json(fields.remove("image"));
+        }
+        user.additional_fields = fields;
     }
     pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
         self.prepare_user_update_optional(update)
@@ -380,100 +393,71 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<UserView>> {
-        let user = self
-            .raw("user", "findOne", |state| state.users.get(id))
-            .await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+        self.output_optional_user_ref(self.user_ref(|user| user.id == *id).await?)
             .await
-            .transpose()
     }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
-        let user = self
-            .raw("user", "findOne", |state| state.users.get(id))
-            .await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+        self.output_optional_user_ref(self.user_ref(|user| user.id == id).await?)
             .await
-            .transpose()
     }
     async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<UserView>> {
-        let user = self.user_record_by_id_value(id).await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
+        self.output_optional_user_ref(self.user_ref_by_id_value(id).await?)
             .await
-            .transpose()
     }
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
-                    state
-                        .users
-                        .snapshot()?
-                        .iter()
-                        .filter(|user| ids.iter().any(|id| user.id.as_str() == Some(id.as_str())))
-                        .cloned()
-                        .collect(),
+                    state.users.select_refs(|user| {
+                        ids.iter().any(|id| user.id.as_str() == Some(id.as_str()))
+                    })?,
                     Some(limit),
                     None,
                 ))
             })
             .await?;
-        self.output_users(users).await
+        self.output_user_refs(users).await
     }
 
     async fn get_user_with_accounts(
         &self,
         email: &str,
     ) -> AuthResult<Option<crate::store::UserAccounts>> {
-        let Some(record) = self.user_record_by_email(email).await? else {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_user_accounts(email).await;
+        }
+        let Some(record) = self.user_ref_by_email(email).await? else {
             return Ok(None);
         };
-        let stored_user_id = record.id.clone();
-        let user = self.output_user(record).await?;
-        let accounts = match stored_user_id.as_str() {
-            Some(id) => self.get_user_accounts(id).await?,
-            None => Vec::new(),
-        };
+        let stored_user_id = record.read(|user| Ok(user.id.clone()))?;
+        let user = self.output_user_refs(vec![record]).await?.remove(0);
+        let mut accounts = Vec::new();
+        if let Some(id) = stored_user_id.as_str() {
+            for record in self.user_account_refs(id).await? {
+                accounts.push(self.output_account_ref(&record).await?);
+            }
+        }
         crate::store::UserAccounts::new(user, accounts, &stored_user_id).map(Some)
     }
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {
-        let user = self.user_record_by_email(email).await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
-            .await
-            .transpose()
+        let user = self.user_ref_by_email(email).await?;
+        self.output_optional_user_ref(user).await
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
         let user = self
-            .raw("user", "findOne", |state| {
-                Ok(state
-                    .users
-                    .snapshot()?
-                    .iter()
-                    .find(|user| user.username.as_deref() == Some(username))
-                    .cloned())
-            })
+            .user_ref(|user| user.username.as_deref() == Some(username))
             .await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
-            .await
-            .transpose()
+        self.output_optional_user_ref(user).await
     }
 
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<UserView>> {
         let user = self
-            .raw("user", "findOne", |state| {
-                Ok(state
-                    .users
-                    .snapshot()?
-                    .iter()
-                    .find(|user| user.phone_number.as_deref() == Some(phone_number))
-                    .cloned())
-            })
+            .user_ref(|user| user.phone_number.as_deref() == Some(phone_number))
             .await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
-            .await
-            .transpose()
+        self.output_optional_user_ref(user).await
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
@@ -548,10 +532,23 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .limit
             .get_or_insert(self.config.advanced.database.find_many_limit());
         let users: Vec<_> = self
-            .raw("user", "findMany", |state| state.users.snapshot())
+            .raw("user", "findMany", |state| {
+                state
+                    .users
+                    .select_refs(|_| true)?
+                    .into_iter()
+                    .map(|source| {
+                        let snapshot = source.read(|user| Ok(user.clone()))?;
+                        Ok((snapshot, source))
+                    })
+                    .collect::<AuthResult<Vec<_>>>()
+            })
             .await?;
-        let (users, _) = crate::user_query::apply_list_users(users, &params);
-        let users = self.output_users(users).await?;
+        let (users, _) =
+            crate::user_query::apply_list_users_by(users, &params, |(snapshot, _)| snapshot);
+        let users = self
+            .output_user_refs(users.into_iter().map(|(_, source)| source).collect())
+            .await?;
         let total = self
             .raw("user", "count", |state| {
                 Ok(crate::user_query::count_users(

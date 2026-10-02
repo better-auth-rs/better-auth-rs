@@ -113,6 +113,7 @@ async fn native_endpoint_spans_share_real_operation_ids_and_error_boundaries() -
             _ => operation,
         };
         let outer = format!("{method} /:virtual");
+        capture.wait_closed().await?;
         let records = capture
             .0
             .lock()

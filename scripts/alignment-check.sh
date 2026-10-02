@@ -35,7 +35,7 @@ cargo test --locked --test compat_endpoint_tests -- --nocapture
 cargo test --locked --test compat_coverage_tests -- --nocapture
 cargo test --locked --test wire_compat_smoke_tests -- --nocapture
 cargo test --locked --features seaorm2 --test transform_order_oracle
-bun test compat-tests/reference-server/contracts tests/fixtures/fallback-joins-upstream.test.ts tests/fixtures/organization-lists-upstream.test.ts tests/fixtures/organization-native-teams-upstream.test.ts tests/fixtures/organization-async-upstream.test.ts tests/fixtures/organization-join-continuation-upstream.test.ts tests/fixtures/account-owner-multiple-fields-upstream.test.ts tests/fixtures/fallback-continuation-upstream.test.ts
+bun test compat-tests/reference-server/contracts tests/fixtures/fallback-joins-upstream.test.ts tests/fixtures/organization-lists-upstream.test.ts tests/fixtures/organization-native-teams-upstream.test.ts tests/fixtures/organization-async-upstream.test.ts tests/fixtures/organization-join-continuation-upstream.test.ts tests/fixtures/account-owner-multiple-fields-upstream.test.ts tests/fixtures/fallback-continuation-upstream.test.ts tests/fixtures/organization-native-joins-upstream.test.ts
 bun test compat-tests/client-tests/support
 cargo test --locked --test client_compat_tests parallel_server_startup -- --ignored --nocapture
 cargo test --locked --test client_compat_tests full_client_compat -- --ignored --nocapture

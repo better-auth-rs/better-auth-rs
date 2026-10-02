@@ -36,15 +36,15 @@ pub(crate) async fn get_active_member_core(
         .active_organization_id()
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
 
-    let member = ctx
+    let joined = ctx
         .database
-        .get_member(org_id, user.id().typed()?)
+        .get_member_with_user(org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     Ok(MemberResponse::from_member_and_user(
-        &member,
-        &ctx.internal_user_view(user).await?,
+        &joined.member,
+        &joined.user,
     ))
 }
 
@@ -68,7 +68,7 @@ pub(crate) async fn list_members_core(
 
     let _ = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
@@ -130,15 +130,17 @@ pub(crate) async fn get_active_member_role_core(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
     if let Some(user_id) = query.user_id.as_deref() {
         let target_member = ctx
             .database
-            .get_member(&org_id, user_id)
+            .get_member_with_user(&org_id, user_id)
             .await?
+            .map(|joined| joined.member)
             .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
         return Ok(GetActiveMemberRoleResponse {
             role: target_member.role().typed()?.to_string(),
@@ -162,8 +164,9 @@ pub(crate) async fn remove_member_core(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     let target_member = if body.member_id_or_email.contains('@') {
@@ -178,8 +181,9 @@ pub(crate) async fn remove_member_core(
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     } else {
         ctx.database
-            .get_member_by_id(&body.member_id_or_email)
+            .get_member_by_id_with_user(&body.member_id_or_email)
             .await?
+            .map(|joined| joined.member)
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     };
     let is_self_removal = target_member.user_id().clone() == user.id().into_owned();
@@ -283,8 +287,9 @@ pub(crate) async fn update_member_role_core(
 
     let requester_member = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     if !has_role(&requester_member, &config.creator_role)?
@@ -303,11 +308,15 @@ pub(crate) async fn update_member_role_core(
         ));
     }
 
-    let target_member = ctx
-        .database
-        .get_member_by_id(&body.member_id)
-        .await?
-        .ok_or_else(|| AuthError::bad_request("Member not found"))?;
+    let target_member = if requester_member.id == body.member_id {
+        requester_member.clone()
+    } else {
+        ctx.database
+            .get_member_by_id_with_user(&body.member_id)
+            .await?
+            .map(|joined| joined.member)
+            .ok_or_else(|| AuthError::bad_request("Member not found"))?
+    };
 
     if target_member.organization_id().typed()? != &org_id {
         return Err(AuthError::forbidden(

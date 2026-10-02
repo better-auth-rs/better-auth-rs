@@ -566,6 +566,8 @@ pub struct AdvancedDatabaseConfig {
     pub generate_id: Option<crate::id::IdGeneration>,
     /// Default limit for find-many queries. Omission uses 100; adapters preserve numeric semantics.
     pub default_find_many_limit: Option<f64>,
+    /// Use native adapter joins when supported. Omission uses fallback reads.
+    pub joins: Option<bool>,
 }
 impl Default for AuthConfig {
     fn default() -> Self {

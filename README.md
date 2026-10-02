@@ -7,7 +7,7 @@ Authentication for Rust with Axum integration and application-owned SeaORM entit
 
 Configure model IDs and application-owned defaults through [database ID generation](docs/content/docs/concepts/database.mdx#model-ids).
 
-Custom adapters must provide a credential-account point query independent of list pagination; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration).
+Custom adapters must provide a credential-account point query independent of list pagination; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration). Enable `advanced.database.joins = Some(true)` for typed core and Organization associations with Memory child references or SeaORM query snapshots.
 
 Sessions use signed cookies. Response headers preserve repeated cookie writes in order; explicit expiration removes earlier values and chunks. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context. Use [Multi Session](docs/content/docs/plugins/multi-session.mdx) to remember and switch between accounts, with adapter-specific session selection and joined field projection.
 

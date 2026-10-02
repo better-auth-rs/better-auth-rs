@@ -61,8 +61,9 @@ pub(crate) async fn invite_member_core(
 
     let member = ctx
         .database
-        .get_member_value(&org_value, &serde_json::json!(user.id()))
+        .get_member_with_user_value(&org_value, &serde_json::json!(user.id()))
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
     let org_id = member.organization_id.typed()?.clone();
@@ -386,29 +387,17 @@ pub(crate) async fn get_invitation_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
 
-    if ctx
+    let inviter = ctx
         .database
-        .get_member(
+        .get_member_with_user(
             invitation.organization_id().typed()?.as_str(),
             invitation.inviter_id().typed()?.as_str(),
         )
         .await?
-        .is_none()
-    {
-        return Err(AuthError::bad_request(
-            "Inviter is no longer a member of the organization",
-        ));
-    }
-
-    let inviter_email = if let Some(inviter) = ctx
-        .database
-        .get_user_by_id(invitation.inviter_id.typed()?)
-        .await?
-    {
-        inviter.email().map(str::to_owned)
-    } else {
-        None
-    };
+        .ok_or_else(|| {
+            AuthError::bad_request("Inviter is no longer a member of the organization")
+        })?;
+    let inviter_email = inviter.user.email().map(str::to_owned);
 
     Ok(Some(GetInvitationResponse {
         invitation: InvitationView::from(&invitation),
@@ -429,7 +418,7 @@ pub(crate) async fn list_invitations_core(
 
     let _ = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -659,11 +648,12 @@ pub(crate) async fn cancel_invitation_core(
 
     let member = ctx
         .database
-        .get_member(
+        .get_member_with_user(
             invitation.organization_id().typed()?.as_str(),
             user.id().typed()?,
         )
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     if !check_permission(

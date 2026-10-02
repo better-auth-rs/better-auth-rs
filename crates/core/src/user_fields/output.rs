@@ -295,85 +295,100 @@ impl UserView {
     }
 }
 
-impl From<UserView> for Map<String, Value> {
-    fn from(user: UserView) -> Self {
-        let mut result = Map::from_iter([
-            ("id".into(), json!(user.id)),
-            ("name".into(), json!(user.name)),
-            ("email".into(), json!(user.email)),
-            ("emailVerified".into(), json!(user.email_verified)),
-            ("image".into(), json!(user.image)),
-            (
-                "createdAt".into(),
-                json!(
-                    user.created_at
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-                ),
-            ),
-            (
-                "updatedAt".into(),
-                json!(
-                    user.updated_at
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-                ),
-            ),
-        ]);
-        if user.id.is_undefined() {
-            let _ = result.remove("id");
-        }
-        if user.name.is_undefined() {
-            let _ = result.remove("name");
-        }
-        if user.image.is_undefined() {
-            let _ = result.remove("image");
-        }
-        for name in ["name", "email", "image"] {
-            if user
+impl UserView {
+    pub(crate) const NATIVE_FIELDS: &[&str] = &[
+        "id",
+        "name",
+        "email",
+        "emailVerified",
+        "image",
+        "createdAt",
+        "updatedAt",
+        "isAnonymous",
+        "phoneNumber",
+        "phoneNumberVerified",
+        "username",
+        "displayUsername",
+        "twoFactorEnabled",
+        "role",
+        "banned",
+        "banReason",
+        "banExpires",
+    ];
+
+    pub(crate) fn native_field_value(&self, name: &str) -> Option<Value> {
+        if matches!(name, "name" | "email" | "image")
+            && self
                 .visible_fields
                 .as_ref()
                 .is_some_and(|fields| !fields.contains(name))
-            {
-                let _ = result.remove(name);
-            }
+        {
+            return None;
         }
-        for (name, value) in [
-            ("isAnonymous", json!(user.is_anonymous)),
-            ("phoneNumber", json!(user.phone_number)),
-            ("phoneNumberVerified", json!(user.phone_number_verified)),
-            ("username", json!(user.username)),
-            ("displayUsername", json!(user.display_username)),
-            ("twoFactorEnabled", json!(user.two_factor_enabled)),
-            ("role", json!(user.role)),
-            ("banned", json!(user.banned)),
-            ("banReason", json!(user.ban_reason)),
-            (
-                "banExpires",
-                json!(
-                    user.ban_expires
-                        .map(|date| date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
-                ),
+        let value = match name {
+            "id" if !self.id.is_undefined() => json!(self.id),
+            "name" if !self.name.is_undefined() => json!(self.name),
+            "email" => json!(self.email),
+            "emailVerified" => json!(self.email_verified),
+            "image" if !self.image.is_undefined() => json!(self.image),
+            "createdAt" => json!(
+                self.created_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
             ),
-        ] {
-            if user
-                .visible_fields
-                .as_ref()
-                .is_none_or(|fields| fields.contains(name))
-            {
-                let value =
-                    if name == "isAnonymous" && value.is_null() && user.visible_fields.is_some() {
-                        json!(false)
-                    } else {
-                        value
-                    };
-                if user.visible_fields.is_none()
+            "updatedAt" => json!(
+                self.updated_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            ),
+            "id" | "name" | "image" => return None,
+            _ => {
+                if self
+                    .visible_fields
+                    .as_ref()
+                    .is_some_and(|fields| !fields.contains(name))
+                {
+                    return None;
+                }
+                let value = match name {
+                    "isAnonymous" => json!(self.is_anonymous),
+                    "phoneNumber" => json!(self.phone_number),
+                    "phoneNumberVerified" => json!(self.phone_number_verified),
+                    "username" => json!(self.username),
+                    "displayUsername" => json!(self.display_username),
+                    "twoFactorEnabled" => json!(self.two_factor_enabled),
+                    "role" => json!(self.role),
+                    "banned" => json!(self.banned),
+                    "banReason" => json!(self.ban_reason),
+                    "banExpires" => json!(
+                        self.ban_expires
+                            .map(|date| date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+                    ),
+                    _ => return None,
+                };
+                if name == "isAnonymous" && value.is_null() && self.visible_fields.is_some() {
+                    return Some(json!(false));
+                }
+                if self.visible_fields.is_none()
                     && value.is_null()
                     && ["isAnonymous", "phoneNumber", "phoneNumberVerified"].contains(&name)
                 {
-                    continue;
+                    return None;
                 }
-                let _ = result.insert(name.into(), value);
+                value
             }
-        }
+        };
+        Some(value)
+    }
+}
+
+impl From<UserView> for Map<String, Value> {
+    fn from(user: UserView) -> Self {
+        let mut result: Map<_, _> = UserView::NATIVE_FIELDS
+            .iter()
+            .filter_map(|name| {
+                user.native_field_value(name)
+                    .map(|value| ((*name).into(), value))
+            })
+            .collect();
         result.extend(user.additional_fields);
         result
     }

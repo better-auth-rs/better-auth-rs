@@ -15,6 +15,7 @@ use crate::entity::{
 use crate::types::InvitationStatus;
 
 mod account_view;
+mod session_projection;
 mod verification_view;
 pub use account_view::AccountView;
 pub use verification_view::VerificationView;
@@ -250,51 +251,33 @@ impl SessionView {
     where
         F: std::future::Future<Output = crate::AuthResult<R>> + Send,
     {
-        let mut rows = sessions
-            .iter()
-            .map(|session| {
-                let view = Self::from(session);
-                // Core getters retain public names when models serialize application field names.
-                let core: serde_json::Map<String, serde_json::Value> = view.clone().into();
-                Ok((
-                    session,
-                    view,
-                    core,
-                    if config.fields().is_empty() {
-                        serde_json::Value::Null
-                    } else {
-                        serde_json::to_value(session)?
-                    },
-                ))
-            })
-            .collect::<crate::AuthResult<Vec<_>>>()?;
+        let mut rows = session_projection::rows(sessions, config)?;
         crate::user_fields::project_fields_then(
             &mut rows,
             config.fields(),
-            |(session, view, core, model), name, field| {
-                Box::pin(async move {
-                    let value = if let Some(fields) = session.projected_fields() {
-                        fields.get(name).cloned()
-                    } else {
-                        let value = model
-                            .get(T::serialized_field_name(
-                                field.field_name.as_deref().unwrap_or(name),
-                            ))
-                            .or_else(|| model.get(name))
-                            .or_else(|| core.get(name))
-                            .cloned();
-                        field.adapter_output(value, supports_native_json).await?
-                    };
-                    if let Some(mut value) = value {
-                        if !field.references_id() {
-                            field.normalize_date(&mut value)?;
-                        }
-                        let _ = view.additional_fields.insert(name.to_owned(), value);
-                    }
-                    Ok(())
-                })
-            },
-            |index, (_, view, _, _)| complete(index, view.clone()),
+            |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
+            |index, row| complete(index, row.view.clone()),
+        )
+        .await
+    }
+
+    /// Continue ready session projections together, retaining their original row indices.
+    pub async fn with_internal_fields_many_for_adapter_batches_then<T: AuthSession, R: Send, F>(
+        sessions: &[T],
+        config: &crate::config::SessionConfig,
+        supports_native_json: bool,
+        complete: impl Fn(Vec<(usize, Self)>) -> F + Sync,
+    ) -> crate::AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = crate::AuthResult<Vec<(usize, R)>>> + Send,
+    {
+        let mut rows = session_projection::rows(sessions, config)?;
+        crate::user_fields::project_fields_batches_then(
+            &mut rows,
+            config.fields(),
+            |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
+            |_, row| Ok(row.view.clone()),
+            complete,
         )
         .await
     }

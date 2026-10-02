@@ -332,7 +332,7 @@ mod tests {
     }
 }
 
-pub(super) fn assign_output(
+pub(crate) fn assign_output(
     output: &mut Map<String, Value>,
     name: &str,
     field: &UserFieldConfig,

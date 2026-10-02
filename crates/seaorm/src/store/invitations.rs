@@ -182,6 +182,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         &self,
         email: &str,
     ) -> AuthResult<Vec<better_auth_core::store::InvitationOrganization>> {
+        if self.config().advanced.database.joins == Some(true) {
+            return self.joined_user_invitations(email).await;
+        }
         let fields = self.organization_fields()?;
         let rows = Entity::<O::Invitation>::find()
             .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))

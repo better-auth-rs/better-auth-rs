@@ -171,11 +171,18 @@ pub fn count_users<'a>(
 }
 
 /// Apply Better Auth admin list-users semantics to a user collection.
-pub fn apply_list_users(
-    mut users: Vec<UserView>,
+pub fn apply_list_users(users: Vec<UserView>, params: &ListUsersParams) -> (Vec<UserView>, usize) {
+    apply_list_users_by(users, params, |user| user)
+}
+
+pub(crate) fn apply_list_users_by<T>(
+    mut users: Vec<T>,
     params: &ListUsersParams,
-) -> (Vec<UserView>, usize) {
-    users.retain(|user| matches_search(user, params) && matches_filter(user, params));
+    record: impl Fn(&T) -> &UserView,
+) -> (Vec<T>, usize) {
+    users.retain(|user| {
+        matches_search(record(user), params) && matches_filter(record(user), params)
+    });
 
     if let Some(sort_by) = params.sort_by.as_deref().filter(|value| !value.is_empty()) {
         let sort_direction = params
@@ -184,26 +191,29 @@ pub fn apply_list_users(
             .filter(|value| !value.is_empty())
             .unwrap_or("asc");
 
-        users.sort_by(|lhs, rhs| match sort_by {
-            "id" | "_id" | "email" | "name" | "username" | "role" => compare_option_strings(
-                string_field(lhs, sort_by),
-                string_field(rhs, sort_by),
-                sort_direction,
-            ),
-            "createdAt" | "updatedAt" | "banExpires" => compare_option_dates(
-                date_field(lhs, sort_by),
-                date_field(rhs, sort_by),
-                sort_direction,
-            ),
-            "banned" => match sort_direction {
-                "asc" => bool_field(lhs, sort_by).cmp(&bool_field(rhs, sort_by)),
-                _ => bool_field(rhs, sort_by).cmp(&bool_field(lhs, sort_by)),
-            },
-            _ => compare_option_dates(
-                date_field(lhs, "createdAt"),
-                date_field(rhs, "createdAt"),
-                sort_direction,
-            ),
+        users.sort_by(|lhs, rhs| {
+            let (lhs, rhs) = (record(lhs), record(rhs));
+            match sort_by {
+                "id" | "_id" | "email" | "name" | "username" | "role" => compare_option_strings(
+                    string_field(lhs, sort_by),
+                    string_field(rhs, sort_by),
+                    sort_direction,
+                ),
+                "createdAt" | "updatedAt" | "banExpires" => compare_option_dates(
+                    date_field(lhs, sort_by),
+                    date_field(rhs, sort_by),
+                    sort_direction,
+                ),
+                "banned" => match sort_direction {
+                    "asc" => bool_field(lhs, sort_by).cmp(&bool_field(rhs, sort_by)),
+                    _ => bool_field(rhs, sort_by).cmp(&bool_field(lhs, sort_by)),
+                },
+                _ => compare_option_dates(
+                    date_field(lhs, "createdAt"),
+                    date_field(rhs, "createdAt"),
+                    sort_direction,
+                ),
+            }
         });
     }
 

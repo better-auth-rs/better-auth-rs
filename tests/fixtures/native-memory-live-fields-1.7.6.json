@@ -1,0 +1,47 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "path": "session",
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": {
+        "name": "ordinary-name-visible",
+        "image": "image-after"
+      },
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "owner",
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": {
+        "name": "ordinary-name-visible",
+        "image": "image-after"
+      },
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    }
+  ]
+}

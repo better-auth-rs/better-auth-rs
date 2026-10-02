@@ -297,20 +297,10 @@ impl UserConfig {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
-        let mut records = adapter_records(storage)?;
-        super::batch::project_fields_batches_then(
-            &mut records,
-            self.fields(),
-            |record, name, field| {
-                Box::pin(project_adapter_field(
-                    record,
-                    name,
-                    field,
-                    supports_native_json,
-                    supports_native_dates,
-                ))
-            },
-            |_, record| Ok(std::mem::take(&mut record.output)),
+        self.project_adapter_records_batches_then(
+            adapter_records(storage)?,
+            supports_native_json,
+            supports_native_dates,
             complete,
         )
         .await
@@ -419,6 +409,35 @@ impl UserConfig {
         )
         .await
     }
+
+    /// Continue ready extracted records together, retaining their original row indices.
+    pub async fn project_adapter_records_batches_then<R: Send, F>(
+        &self,
+        mut records: Vec<AdapterRecord>,
+        supports_native_json: bool,
+        supports_native_dates: bool,
+        complete: impl Fn(Vec<(usize, indexmap::IndexMap<String, SchemaValue<Value>>)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
+        super::batch::project_fields_batches_then(
+            &mut records,
+            self.fields(),
+            |record, name, field| {
+                Box::pin(project_adapter_field(
+                    record,
+                    name,
+                    field,
+                    supports_native_json,
+                    supports_native_dates,
+                ))
+            },
+            |_, record| Ok(std::mem::take(&mut record.output)),
+            complete,
+        )
+        .await
+    }
 }
 
 type OrganizationRecord = (Map<String, Value>, Map<String, Value>);
@@ -476,27 +495,39 @@ async fn project_adapter_field(
         .storage
         .get(field.field_name.as_deref().unwrap_or(name))
         .cloned();
-    let value = field.adapter_output(value, supports_native_json).await?;
-    let value = if !supports_native_dates
-        && !field.references_id()
-        && matches!(field.field_type, UserFieldType::Date)
-    {
-        match value {
-            Some(Value::String(text)) => match crate::utils::date::parse_adapter_date(&text) {
-                Some(date) => SchemaValue::Typed(Value::String(
-                    date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                )),
-                None => SchemaValue::InvalidDate,
-            },
-            value => SchemaValue::from_json(value),
-        }
-    } else {
-        SchemaValue::from_json(value)
-    };
+    let value =
+        project_adapter_value(value, field, supports_native_json, supports_native_dates).await?;
     if value.is_undefined() {
         let _ = record.output.shift_remove(name);
     } else {
         let _ = record.output.insert(name.to_owned(), value);
     }
     Ok(())
+}
+
+pub(crate) async fn project_adapter_value(
+    value: Option<Value>,
+    field: &UserFieldConfig,
+    supports_native_json: bool,
+    supports_native_dates: bool,
+) -> AuthResult<SchemaValue<Value>> {
+    let value = field.adapter_output(value, supports_native_json).await?;
+    Ok(
+        if !supports_native_dates
+            && !field.references_id()
+            && matches!(field.field_type, UserFieldType::Date)
+        {
+            match value {
+                Some(Value::String(text)) => match crate::utils::date::parse_adapter_date(&text) {
+                    Some(date) => SchemaValue::Typed(Value::String(
+                        date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                    )),
+                    None => SchemaValue::InvalidDate,
+                },
+                value => SchemaValue::from_json(value),
+            }
+        } else {
+            SchemaValue::from_json(value)
+        },
+    )
 }

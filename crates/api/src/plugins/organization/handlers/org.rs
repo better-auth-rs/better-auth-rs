@@ -14,10 +14,8 @@ use crate::plugins::organization::{OrganizationConfig, hooks::*};
 use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
-use better_auth_core::store::ListOrganizationMembersParams;
 use better_auth_core::types::{AuthRequest, AuthResponse, CreateOrganization, UpdateOrganization};
 use better_auth_core::wire::InvitationView;
-use std::collections::HashMap;
 
 fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
     Ok(member
@@ -230,8 +228,9 @@ pub(crate) async fn update_organization_core(
 
     let member = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     if !check_permission(
@@ -314,8 +313,9 @@ pub(crate) async fn delete_organization_core(
 
     let member = ctx
         .database
-        .get_member(&body.organization_id, user.id().typed()?)
+        .get_member_with_user(&body.organization_id, user.id().typed()?)
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("User is not a member of the organization"))?;
 
     if !check_permission(
@@ -392,88 +392,60 @@ pub(crate) async fn get_full_organization_core(
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<FullOrganizationResponse<OrganizationResponse, InvitationView>>> {
-    let (org_id, organization) = if let Some(slug) = query.organization_slug.as_deref() {
-        let organization = ctx
-            .database
-            .get_organization_by_slug(slug)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        (organization.id().typed()?.to_string(), organization)
+    use better_auth_core::store::{OrganizationDetailsQuery, OrganizationKey};
+
+    let selector = if let Some(slug) = query.organization_slug.as_deref() {
+        OrganizationKey::Slug(slug)
     } else {
-        let Some(org_id) = query
+        let Some(id) = query
             .organization_id
             .as_deref()
             .or_else(|| session.active_organization_id())
         else {
             return Ok(None);
         };
-        let organization = ctx
-            .database
-            .get_organization_by_id(org_id)
-            .await?
-            .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        (org_id.to_string(), organization)
+        OrganizationKey::Id(id)
     };
-
-    let invitations = ctx.database.list_organization_invitations(&org_id).await?;
-
-    let members_limit = query
-        .members_limit
-        .filter(|limit| *limit != 0.0 && !limit.is_nan())
-        .or(Some(ctx.config.advanced.database.find_many_limit()));
-    let member_params = ListOrganizationMembersParams {
-        organization_id: org_id.clone(),
-        limit: members_limit,
-        ..Default::default()
-    };
-    let (members_raw, _) = ctx
+    let details = ctx
         .database
-        .query_organization_members(&member_params)
-        .await?;
-    let teams = if config.teams.enabled {
-        let mut teams = Vec::new();
-        for team in ctx.database.list_organization_teams(&org_id).await? {
-            teams.push(crate::plugins::organization::types::FullOrganizationTeam { team });
-        }
-        Some(teams)
-    } else {
-        None
+        .get_organization_details(OrganizationDetailsQuery {
+            organization: selector,
+            members_limit: query
+                .members_limit
+                .filter(|limit| *limit != 0.0 && !limit.is_nan()),
+            users_limit: config.member_list_limit() as f64,
+            include_teams: config.teams.enabled,
+        })
+        .await?
+        .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
+    let organization = details.organization;
+    let org_id = match selector {
+        OrganizationKey::Id(id) => id,
+        OrganizationKey::Slug(_) => organization.id.typed()?,
     };
-    let user_ids = members_raw
-        .iter()
-        .map(|member| member.user_id.typed().cloned())
-        .collect::<AuthResult<Vec<_>>>()?;
-    let users = if user_ids.is_empty() {
-        Vec::new()
-    } else {
-        ctx.database
-            .list_users_by_ids(&user_ids, config.member_list_limit() as f64)
-            .await?
-    };
-    let users_by_id = users
-        .into_iter()
-        .map(|user| (user.id.as_str().map(str::to_owned), user))
-        .collect::<HashMap<_, _>>();
-    let mut members = Vec::with_capacity(members_raw.len());
-
-    for member in &members_raw {
-        let user_info = users_by_id
-            .get(&member.user_id.as_str().map(str::to_owned))
-            .ok_or_else(|| AuthError::internal("Unexpected error: User not found for member"))?;
-        members.push(MemberResponse::from_member_and_user(member, user_info));
-    }
-
     let _ = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member(org_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
-
     Ok(Some(FullOrganizationResponse {
         organization: crate::plugins::organization::fields::organization(&organization, ctx),
-        members,
-        invitations: invitations.iter().map(InvitationView::from).collect(),
-        teams,
+        members: details
+            .members
+            .iter()
+            .map(|joined| MemberResponse::from_member_and_user(&joined.member, &joined.user))
+            .collect(),
+        invitations: details
+            .invitations
+            .iter()
+            .map(InvitationView::from)
+            .collect(),
+        teams: details.teams.map(|teams| {
+            teams
+                .into_iter()
+                .map(|team| crate::plugins::organization::types::FullOrganizationTeam { team })
+                .collect()
+        }),
     }))
 }
 
@@ -565,13 +537,14 @@ pub(crate) async fn leave_organization_core(
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
-    let member = ctx
+    let joined = ctx
         .database
-        .get_member(&body.organization_id, user.id().typed()?)
+        .get_member_with_user(&body.organization_id, user.id().typed()?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if has_role(&member, &config.creator_role)? {
+    let member = &joined.member;
+    if has_role(member, &config.creator_role)? {
         let all_members = ctx
             .database
             .list_organization_members(&body.organization_id)
@@ -590,8 +563,7 @@ pub(crate) async fn leave_organization_core(
         }
     }
 
-    let response =
-        MemberResponse::from_member_and_user(&member, &ctx.internal_user_view(user).await?);
+    let response = MemberResponse::from_member_and_user(member, &joined.user);
     ctx.database.delete_member(member.id().typed()?).await?;
 
     if session.active_organization_id() == Some(&body.organization_id) {

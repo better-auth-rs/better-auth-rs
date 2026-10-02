@@ -30,6 +30,7 @@ mod device_codes;
 mod fields;
 mod hooks;
 mod invitation_accept;
+mod joins;
 mod jwks;
 #[cfg(test)]
 mod lifecycle_tests;
@@ -37,6 +38,7 @@ mod member_delete;
 mod organization;
 #[cfg(test)]
 mod organization_async_tests;
+mod organization_joins;
 mod passkeys;
 mod rate_limits;
 mod rows;

@@ -65,3 +65,47 @@ pub struct InvitationOrganization {
     pub invitation: crate::Invitation,
     pub organization: Option<crate::Organization>,
 }
+
+/// A member and the user selected by the member's persisted foreign key.
+#[derive(Debug, Clone)]
+pub struct MemberUser {
+    /// Projected member fields.
+    pub member: crate::Member,
+    /// Projected fields from the stored user, before the endpoint selects its summary.
+    pub user: UserView,
+}
+
+/// Select the organization before loading its related records.
+#[derive(Debug, Clone, Copy)]
+pub enum OrganizationKey<'a> {
+    /// Match the stored organization ID.
+    Id(&'a str),
+    /// Match the stored organization slug.
+    Slug(&'a str),
+}
+
+/// The independently limited pages used by a full organization response.
+#[derive(Debug, Clone, Copy)]
+pub struct OrganizationDetailsQuery<'a> {
+    /// Organization selector.
+    pub organization: OrganizationKey<'a>,
+    /// Member page limit; omission uses the adapter default.
+    pub members_limit: Option<f64>,
+    /// Limit of the separate user query after the organization and child projections.
+    pub users_limit: f64,
+    /// Include the organization's team page.
+    pub include_teams: bool,
+}
+
+/// Projected organization records and the users loaded after the related pages.
+#[derive(Debug, Clone)]
+pub struct OrganizationDetails {
+    /// Organization fields.
+    pub organization: crate::Organization,
+    /// Adapter-limited invitation page.
+    pub invitations: Vec<crate::Invitation>,
+    /// Adapter-limited member page with its separately loaded users.
+    pub members: Vec<MemberUser>,
+    /// Team page when requested; omission remains distinct from an empty page.
+    pub teams: Option<Vec<crate::Team>>,
+}

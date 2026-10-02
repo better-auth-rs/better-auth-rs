@@ -1,0 +1,245 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "path": "point",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "email",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "list",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "ids",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "owner",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "owner",
+      "joins": true,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "sessions",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "sessions",
+      "joins": true,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "user-accounts",
+      "joins": false,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-after"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    },
+    {
+      "path": "user-accounts",
+      "joins": true,
+      "events": [
+        [
+          "name",
+          "ordinary-name"
+        ],
+        [
+          "display-write",
+          "image-after"
+        ]
+      ],
+      "result": [
+        {
+          "name": "ordinary-name-visible",
+          "image": "image-before"
+        }
+      ],
+      "stored": {
+        "name": "ordinary-name",
+        "image": "image-after"
+      }
+    }
+  ]
+}

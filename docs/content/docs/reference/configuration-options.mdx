@@ -268,6 +268,7 @@ Disabling tracking omits session and CAPTCHA addresses and disables IP rate limi
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| `joins` | `Option<bool>` | `None` → `false` | Enable native adapter associations; see [database integration](../concepts/database#adapter-configuration) for supported paths |
 | `default_find_many_limit` | `Option<f64>` | `None` → `100` | Default limit for find-many queries; preserve adapter-specific numeric behavior |
 | `generate_id` | `IdGeneration` | `Random` | Generate model IDs or delegate to database defaults |
 

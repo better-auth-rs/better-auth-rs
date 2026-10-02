@@ -399,11 +399,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         if !self.database_sessions() || self.config.session.preserve_session_in_database() {
             return Ok(None);
         }
-        Ok(self
-            .inner
-            .get_session(token)
-            .await?
-            .map(|session| (session, None)))
+        self.inner.get_session_snapshot(token).await
     }
 
     async fn get_session_snapshots(

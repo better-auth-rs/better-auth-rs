@@ -5,7 +5,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
 };
 
-use better_auth_core::store::{AccountStore, UserStore};
+use better_auth_core::store::UserStore;
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::DatabaseHookUpdate;
@@ -70,6 +70,43 @@ where
         .await?;
         output.visible_fields = row.field_presence().cloned();
         Ok(output)
+    }
+
+    pub(super) async fn output_joined_users(
+        &self,
+        rows: &[Option<S::User>],
+        indices: &[usize],
+    ) -> AuthResult<Vec<Option<better_auth_core::wire::UserView>>> {
+        let selected = indices
+            .iter()
+            .map(|index| {
+                rows.get(*index).ok_or_else(|| {
+                    AuthError::internal("Parent projection lost its joined user index")
+                })
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        let models: Vec<_> = selected
+            .iter()
+            .filter_map(|user| user.as_ref())
+            .cloned()
+            .collect();
+        let mut projected = self
+            .output_users(&models, self.connection())
+            .await?
+            .into_iter();
+        selected
+            .into_iter()
+            .map(|user| {
+                if user.is_some() {
+                    projected
+                        .next()
+                        .map(Some)
+                        .ok_or_else(|| AuthError::internal("Joined user projection lost its row"))
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect()
     }
 
     pub(super) async fn find_user_by_username(
@@ -492,15 +529,60 @@ where
         email: &str,
     ) -> AuthResult<Option<better_auth_core::store::UserAccounts>> {
         use better_auth_core::AuthUser;
-        let Some(record) = self.user_record_by_email(email).await? else {
-            return Ok(None);
+        let (record, native_accounts) = if self.config().advanced.database.joins == Some(true) {
+            let query = super::joins::joined_query::<
+                <S::User as SeaOrmUserModel>::Entity,
+                <S::Account as SeaOrmAccountModel>::Entity,
+            >(
+                <S::User as SeaOrmUserModel>::Entity::find()
+                    .filter(S::User::email_column().eq(normalize_user_email(email)))
+                    .limit(1),
+                (S::User::id_column(), S::Account::user_id_column()),
+                S::Account::id_column(),
+            );
+            let rows = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+                self.config(),
+                "findOne",
+                super::joins::joined_rows::<
+                    <S::User as SeaOrmUserModel>::Entity,
+                    <S::Account as SeaOrmAccountModel>::Entity,
+                >(self.connection(), &query),
+            )
+            .await?;
+            let mut rows = rows.into_iter();
+            let Some((record, first_account)) = rows.next() else {
+                return Ok(None);
+            };
+            let accounts =
+                super::joins::limited_children::<<S::Account as SeaOrmAccountModel>::Entity>(
+                    std::iter::once(first_account)
+                        .chain(rows.map(|(_, account)| account))
+                        .flatten(),
+                    S::Account::id_column(),
+                    self.config().advanced.database.find_many_limit(),
+                );
+            (record, Some(accounts))
+        } else {
+            let Some(record) = self.user_record_by_email(email).await? else {
+                return Ok(None);
+            };
+            (record, None)
         };
         let stored_user_id = record.id().into_owned();
         let user = self.output_user(&record, self.connection()).await?;
-        let accounts = match stored_user_id.as_str() {
-            Some(id) => self.get_user_accounts(id).await?,
-            None => Vec::new(),
+        let records = if let Some(records) = native_accounts {
+            records
+        } else {
+            match stored_user_id.as_str() {
+                Some(id) => self.user_account_records(id).await?,
+                None => Vec::new(),
+            }
         };
+        let mut accounts = Vec::with_capacity(records.len());
+        for record in records {
+            accounts.push(self.output_account(&record, self.connection()).await?);
+        }
+
         better_auth_core::store::UserAccounts::new(user, accounts, &stored_user_id).map(Some)
     }
 

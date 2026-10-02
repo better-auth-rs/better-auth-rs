@@ -203,6 +203,9 @@ impl<
             .map_err(map_db_err)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
+        if self.config().advanced.database.joins == Some(true) {
+            return self.joined_user_teams(user_id).await;
+        }
         let rows = Entity::<O::TeamMember>::find()
             .filter(
                 O::TeamMember::column("user_id")?

@@ -126,18 +126,13 @@ pub(crate) async fn find_team(
 }
 
 async fn authorize(
-    user_id: &str,
+    member: &better_auth_core::Member,
     org_id: &str,
     permission: (&str, &str),
     message: &'static str,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<()> {
-    let member = ctx
-        .database
-        .get_member(org_id, user_id)
-        .await?
-        .ok_or_else(|| AuthError::forbidden(message))?;
     if !check_permission(
         member.role.typed()?,
         org_id,
@@ -188,8 +183,13 @@ pub(crate) async fn handle_team_request(
                 optional_string(body.data.organization_id, "body.data.organizationId")?;
             let org =
                 resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
+            let member = ctx
+                .database
+                .get_member_with_user(&org, user.id().typed()?)
+                .await?
+                .ok_or_else(|| AuthError::forbidden("You are not allowed to update this team"))?;
             authorize(
-                user.id().typed()?,
+                &member.member,
                 &org,
                 ("team", "update"),
                 "You are not allowed to update this team",
@@ -236,7 +236,7 @@ pub(crate) async fn handle_team_request(
                     .await?;
             if ctx
                 .database
-                .get_member(&org, user.id().typed()?)
+                .get_member_with_user(&org, user.id().typed()?)
                 .await?
                 .is_none()
             {
@@ -305,19 +305,16 @@ pub(crate) async fn handle_team_request(
             let org = explicit_org.or(session.active_organization_id());
             if user.id != target || explicit_org.is_some() {
                 let org = org.ok_or_else(|| AuthError::bad_request("No active organization"))?;
-                if ctx
+                let member = ctx
                     .database
-                    .get_member(org, user.id().typed()?)
+                    .get_member_with_user(org, user.id().typed()?)
                     .await?
-                    .is_none()
-                {
-                    return Err(AuthError::forbidden(
-                        "You are not a member of this organization",
-                    ));
-                }
+                    .ok_or_else(|| {
+                        AuthError::forbidden("You are not a member of this organization")
+                    })?;
                 if user.id != target {
                     authorize(
-                        user.id().typed()?,
+                        &member.member,
                         org,
                         ("member", "update"),
                         "You are not allowed to update this member",
@@ -325,7 +322,12 @@ pub(crate) async fn handle_team_request(
                         ctx,
                     )
                     .await?;
-                    if ctx.database.get_member(org, target).await?.is_none() {
+                    if ctx
+                        .database
+                        .get_member_with_user(org, target)
+                        .await?
+                        .is_none()
+                    {
                         return Err(AuthError::bad_request(
                             "User is not a member of the organization",
                         ));
@@ -387,19 +389,16 @@ pub(crate) async fn handle_team_request(
             let body = body!(MemberBody);
             let org = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx)
                 .await?;
-            if ctx
+            let member = ctx
                 .database
-                .get_member(&org, user.id().typed()?)
+                .get_member_with_user(&org, user.id().typed()?)
                 .await?
-                .is_none()
-            {
-                return Err(AuthError::bad_request(
-                    "User is not a member of the organization",
-                ));
-            }
+                .ok_or_else(|| {
+                    AuthError::bad_request("User is not a member of the organization")
+                })?;
             let adding = req.path() == "/organization/add-team-member";
             authorize(
-                user.id().typed()?,
+                &member.member,
                 &org,
                 ("member", if adding { "update" } else { "delete" }),
                 if adding {
@@ -413,7 +412,7 @@ pub(crate) async fn handle_team_request(
             .await?;
             if ctx
                 .database
-                .get_member(&org, &body.user_id)
+                .get_member_with_user(&org, &body.user_id)
                 .await?
                 .is_none()
             {

@@ -190,7 +190,7 @@ async fn global_input_patches_are_deferred_and_schema_errors_are_traced() -> Aut
 }
 
 #[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<Record>>>);
+struct Capture(Arc<Mutex<Vec<Record>>>, Arc<tokio::sync::Notify>);
 #[derive(Clone, Debug, Default)]
 struct Record {
     id: u64,
@@ -229,6 +229,27 @@ fn init_tracing() {
     });
 }
 impl Capture {
+    async fn wait_closed(&self) -> AuthResult<()> {
+        // SQLx workers can retain spans after delivering query results.
+        // A single waiter consumes notify_one's stored permit, including notifications before await.
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let all_closed = self
+                    .0
+                    .lock()
+                    .map_err(|_| AuthError::internal("capture poisoned"))?
+                    .iter()
+                    .all(|record| record.closed > 0);
+                if all_closed {
+                    return Ok(());
+                }
+                self.1.notified().await;
+            }
+        })
+        .await
+        .map_err(|_| AuthError::internal("Captured spans did not close before timeout"))?
+    }
+
     fn span(&self) -> tracing::Span {
         init_tracing();
         let span = tracing::info_span!(target: "better-auth-test", "capture");
@@ -323,15 +344,18 @@ impl<S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>> Layer
         let Some(capture) = span.extensions().get::<Capture>().cloned() else {
             return;
         };
-        if let Some(record) = capture
-            .0
-            .lock()
-            .expect("capture mutex is not poisoned")
-            .iter_mut()
-            .find(|record| record.id == id.into_u64())
         {
-            record.closed += 1;
+            if let Some(record) = capture
+                .0
+                .lock()
+                .expect("capture mutex is not poisoned")
+                .iter_mut()
+                .find(|record| record.id == id.into_u64())
+            {
+                record.closed += 1;
+            }
         }
+        capture.1.notify_one();
     }
 }
 #[derive(Clone, Copy)]
@@ -478,6 +502,7 @@ async fn spans_preserve_dispatch_order_parentage_and_original_outcomes() -> Auth
                     }
                 );
             }
+            capture.wait_closed().await?;
             let records = capture
                 .0
                 .lock()
@@ -669,6 +694,7 @@ async fn database_spans_trace_only_declared_callbacks_and_instance_enablement() 
         let capture_span = capture.span();
         let response=auth.call_endpoint(HttpMethod::Post,"/sign-up/email",better_auth::server_api::EndpointInput { body:Some(json!({"email":"example@example.test","name":"Example","password":"Password123!"})),..Default::default() }).instrument(capture_span).await?;
         assert_eq!(response.status, 200);
+        capture.wait_closed().await?;
         let records = capture
             .0
             .lock()
@@ -978,6 +1004,7 @@ mod sqlite {
                 .await
                 .is_err()
         );
+        capture.wait_closed().await?;
         let records = capture
             .0
             .lock()
@@ -1176,6 +1203,7 @@ mod sqlite {
                 "missing" => assert!(matches!(result, Err(AuthError::UserNotFound))),
                 _ => assert!(result.is_err()),
             }
+            capture.wait_closed().await?;
             let records = capture
                 .0
                 .lock()
@@ -1309,6 +1337,7 @@ async fn check_two_factor_operations(
         "incrementOne",
         "findOne",
     ];
+    capture.wait_closed().await?;
     let records = capture
         .0
         .lock()
@@ -1435,6 +1464,7 @@ async fn check_plugin_operations(
         ("create", wallets),
         ("findOne", wallets),
     ];
+    capture.wait_closed().await?;
     let records = capture
         .0
         .lock()
@@ -1588,6 +1618,7 @@ async fn check_device_operations(
         "findOne",
         "delete",
     ];
+    capture.wait_closed().await?;
     let records = capture
         .0
         .lock()
@@ -1648,6 +1679,7 @@ async fn trace_api_key_usage(
         .consume_api_key_usage(snapshot, true)
         .instrument(capture.span())
         .await;
+    capture.wait_closed().await?;
     let records = capture
         .0
         .lock()
@@ -1759,6 +1791,7 @@ async fn check_api_key_list(
         [Some("E"), Some("D")]
     );
     assert_eq!(count?, 5);
+    capture.wait_closed().await?;
     let records = capture
         .0
         .lock()

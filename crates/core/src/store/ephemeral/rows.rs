@@ -10,6 +10,15 @@ pub(super) trait MemoryRow {
 
 #[derive(Clone)]
 pub(super) struct Rows<T>(Vec<Arc<Mutex<T>>>);
+
+#[derive(Clone)]
+pub(super) struct RowRef<T>(Arc<Mutex<T>>);
+
+impl<T> RowRef<T> {
+    pub(super) fn read<R>(&self, read: impl FnOnce(&T) -> AuthResult<R>) -> AuthResult<R> {
+        read(&*lock(&self.0)?)
+    }
+}
 impl<T> Default for Rows<T> {
     fn default() -> Self {
         Self(Vec::new())
@@ -20,6 +29,28 @@ fn lock<T>(row: &Mutex<T>) -> AuthResult<MutexGuard<'_, T>> {
         .map_err(|_| AuthError::internal("Ephemeral row lock poisoned"))
 }
 impl<T: Clone> Rows<T> {
+    pub(super) fn first_ref(
+        &self,
+        predicate: impl Fn(&T) -> bool,
+    ) -> AuthResult<Option<RowRef<T>>> {
+        for row in &self.0 {
+            if predicate(&*lock(row)?) {
+                return Ok(Some(RowRef(row.clone())));
+            }
+        }
+        Ok(None)
+    }
+
+    pub(super) fn select_refs(&self, predicate: impl Fn(&T) -> bool) -> AuthResult<Vec<RowRef<T>>> {
+        let mut selected = Vec::new();
+        for row in &self.0 {
+            if predicate(&*lock(row)?) {
+                selected.push(RowRef(row.clone()));
+            }
+        }
+        Ok(selected)
+    }
+
     pub(super) fn push(&mut self, row: T) {
         self.0.push(Arc::new(Mutex::new(row)));
     }

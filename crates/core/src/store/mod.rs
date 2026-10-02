@@ -610,7 +610,10 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
 }
 
 mod joins;
-pub use joins::{AccountOwner, InvitationOrganization, UserAccounts};
+pub use joins::{
+    AccountOwner, InvitationOrganization, MemberUser, OrganizationDetails,
+    OrganizationDetailsQuery, OrganizationKey, UserAccounts,
+};
 
 #[async_trait]
 pub trait AccountStore<S: AuthSchema>: Send + Sync {
@@ -832,6 +835,16 @@ pub trait OrganizationStore: Send + Sync {
             ))
         }
     }
+    /// Read the organization and its child pages, then load the member users.
+    /// Native joins must select the organization and all child pages in one statement.
+    async fn get_organization_details(
+        &self,
+        _query: OrganizationDetailsQuery<'_>,
+    ) -> AuthResult<Option<OrganizationDetails>> {
+        Err(AuthError::config(
+            "The store must support full organization reads",
+        ))
+    }
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization>;
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>>;
     /// Query an ID supplied through a replacement organization schema.
@@ -904,6 +917,41 @@ pub trait MemberStore: Send + Sync {
         self.get_member(organization_id, user_id).await
     }
 
+    /// Read a member and its stored user, projecting the member before the user.
+    async fn get_member_with_user(
+        &self,
+        _organization_id: &str,
+        _user_id: &str,
+    ) -> AuthResult<Option<MemberUser>> {
+        Err(AuthError::config(
+            "The store must support member user joins",
+        ))
+    }
+    /// Query member references accepted by a replacement organization schema.
+    async fn get_member_with_user_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<MemberUser>> {
+        let organization_id = organization_id.as_str().ok_or_else(|| {
+            AuthError::config(
+                "The store must support dynamic member reference queries for this schema",
+            )
+        })?;
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config(
+                "The store must support dynamic member reference queries for this schema",
+            )
+        })?;
+        self.get_member_with_user(organization_id, user_id).await
+    }
+    /// Read one member by its stored ID and project its stored user.
+    /// Return an error if the selected member has no stored user.
+    async fn get_member_by_id_with_user(&self, _id: &str) -> AuthResult<Option<MemberUser>> {
+        Err(AuthError::config(
+            "The store must support member user joins",
+        ))
+    }
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>>;
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member>;
     async fn delete_member(&self, member_id: &str) -> AuthResult<()>;

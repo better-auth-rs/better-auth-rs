@@ -25,6 +25,13 @@ pub(super) fn compare_member_values(
 
 #[async_trait]
 impl OrganizationStore for EphemeralStore {
+    async fn get_organization_details(
+        &self,
+        query: crate::store::OrganizationDetailsQuery<'_>,
+    ) -> AuthResult<Option<crate::store::OrganizationDetails>> {
+        self.read_organization_details(query).await
+    }
+
     async fn insert_organization(&self, mut record: Organization) -> AuthResult<Organization> {
         record.id = self
             .generated_id(
@@ -283,6 +290,9 @@ impl OrganizationStore for EphemeralStore {
         Ok(())
     }
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_user_organizations(user_id).await;
+        }
         let rows = self
             .lock()?
             .members
@@ -305,14 +315,19 @@ impl OrganizationStore for EphemeralStore {
                     let id = ids.get(index).ok_or_else(|| {
                         AuthError::internal("Member projection lost its stored join index")
                     })?;
-                    if let Some(organization) = self.lock()?.organizations.get(id)? {
+                    if let Some(organization) =
+                        self.lock()?.organizations.first_ref(|row| row.id == *id)?
+                    {
                         indices.push(index);
                         organizations.push(organization);
                     }
                 }
                 Ok(indices
                     .into_iter()
-                    .zip(self.output_organizations(organizations).await?)
+                    .zip(
+                        self.output_record_refs(EntityRole::Organization, organizations)
+                            .await?,
+                    )
                     .collect())
             }
         })
@@ -321,6 +336,40 @@ impl OrganizationStore for EphemeralStore {
 }
 #[async_trait]
 impl MemberStore for EphemeralStore {
+    async fn get_member_with_user(
+        &self,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<Option<crate::store::MemberUser>> {
+        self.read_member_user(
+            |row| Ok(row.organization_id == organization_id && row.user_id == user_id),
+            false,
+        )
+        .await
+    }
+    async fn get_member_with_user_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<crate::store::MemberUser>> {
+        self.read_member_user(
+            |row| {
+                Ok(
+                    row.organization_id.json()?.as_ref() == Some(organization_id)
+                        && row.user_id.json()?.as_ref() == Some(user_id),
+                )
+            },
+            false,
+        )
+        .await
+    }
+    async fn get_member_by_id_with_user(
+        &self,
+        id: &str,
+    ) -> AuthResult<Option<crate::store::MemberUser>> {
+        self.read_member_user(|row| Ok(row.id == id), true).await
+    }
+
     async fn insert_member(&self, mut record: Member) -> AuthResult<Member> {
         record.id = self
             .generated_id(
@@ -781,6 +830,9 @@ impl InvitationStore for EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_user_invitations(email).await;
+        }
         let email = email.to_lowercase();
         let rows = self
             .lock()?
@@ -804,12 +856,15 @@ impl InvitationStore for EphemeralStore {
                     let id = ids.get(index).ok_or_else(|| {
                         AuthError::internal("Invitation projection lost its stored join index")
                     })?;
-                    let organization = self.lock()?.organizations.get(id)?;
+                    let organization = self.lock()?.organizations.first_ref(|row| row.id == *id)?;
                     let has_organization = organization.is_some();
                     organizations.extend(organization);
                     pending.push((index, invitation, has_organization));
                 }
-                let mut organizations = self.output_organizations(organizations).await?.into_iter();
+                let mut organizations = self
+                    .output_record_refs(EntityRole::Organization, organizations)
+                    .await?
+                    .into_iter();
                 Ok(pending
                     .into_iter()
                     .map(|(index, invitation, has_organization)| {

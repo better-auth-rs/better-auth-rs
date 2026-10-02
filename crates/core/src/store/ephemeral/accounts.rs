@@ -27,6 +27,32 @@ impl EphemeralStore {
         .await
     }
 
+    pub(super) async fn user_account_records(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Vec<Map<String, Value>>> {
+        let fields = self.config.account.field_schema();
+        let records: Vec<_> = self
+            .raw("account", "findMany", |state| {
+                Ok(crate::query::paginate_memory(
+                    state
+                        .accounts
+                        .snapshot()?
+                        .iter()
+                        .filter(|record| {
+                            record.get(fields.record_storage_key("userId"))
+                                == Some(&Value::String(user_id.to_owned()))
+                        })
+                        .cloned()
+                        .collect(),
+                    Some(self.config.advanced.database.find_many_limit()),
+                    None,
+                ))
+            })
+            .await?;
+        Ok(records)
+    }
+
     pub(super) async fn output_accounts(
         &self,
         records: &[Map<String, Value>],
@@ -132,6 +158,9 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         provider: &str,
         account_id: &str,
     ) -> AuthResult<Option<crate::store::AccountOwner>> {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_account_owner(provider, account_id).await;
+        }
         let fields = self.config.account.field_schema();
         let records = self.account_records(provider, account_id).await?;
         let owner_ids: Vec<_> = records
@@ -150,14 +179,14 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                         })?;
                         let stored_owner_id = crate::SchemaValue::from_json(owner_id.clone());
                         let user = match owner_id {
-                            Some(id) if !id.is_null() => self.user_record_by_id_value(id).await?,
+                            Some(id) if !id.is_null() => self.user_ref_by_id_value(id).await?,
                             _ => None,
                         };
                         let has_user = user.is_some();
                         users.extend(user);
                         pending.push((index, output, stored_owner_id, has_user));
                     }
-                    let mut users = self.output_users(users).await?.into_iter();
+                    let mut users = self.output_user_refs(users).await?.into_iter();
                     pending
                         .into_iter()
                         .map(|(index, output, stored_owner_id, has_user)| {
@@ -201,26 +230,8 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
-        let fields = self.config.account.field_schema();
-        let records: Vec<_> = self
-            .raw("account", "findMany", |state| {
-                Ok(crate::query::paginate_memory(
-                    state
-                        .accounts
-                        .snapshot()?
-                        .iter()
-                        .filter(|record| {
-                            record.get(fields.record_storage_key("userId"))
-                                == Some(&Value::String(user_id.to_owned()))
-                        })
-                        .cloned()
-                        .collect(),
-                    Some(self.config.advanced.database.find_many_limit()),
-                    None,
-                ))
-            })
-            .await?;
-        self.output_accounts(&records).await
+        self.output_accounts(&self.user_account_records(user_id).await?)
+            .await
     }
 
     async fn update_account(&self, id: &str, input: UpdateAccount) -> AuthResult<AccountView> {

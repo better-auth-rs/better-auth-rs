@@ -1,0 +1,413 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "joins": false,
+      "path": "organizations",
+      "mode": "parent-read",
+      "limit": 2,
+      "unconfiguredLogo": true,
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo-after"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "organizations": [
+          {
+            "name": "O-A",
+            "logo": "O-A-logo-after"
+          },
+          {
+            "name": "O-B",
+            "logo": "O-B-logo"
+          }
+        ],
+        "teams": [
+          {
+            "name": "T-A",
+            "label": "T-A-label"
+          },
+          {
+            "name": "T-B",
+            "label": "T-B-label"
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A",
+            "detail": "I-A-detail"
+          },
+          {
+            "label": "I-A2",
+            "detail": "I-A2-detail"
+          },
+          {
+            "label": "I-B",
+            "detail": "I-B-detail"
+          }
+        ],
+        "users": [
+          {
+            "name": "U-A",
+            "image": "U-A-image"
+          },
+          {
+            "name": "U-B",
+            "image": "U-B-image"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "path": "organizations",
+      "mode": "parent-read",
+      "limit": 2,
+      "unconfiguredLogo": true,
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo-after"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "organizations": [
+          {
+            "name": "O-A",
+            "logo": "O-A-logo-after"
+          },
+          {
+            "name": "O-B",
+            "logo": "O-B-logo"
+          }
+        ],
+        "teams": [
+          {
+            "name": "T-A",
+            "label": "T-A-label"
+          },
+          {
+            "name": "T-B",
+            "label": "T-B-label"
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A",
+            "detail": "I-A-detail"
+          },
+          {
+            "label": "I-A2",
+            "detail": "I-A2-detail"
+          },
+          {
+            "label": "I-B",
+            "detail": "I-B-detail"
+          }
+        ],
+        "users": [
+          {
+            "name": "U-A",
+            "image": "U-A-image"
+          },
+          {
+            "name": "U-B",
+            "image": "U-B-image"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "path": "organizations",
+      "mode": "parent-read",
+      "limit": 2,
+      "unconfiguredLogo": true,
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "organizations": [
+          {
+            "name": "O-A",
+            "logo": "O-A-logo-after"
+          },
+          {
+            "name": "O-B",
+            "logo": "O-B-logo"
+          }
+        ],
+        "teams": [
+          {
+            "name": "T-A",
+            "label": "T-A-label"
+          },
+          {
+            "name": "T-B",
+            "label": "T-B-label"
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A",
+            "detail": "I-A-detail"
+          },
+          {
+            "label": "I-A2",
+            "detail": "I-A2-detail"
+          },
+          {
+            "label": "I-B",
+            "detail": "I-B-detail"
+          }
+        ],
+        "users": [
+          {
+            "name": "U-A",
+            "image": "U-A-image"
+          },
+          {
+            "name": "U-B",
+            "image": "U-B-image"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "path": "organizations",
+      "mode": "parent-read",
+      "limit": 2,
+      "unconfiguredLogo": true,
+      "events": [
+        [
+          "member.label",
+          "M-A"
+        ],
+        [
+          "member.label",
+          "M-B"
+        ],
+        [
+          "member.detail",
+          "M-A-detail"
+        ],
+        [
+          "member.detail",
+          "M-B-detail"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "organization.name",
+          "O-B"
+        ],
+        [
+          "organization.name",
+          "O-A"
+        ],
+        [
+          "display-write",
+          "organization",
+          {
+            "logo": "O-A-logo-after"
+          }
+        ]
+      ],
+      "result": [
+        {
+          "name": "O-A-visible",
+          "logo": "O-A-logo"
+        },
+        {
+          "name": "O-B-visible",
+          "logo": "O-B-logo"
+        }
+      ],
+      "originalError": false,
+      "stored": {
+        "organizations": [
+          {
+            "name": "O-A",
+            "logo": "O-A-logo-after"
+          },
+          {
+            "name": "O-B",
+            "logo": "O-B-logo"
+          }
+        ],
+        "teams": [
+          {
+            "name": "T-A",
+            "label": "T-A-label"
+          },
+          {
+            "name": "T-B",
+            "label": "T-B-label"
+          }
+        ],
+        "invitations": [
+          {
+            "label": "I-A",
+            "detail": "I-A-detail"
+          },
+          {
+            "label": "I-A2",
+            "detail": "I-A2-detail"
+          },
+          {
+            "label": "I-B",
+            "detail": "I-B-detail"
+          }
+        ],
+        "users": [
+          {
+            "name": "U-A",
+            "image": "U-A-image"
+          },
+          {
+            "name": "U-B",
+            "image": "U-B-image"
+          }
+        ]
+      }
+    }
+  ]
+}

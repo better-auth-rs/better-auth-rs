@@ -31,18 +31,15 @@ pub(super) async fn create(
         })
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
     if let Some((user, _)) = &session {
-        if ctx
+        let member = ctx
             .database
-            .get_member(org, user.id().typed()?)
+            .get_member_with_user(org, user.id().typed()?)
             .await?
-            .is_none()
-        {
-            return Err(AuthError::forbidden(
-                "You are not allowed to invite users to this organization",
-            ));
-        }
+            .ok_or_else(|| {
+                AuthError::forbidden("You are not allowed to invite users to this organization")
+            })?;
         authorize(
-            user.id().typed()?,
+            &member.member,
             org,
             ("team", "create"),
             "You are not allowed to create teams in this organization",
@@ -141,19 +138,18 @@ pub(super) async fn remove(
         return Err(AuthResponse::new(401).into());
     }
     if let Some((user, session)) = &session {
-        if session.active_team_id() == Some(body.team_id.as_str())
-            || ctx
-                .database
-                .get_member(org, user.id().typed()?)
-                .await?
-                .is_none()
-        {
+        if session.active_team_id() == Some(body.team_id.as_str()) {
             return Err(AuthError::forbidden(
                 "You are not allowed to delete this team",
             ));
         }
+        let member = ctx
+            .database
+            .get_member_with_user(org, user.id().typed()?)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("You are not allowed to delete this team"))?;
         authorize(
-            user.id().typed()?,
+            &member.member,
             org,
             ("team", "delete"),
             "You are not allowed to delete teams in this organization",

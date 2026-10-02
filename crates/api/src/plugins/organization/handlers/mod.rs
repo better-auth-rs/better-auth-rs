@@ -122,8 +122,9 @@ pub(crate) async fn has_permission_core(
 
     let member = ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_with_user(&org_id, user.id().typed()?)
         .await?
+        .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
     let has_all_permissions = check_permissions(

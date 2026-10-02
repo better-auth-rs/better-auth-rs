@@ -1,0 +1,55 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "joins": false,
+      "events": [
+        [
+          "displayLabel",
+          "label-a-before"
+        ],
+        [
+          "display-write",
+          "label-b-after"
+        ],
+        [
+          "displayLabel",
+          "label-b-after"
+        ]
+      ],
+      "result": [
+        "label-a-before-visible",
+        "label-b-after-visible"
+      ],
+      "stored": [
+        "label-a-before",
+        "label-b-after"
+      ]
+    },
+    {
+      "joins": true,
+      "events": [
+        [
+          "displayLabel",
+          "label-a-before"
+        ],
+        [
+          "display-write",
+          "label-b-after"
+        ],
+        [
+          "displayLabel",
+          "label-b-after"
+        ]
+      ],
+      "result": [
+        "label-a-before-visible",
+        "label-b-after-visible"
+      ],
+      "stored": [
+        "label-a-before",
+        "label-b-after"
+      ]
+    }
+  ]
+}

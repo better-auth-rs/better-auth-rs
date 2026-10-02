@@ -218,6 +218,7 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Member
     for SeaOrmStore<S, O, P>
 where
     S: AuthSchema + Send + Sync,
+    S::User: crate::SeaOrmUserModel,
 {
     async fn insert_member(&self, record: Member) -> AuthResult<Member> {
         let config = self.organization_fields()?.member;
@@ -260,6 +261,50 @@ where
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
         self.create_member_with_connection(self.connection(), member)
             .await
+    }
+
+    async fn get_member_with_user(
+        &self,
+        organization_id: &str,
+        user_id: &str,
+    ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
+        let query = Entity::<O::Member>::find()
+            .filter(O::Member::column("organization_id")?.eq_id(
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .filter(
+                O::Member::column("user_id")?
+                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
+            );
+        self.read_member_user(query, false).await
+    }
+    async fn get_member_with_user_value(
+        &self,
+        organization_id: &serde_json::Value,
+        user_id: &serde_json::Value,
+    ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
+        let query = Entity::<O::Member>::find()
+            .filter(super::value_filter::equals_id(
+                O::Member::column("organization_id")?,
+                organization_id,
+                self.config().advanced.database.generate_id(),
+            )?)
+            .filter(super::value_filter::equals_id(
+                O::Member::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+            )?);
+        self.read_member_user(query, false).await
+    }
+    async fn get_member_by_id_with_user(
+        &self,
+        id: &str,
+    ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
+        let query = Entity::<O::Member>::find().filter(
+            O::Member::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?,
+        );
+        self.read_member_user(query, true).await
     }
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {

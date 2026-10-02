@@ -204,6 +204,9 @@ impl TeamStore for EphemeralStore {
             .count() as u64)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
+        if self.config.advanced.database.joins == Some(true) {
+            return self.joined_user_teams(user_id).await;
+        }
         let rows = self
             .lock()?
             .team_members
@@ -218,11 +221,15 @@ impl TeamStore for EphemeralStore {
         );
         let mut teams = Vec::new();
         for member in rows {
-            if let Some(team) = self.lock()?.teams.get(&member.team_id)? {
+            if let Some(team) = self
+                .lock()?
+                .teams
+                .first_ref(|row| row.id == member.team_id)?
+            {
                 teams.push(team);
             }
         }
-        self.output_records(EntityRole::Team, teams).await
+        self.output_record_refs(EntityRole::Team, teams).await
     }
     async fn get_team_member(
         &self,

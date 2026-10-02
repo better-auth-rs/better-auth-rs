@@ -1,0 +1,398 @@
+use super::rows::{MemoryRow, RowRef};
+use super::*;
+use crate::SchemaValue;
+use crate::store::{MemberUser, OrganizationDetails, OrganizationDetailsQuery, OrganizationKey};
+use better_auth_schema_registry::EntityRole;
+
+struct OrganizationChildren {
+    invitations: Vec<RowRef<Invitation>>,
+    members: Vec<(RowRef<Member>, SchemaValue<String>)>,
+    teams: Option<Vec<RowRef<crate::Team>>>,
+}
+
+fn child_page<T: Clone + MemoryRow>(
+    rows: Vec<RowRef<T>>,
+    limit: f64,
+) -> AuthResult<Vec<RowRef<T>>> {
+    let mut result = Vec::new();
+    let mut ids = Vec::new();
+    for row in rows {
+        if result.len() as f64 >= limit {
+            break;
+        }
+        let id = row.read(|row| Ok(row.id().clone()))?;
+        if !ids.contains(&id) {
+            ids.push(id);
+            result.push(row);
+        }
+    }
+    Ok(result)
+}
+
+impl EphemeralStore {
+    pub(super) async fn read_member_user(
+        &self,
+        predicate: impl Fn(&Member) -> AuthResult<bool> + Send,
+        require_user: bool,
+    ) -> AuthResult<Option<MemberUser>> {
+        let (member, owner_id, native_user) = {
+            let state = self.lock()?;
+            let mut selected = None;
+            for row in state.members.snapshot()? {
+                if predicate(&row)? {
+                    selected = Some(row);
+                    break;
+                }
+            }
+            let Some(member) = selected else {
+                return Ok(None);
+            };
+            let owner_id = member.user_id.clone();
+            let native_user = if self.config.advanced.database.joins == Some(true) {
+                Some(state.users.first_ref(|user| user.id == owner_id)?)
+            } else {
+                None
+            };
+            (member, owner_id, native_user)
+        };
+        let member = self.output_member(member).await?;
+        let user = match native_user {
+            Some(user) => user,
+            None => self.lock()?.users.first_ref(|user| user.id == owner_id)?,
+        };
+        let user = self
+            .output_user_refs(user.into_iter().collect())
+            .await?
+            .into_iter()
+            .next();
+        match user {
+            Some(user) => Ok(Some(MemberUser { member, user })),
+            // The by-ID adapter requires a child; the organization/user lookup permits an absent child.
+            None if require_user => Err(AuthError::internal("User not found for member")),
+            None => Ok(None),
+        }
+    }
+
+    pub(super) async fn read_organization_details(
+        &self,
+        query: OrganizationDetailsQuery<'_>,
+    ) -> AuthResult<Option<OrganizationDetails>> {
+        let default_limit = self.config.advanced.database.find_many_limit();
+        let members_limit = query.members_limit.unwrap_or(default_limit);
+        let (organization, children) = {
+            let state = self.lock()?;
+            let organization = state.organizations.find(|row| match query.organization {
+                OrganizationKey::Id(id) => row.id == id,
+                OrganizationKey::Slug(slug) => row.slug == slug,
+            })?;
+            let Some(organization) = organization else {
+                return Ok(None);
+            };
+            let children = if self.config.advanced.database.joins == Some(true) {
+                let invitations = child_page(
+                    state
+                        .invitations
+                        .select_refs(|row| row.organization_id == organization.id)?,
+                    default_limit,
+                )?;
+                let members = child_page(
+                    state
+                        .members
+                        .select_refs(|row| row.organization_id == organization.id)?,
+                    members_limit,
+                )?
+                .into_iter()
+                .map(|row| {
+                    let owner = row.read(|member| Ok(member.user_id.clone()))?;
+                    Ok((row, owner))
+                })
+                .collect::<AuthResult<Vec<_>>>()?;
+                let teams = if query.include_teams {
+                    Some(child_page(
+                        state
+                            .teams
+                            .select_refs(|row| row.organization_id == organization.id)?,
+                        default_limit,
+                    )?)
+                } else {
+                    None
+                };
+                Some(OrganizationChildren {
+                    invitations,
+                    members,
+                    teams,
+                })
+            } else {
+                None
+            };
+            (organization, children)
+        };
+        let organization_id = organization.id.clone();
+        let organization = self.output_organization(organization).await?;
+        let (invitations, members, teams) = if let Some(children) = children {
+            let mut invitations = Vec::with_capacity(children.invitations.len());
+            for row in children.invitations {
+                invitations.extend(
+                    self.output_record_refs(EntityRole::Invitation, vec![row])
+                        .await?,
+                );
+            }
+            let mut members = Vec::with_capacity(children.members.len());
+            for (row, owner) in children.members {
+                for row in self
+                    .output_record_refs(EntityRole::Member, vec![row])
+                    .await?
+                {
+                    members.push((row, owner.clone()));
+                }
+            }
+            let teams = if let Some(rows) = children.teams {
+                let mut teams = Vec::with_capacity(rows.len());
+                for row in rows {
+                    teams.extend(self.output_record_refs(EntityRole::Team, vec![row]).await?);
+                }
+                Some(teams)
+            } else {
+                None
+            };
+            (invitations, members, teams)
+        } else {
+            let rows = crate::query::paginate_memory(
+                self.lock()?
+                    .invitations
+                    .select_refs(|row| row.organization_id == organization_id)?,
+                Some(default_limit),
+                None,
+            );
+            let mut invitations = Vec::with_capacity(rows.len());
+            for row in rows {
+                invitations.extend(
+                    self.output_record_refs(EntityRole::Invitation, vec![row])
+                        .await?,
+                );
+            }
+            let rows = crate::query::paginate_memory(
+                self.lock()?
+                    .members
+                    .select_refs(|row| row.organization_id == organization_id)?,
+                Some(members_limit),
+                None,
+            )
+            .into_iter()
+            .map(|row| {
+                let owner = row.read(|member| Ok(member.user_id.clone()))?;
+                Ok((row, owner))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+            let mut members = Vec::with_capacity(rows.len());
+            for (row, owner) in rows {
+                for member in self
+                    .output_record_refs(EntityRole::Member, vec![row])
+                    .await?
+                {
+                    members.push((member, owner.clone()));
+                }
+            }
+            let teams = if query.include_teams {
+                let rows = crate::query::paginate_memory(
+                    self.lock()?
+                        .teams
+                        .select_refs(|row| row.organization_id == organization_id)?,
+                    Some(default_limit),
+                    None,
+                );
+                let mut teams = Vec::with_capacity(rows.len());
+                for row in rows {
+                    teams.extend(self.output_record_refs(EntityRole::Team, vec![row]).await?);
+                }
+                Some(teams)
+            } else {
+                None
+            };
+            (invitations, members, teams)
+        };
+        let owners = members
+            .iter()
+            .map(|(_, id)| id.typed().cloned())
+            .collect::<AuthResult<Vec<_>>>()?;
+        let user_rows = if owners.is_empty() {
+            Vec::new()
+        } else {
+            self.raw("user", "findMany", |state| {
+                Ok(crate::query::paginate_memory(
+                    state
+                        .users
+                        .snapshot()?
+                        .into_iter()
+                        .filter(|user| owners.iter().any(|owner| user.id == owner.as_str()))
+                        .collect(),
+                    Some(query.users_limit),
+                    None,
+                ))
+            })
+            .await?
+        };
+        let stored_ids = user_rows
+            .iter()
+            .map(|user| user.id.clone())
+            .collect::<Vec<_>>();
+        let users = self.output_users(user_rows).await?;
+        let members = members
+            .into_iter()
+            .map(|(member, owner)| {
+                let index = stored_ids
+                    .iter()
+                    .position(|id| *id == owner)
+                    .ok_or_else(|| {
+                        AuthError::internal("Unexpected error: User not found for member")
+                    })?;
+                Ok(MemberUser {
+                    member,
+                    user: users.get(index).cloned().ok_or_else(|| {
+                        AuthError::internal("Member projection lost its stored user index")
+                    })?,
+                })
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        Ok(Some(OrganizationDetails {
+            organization,
+            invitations,
+            members,
+            teams,
+        }))
+    }
+
+    pub(super) async fn joined_user_organizations(
+        &self,
+        user_id: &str,
+    ) -> AuthResult<Vec<Organization>> {
+        let (members, organizations) = {
+            let state = self.lock()?;
+            let rows = crate::query::paginate_memory(
+                state
+                    .members
+                    .snapshot()?
+                    .into_iter()
+                    .filter(|row| row.user_id == user_id)
+                    .collect(),
+                Some(self.config.advanced.database.find_many_limit()),
+                None,
+            );
+            let organizations = rows
+                .iter()
+                .map(|row| {
+                    state
+                        .organizations
+                        .first_ref(|org| org.id == row.organization_id)
+                })
+                .collect::<AuthResult<Vec<_>>>()?;
+            (rows, organizations)
+        };
+        self.output_records_batches_then(EntityRole::Member, members, |ready| {
+            let organizations = &organizations;
+            async move {
+                let mut indices = Vec::new();
+                let mut sources = Vec::new();
+                for (index, _) in ready {
+                    if let Some(row) = organizations.get(index).ok_or_else(|| {
+                        AuthError::internal("Member projection lost its stored join index")
+                    })? {
+                        indices.push(index);
+                        sources.push(row.clone());
+                    }
+                }
+                Ok(indices
+                    .into_iter()
+                    .zip(
+                        self.output_record_refs(EntityRole::Organization, sources)
+                            .await?,
+                    )
+                    .collect())
+            }
+        })
+        .await
+    }
+
+    pub(super) async fn joined_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>> {
+        let teams = {
+            let state = self.lock()?;
+            let rows = crate::query::paginate_memory(
+                state
+                    .team_members
+                    .snapshot()?
+                    .into_iter()
+                    .filter(|row| row.user_id == user_id)
+                    .collect(),
+                Some(self.config.advanced.database.find_many_limit()),
+                None,
+            );
+            rows.iter()
+                .map(|row| state.teams.first_ref(|team| team.id == row.team_id))
+                .collect::<AuthResult<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .collect()
+        };
+        self.output_record_refs(EntityRole::Team, teams).await
+    }
+
+    pub(super) async fn joined_user_invitations(
+        &self,
+        email: &str,
+    ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
+        let email = email.to_lowercase();
+        let (invitations, organizations) = {
+            let state = self.lock()?;
+            let rows = crate::query::paginate_memory(
+                state
+                    .invitations
+                    .snapshot()?
+                    .into_iter()
+                    .filter(|row| row.email == email)
+                    .collect(),
+                Some(self.config.advanced.database.find_many_limit()),
+                None,
+            );
+            let organizations = rows
+                .iter()
+                .map(|row| {
+                    state
+                        .organizations
+                        .first_ref(|org| org.id == row.organization_id)
+                })
+                .collect::<AuthResult<Vec<_>>>()?;
+            (rows, organizations)
+        };
+        self.output_records_batches_then(EntityRole::Invitation, invitations, |ready| {
+            let organizations = &organizations;
+            async move {
+                let mut pending = Vec::new();
+                let mut sources = Vec::new();
+                for (index, invitation) in ready {
+                    let row = organizations.get(index).ok_or_else(|| {
+                        AuthError::internal("Invitation projection lost its stored join index")
+                    })?;
+                    sources.extend(row.clone());
+                    pending.push((index, invitation, row.is_some()));
+                }
+                let mut projected = self
+                    .output_record_refs(EntityRole::Organization, sources)
+                    .await?
+                    .into_iter();
+                Ok(pending
+                    .into_iter()
+                    .map(|(index, invitation, present)| {
+                        (
+                            index,
+                            crate::store::InvitationOrganization {
+                                invitation,
+                                organization: if present { projected.next() } else { None },
+                            },
+                        )
+                    })
+                    .collect())
+            }
+        })
+        .await
+    }
+}

@@ -39,7 +39,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationStore
     for SeaOrmStore<S, O, P>
+where
+    S::User: crate::SeaOrmUserModel,
 {
+    async fn get_organization_details(
+        &self,
+        query: better_auth_core::store::OrganizationDetailsQuery<'_>,
+    ) -> AuthResult<Option<better_auth_core::store::OrganizationDetails>> {
+        self.read_organization_details(query).await
+    }
+
     async fn insert_organization(&self, record: Organization) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
         let core = self.create_fields(
@@ -335,6 +344,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     }
 
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
+        if self.config().advanced.database.joins == Some(true) {
+            return self.joined_user_organizations(user_id).await;
+        }
         let config = self.organization_fields()?;
         let rows = Entity::<O::Member>::find()
             .filter(

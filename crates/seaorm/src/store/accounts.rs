@@ -9,12 +9,30 @@ use sea_orm::{
 use better_auth_core::store::AccountStore;
 use better_auth_core::wire::AccountView;
 
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 use crate::hooks::DatabaseHookUpdate;
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateAccount, UpdateAccount};
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
+
+fn stored_owner_id(
+    value: Option<&sea_orm::Value>,
+) -> AuthResult<better_auth_core::SchemaValue<String>> {
+    value
+        .map(sea_orm::sea_query::sea_value_to_json_value)
+        .map(|value| {
+            if value.is_null() {
+                Ok(better_auth_core::SchemaValue::from_json(Some(value)))
+            } else {
+                better_auth_core::SchemaValue::<String>::from_json(Some(value))
+                    .display_string()
+                    .map(better_auth_core::SchemaValue::from)
+            }
+        })
+        .transpose()
+        .map(Option::unwrap_or_default)
+}
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -37,6 +55,26 @@ where
                             .eq(provider_account_id),
                     )
                     .limit(2)
+                    .all(self.connection())
+                    .await
+                    .map_err(map_db_err)
+            },
+        )
+        .await
+    }
+
+    pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<S::Account>> {
+        let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
+        database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "findMany",
+            async {
+                <S::Account as SeaOrmAccountModel>::Entity::find()
+                    .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
+                    .limit(super::pagination::default_limit(
+                        self.config(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .all(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -77,6 +115,48 @@ where
                 &self.config().account.field_schema(),
                 db.get_database_backend() == sea_orm::DbBackend::Postgres,
                 db.get_database_backend() != sea_orm::DbBackend::Sqlite,
+            )
+            .await
+    }
+
+    async fn native_account_owners(
+        &self,
+        records: Vec<better_auth_core::user_fields::AdapterRecord>,
+        users: &[Option<S::User>],
+        owner_ids: &[Option<sea_orm::Value>],
+    ) -> AuthResult<Vec<better_auth_core::store::AccountOwner>>
+    where
+        S::User: SeaOrmUserModel,
+    {
+        let backend = self.connection().get_database_backend();
+        self.config()
+            .account
+            .field_schema()
+            .project_adapter_records_batches_then(
+                records,
+                backend == sea_orm::DbBackend::Postgres,
+                backend != sea_orm::DbBackend::Sqlite,
+                |ready| async move {
+                    let indices: Vec<_> = ready.iter().map(|(index, _)| *index).collect();
+                    let projected = self.output_joined_users(users, &indices).await?;
+                    ready
+                        .into_iter()
+                        .zip(projected)
+                        .map(|((index, output), user)| {
+                            let owner_id = owner_ids.get(index).ok_or_else(|| {
+                                AuthError::internal(
+                                    "Account projection lost its stored owner index",
+                                )
+                            })?;
+                            better_auth_core::store::AccountOwner::new(
+                                AccountView::from_adapter_fields(output),
+                                user,
+                                &stored_owner_id(owner_id.as_ref())?,
+                            )
+                            .map(|owner| (index, owner))
+                        })
+                        .collect()
+                },
             )
             .await
     }
@@ -216,7 +296,32 @@ where
         provider: &str,
         account_id: &str,
     ) -> AuthResult<Option<better_auth_core::store::AccountOwner>> {
-        let records = self.account_records(provider, account_id).await?;
+        let (records, native_users) = if self.config().advanced.database.joins == Some(true) {
+            let query = super::joins::joined_query::<
+                <S::Account as SeaOrmAccountModel>::Entity,
+                <S::User as SeaOrmUserModel>::Entity,
+            >(
+                <S::Account as SeaOrmAccountModel>::Entity::find()
+                    .filter(S::Account::provider_id_column().eq(provider))
+                    .filter(S::Account::account_id_column().eq(account_id))
+                    .limit(2),
+                (S::Account::user_id_column(), S::User::id_column()),
+                S::User::id_column(),
+            );
+            let rows = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+                self.config(),
+                "findMany",
+                super::joins::joined_rows::<
+                    <S::Account as SeaOrmAccountModel>::Entity,
+                    <S::User as SeaOrmUserModel>::Entity,
+                >(self.connection(), &query),
+            )
+            .await?;
+            let (records, users): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
+            (records, Some(users))
+        } else {
+            (self.account_records(provider, account_id).await?, None)
+        };
         let fields = self.config().account.field_schema();
         let mut owner_ids = Vec::with_capacity(records.len());
         let extracted = records
@@ -233,62 +338,61 @@ where
             })
             .collect::<AuthResult<Vec<_>>>()?;
         let backend = self.connection().get_database_backend();
-        let owners = fields
-            .project_adapter_records_then(
-                extracted,
-                backend == sea_orm::DbBackend::Postgres,
-                backend != sea_orm::DbBackend::Sqlite,
-                |index, output| {
-                    let owner_ids = &owner_ids;
-                    async move {
-                        let owner_id = owner_ids.get(index).ok_or_else(|| {
-                            crate::error::AuthError::internal(
-                                "Account projection lost its stored owner index",
-                            )
-                        })?;
-                        let account = AccountView::from_adapter_fields(output);
-                        let stored_owner_id = owner_id
-                            .as_ref()
-                            .map(sea_orm::sea_query::sea_value_to_json_value)
-                            .map(|value| {
-                                if value.is_null() {
-                                    Ok(better_auth_core::SchemaValue::from_json(Some(value)))
-                                } else {
-                                    better_auth_core::SchemaValue::<String>::from_json(Some(value))
-                                        .display_string()
-                                        .map(better_auth_core::SchemaValue::from)
+        let owners = if let Some(users) = native_users {
+            self.native_account_owners(extracted, &users, &owner_ids)
+                .await?
+        } else {
+            fields
+                .project_adapter_records_then(
+                    extracted,
+                    backend == sea_orm::DbBackend::Postgres,
+                    backend != sea_orm::DbBackend::Sqlite,
+                    |index, output| {
+                        let owner_ids = &owner_ids;
+                        async move {
+                            let owner_id = owner_ids.get(index).ok_or_else(|| {
+                                crate::error::AuthError::internal(
+                                    "Account projection lost its stored owner index",
+                                )
+                            })?;
+                            let account = AccountView::from_adapter_fields(output);
+                            let stored_owner_id = stored_owner_id(owner_id.as_ref())?;
+                            let Some(owner_id) = owner_id else {
+                                return better_auth_core::store::AccountOwner::new(
+                                    account,
+                                    None,
+                                    &stored_owner_id,
+                                );
+                            };
+                            let owner =
+                                database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+                                    self.config(),
+                                    "findOne",
+                                    async {
+                                        <S::User as SeaOrmUserModel>::Entity::find()
+                                            .filter(S::User::id_column().eq(owner_id.clone()))
+                                            .one(self.connection())
+                                            .await
+                                            .map_err(map_db_err)
+                                    },
+                                )
+                                .await?;
+                            let user = match owner.as_ref() {
+                                Some(row) => {
+                                    self.output_user(row, self.connection()).await.map(Some)
                                 }
-                            })
-                            .transpose()?
-                            .unwrap_or_default();
-                        let Some(owner_id) = owner_id else {
-                            return better_auth_core::store::AccountOwner::new(
+                                None => Ok(None),
+                            }?;
+                            better_auth_core::store::AccountOwner::new(
                                 account,
-                                None,
+                                user,
                                 &stored_owner_id,
-                            );
-                        };
-                        let owner = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-                            self.config(),
-                            "findOne",
-                            async {
-                                <S::User as SeaOrmUserModel>::Entity::find()
-                                    .filter(S::User::id_column().eq(owner_id.clone()))
-                                    .one(self.connection())
-                                    .await
-                                    .map_err(map_db_err)
-                            },
-                        )
-                        .await?;
-                        let user = match owner.as_ref() {
-                            Some(row) => self.output_user(row, self.connection()).await.map(Some),
-                            None => Ok(None),
-                        }?;
-                        better_auth_core::store::AccountOwner::new(account, user, &stored_owner_id)
-                    }
-                },
-            )
-            .await?;
+                            )
+                        }
+                    },
+                )
+                .await?
+        };
         if owners.len() > 1 {
             return Err(crate::error::AuthError::internal(format!(
                 "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
@@ -327,27 +431,8 @@ where
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
-        let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
-        match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
-            self.config(),
-            "findMany",
-            async {
-                <S::Account as SeaOrmAccountModel>::Entity::find()
-                    .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
-                    .limit(super::pagination::default_limit(
-                        self.config(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            },
-        )
-        .await
-        {
-            Ok(rows) => self.output_accounts(&rows, self.connection()).await,
-            Err(error) => Err(error),
-        }
+        let rows = self.user_account_records(user_id).await?;
+        self.output_accounts(&rows, self.connection()).await
     }
 
     async fn update_account(&self, id: &str, update: UpdateAccount) -> AuthResult<AccountView> {

@@ -1,0 +1,1239 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "joins": false,
+      "limitKind": "half",
+      "observation": {
+        "backend": "memory",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": false,
+      "limitKind": "oneAndHalf",
+      "observation": {
+        "backend": "memory",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": false,
+      "limitKind": "negativeOne",
+      "observation": {
+        "backend": "memory",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": false,
+      "limitKind": "nan",
+      "observation": {
+        "backend": "memory",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": false,
+      "limitKind": "positiveInfinity",
+      "observation": {
+        "backend": "memory",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-2"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible",
+            "A-label-2-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": false,
+      "limitKind": "negativeInfinity",
+      "observation": {
+        "backend": "memory",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "limitKind": "half",
+      "observation": {
+        "backend": "memory",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "limitKind": "oneAndHalf",
+      "observation": {
+        "backend": "memory",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "limitKind": "negativeOne",
+      "observation": {
+        "backend": "memory",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "limitKind": "nan",
+      "observation": {
+        "backend": "memory",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-2"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible",
+            "A-label-2-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "limitKind": "positiveInfinity",
+      "observation": {
+        "backend": "memory",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-2"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible",
+            "A-label-2-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "memory",
+      "joins": true,
+      "limitKind": "negativeInfinity",
+      "observation": {
+        "backend": "memory",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "limitKind": "half",
+      "error": {
+        "name": "SQLiteError",
+        "message": "datatype mismatch",
+        "code": "SQLITE_MISMATCH"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "limitKind": "oneAndHalf",
+      "error": {
+        "name": "SQLiteError",
+        "message": "datatype mismatch",
+        "code": "SQLITE_MISMATCH"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "limitKind": "negativeOne",
+      "observation": {
+        "backend": "sqlite",
+        "joins": false,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-2"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible",
+            "A-label-2-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "limitKind": "nan",
+      "error": {
+        "name": "SQLiteError",
+        "message": "datatype mismatch",
+        "code": "SQLITE_MISMATCH"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "limitKind": "positiveInfinity",
+      "error": {
+        "name": "SQLiteError",
+        "message": "datatype mismatch",
+        "code": "SQLITE_MISMATCH"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "limitKind": "negativeInfinity",
+      "error": {
+        "name": "SQLiteError",
+        "message": "datatype mismatch",
+        "code": "SQLITE_MISMATCH"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "limitKind": "half",
+      "observation": {
+        "backend": "sqlite",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "limitKind": "oneAndHalf",
+      "observation": {
+        "backend": "sqlite",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "limitKind": "negativeOne",
+      "observation": {
+        "backend": "sqlite",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "limitKind": "nan",
+      "observation": {
+        "backend": "sqlite",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "limitKind": "positiveInfinity",
+      "observation": {
+        "backend": "sqlite",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-0"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-1"
+          ],
+          [
+            "account.displayLabel",
+            "A-label-2"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": [
+            "A-label-0-visible",
+            "A-label-1-visible",
+            "A-label-2-visible"
+          ]
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "limitKind": "negativeInfinity",
+      "observation": {
+        "backend": "sqlite",
+        "joins": true,
+        "path": "accounts",
+        "mode": "sync",
+        "events": [
+          [
+            "user.name",
+            "A"
+          ],
+          [
+            "user.image",
+            "A-image"
+          ]
+        ],
+        "result": {
+          "user": {
+            "name": "A-visible",
+            "image": "A-image-visible"
+          },
+          "accounts": []
+        },
+        "originalError": false,
+        "stored": {
+          "users": [
+            {
+              "name": "A",
+              "image": "A-image"
+            },
+            {
+              "name": "B",
+              "image": "B-image"
+            },
+            {
+              "name": "C",
+              "image": "C-image"
+            }
+          ],
+          "accounts": [
+            "A-label-0",
+            "A-label-1",
+            "A-label-2",
+            "B-label-0",
+            "B-label-1",
+            "B-label-2",
+            "C-label-0",
+            "C-label-1",
+            "C-label-2"
+          ]
+        }
+      }
+    }
+  ]
+}

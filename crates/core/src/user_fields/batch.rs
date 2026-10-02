@@ -8,6 +8,117 @@ use futures_util::{
 use indexmap::IndexMap;
 use std::future::Future;
 
+type ReadyRow<'a, T> = (usize, &'a mut T, usize);
+
+/// Read ready asynchronous callback inputs before polling those callbacks.
+pub(crate) async fn project_source_fields_then<T: Send, V: Send + 'static, R: Send>(
+    rows: &mut [T],
+    fields: &IndexMap<String, UserFieldConfig>,
+    read: impl Fn(&mut T, &str, &UserFieldConfig) -> AuthResult<V> + Sync,
+    apply: impl for<'a> Fn(&'a mut T, &'a str, &'a UserFieldConfig, V) -> BoxFuture<'a, AuthResult<()>>
+    + Sync,
+    complete: impl Fn(usize, &mut T) -> AuthResult<R> + Sync,
+) -> AuthResult<Vec<R>> {
+    if !fields.values().any(is_async) {
+        return project_fields_then(
+            rows,
+            fields,
+            |row, name, field| match read(row, name, field) {
+                Ok(value) => apply(row, name, field, value),
+                Err(error) => Box::pin(std::future::ready(Err(error))),
+            },
+            |index, row| std::future::ready(complete(index, row)),
+        )
+        .await;
+    }
+    let capacity = rows.len().max(1);
+    let mut ready: Vec<_> = rows
+        .iter_mut()
+        .enumerate()
+        .map(|(index, row)| (index, row, 0))
+        .collect();
+    let mut pending: FuturesUnordered<BoxFuture<'_, AuthResult<ReadyRow<'_, T>>>> =
+        FuturesUnordered::new();
+    let mut first_error = None;
+    let mut completed = Vec::new();
+    loop {
+        for (index, row, mut position) in ready {
+            loop {
+                let Some((name, field)) = fields.get_index(position) else {
+                    collect_result(
+                        complete(index, row).map(|value| (index, value)),
+                        &mut first_error,
+                        &mut completed,
+                    );
+                    break;
+                };
+                let value = match read(row, name, field) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        let _ = first_error.get_or_insert(error);
+                        break;
+                    }
+                };
+                position += 1;
+                if is_async(field) {
+                    let apply = &apply;
+                    // Capture only this field. Later fields must observe writes made while awaiting.
+                    pending.push(Box::pin(async move {
+                        apply(row, name, field, value).await?;
+                        Ok((index, row, position))
+                    }));
+                    break;
+                }
+                if let Err(error) = apply(row, name, field, value).await {
+                    let _ = first_error.get_or_insert(error);
+                    break;
+                }
+            }
+        }
+        let Some(batch) = pending.by_ref().ready_chunks(capacity).next().await else {
+            break;
+        };
+        ready = Vec::new();
+        for result in batch {
+            collect_result(result, &mut first_error, &mut ready);
+        }
+    }
+    finish_projection(first_error, completed)
+}
+
+fn is_async(field: &UserFieldConfig) -> bool {
+    field
+        .output_transform()
+        .is_some_and(super::UserFieldTransform::is_async)
+}
+
+fn collect_result<T>(
+    result: AuthResult<T>,
+    first_error: &mut Option<crate::AuthError>,
+    completed: &mut Vec<T>,
+) {
+    match result {
+        Ok(value) => completed.push(value),
+        Err(error) => {
+            let _ = first_error.get_or_insert(error);
+        }
+    }
+}
+
+fn finish_projection<R>(
+    first_error: Option<crate::AuthError>,
+    mut completed: Vec<(usize, R)>,
+) -> AuthResult<Vec<R>> {
+    // Drain started peers before returning the first original callback error.
+    match first_error {
+        Some(error) => Err(error),
+        None => {
+            completed.sort_unstable_by_key(|(index, _)| *index);
+            Ok(completed.into_iter().map(|(_, value)| value).collect())
+        }
+    }
+}
+
 pub(crate) async fn project_fields<T: Send>(
     rows: &mut [T],
     fields: &IndexMap<String, UserFieldConfig>,
@@ -32,21 +143,11 @@ where
     let (mut first_error, mut pending) = projection_tasks(rows, fields, &project, &complete).await;
     let mut completed = Vec::new();
     while let Some(result) = pending.next().await {
-        match result {
-            Ok(value) => completed.push(value),
-            Err(error) if first_error.is_none() => first_error = Some(error),
-            Err(_) => {}
-        }
+        collect_result(result, &mut first_error, &mut completed);
     }
     // A failed row must not cancel other started rows. Complete their callbacks,
     // then propagate the first original error, preserving the synchronous batch contract.
-    match first_error {
-        Some(error) => Err(error),
-        None => {
-            completed.sort_unstable_by_key(|(index, _)| *index);
-            Ok(completed.into_iter().map(|(_, value)| value).collect())
-        }
-    }
+    finish_projection(first_error, completed)
 }
 
 type ProjectionTasks<'a, R> = FuturesUnordered<BoxFuture<'a, AuthResult<(usize, R)>>>;
@@ -65,11 +166,7 @@ where
 {
     let mut first_error = None;
     let pending: FuturesUnordered<BoxFuture<'_, AuthResult<(usize, R)>>> = FuturesUnordered::new();
-    if fields.values().any(|field| {
-        field
-            .output_transform()
-            .is_some_and(super::UserFieldTransform::is_async)
-    }) {
+    if fields.values().any(is_async) {
         for (index, row) in rows.iter_mut().enumerate() {
             pending.push(Box::pin(async move {
                 for (name, field) in fields {
@@ -150,11 +247,5 @@ where
             Err(_) => {}
         }
     }
-    match first_error {
-        Some(error) => Err(error),
-        None => {
-            completed.sort_unstable_by_key(|(index, _)| *index);
-            Ok(completed.into_iter().map(|(_, value)| value).collect())
-        }
-    }
+    finish_projection(first_error, completed)
 }
