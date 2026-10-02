@@ -33,6 +33,16 @@ Custom adapters must return the runtime views from AccountStore and Verification
 
 Creation and update inputs use `SchemaValue<T>` too. `Undefined` omits a field, `Typed(None)` supplies null for a nullable field, and `Dynamic` supplies a replacement value. Input `additional_fields` use logical public names; the adapter applies `field_name` once before binding columns.
 
+## Memory JSON and Arrays
+
+Account and Verification Memory fields use JSON text storage. Input transforms run before encoding; output transforms receive stored text before the adapter parses their result. String and number arrays remain native arrays. Field aliases apply to the stored keys while returned views use logical names.
+
+Declared references keep the Memory reference rules: Serial conversion runs before JSON encoding, and output transforms receive the raw reference value before string conversion. Non-Serial reference arrays remain arrays until the output transform completes. The same conversion applies to ordinary point reads, lists, mutation returns, and Account fields in joined reads. Joined reads retain their existing snapshot or live-row selection and callback order.
+
+These rules apply to database-backed Memory records. Pure secondary Verification storage retains its separate policy-free behavior. SQL adapters retain their existing native-column conversion and callback reconstruction. This field representation does not establish raw database interchangeability or arbitrary replacement-type parity.
+
+The pinned Better Auth 1.7.6 Memory capture, strict Bun comparison, and Rust contract pass for six ordinary display-field cases. The cases cover both record families, JSON text and native arrays, Serial display references, and non-Serial reference arrays. The complete callback events, returned fields, and stored fields match. Existing Account batch, live-page, and Serial-reference regressions also pass.
+
 ## Memory Serial References
 
 With `IdGeneration::Serial`, Memory converts declared references to an `id` field after defaults and input transforms. User and Session additional fields, Account fields, and Verification fields accept finite JSON numbers and values that convert to finite numbers. Null remains null. Arrays preserve null entries and convert each non-null value. Output transforms receive the numeric storage values before the adapter formats references as strings.

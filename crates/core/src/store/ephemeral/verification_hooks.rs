@@ -32,7 +32,7 @@ impl EphemeralStore {
             .verification
             .field_schema()
             .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
-                self.memory_record_input(field, value)
+                self.memory_plugin_field_input(field, value)
             })
             .await?;
         let bound_identifier = self.verification_query("identifier", identifier)?;

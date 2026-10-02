@@ -118,6 +118,10 @@ pub(crate) fn policies(failure: Arc<AtomicU8>) -> UserConfig {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The fixed fixture date must parse before any store operation"
+)]
 pub(crate) fn input(label: &str) -> CreateDeviceCode {
     CreateDeviceCode {
         device_code: format!("ordinary-device:{label}"),
@@ -143,6 +147,10 @@ pub(crate) fn input(label: &str) -> CreateDeviceCode {
     }
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract must fail if Device output changes its flattened field shape"
+)]
 fn observe(name: &str, row: &DeviceCode) -> AuthResult<Value> {
     let serialized = serde_json::to_value(row)?;
     assert_eq!(serialized.get("label"), row.additional_fields.get("label"));
@@ -150,6 +158,10 @@ fn observe(name: &str, row: &DeviceCode) -> AuthResult<Value> {
     Ok(json!({"name":name, "scope":row.scope.json()?, "fields":row.additional_fields}))
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The contract requires complete rows, the original callback errors, and a matching captured backend"
+)]
 pub(crate) async fn contract<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
@@ -261,12 +273,16 @@ pub(crate) async fn contract<S: AuthSchema>(
     let expected: Value = serde_json::from_str(include_str!(
         "../fixtures/device-additional-fields-1.7.6.json"
     ))?;
-    assert_eq!(expected["version"], "1.7.6");
-    let expected = expected["backends"]
-        .as_array()
+    assert_eq!(
+        expected.get("version").expect("fixture contains version"),
+        "1.7.6"
+    );
+    let expected = expected
+        .get("backends")
+        .and_then(Value::as_array)
         .expect("fixture contains backends")
         .iter()
-        .find(|value| value["backend"] == backend)
+        .find(|value| value.get("backend").and_then(Value::as_str) == Some(backend))
         .expect("fixture contains this backend");
     assert_eq!(json!({"backend":backend,"cases":cases}), *expected);
     Ok(())

@@ -8,7 +8,7 @@ use better_auth_seaorm::store::{
     entities::api_key,
 };
 
-#[allow(
+#[expect(
     unreachable_pub,
     reason = "SeaORM entity derives require public fixture types"
 )]
@@ -59,6 +59,10 @@ pub mod model {
 
 pub(crate) type Plugins = PluginModels<api_key::Model, model::Model>;
 
+#[expect(
+    clippy::expect_used,
+    reason = "The SQLite fixture must connect before the contract can run"
+)]
 pub(crate) async fn sqlite(
     config: AuthConfig,
 ) -> (
@@ -71,6 +75,10 @@ pub(crate) async fn sqlite(
     setup(config, database).await
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The fixture must create its required core and Device tables before the contract can run"
+)]
 pub(crate) async fn setup(
     config: AuthConfig,
     database: DatabaseConnection,

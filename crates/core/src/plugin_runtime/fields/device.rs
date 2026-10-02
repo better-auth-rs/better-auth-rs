@@ -65,7 +65,10 @@ impl ModelFields {
     }
 
     /// Project stored memory fields while retaining the original credential and authorization state.
-    pub async fn project_device_codes(&self, rows: Vec<DeviceCode>) -> AuthResult<Vec<DeviceCode>> {
+    pub async fn project_device_codes(
+        &self,
+        mut rows: Vec<DeviceCode>,
+    ) -> AuthResult<Vec<DeviceCode>> {
         let records = rows
             .iter()
             .map(|row| {
@@ -76,7 +79,14 @@ impl ModelFields {
                 Ok(AdapterRecord::new(Map::new(), storage))
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        self.project_device_code_records(rows, records, true).await
+        let output = self
+            .fields(EntityRole::DeviceCode)
+            .project_memory_adapter_records(records)
+            .await?;
+        for (row, output) in rows.iter_mut().zip(output) {
+            self.assign_device_code_output(row, output)?;
+        }
+        Ok(rows)
     }
 
     /// Project extracted Device fields without replacing the raw record's typed bindings.

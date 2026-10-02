@@ -10,6 +10,8 @@ mod fixture;
 mod live_reads;
 #[path = "device_additional_fields_tests/live_writes.rs"]
 mod live_writes;
+#[path = "device_additional_fields_tests/memory_representation.rs"]
+mod memory_representation;
 
 use better_auth::{
     __private_core::{
@@ -77,6 +79,11 @@ async fn live_postgres_declared_device_fields_match_pinned_sqlite_contract()
 }
 
 #[tokio::test]
+#[expect(
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    reason = "The test requires complete reference observations and fails if the captured values differ"
+)]
 async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResult<()> {
     let mut config = contract::config();
     config.advanced.database.generate_id = Some(IdGeneration::Serial);
@@ -126,17 +133,38 @@ async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResu
     let expected: Value =
         serde_json::from_str(include_str!("fixtures/device-additional-fields-1.7.6.json"))?;
     let actual = json!({
-        "created":created.additional_fields["target"],
-        "read":read.additional_fields["target"],
+        "created":created.additional_fields.get("target").expect("created reference field exists"),
+        "read":read.additional_fields.get("target").expect("read reference field exists"),
         "outputInputs":*observed.lock().expect("ordinary output trace lock"),
     });
-    assert_eq!(actual, expected["serialReference"]);
-    assert_eq!(actual["outputInputs"], json!([2, 2]));
-    assert_eq!(actual["created"], "2");
+    assert_eq!(
+        &actual,
+        expected
+            .get("serialReference")
+            .expect("fixture contains Serial reference observations")
+    );
+    assert_eq!(
+        actual
+            .get("outputInputs")
+            .expect("output callback observations exist"),
+        &json!([2, 2])
+    );
+    assert_eq!(
+        actual
+            .get("created")
+            .expect("created reference observation exists"),
+        "2"
+    );
     Ok(())
 }
 
 #[tokio::test]
+#[expect(
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    clippy::panic,
+    reason = "The schema contract must fail if fixture setup or the expected typed mismatch is absent"
+)]
 async fn device_field_preflight_tracks_only_declared_columns() -> AuthResult<()> {
     let (store, database) = fixture::sqlite(contract::config()).await;
     let _ = database

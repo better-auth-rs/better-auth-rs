@@ -14,7 +14,7 @@ impl EphemeralStore {
             .config
             .verification
             .field_schema()
-            .project_records(records, true, true)
+            .project_memory_records(records)
             .await?
             .into_iter()
             .map(VerificationView::from_adapter_fields)
@@ -29,8 +29,9 @@ impl EphemeralStore {
             self.config
                 .verification
                 .field_schema()
-                .project_record(record, true, true)
-                .await?,
+                .project_memory_records(std::slice::from_ref(record))
+                .await?
+                .remove(0),
         ))
     }
     pub(super) fn verification_query(&self, name: &str, value: &str) -> AuthResult<Value> {
@@ -99,7 +100,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .record_storage_fields_with_binding(
                 input.with_timestamps(Utc::now()).fields()?,
                 true,
-                |_, field, value| self.memory_record_input(field, value),
+                |_, field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
         let _ = record.insert("id".into(), Value::String(id.to_owned()));
@@ -143,7 +144,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .verification
             .field_schema()
             .record_storage_fields_with_binding(input.fields()?, true, |_, field, value| {
-                self.memory_record_input(field, value)
+                self.memory_plugin_field_input(field, value)
             })
             .await?;
         let supplied = record

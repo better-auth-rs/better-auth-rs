@@ -15,6 +15,10 @@ Use `BetterAuth::stateless(config)` without an application schema or database. E
 
 Configure application user fields with `AuthConfig.user.fields_mut()` and matching application-owned entity columns. Configured fields use their logical name when `field_name` is omitted or empty, including username projections. See [user fields](docs/content/docs/concepts/users-accounts.mdx) for input validation, defaults, transforms, public visibility, and synchronous batch projection.
 
+Adapter-created JSON text uses JavaScript property ordering and number formatting. See [JSON field bindings](docs/content/docs/concepts/database.mdx#json-field-bindings) for the fallible conversion API and native SQL JSON storage boundary.
+
+Account and Verification Memory fields store JSON as text and retain native arrays. See [field representation](docs/content/docs/concepts/account-verification-fields.mdx#memory-json-and-arrays) for callback values and reference conversion.
+
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
 The schema generator keeps its default table name when `modelName` is omitted or empty. See [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns) for configuration and preserved declarations.
@@ -129,7 +133,7 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
 
-Plugins can register adapter field policies for supported typed model fields and declared DeviceCode, JWK, or WalletAddress additional fields. Supported native display fields use their logical name when `field_name` is omitted or empty; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Wallet create and lookup methods are also available through `AuthTransaction`. Memory Device create, ordinary update, and code lookups read each additional field when its output callback runs; see [Device field policies](docs/content/docs/plugins/device-authorization.mdx#adapter-field-policies). Direct Organization store configuration also resolves built-in field order.
+Plugins can register adapter field policies for supported typed model fields and declared DeviceCode, JWK, or WalletAddress additional fields. Supported native display fields use their logical name when `field_name` is omitted or empty; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Wallet create and lookup methods are also available through `AuthTransaction`. Memory Device create, ordinary update, and code lookups read each additional field when its output callback runs. Ordinary JSON uses stored text, while reference arrays reach callbacks before public string conversion; see [Device field policies](docs/content/docs/plugins/device-authorization.mdx#adapter-field-policies) for the supported Memory representations. Direct Organization store configuration also resolves built-in field order.
 
 Optional configuration fields use `Option` to distinguish omission from an explicit value. Construct social providers with a built-in constructor or `OAuthProvider::custom`. See [configuration options](docs/content/docs/reference/configuration-options.mdx) for defaults and [OAuth](docs/content/docs/plugins/oauth.mdx) for provider configuration. [Observability](docs/content/docs/concepts/observability.mdx) documents logging, tracing, opt-in telemetry, and the current alignment boundaries.
 

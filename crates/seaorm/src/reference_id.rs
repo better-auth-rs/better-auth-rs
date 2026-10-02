@@ -21,11 +21,11 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
         );
         return serial_reference(value, text_column);
     }
-    Ok(field.adapter_input(
+    field.adapter_input(
         value,
         backend == sea_orm::DbBackend::Postgres,
         native_json_field(name),
-    ))
+    )
 }
 
 /// Apply Serial conversion after field transforms and before typed model decoding.

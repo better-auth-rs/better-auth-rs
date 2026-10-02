@@ -1,0 +1,1549 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "mode": "custom",
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "settings",
+              {
+                "theme": "dark"
+              }
+            ],
+            [
+              "input",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "input",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "input",
+              "targetDocument",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"dark\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              "[\"1\",\"2\"]"
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "dark"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "[\"1\",\"2\"]"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"dark\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              "1",
+              "2"
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": "[\"1\",\"2\"]"
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "read-device",
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"dark\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              "[\"1\",\"2\"]"
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "dark"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "[\"1\",\"2\"]"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"dark\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              "1",
+              "2"
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": "[\"1\",\"2\"]"
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "read-user",
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"dark\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              "[\"1\",\"2\"]"
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "dark"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "[\"1\",\"2\"]"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"dark\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              "1",
+              "2"
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": "[\"1\",\"2\"]"
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "update",
+          "events": [
+            [
+              "input",
+              "settings",
+              {
+                "theme": "light"
+              }
+            ],
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"light\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              "[\"1\",\"2\"]"
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "light"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "[\"1\",\"2\"]"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"light\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              "1",
+              "2"
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": "[\"1\",\"2\"]"
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "update-if-status",
+          "events": [
+            [
+              "input",
+              "settings",
+              {
+                "theme": "guarded"
+              }
+            ],
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"guarded\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              "[\"1\",\"2\"]"
+            ]
+          ],
+          "result": true,
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"guarded\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              "1",
+              "2"
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": "[\"1\",\"2\"]"
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "read-after-status",
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"guarded\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              "[\"1\",\"2\"]"
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "guarded"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "[\"1\",\"2\"]"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"guarded\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              "1",
+              "2"
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": "[\"1\",\"2\"]"
+          },
+          "nativeUnchanged": true
+        }
+      ],
+      "transaction": {
+        "operations": [
+          {
+            "name": "create",
+            "events": [
+              [
+                "input",
+                "settings",
+                {
+                  "theme": "dark"
+                }
+              ],
+              [
+                "input",
+                "nullableSettings",
+                null
+              ],
+              [
+                "input",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "input",
+                "targets",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "input",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "input",
+                "targetDocument",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "output",
+                "settings",
+                "{\"theme\":\"dark\"}"
+              ],
+              [
+                "output",
+                "nullableSettings",
+                "null"
+              ],
+              [
+                "output",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "output",
+                "targets",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "output",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetDocument",
+                "[\"1\",\"2\"]"
+              ]
+            ],
+            "result": {
+              "settings": {
+                "theme": "dark"
+              },
+              "nullableSettings": null,
+              "tags": [
+                "alpha",
+                "beta"
+              ],
+              "targets": "1,2",
+              "targetNumbers": "1,2",
+              "targetDocument": "[\"1\",\"2\"]"
+            },
+            "nativeUnchanged": true
+          },
+          {
+            "name": "read-device",
+            "events": [
+              [
+                "output",
+                "settings",
+                "{\"theme\":\"dark\"}"
+              ],
+              [
+                "output",
+                "nullableSettings",
+                "null"
+              ],
+              [
+                "output",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "output",
+                "targets",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "output",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetDocument",
+                "[\"1\",\"2\"]"
+              ]
+            ],
+            "result": {
+              "settings": {
+                "theme": "dark"
+              },
+              "nullableSettings": null,
+              "tags": [
+                "alpha",
+                "beta"
+              ],
+              "targets": "1,2",
+              "targetNumbers": "1,2",
+              "targetDocument": "[\"1\",\"2\"]"
+            },
+            "nativeUnchanged": true
+          },
+          {
+            "name": "update",
+            "events": [
+              [
+                "input",
+                "settings",
+                {
+                  "theme": "transaction"
+                }
+              ],
+              [
+                "output",
+                "settings",
+                "{\"theme\":\"transaction\"}"
+              ],
+              [
+                "output",
+                "nullableSettings",
+                "null"
+              ],
+              [
+                "output",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "output",
+                "targets",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "output",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetDocument",
+                "[\"1\",\"2\"]"
+              ]
+            ],
+            "result": {
+              "settings": {
+                "theme": "transaction"
+              },
+              "nullableSettings": null,
+              "tags": [
+                "alpha",
+                "beta"
+              ],
+              "targets": "1,2",
+              "targetNumbers": "1,2",
+              "targetDocument": "[\"1\",\"2\"]"
+            },
+            "nativeUnchanged": true
+          }
+        ],
+        "storedPhysical": {
+          "stored_settings": "{\"theme\":\"transaction\"}",
+          "stored_nullable_settings": "null",
+          "stored_tags": [
+            "alpha",
+            "beta"
+          ],
+          "stored_targets": [
+            "1",
+            "2"
+          ],
+          "stored_target_numbers": [
+            1,
+            2
+          ],
+          "stored_target_document": "[\"1\",\"2\"]"
+        },
+        "nativeUnchanged": true
+      }
+    },
+    {
+      "mode": "serial",
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "settings",
+              {
+                "theme": "dark"
+              }
+            ],
+            [
+              "input",
+              "nullableSettings",
+              null
+            ],
+            [
+              "input",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "input",
+              "targets",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "input",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "input",
+              "targetDocument",
+              [
+                "1",
+                "2"
+              ]
+            ],
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"dark\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "dark"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "1,2"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"dark\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              1,
+              2
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": [
+              1,
+              2
+            ]
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "read-device",
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"dark\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "dark"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "1,2"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"dark\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              1,
+              2
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": [
+              1,
+              2
+            ]
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "read-user",
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"dark\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "dark"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "1,2"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"dark\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              1,
+              2
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": [
+              1,
+              2
+            ]
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "update",
+          "events": [
+            [
+              "input",
+              "settings",
+              {
+                "theme": "light"
+              }
+            ],
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"light\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "light"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "1,2"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"light\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              1,
+              2
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": [
+              1,
+              2
+            ]
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "update-if-status",
+          "events": [
+            [
+              "input",
+              "settings",
+              {
+                "theme": "guarded"
+              }
+            ],
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"guarded\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": true,
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"guarded\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              1,
+              2
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": [
+              1,
+              2
+            ]
+          },
+          "nativeUnchanged": true
+        },
+        {
+          "name": "read-after-status",
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"theme\":\"guarded\"}"
+            ],
+            [
+              "output",
+              "nullableSettings",
+              "null"
+            ],
+            [
+              "output",
+              "tags",
+              [
+                "alpha",
+                "beta"
+              ]
+            ],
+            [
+              "output",
+              "targets",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetNumbers",
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              "output",
+              "targetDocument",
+              [
+                1,
+                2
+              ]
+            ]
+          ],
+          "result": {
+            "settings": {
+              "theme": "guarded"
+            },
+            "nullableSettings": null,
+            "tags": [
+              "alpha",
+              "beta"
+            ],
+            "targets": "1,2",
+            "targetNumbers": "1,2",
+            "targetDocument": "1,2"
+          },
+          "storedPhysical": {
+            "stored_settings": "{\"theme\":\"guarded\"}",
+            "stored_nullable_settings": "null",
+            "stored_tags": [
+              "alpha",
+              "beta"
+            ],
+            "stored_targets": [
+              1,
+              2
+            ],
+            "stored_target_numbers": [
+              1,
+              2
+            ],
+            "stored_target_document": [
+              1,
+              2
+            ]
+          },
+          "nativeUnchanged": true
+        }
+      ],
+      "transaction": {
+        "operations": [
+          {
+            "name": "create",
+            "events": [
+              [
+                "input",
+                "settings",
+                {
+                  "theme": "dark"
+                }
+              ],
+              [
+                "input",
+                "nullableSettings",
+                null
+              ],
+              [
+                "input",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "input",
+                "targets",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "input",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "input",
+                "targetDocument",
+                [
+                  "1",
+                  "2"
+                ]
+              ],
+              [
+                "output",
+                "settings",
+                "{\"theme\":\"dark\"}"
+              ],
+              [
+                "output",
+                "nullableSettings",
+                "null"
+              ],
+              [
+                "output",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "output",
+                "targets",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetDocument",
+                [
+                  1,
+                  2
+                ]
+              ]
+            ],
+            "result": {
+              "settings": {
+                "theme": "dark"
+              },
+              "nullableSettings": null,
+              "tags": [
+                "alpha",
+                "beta"
+              ],
+              "targets": "1,2",
+              "targetNumbers": "1,2",
+              "targetDocument": "1,2"
+            },
+            "nativeUnchanged": true
+          },
+          {
+            "name": "read-device",
+            "events": [
+              [
+                "output",
+                "settings",
+                "{\"theme\":\"dark\"}"
+              ],
+              [
+                "output",
+                "nullableSettings",
+                "null"
+              ],
+              [
+                "output",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "output",
+                "targets",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetDocument",
+                [
+                  1,
+                  2
+                ]
+              ]
+            ],
+            "result": {
+              "settings": {
+                "theme": "dark"
+              },
+              "nullableSettings": null,
+              "tags": [
+                "alpha",
+                "beta"
+              ],
+              "targets": "1,2",
+              "targetNumbers": "1,2",
+              "targetDocument": "1,2"
+            },
+            "nativeUnchanged": true
+          },
+          {
+            "name": "update",
+            "events": [
+              [
+                "input",
+                "settings",
+                {
+                  "theme": "transaction"
+                }
+              ],
+              [
+                "output",
+                "settings",
+                "{\"theme\":\"transaction\"}"
+              ],
+              [
+                "output",
+                "nullableSettings",
+                "null"
+              ],
+              [
+                "output",
+                "tags",
+                [
+                  "alpha",
+                  "beta"
+                ]
+              ],
+              [
+                "output",
+                "targets",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetNumbers",
+                [
+                  1,
+                  2
+                ]
+              ],
+              [
+                "output",
+                "targetDocument",
+                [
+                  1,
+                  2
+                ]
+              ]
+            ],
+            "result": {
+              "settings": {
+                "theme": "transaction"
+              },
+              "nullableSettings": null,
+              "tags": [
+                "alpha",
+                "beta"
+              ],
+              "targets": "1,2",
+              "targetNumbers": "1,2",
+              "targetDocument": "1,2"
+            },
+            "nativeUnchanged": true
+          }
+        ],
+        "storedPhysical": {
+          "stored_settings": "{\"theme\":\"transaction\"}",
+          "stored_nullable_settings": "null",
+          "stored_tags": [
+            "alpha",
+            "beta"
+          ],
+          "stored_targets": [
+            1,
+            2
+          ],
+          "stored_target_numbers": [
+            1,
+            2
+          ],
+          "stored_target_document": [
+            1,
+            2
+          ]
+        },
+        "nativeUnchanged": true
+      }
+    }
+  ]
+}

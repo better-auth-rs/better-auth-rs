@@ -31,6 +31,10 @@ fn policies() -> UserConfig {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The point-read contract requires declared string fields, complete rows, callback traces, and a captured selector"
+)]
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> AuthResult<()> {
     let writer = BetterAuth::new(fields::config())
         .store_arc(raw.clone())
@@ -138,11 +142,15 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
             .get_device_code_by_device_code(&created.device_code)
             .await?
             .expect("ordinary record remains stored");
-        let expected = fixture["cases"]
-            .as_array()
+        let expected = fixture
+            .get("cases")
+            .and_then(Value::as_array)
             .expect("captured cases")
             .iter()
-            .find(|case| case["backend"] == backend && case["selector"] == selector)
+            .find(|case| {
+                case.get("backend").and_then(Value::as_str) == Some(backend)
+                    && case.get("selector").and_then(Value::as_str) == Some(selector)
+            })
             .expect("captured point-read case");
         assert_eq!(
             json!({

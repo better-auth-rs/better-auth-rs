@@ -31,6 +31,10 @@ fn policies() -> UserConfig {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The write-return contract requires declared string fields and complete callback traces"
+)]
 async fn observations<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
@@ -150,21 +154,30 @@ async fn observations<S: AuthSchema>(
     Ok(cases)
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The contract requires captured cases and compares every write-return observation for the selected backend"
+)]
 fn assert_pinned(actual: Vec<Value>, backend: &str) {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/device-live-writes-1.7.6.json"))
             .expect("captured Device write-return fixture");
-    let expected = fixture["cases"]
-        .as_array()
+    let expected = fixture
+        .get("cases")
+        .and_then(Value::as_array)
         .expect("captured cases")
         .iter()
-        .filter(|case| case["backend"] == backend)
+        .filter(|case| case.get("backend").and_then(Value::as_str) == Some(backend))
         .cloned()
         .collect::<Vec<_>>();
     assert_eq!(actual, expected);
 }
 
 #[tokio::test]
+#[expect(
+    clippy::expect_used,
+    reason = "The test must fail if the ordinary Memory write-return contract returns an error"
+)]
 async fn memory_device_write_results_observe_later_display_writes() {
     let actual = observations(
         Arc::new(EphemeralStore::new(Arc::new(fields::config()))),
@@ -176,6 +189,10 @@ async fn memory_device_write_results_observe_later_display_writes() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::expect_used,
+    reason = "The test must fail if the ordinary SQLite write-return contract returns an error"
+)]
 async fn sqlite_device_write_results_keep_their_display_snapshot() {
     let (store, _) = fixture::sqlite(fields::config()).await;
     let actual = observations(Arc::new(store), "sqlite")

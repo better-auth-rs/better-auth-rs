@@ -13,7 +13,7 @@ impl UserConfig {
         native_json_field: impl Fn(&str) -> bool,
     ) -> AuthResult<Map<String, Value>> {
         self.storage_fields_with_binding(input, create, |name, field, value| {
-            Ok(field.adapter_input(value, supports_native_json, native_json_field(name)))
+            field.adapter_input(value, supports_native_json, native_json_field(name))
         })
         .await
     }
@@ -38,20 +38,22 @@ impl UserConfig {
 
 impl UserFieldConfig {
     /// Convert a transformed value to the selected adapter's database binding.
+    /// JSON text uses JavaScript property ordering and number formatting.
+    /// Serialization errors propagate before the adapter writes the value.
     pub fn adapter_input(
         &self,
         value: Value,
         supports_native_json: bool,
         native_json_field: bool,
-    ) -> Value {
+    ) -> AuthResult<Value> {
         if self.references_id() {
             match (&self.field_type, &value) {
                 (UserFieldType::Boolean, Value::Bool(value)) if !supports_native_json => {
-                    return Value::from(i64::from(*value));
+                    return Ok(Value::from(i64::from(*value)));
                 }
                 (UserFieldType::StringArray | UserFieldType::NumberArray, Value::Array(_))
                 | (UserFieldType::Json, Value::Object(_) | Value::Array(_)) => {
-                    return Value::String(value.to_string());
+                    return Ok(Value::String(crate::utils::json::stringify(&value)?));
                 }
                 _ => {}
             }
@@ -60,9 +62,9 @@ impl UserFieldConfig {
             && matches!(self.field_type, UserFieldType::Json)
             && (value.is_null() || (!native_json_field && (value.is_object() || value.is_array())))
         {
-            Value::String(value.to_string())
+            Ok(Value::String(crate::utils::json::stringify(&value)?))
         } else {
-            value
+            Ok(value)
         }
     }
 
@@ -79,21 +81,29 @@ impl UserFieldConfig {
         value: Option<Value>,
         supports_native_json: bool,
     ) -> AuthResult<Option<Value>> {
-        let mut value = self.prepare_output(value, supports_native_json);
+        let mut value = self.prepare_output(value, supports_native_json)?;
         if let Some(transform) = self.output_transform() {
             value = transform.call(value).await?;
         }
         self.finish_output(value, supports_native_json)
     }
 
-    fn prepare_output(&self, value: Option<Value>, supports_native_json: bool) -> Option<Value> {
+    fn prepare_output(
+        &self,
+        value: Option<Value>,
+        supports_native_json: bool,
+    ) -> AuthResult<Option<Value>> {
         if !supports_native_json && matches!(self.field_type, UserFieldType::Json) {
-            value.map(|value| match value {
-                Value::Object(_) | Value::Array(_) => Value::String(value.to_string()),
-                value => value,
-            })
-        } else {
             value
+                .map(|value| match value {
+                    Value::Object(_) | Value::Array(_) => {
+                        Ok(Value::String(crate::utils::json::stringify(&value)?))
+                    }
+                    value => Ok(value),
+                })
+                .transpose()
+        } else {
+            Ok(value)
         }
     }
 

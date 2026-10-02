@@ -376,6 +376,14 @@ Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and 
 
 Internal behavior tests also use a bundled schema. Dual-server and client SDK compatibility checks compare behavior with the TypeScript reference server.
 
+## JSON field bindings
+
+When a field binding requires JSON text, the adapter uses the shared JavaScript-compatible serializer. The serializer orders array-index property names before other keys and uses JavaScript number formatting. Input policies run before this conversion. Output callbacks receive the stored text, or text reconstructed from a typed JSON value, before the adapter decodes the callback result.
+
+`UserFieldConfig::adapter_input(value, supports_native_json, native_json_field)` returns `AuthResult<Value>`. Custom adapter callers must propagate or handle this result. `storage_fields_for_adapter`, `record_storage_fields_for_adapter`, and `adapter_output` retain their existing fallible signatures. Serialization errors propagate before the corresponding write or output callback; no fallback serializer runs.
+
+This conversion applies where the existing field and adapter flags require text. It does not change reference conversion or native JSON capabilities. Native SQL JSON columns still use the database driver's serialization and normalization. Callback text equivalence does not establish identical raw native-column bytes. Application-owned column types and existing stored values remain unchanged.
+
 ## Notes
 
 - Custom stores must report uniqueness conflicts as `DatabaseError::UniqueConstraint`. Device code generation retries only that error, up to three attempts.

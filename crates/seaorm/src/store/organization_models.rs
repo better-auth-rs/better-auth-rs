@@ -50,7 +50,7 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
                 std::mem::take(value),
                 backend == sea_orm::DbBackend::Postgres,
                 native_json,
-            );
+            )?;
         }
     }
     crate::reference_id::prepare_fields(

@@ -60,18 +60,6 @@ impl EphemeralStore {
         }
     }
 
-    pub(super) fn memory_record_input(
-        &self,
-        field: &UserFieldConfig,
-        value: Value,
-    ) -> AuthResult<Value> {
-        if self.uses_serial_reference(field) {
-            crate::id::serial_reference_value(value)
-        } else {
-            Ok(field.adapter_input(value, true, true))
-        }
-    }
-
     pub(super) fn memory_plugin_field_input(
         &self,
         field: &UserFieldConfig,
@@ -81,7 +69,7 @@ impl EphemeralStore {
             self.memory_field_input(field, value)
         } else if matches!(field.field_type, UserFieldType::Json) {
             // Memory stores JSON text but retains native arrays, booleans and dates.
-            Ok(field.adapter_input(value, false, false))
+            field.adapter_input(value, false, false)
         } else {
             Ok(value)
         }

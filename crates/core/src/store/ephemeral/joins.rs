@@ -86,7 +86,7 @@ impl EphemeralStore {
                 continue;
             }
             let value = source.read(|row| Ok(row.get(schema.record_storage_key(name)).cloned()))?;
-            let value = project_adapter_value(value, field, true, true).await?;
+            let value = project_adapter_value(value, field, field.references_id(), true).await?;
             if !value.is_undefined() {
                 let _ = fields.insert(name.clone(), value);
             }
@@ -202,7 +202,7 @@ impl EphemeralStore {
             .await?;
         let storage: Vec<_> = rows.iter().map(|(account, _, _)| account.clone()).collect();
         let owners = fields
-            .project_records_batches_then(&storage, true, true, |ready| {
+            .project_memory_records_batches_then(&storage, |ready| {
                 let rows = &rows;
                 async move {
                     let mut pending = Vec::new();

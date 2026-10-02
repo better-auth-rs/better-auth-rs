@@ -1,0 +1,635 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "model": "account",
+      "scenario": "display",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "theme": "light",
+            "compact": true
+          }
+        ],
+        [
+          "input",
+          "labels",
+          [
+            "first",
+            "second"
+          ]
+        ],
+        [
+          "input",
+          "displayOrder",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"light\",\"compact\":true}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "first",
+            "second"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"light\",\"compact\":true}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "first",
+            "second"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "operation",
+          "update"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "theme": "dark",
+            "compact": false
+          }
+        ],
+        [
+          "input",
+          "labels",
+          [
+            "updated"
+          ]
+        ],
+        [
+          "input",
+          "displayOrder",
+          [
+            3
+          ]
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"dark\",\"compact\":false}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "updated"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            3
+          ]
+        ],
+        [
+          "operation",
+          "reread"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"dark\",\"compact\":false}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "updated"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            3
+          ]
+        ]
+      ],
+      "result": {
+        "created": {
+          "settings": {
+            "theme": "light",
+            "compact": true
+          },
+          "labels": [
+            "first",
+            "second"
+          ],
+          "displayOrder": [
+            1,
+            2
+          ]
+        },
+        "read": {
+          "settings": {
+            "theme": "light",
+            "compact": true
+          },
+          "labels": [
+            "first",
+            "second"
+          ],
+          "displayOrder": [
+            1,
+            2
+          ]
+        },
+        "updated": {
+          "settings": {
+            "theme": "dark",
+            "compact": false
+          },
+          "labels": [
+            "updated"
+          ],
+          "displayOrder": [
+            3
+          ]
+        },
+        "reread": {
+          "settings": {
+            "theme": "dark",
+            "compact": false
+          },
+          "labels": [
+            "updated"
+          ],
+          "displayOrder": [
+            3
+          ]
+        }
+      },
+      "stored": {
+        "settings": "{\"theme\":\"dark\",\"compact\":false}",
+        "labels": [
+          "updated"
+        ],
+        "displayOrder": [
+          3
+        ]
+      }
+    },
+    {
+      "model": "account",
+      "scenario": "serial-reference",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "displayRefs",
+          [
+            "1",
+            "2"
+          ]
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            1,
+            2
+          ]
+        ]
+      ],
+      "result": {
+        "created": {
+          "displayRefs": "1,2"
+        },
+        "read": {
+          "displayRefs": "1,2"
+        }
+      },
+      "stored": {
+        "displayRefs": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "model": "account",
+      "scenario": "array-reference",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "displayRefs",
+          [
+            "display-user-1",
+            "display-user-2"
+          ]
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            "display-user-1",
+            "display-user-2"
+          ]
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            "display-user-1",
+            "display-user-2"
+          ]
+        ]
+      ],
+      "result": {
+        "created": {
+          "displayRefs": "display-user-1,display-user-2"
+        },
+        "read": {
+          "displayRefs": "display-user-1,display-user-2"
+        }
+      },
+      "stored": {
+        "displayRefs": [
+          "display-user-1",
+          "display-user-2"
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "scenario": "display",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "theme": "light",
+            "compact": true
+          }
+        ],
+        [
+          "input",
+          "labels",
+          [
+            "first",
+            "second"
+          ]
+        ],
+        [
+          "input",
+          "displayOrder",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"light\",\"compact\":true}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "first",
+            "second"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"light\",\"compact\":true}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "first",
+            "second"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "operation",
+          "update"
+        ],
+        [
+          "input",
+          "settings",
+          {
+            "theme": "dark",
+            "compact": false
+          }
+        ],
+        [
+          "input",
+          "labels",
+          [
+            "updated"
+          ]
+        ],
+        [
+          "input",
+          "displayOrder",
+          [
+            3
+          ]
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"dark\",\"compact\":false}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "updated"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            3
+          ]
+        ],
+        [
+          "operation",
+          "reread"
+        ],
+        [
+          "output",
+          "settings",
+          "{\"theme\":\"dark\",\"compact\":false}"
+        ],
+        [
+          "output",
+          "labels",
+          [
+            "updated"
+          ]
+        ],
+        [
+          "output",
+          "displayOrder",
+          [
+            3
+          ]
+        ]
+      ],
+      "result": {
+        "created": {
+          "settings": {
+            "theme": "light",
+            "compact": true
+          },
+          "labels": [
+            "first",
+            "second"
+          ],
+          "displayOrder": [
+            1,
+            2
+          ]
+        },
+        "read": {
+          "settings": {
+            "theme": "light",
+            "compact": true
+          },
+          "labels": [
+            "first",
+            "second"
+          ],
+          "displayOrder": [
+            1,
+            2
+          ]
+        },
+        "updated": {
+          "settings": {
+            "theme": "dark",
+            "compact": false
+          },
+          "labels": [
+            "updated"
+          ],
+          "displayOrder": [
+            3
+          ]
+        },
+        "reread": {
+          "settings": {
+            "theme": "dark",
+            "compact": false
+          },
+          "labels": [
+            "updated"
+          ],
+          "displayOrder": [
+            3
+          ]
+        }
+      },
+      "stored": {
+        "settings": "{\"theme\":\"dark\",\"compact\":false}",
+        "labels": [
+          "updated"
+        ],
+        "displayOrder": [
+          3
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "scenario": "serial-reference",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "displayRefs",
+          [
+            "1",
+            "2"
+          ]
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            1,
+            2
+          ]
+        ]
+      ],
+      "result": {
+        "created": {
+          "displayRefs": "1,2"
+        },
+        "read": {
+          "displayRefs": "1,2"
+        }
+      },
+      "stored": {
+        "displayRefs": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "scenario": "array-reference",
+      "events": [
+        [
+          "operation",
+          "create"
+        ],
+        [
+          "input",
+          "displayRefs",
+          [
+            "display-user-1",
+            "display-user-2"
+          ]
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            "display-user-1",
+            "display-user-2"
+          ]
+        ],
+        [
+          "operation",
+          "read"
+        ],
+        [
+          "output",
+          "displayRefs",
+          [
+            "display-user-1",
+            "display-user-2"
+          ]
+        ]
+      ],
+      "result": {
+        "created": {
+          "displayRefs": "display-user-1,display-user-2"
+        },
+        "read": {
+          "displayRefs": "display-user-1,display-user-2"
+        }
+      },
+      "stored": {
+        "displayRefs": [
+          "display-user-1",
+          "display-user-2"
+        ]
+      }
+    }
+  ]
+}

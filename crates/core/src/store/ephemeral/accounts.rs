@@ -64,7 +64,7 @@ impl EphemeralStore {
             .config
             .account
             .field_schema()
-            .project_records(records, true, true)
+            .project_memory_records(records)
             .await?
             .into_iter()
             .map(AccountView::from_adapter_fields)
@@ -79,8 +79,9 @@ impl EphemeralStore {
             self.config
                 .account
                 .field_schema()
-                .project_record(record, true, true)
-                .await?,
+                .project_memory_records(std::slice::from_ref(record))
+                .await?
+                .remove(0),
         ))
     }
 }
@@ -120,7 +121,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .account
             .field_schema()
             .record_storage_fields_with_binding(input.fields()?, true, |_, field, value| {
-                self.memory_record_input(field, value)
+                self.memory_plugin_field_input(field, value)
             })
             .await?;
         let supplied = fields
@@ -173,7 +174,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .map(|record| record.get(fields.record_storage_key("userId")).cloned())
             .collect();
         let owners = fields
-            .project_records_batches_then(&records, true, true, |ready| {
+            .project_memory_records_batches_then(&records, |ready| {
                 let owner_ids = &owner_ids;
                 async move {
                     let mut pending = Vec::new();
@@ -281,7 +282,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .account
             .field_schema()
             .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
-                self.memory_record_input(field, value)
+                self.memory_plugin_field_input(field, value)
             })
             .await?;
         let record = self

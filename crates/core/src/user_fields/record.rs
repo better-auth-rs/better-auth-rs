@@ -267,6 +267,43 @@ impl UserConfig {
         .await
     }
 
+    /// Keep raw Memory reference values and decode ordinary JSON after output callbacks.
+    pub(crate) async fn project_memory_records(
+        &self,
+        storage: &[Map<String, Value>],
+    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        self.project_memory_adapter_records(adapter_records(storage)?)
+            .await
+    }
+
+    /// Preserve Memory field conversion while continuing each ready batch with its original indices.
+    pub(crate) async fn project_memory_records_batches_then<R: Send, F>(
+        &self,
+        storage: &[Map<String, Value>],
+        complete: impl Fn(Vec<(usize, indexmap::IndexMap<String, SchemaValue<Value>>)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
+        let mut records = adapter_records(storage)?;
+        super::batch::project_fields_batches_then(
+            &mut records,
+            self.fields(),
+            |record, name, field| {
+                Box::pin(project_adapter_field(
+                    record,
+                    name,
+                    field,
+                    field.references_id(),
+                    true,
+                ))
+            },
+            |_, record| Ok(std::mem::take(&mut record.output)),
+            complete,
+        )
+        .await
+    }
+
     /// Complete each successfully projected row without cancelling other started rows.
     /// The original row index remains available for adapter-owned association data.
     pub async fn project_records_then<R: Send, F>(
@@ -319,7 +356,7 @@ impl UserConfig {
         native_json_field: impl Fn(&str) -> bool,
     ) -> AuthResult<Map<String, Value>> {
         self.record_storage_fields_with_binding(input, create, |name, field, value| {
-            Ok(field.adapter_input(value, supports_native_json, native_json_field(name)))
+            field.adapter_input(value, supports_native_json, native_json_field(name))
         })
         .await
     }
@@ -382,6 +419,24 @@ impl UserConfig {
             |_, fields| std::future::ready(Ok(fields)),
         )
         .await
+    }
+
+    /// Preserve Memory reference values until callbacks run, then decode ordinary JSON text.
+    pub(crate) async fn project_memory_adapter_records(
+        &self,
+        mut records: Vec<AdapterRecord>,
+    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        super::batch::project_fields(&mut records, self.fields(), |record, name, field| {
+            Box::pin(project_adapter_field(
+                record,
+                name,
+                field,
+                field.references_id(),
+                true,
+            ))
+        })
+        .await?;
+        Ok(records.into_iter().map(|record| record.output).collect())
     }
 
     /// Complete each extracted row after its output policies, retaining the original row order.

@@ -34,6 +34,10 @@ fn display(row: &DeviceCode) -> Value {
     })
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The alias contract requires the created row to remain readable through both configurations"
+)]
 async fn observations<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
@@ -84,20 +88,33 @@ async fn observations<S: AuthSchema>(
     }))
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The contract requires a captured backend and compares the complete backend observation"
+)]
 fn assert_pinned(actual: Value) {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/empty-field-name-1.7.6.json"))
             .expect("captured display-field alias fixture");
-    let expected = fixture["cases"]
-        .as_array()
+    let backend = actual
+        .get("backend")
+        .and_then(Value::as_str)
+        .expect("observed backend is a string");
+    let expected = fixture
+        .get("cases")
+        .and_then(Value::as_array)
         .expect("captured cases")
         .iter()
-        .find(|case| case["backend"] == actual["backend"])
+        .find(|case| case.get("backend").and_then(Value::as_str) == Some(backend))
         .expect("captured backend");
     assert_eq!(&actual, expected);
 }
 
 #[tokio::test]
+#[expect(
+    clippy::expect_used,
+    reason = "The test must fail if the ordinary Memory alias contract returns an error"
+)]
 async fn memory_empty_and_omitted_display_aliases_share_storage() {
     let actual = observations(
         Arc::new(EphemeralStore::new(Arc::new(fields::config()))),
@@ -109,6 +126,10 @@ async fn memory_empty_and_omitted_display_aliases_share_storage() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::expect_used,
+    reason = "The test must fail if the ordinary SQLite alias contract returns an error"
+)]
 async fn sqlite_empty_and_omitted_display_aliases_share_storage() {
     let (store, _) = fixture::sqlite(fields::config()).await;
     let actual = observations(Arc::new(store), "sqlite")
