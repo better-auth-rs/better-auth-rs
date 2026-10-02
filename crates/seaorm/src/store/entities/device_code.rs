@@ -12,7 +12,8 @@ pub struct Model {
     pub expires_at: DateTimeUtc,
     pub status: String,
     pub last_polled_at: Option<DateTimeUtc>,
-    pub polling_interval: Option<i64>,
+    #[sea_orm(column_type = "Integer", nullable)]
+    pub polling_interval: Option<crate::SqlNumber>,
     pub client_id: Option<String>,
     pub scope: Option<String>,
 }

@@ -1,0 +1,191 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "name": "default",
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-device-interval",
+        "user_code": "ABCDEF12",
+        "verification_uri": "http://device-interval.test/device",
+        "verification_uri_complete": "http://device-interval.test/device?user_code=ABCDEF12",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "storedInterval": 5000,
+      "sql": null
+    },
+    {
+      "backend": "memory",
+      "name": "fractional",
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-device-interval",
+        "user_code": "ABCDEF12",
+        "verification_uri": "http://device-interval.test/device",
+        "verification_uri_complete": "http://device-interval.test/device?user_code=ABCDEF12",
+        "expires_in": 1800,
+        "interval": 0
+      },
+      "storedInterval": 1.5,
+      "sql": null
+    },
+    {
+      "backend": "sqlite",
+      "name": "default",
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-device-interval",
+        "user_code": "ABCDEF12",
+        "verification_uri": "http://device-interval.test/device",
+        "verification_uri_complete": "http://device-interval.test/device?user_code=ABCDEF12",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "storedInterval": 5000,
+      "sql": {
+        "columnType": "INTEGER",
+        "nullable": true,
+        "storageClass": "integer"
+      }
+    },
+    {
+      "backend": "sqlite",
+      "name": "fractional",
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-device-interval",
+        "user_code": "ABCDEF12",
+        "verification_uri": "http://device-interval.test/device",
+        "verification_uri_complete": "http://device-interval.test/device?user_code=ABCDEF12",
+        "expires_in": 1800,
+        "interval": 0
+      },
+      "storedInterval": 1.5,
+      "sql": {
+        "columnType": "INTEGER",
+        "nullable": true,
+        "storageClass": "real"
+      }
+    },
+    {
+      "backend": "memory",
+      "name": "negative",
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-device-interval",
+        "user_code": "ABCDEF12",
+        "verification_uri": "http://device-interval.test/device",
+        "verification_uri_complete": "http://device-interval.test/device?user_code=ABCDEF12",
+        "expires_in": -1,
+        "interval": -1
+      },
+      "storedInterval": -1.5,
+      "sql": null
+    },
+    {
+      "backend": "sqlite",
+      "name": "negative",
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-device-interval",
+        "user_code": "ABCDEF12",
+        "verification_uri": "http://device-interval.test/device",
+        "verification_uri_complete": "http://device-interval.test/device?user_code=ABCDEF12",
+        "expires_in": -1,
+        "interval": -1
+      },
+      "storedInterval": -1.5,
+      "sql": {
+        "columnType": "INTEGER",
+        "nullable": true,
+        "storageClass": "real"
+      }
+    }
+  ]
+}

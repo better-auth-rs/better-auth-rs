@@ -35,7 +35,7 @@ Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification an
 
 For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
-Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. Explicit `CookieAttributes.expires` uses `chrono::DateTime<Utc>`. HTTP issuance and clearing return `AuthResult` and enforce the 400-day limits before formatting; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero. The TOTP period also accepts fractional seconds; see the same configuration guide for its counter and authenticator boundaries.
+Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. Explicit `CookieAttributes.expires` uses `chrono::DateTime<Utc>`. HTTP issuance and clearing return `AuthResult` and enforce the 400-day limits before formatting; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero. The TOTP period and account lockout duration also accept fractional seconds; see the same guide for their numeric and timing boundaries. [OAuth Proxy](docs/content/docs/plugins/oauth-proxy.mdx) accepts finite `f64` seconds for its maximum profile age.
 
 ## Quick start
 

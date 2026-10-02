@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     mod account_verification;
+    mod device_intervals;
     mod dynamic_fields;
     mod field_attributes;
     mod ids;

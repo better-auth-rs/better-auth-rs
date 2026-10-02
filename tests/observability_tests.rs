@@ -1515,7 +1515,7 @@ async fn check_device_operations(
                 expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
                 status: "pending".into(),
                 last_polled_at: None,
-                polling_interval: Some(5_000),
+                polling_interval: Some(5_000.0),
                 client_id: Some("client".into()),
                 scope: Default::default(),
             })

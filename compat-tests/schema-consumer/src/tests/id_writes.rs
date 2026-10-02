@@ -208,7 +208,7 @@ pub(super) async fn reference_writes<
             expires_at: user.created_at + std::time::Duration::from_secs(300),
             status: "pending".into(),
             last_polled_at: None,
-            polling_interval: Some(5),
+            polling_interval: Some(5.0),
             client_id: None,
             scope: Default::default(),
         })

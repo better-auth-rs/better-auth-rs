@@ -974,7 +974,7 @@ async fn create_device_codes(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
                         .not_null(),
                 )
                 .col(ColumnDef::new(device_code::Column::LastPolledAt).timestamp_with_time_zone())
-                .col(ColumnDef::new(device_code::Column::PollingInterval).big_integer())
+                .col(ColumnDef::new(device_code::Column::PollingInterval).integer())
                 .col(ColumnDef::new(device_code::Column::ClientId).string())
                 .col(ColumnDef::new(device_code::Column::Scope).string())
                 .foreign_key(

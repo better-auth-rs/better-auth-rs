@@ -212,7 +212,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             expires_at: user.created_at,
             status: "pending".into(),
             last_polled_at: None,
-            polling_interval: Some(5),
+            polling_interval: Some(5.0),
             client_id: Some("consumer".into()),
             scope: Some("read".into()).into(),
         })

@@ -303,7 +303,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
             expires_at: Utc::now() + Duration::minutes(5),
             status: "pending".into(),
             last_polled_at: None,
-            polling_interval: Some(5),
+            polling_interval: Some(5.0),
             client_id: None,
             scope: Default::default(),
         })

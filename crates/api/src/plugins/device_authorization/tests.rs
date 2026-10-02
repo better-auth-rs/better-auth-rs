@@ -149,7 +149,7 @@ async fn test_device_code_response_shape_and_storage() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(stored.polling_interval, Some(2000));
+    assert_eq!(stored.polling_interval, Some(2000.0));
     assert_eq!(
         stored.client_id.typed().unwrap().as_deref(),
         Some("test-client")
@@ -273,7 +273,7 @@ async fn test_device_token_expired_returns_error_and_deletes_record() {
             expires_at: Utc::now() - Duration::seconds(1),
             status: DEVICE_STATUS_PENDING.to_string(),
             last_polled_at: None,
-            polling_interval: Some(5000),
+            polling_interval: Some(5000.0),
             client_id: Some("test-client".to_string()),
             scope: Default::default(),
         })
@@ -371,7 +371,7 @@ async fn test_device_verify_strips_hyphens_and_preserves_input_shape() {
             expires_at: Utc::now() + Duration::minutes(5),
             status: DEVICE_STATUS_PENDING.to_string(),
             last_polled_at: None,
-            polling_interval: Some(5000),
+            polling_interval: Some(5000.0),
             client_id: Some("test-client".to_string()),
             scope: Default::default(),
         })

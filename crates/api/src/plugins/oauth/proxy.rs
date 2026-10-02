@@ -17,6 +17,9 @@ use crate::plugins::{json_body, symmetric};
 
 mod environment;
 
+#[cfg(test)]
+mod config_tests;
+
 /// Production-to-preview callback configuration.
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "OAuthProxyPlugin")]
@@ -30,9 +33,9 @@ pub struct OAuthProxyConfig {
     /// Shared encryption secret; defaults to the authentication secret.
     #[config(default = None)]
     pub secret: Option<String>,
-    /// Maximum profile age in seconds.
-    #[config(default = 60)]
-    pub max_age: i64,
+    /// Maximum profile age in finite seconds, including fractions.
+    #[config(default = 60.0)]
+    pub max_age: f64,
 }
 
 /// Complete preview authentication without creating a production session.
@@ -134,6 +137,12 @@ struct Profile {
 impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
     fn name(&self) -> &'static str {
         "oauth-proxy"
+    }
+    async fn on_init(&self, _ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        if !self.config.max_age.is_finite() {
+            return Err(AuthError::config("OAuth proxy max_age must be finite"));
+        }
+        Ok(())
     }
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
@@ -634,7 +643,7 @@ impl OAuthProxyPlugin {
             return redirect_error(error_url, "provider_mismatch", None);
         }
         let age = (Utc::now().timestamp_millis() as f64 - profile.timestamp) / 1000.0;
-        if age > self.config.max_age as f64 || age < -10.0 {
+        if age > self.config.max_age || age < -10.0 {
             return redirect_error(error_url, "payload_expired", None);
         }
         let state = match ctx.config.account.store_state_strategy() {

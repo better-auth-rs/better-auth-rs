@@ -78,6 +78,8 @@ pub(super) fn generate(
             }
         } else if role == EntityRole::DeviceCode && matches!(name.as_str(), "client_id" | "scope") {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
+        } else if role == EntityRole::DeviceCode && name == "polling_interval" {
+            quote!(self.#ident.map(f64::from))
         } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
         } else if role == EntityRole::ApiKey && name == "name"

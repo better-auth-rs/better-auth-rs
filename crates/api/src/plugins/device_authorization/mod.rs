@@ -241,7 +241,8 @@ impl DeviceAuthorizationPlugin {
         }
 
         let expires_at = Utc::now() + self.config.expires_in;
-        let polling_interval = self.config.interval.num_milliseconds();
+        let polling_interval = self.config.interval.num_seconds() as f64 * 1000.0
+            + f64::from(self.config.interval.subsec_nanos()) / 1_000_000.0;
         for _ in 0..3 {
             let device_code = self.generate_device_code().await?;
             let user_code = self.generate_user_code().await?;
@@ -282,8 +283,8 @@ impl DeviceAuthorizationPlugin {
                     user_code,
                     verification_uri,
                     verification_uri_complete,
-                    expires_in: self.config.expires_in.num_seconds(),
-                    interval: self.config.interval.num_seconds(),
+                    expires_in: self.config.expires_in.as_seconds_f64().floor() as i64,
+                    interval: self.config.interval.as_seconds_f64().floor() as i64,
                 },
             )?
             .with_header("Cache-Control", "no-store")
@@ -332,7 +333,7 @@ impl DeviceAuthorizationPlugin {
             (device_code.last_polled_at, device_code.polling_interval)
         {
             let elapsed = now.signed_duration_since(last_polled_at).num_milliseconds();
-            if elapsed < polling_interval {
+            if (elapsed as f64) < polling_interval {
                 return device_error_response(400, "slow_down", POLLING_TOO_FREQUENTLY);
             }
         }

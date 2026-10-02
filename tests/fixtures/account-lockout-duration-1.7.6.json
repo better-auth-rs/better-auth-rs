@@ -1,0 +1,116 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "omitted",
+      "configured": null,
+      "anchorMillis": 2000000000123,
+      "events": [
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-date-calculation"
+            }
+          ],
+          "increment": {
+            "failedVerificationCount": 1
+          }
+        },
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-date-calculation"
+            },
+            {
+              "field": "failedVerificationCount",
+              "operator": "gte",
+              "value": 10
+            }
+          ],
+          "increment": {},
+          "set": {
+            "lockedUntil": "2033-05-18T03:48:20.123Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero",
+      "configured": 0,
+      "anchorMillis": 2000000000123,
+      "events": [
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-date-calculation"
+            }
+          ],
+          "increment": {
+            "failedVerificationCount": 1
+          }
+        },
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-date-calculation"
+            },
+            {
+              "field": "failedVerificationCount",
+              "operator": "gte",
+              "value": 10
+            }
+          ],
+          "increment": {},
+          "set": {
+            "lockedUntil": "2033-05-18T03:33:20.123Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fractional",
+      "configured": 1.5,
+      "anchorMillis": 2000000000123,
+      "events": [
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-date-calculation"
+            }
+          ],
+          "increment": {
+            "failedVerificationCount": 1
+          }
+        },
+        {
+          "model": "twoFactor",
+          "where": [
+            {
+              "field": "id",
+              "value": "ordinary-date-calculation"
+            },
+            {
+              "field": "failedVerificationCount",
+              "operator": "gte",
+              "value": 10
+            }
+          ],
+          "increment": {},
+          "set": {
+            "lockedUntil": "2033-05-18T03:33:21.623Z"
+          }
+        }
+      ]
+    }
+  ]
+}

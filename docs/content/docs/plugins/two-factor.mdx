@@ -142,6 +142,8 @@ For TS compatibility, Rust keeps backup-code retrieval as a server-only capabili
 - **TOTP and backup-code challenges** allow five failed attempts before the challenge is invalidated
 - **Account lockout** blocks sign-in factor verification for 15 minutes after 10 consecutive failures across challenges; successful verification clears the counter. As in Better Auth 1.7.6, the account must have an authenticator record. OTP-only enrollment uses the per-code attempt limit.
 
+`AccountLockout.duration_seconds` accepts `f64` seconds, including fractions, and defaults to `900.0`. Explicit zero is preserved. Date conversion truncates to JavaScript millisecond precision and returns a configuration error for non-finite or unrepresentable dates. Rust still reads the clock before calling the counter store operation; Better Auth 1.7.6 reads the clock after the first increment reaches the threshold. This numeric configuration support does not establish equivalent counter timing or arbitrary numeric behavior. `max_failed_attempts` remains an integer.
+
 ## Errors
 
 | Status | Condition |

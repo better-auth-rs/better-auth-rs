@@ -155,8 +155,8 @@ pub struct AccountLockout {
     pub enabled: bool,
     /// Failures across factors and challenges before locking the account.
     pub max_failed_attempts: i64,
-    /// Duration of the lock in seconds.
-    pub duration_seconds: i64,
+    /// Duration of the lock in seconds, including fractions. Zero is preserved.
+    pub duration_seconds: f64,
 }
 
 impl Default for AccountLockout {
@@ -164,7 +164,7 @@ impl Default for AccountLockout {
         Self {
             enabled: true,
             max_failed_attempts: 10,
-            duration_seconds: 900,
+            duration_seconds: 900.0,
         }
     }
 }

@@ -1,5 +1,17 @@
 use super::*;
 
+#[cfg(test)]
+mod duration_tests;
+
+impl AccountLockout {
+    fn locked_until(&self, now: chrono::DateTime<Utc>) -> AuthResult<chrono::DateTime<Utc>> {
+        better_auth_core::utils::date::from_milliseconds(
+            now.timestamp_millis() as f64 + self.duration_seconds * 1000.0,
+        )
+        .ok_or_else(|| AuthError::config("Account lockout expiration is out of range"))
+    }
+}
+
 pub(super) async fn assert_not_locked(
     state: &ResolvedTwoFactorState,
     factor: &TwoFactor,
@@ -35,7 +47,7 @@ pub(super) async fn record_failure(
             .record_two_factor_failure(
                 &factor.id,
                 config.max_failed_attempts,
-                Utc::now() + Duration::seconds(config.duration_seconds),
+                config.locked_until(Utc::now())?,
             )
             .await?;
     }

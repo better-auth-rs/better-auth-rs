@@ -243,8 +243,13 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
         let primary_key = field
             .primary_key
             .then(|| quote! { #[sea_orm(primary_key, auto_increment = #auto_increment)] });
-        let number_storage = (entity.role == Some(EntityRole::RateLimit) && name == "count")
-            .then(|| quote!(#[sea_orm(column_type = "Integer")]));
+        let number_storage = if entity.role == Some(EntityRole::RateLimit) && name == "count" {
+            Some(quote!(#[sea_orm(column_type = "Integer")]))
+        } else if entity.role == Some(EntityRole::DeviceCode) && name == "polling_interval" {
+            Some(quote!(#[sea_orm(column_type = "Integer", nullable)]))
+        } else {
+            None
+        };
         let reference = (entity.role.is_some()
             && field.attributes.is_some()
             && field.references_id(entity.registry_table))

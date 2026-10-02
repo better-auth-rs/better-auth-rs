@@ -134,7 +134,7 @@ impl From<&entities::device_code::Model> for DeviceCode {
             expires_at: model.expires_at,
             status: model.status.clone(),
             last_polled_at: model.last_polled_at,
-            polling_interval: model.polling_interval,
+            polling_interval: model.polling_interval.map(f64::from),
             client_id: model.client_id.clone().into(),
             scope: model.scope.clone().into(),
         }

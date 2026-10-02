@@ -144,7 +144,7 @@ pub struct DeviceCode {
     #[serde(serialize_with = "crate::utils::date::serialize_option")]
     pub last_polled_at: Option<DateTime<Utc>>,
     #[serde(rename = "pollingInterval", skip_serializing_if = "Option::is_none")]
-    pub polling_interval: Option<i64>,
+    pub polling_interval: Option<f64>,
     #[serde(
         default,
         rename = "clientId",
@@ -164,7 +164,7 @@ pub struct CreateDeviceCode {
     pub expires_at: DateTime<Utc>,
     pub status: String,
     pub last_polled_at: Option<DateTime<Utc>>,
-    pub polling_interval: Option<i64>,
+    pub polling_interval: Option<f64>,
     pub client_id: Option<String>,
     /// Omit with `Undefined`, clear with `Typed(None)`, or supply a string.
     pub scope: crate::SchemaValue<Option<String>>,

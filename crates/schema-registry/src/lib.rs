@@ -269,7 +269,7 @@ static PLUGINS: &[PluginSchema] = &[
                 f!("expires_at", "DateTimeUtc"),
                 f!("status", "String"),
                 f!("last_polled_at", "Option<DateTimeUtc>"),
-                f!("polling_interval", "Option<i64>"),
+                f!("polling_interval", "Option<better_auth::seaorm::SqlNumber>"),
                 f!("client_id", "Option<String>"),
                 f!("scope", "Option<String>"),
             ],
