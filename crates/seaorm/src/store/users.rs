@@ -779,10 +779,14 @@ where
                 let serialized = serde_json::to_value(&model)?;
                 for (name, field) in self.config().user.fields() {
                     let physical = resolve_field_name(field.field_name.as_deref(), name);
-                    let value = if matches!(
-                        field.field_type,
-                        better_auth_core::user_fields::UserFieldType::String
-                    ) && field.references.is_none()
+                    let value = if (matches!(field.field_type, UserFieldType::String)
+                        || (self.connection().get_database_backend() == sea_orm::DbBackend::Sqlite
+                            && query.is_additional_field(name)
+                            && matches!(
+                                field.field_type,
+                                UserFieldType::Boolean | UserFieldType::Number
+                            )))
+                        && field.references.is_none()
                     {
                         let column = S::User::field_column(physical)?;
                         let value =

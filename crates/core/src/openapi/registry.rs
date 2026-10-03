@@ -81,12 +81,13 @@ impl OpenApiRegistry {
                 }
                 models.entry(model).or_default().extend(fields);
             }
-            for (role, field) in plugin.registered_field_names {
+            for (role, fields) in plugin.registered_field_names {
                 if let Some(model) = registered_model_name(role) {
-                    let _ = declaration_order
+                    let _ = models.entry(model.into()).or_default();
+                    declaration_order
                         .entry(model.into())
                         .or_default()
-                        .insert(field);
+                        .extend(fields);
                 }
             }
             if plugin.id == "open-api" {

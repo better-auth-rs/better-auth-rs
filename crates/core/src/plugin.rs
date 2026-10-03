@@ -241,7 +241,7 @@ pub struct AuthRoute {
 pub struct AuthInitContext<S: AuthSchema> {
     request_runtime: crate::request_runtime::RequestRuntime,
     plugin_fields: crate::plugin_runtime::ModelFields,
-    registered_model_field_names: Vec<(crate::store::schema::EntityRole, String)>,
+    registered_model_field_names: Vec<(crate::store::schema::EntityRole, Vec<String>)>,
     database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
     runtime: crate::plugin_runtime::PluginRuntime<S>,
     pub extensions: crate::RuntimeExtensions,
@@ -436,14 +436,16 @@ impl<S: AuthSchema> AuthInitContext<S> {
 
     /// Register user schema fields in plugin registration order.
     pub fn register_user_fields(&mut self, fields: crate::user_fields::UserConfig) {
-        let names: Vec<_> = fields.fields().keys().cloned().collect();
+        let names = fields
+            .additional_fields
+            .as_ref()
+            .map(|fields| fields.keys().cloned().collect());
         self.plugin_fields
             .extend(crate::store::schema::EntityRole::User, fields);
-        self.registered_model_field_names.extend(
-            names
-                .into_iter()
-                .map(|name| (crate::store::schema::EntityRole::User, name)),
-        );
+        if let Some(names) = names {
+            self.registered_model_field_names
+                .push((crate::store::schema::EntityRole::User, names));
+        }
     }
 
     /// Register adapter fields for core models, Organization, Team, or supported plugin display fields.
@@ -453,19 +455,23 @@ impl<S: AuthSchema> AuthInitContext<S> {
         role: crate::store::schema::EntityRole,
         fields: crate::user_fields::UserConfig,
     ) -> AuthResult<()> {
-        let names: Vec<_> = fields.fields().keys().cloned().collect();
+        let names = fields
+            .additional_fields
+            .as_ref()
+            .map(|fields| fields.keys().cloned().collect());
         self.plugin_fields.register(role, fields)?;
-        self.registered_model_field_names
-            .extend(names.into_iter().map(|name| (role, name)));
+        if let Some(names) = names {
+            self.registered_model_field_names.push((role, names));
+        }
         Ok(())
     }
 
     /// Take successful declarations after one plugin initializes, before the next plugin runs.
-    /// Names retain declaration order even when adapter policies reorder their own fields.
+    /// Each role group retains explicit empty declarations and its field insertion order.
     #[doc(hidden)]
     pub fn take_registered_model_field_names(
         &mut self,
-    ) -> Vec<(crate::store::schema::EntityRole, String)> {
+    ) -> Vec<(crate::store::schema::EntityRole, Vec<String>)> {
         std::mem::take(&mut self.registered_model_field_names)
     }
 

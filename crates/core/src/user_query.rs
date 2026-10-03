@@ -275,8 +275,10 @@ fn matches_record(
             Some((name, field, value)) => {
                 let operator = params.filter_operator.as_deref().unwrap_or("eq");
                 let actual = raw.get(*name);
-                if matches!(field.field_type, UserFieldType::String)
-                    && field.references.is_none()
+                if matches!(
+                    field.field_type,
+                    UserFieldType::String | UserFieldType::Boolean | UserFieldType::Number
+                ) && field.references.is_none()
                     && value.is_null()
                     && matches!(operator, "eq" | "ne")
                 {
@@ -347,6 +349,11 @@ impl<'a> PreparedUserQuery<'a> {
             fields,
             filter: additional_filter(params, fields)?,
         })
+    }
+
+    /// Report whether a declared name selects an additional field instead of a native getter.
+    pub fn is_additional_field(&self, name: &str) -> bool {
+        additional_field(name, self.fields).is_some()
     }
 
     /// Validate a nonempty sort declaration before a SQL adapter executes its query.

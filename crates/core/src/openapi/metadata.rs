@@ -17,7 +17,7 @@ pub struct OpenApiPluginMetadata {
     pub(super) id: String,
     pub(super) endpoints: Vec<Endpoint>,
     pub(super) models: IndexMap<String, ModelFields>,
-    pub(super) registered_field_names: Vec<(EntityRole, String)>,
+    pub(super) registered_field_names: Vec<(EntityRole, Vec<String>)>,
 }
 
 impl OpenApiPluginMetadata {
@@ -166,9 +166,9 @@ impl OpenApiPluginMetadata {
     }
 
     /// Attach successful declarations from this plugin's initialization without replacing policies.
-    /// The registry uses these names only to preserve model field insertion order.
+    /// Role groups preserve explicit empty models and model/field insertion order.
     #[doc(hidden)]
-    pub fn registered_field_names(mut self, fields: Vec<(EntityRole, String)>) -> Self {
+    pub fn registered_field_names(mut self, fields: Vec<(EntityRole, Vec<String>)>) -> Self {
         self.registered_field_names = fields;
         self
     }

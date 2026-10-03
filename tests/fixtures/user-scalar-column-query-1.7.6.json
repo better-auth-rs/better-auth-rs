@@ -1,0 +1,686 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "sqlite",
+      "queries": [
+        {
+          "name": "logical-boolean-false",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 0
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-boolean-false",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 0
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "logical-boolean-sort",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "null",
+              "value": null
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 0
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 1
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "null",
+              "value": null
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 12.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "null"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "true"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": true
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 12.5
+                }
+              }
+            ],
+            "total": 3
+          }
+        },
+        {
+          "name": "physical-boolean-sort-page",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 1
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 0
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 12.5
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "true"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": true
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 12.5
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              }
+            ],
+            "total": 3
+          }
+        },
+        {
+          "name": "logical-boolean-eq-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "null",
+              "value": null
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "null",
+              "value": null
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "null"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-boolean-ne-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 0
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 1
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 12.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "true"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": true
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 12.5
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "logical-number-eq-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "null",
+              "value": null
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "null",
+              "value": null
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "null"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-number-ne-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 0
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "number",
+              "value": 1
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 12.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "true"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": true
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 12.5
+                }
+              }
+            ],
+            "total": 2
+          }
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "queries": [
+        {
+          "name": "logical-boolean-eq-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "null",
+              "value": null
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "null",
+              "value": null
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "null"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-boolean-ne-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "boolean",
+              "value": false
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "boolean",
+              "value": true
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 12.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "true"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": true
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 12.5
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "logical-number-eq-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "null",
+              "value": null
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "null",
+              "value": null
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "null"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": null
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-number-ne-null",
+          "events": [
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "boolean",
+              "value": false
+            },
+            {
+              "field": "highlighted",
+              "present": true,
+              "kind": "boolean",
+              "value": true
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 0.5
+            },
+            {
+              "field": "rank",
+              "present": true,
+              "kind": "number",
+              "value": 12.5
+            }
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "false"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": false
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 0.5
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "present": true,
+                  "value": "true"
+                },
+                "highlighted": {
+                  "own": true,
+                  "present": true,
+                  "value": true
+                },
+                "rank": {
+                  "own": true,
+                  "present": true,
+                  "value": 12.5
+                }
+              }
+            ],
+            "total": 2
+          }
+        }
+      ]
+    }
+  ]
+}
