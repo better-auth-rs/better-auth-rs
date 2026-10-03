@@ -31,13 +31,29 @@ where
         rows: &[S::User],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
-        let mut output = better_auth_core::wire::UserView::with_internal_fields_many_for_adapter(
-            rows,
-            &self.config().user,
-            &Default::default(),
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
-        .await?;
+        let mut output =
+            better_auth_core::wire::UserView::with_internal_fields_many_for_adapter_using(
+                rows,
+                &self.config().user,
+                &Default::default(),
+                db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                |model, name, field| {
+                    if matches!(
+                        field.field_type,
+                        better_auth_core::user_fields::UserFieldType::String
+                    ) && field.references.is_none()
+                    {
+                        let physical = resolve_field_name(field.field_name.as_deref(), name);
+                        let column = S::User::field_column(physical)?;
+                        let value =
+                            column_value::<<S::User as SeaOrmUserModel>::Entity>(model, column);
+                        Ok(Some(sea_orm::sea_query::sea_value_to_json_value(&value)))
+                    } else {
+                        Ok(None)
+                    }
+                },
+            )
+            .await?;
         use better_auth_core::AuthUser;
         for (view, row) in output.iter_mut().zip(rows) {
             view.visible_fields = row.field_presence().cloned();
@@ -66,16 +82,11 @@ where
         row: &S::User,
         db: &impl ConnectionTrait,
     ) -> AuthResult<better_auth_core::wire::UserView> {
-        use better_auth_core::AuthUser;
-        let mut output = better_auth_core::wire::UserView::with_internal_fields_for_adapter(
-            row,
-            &self.config().user,
-            &Default::default(),
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
-        .await?;
-        output.visible_fields = row.field_presence().cloned();
-        Ok(output)
+        // Projection preserves the one input row.
+        Ok(self
+            .output_users(std::slice::from_ref(row), db)
+            .await?
+            .remove(0))
     }
 
     pub(super) async fn output_joined_users(
@@ -682,6 +693,9 @@ where
         )?;
         params.limit = limit.map(|value| value as f64);
         params.offset = offset.map(|value| value as f64);
+        let query =
+            better_auth_core::user_query::PreparedUserQuery::new(&params, &self.config().user)?;
+        query.validate_sort()?;
         let models = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -724,12 +738,7 @@ where
             .into_iter()
             .map(&query_record)
             .collect::<AuthResult<Vec<_>>>()?;
-        let (selected, _) = better_auth_core::user_query::apply_list_users_by(
-            records,
-            &params,
-            &self.config().user,
-            |(view, fields, _)| (view, fields),
-        )?;
+        let (selected, _) = query.select(records, |(view, fields, _)| (view, fields))?;
         let selected = selected
             .into_iter()
             .map(|(_, _, model)| model)
@@ -747,12 +756,7 @@ where
                     .into_iter()
                     .map(query_record)
                     .collect::<AuthResult<Vec<_>>>()?;
-                better_auth_core::user_query::count_users(
-                    &records,
-                    &params,
-                    &self.config().user,
-                    |(view, fields, _)| (view, fields),
-                )
+                Ok(query.count(&records, |(view, fields, _)| (view, fields)))
             },
         )
         .await?;

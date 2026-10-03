@@ -1,4 +1,4 @@
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use serde_json::{Map, Value};
 
 use crate::{AuthConfig, AuthResult, HttpMethod, user_fields::UserConfig};
@@ -39,6 +39,7 @@ impl OpenApiRegistry {
     ) -> AuthResult<Self> {
         let catalog = catalog()?;
         let mut models: IndexMap<String, ModelFields> = IndexMap::new();
+        let mut declaration_order: IndexMap<String, IndexSet<String>> = IndexMap::new();
         for model in catalog
             .models(None)
             .iter()
@@ -73,10 +74,22 @@ impl OpenApiRegistry {
         }
         for plugin in plugins {
             for (model, fields) in plugin.models {
+                declaration_order
+                    .entry(model.clone())
+                    .or_default()
+                    .extend(fields.keys().cloned());
                 if model == "user" {
                     input_fields.extend(fields.clone());
                 }
                 models.entry(model).or_default().extend(fields);
+            }
+            for (role, field) in plugin.registered_field_names {
+                if let Some(model) = registered_model_name(role) {
+                    let _ = declaration_order
+                        .entry(model.into())
+                        .or_default()
+                        .insert(field);
+                }
             }
             if plugin.id == "open-api" {
                 continue;
@@ -105,18 +118,10 @@ impl OpenApiRegistry {
                 EntityRole::OrganizationRole => {
                     ("organizationRole", &organization.organization_role)
                 }
-                EntityRole::ApiKey => ("apikey", fields),
-                EntityRole::DeviceCode => ("deviceCode", fields),
-                EntityRole::Passkey => ("passkey", fields),
-                EntityRole::Jwk => ("jwks", fields),
-                EntityRole::WalletAddress => ("walletAddress", fields),
-                EntityRole::User
-                | EntityRole::Session
-                | EntityRole::Account
-                | EntityRole::Verification
-                | EntityRole::TeamMember
-                | EntityRole::TwoFactor
-                | EntityRole::RateLimit => continue,
+                _ => match registered_model_name(role) {
+                    Some(name) => (name, fields),
+                    None => continue,
+                },
             };
             if fields.fields().is_empty() && !models.contains_key(name) {
                 continue;
@@ -132,7 +137,7 @@ impl OpenApiRegistry {
                     .iter()
                     .map(|(key, field)| (key.clone(), project_field(key, field, false))),
             );
-            if matches!(
+            let order = if matches!(
                 role,
                 EntityRole::Organization
                     | EntityRole::Member
@@ -140,7 +145,13 @@ impl OpenApiRegistry {
                     | EntityRole::Team
                     | EntityRole::OrganizationRole
             ) {
-                let order = registered_fields.organization_output_field_names(role, fields);
+                Some(registered_fields.organization_output_field_names(role, fields))
+            } else {
+                declaration_order
+                    .get(name)
+                    .map(|names| names.iter().cloned().collect())
+            };
+            if let Some(order) = order {
                 let position = |name: &str| {
                     order
                         .iter()
@@ -234,6 +245,28 @@ impl OpenApiRegistry {
             }
         }
         builder.build()
+    }
+}
+
+fn registered_model_name(role: EntityRole) -> Option<&'static str> {
+    match role {
+        EntityRole::ApiKey => Some("apikey"),
+        EntityRole::DeviceCode => Some("deviceCode"),
+        EntityRole::Passkey => Some("passkey"),
+        EntityRole::Jwk => Some("jwks"),
+        EntityRole::WalletAddress => Some("walletAddress"),
+        EntityRole::User
+        | EntityRole::Session
+        | EntityRole::Account
+        | EntityRole::Verification
+        | EntityRole::Organization
+        | EntityRole::Member
+        | EntityRole::Invitation
+        | EntityRole::Team
+        | EntityRole::OrganizationRole
+        | EntityRole::TeamMember
+        | EntityRole::TwoFactor
+        | EntityRole::RateLimit => None,
     }
 }
 

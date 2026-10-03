@@ -152,7 +152,36 @@ impl UserView {
         metadata: &MetadataMap,
         supports_native_json: bool,
     ) -> AuthResult<Vec<Self>> {
-        Self::project_many(users, config, metadata, false, supports_native_json).await
+        Self::project_many(
+            users,
+            config,
+            metadata,
+            false,
+            supports_native_json,
+            |_, _, _| Ok(None),
+        )
+        .await
+    }
+
+    /// Project database rows with an adapter source for unprojected additional fields.
+    /// `Some(Value::Null)` preserves a present null; `None` retains the serialized source.
+    /// Native fields and completed adapter output do not use this accessor.
+    pub async fn with_internal_fields_many_for_adapter_using<T: AuthUser>(
+        users: &[T],
+        config: &super::UserConfig,
+        metadata: &MetadataMap,
+        supports_native_json: bool,
+        read_extra: impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync,
+    ) -> AuthResult<Vec<Self>> {
+        Self::project_many(
+            users,
+            config,
+            metadata,
+            false,
+            supports_native_json,
+            read_extra,
+        )
+        .await
     }
 
     async fn project<T: AuthUser>(
@@ -169,6 +198,7 @@ impl UserView {
             metadata,
             public,
             supports_native_json,
+            |_, _, _| Ok(None),
         )
         .await?
         .remove(0))
@@ -180,6 +210,7 @@ impl UserView {
         metadata: &MetadataMap,
         public: bool,
         supports_native_json: bool,
+        read_extra: impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync,
     ) -> AuthResult<Vec<Self>> {
         let mut rows = users
             .iter()
@@ -216,6 +247,7 @@ impl UserView {
                 Ok((user, view, model))
             })
             .collect::<AuthResult<Vec<_>>>()?;
+        let read_extra = &read_extra;
         super::batch::project_fields(
             &mut rows,
             config.fields(),
@@ -229,10 +261,18 @@ impl UserView {
                         }
                     } else {
                         let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-                        let value = model
-                            .as_ref()
-                            .and_then(|model| model.get(storage_name))
-                            .cloned()
+                        let value = if Self::NATIVE_FIELDS.contains(&name) {
+                            None
+                        } else {
+                            read_extra(user, name, field)?
+                        };
+                        let value = value
+                            .or_else(|| {
+                                model
+                                    .as_ref()
+                                    .and_then(|model| model.get(storage_name))
+                                    .cloned()
+                            })
                             .or_else(|| match (name, storage_name == name) {
                                 ("username", true) => Some(json!(user.username())),
                                 ("displayUsername", true) => Some(json!(user.display_username())),

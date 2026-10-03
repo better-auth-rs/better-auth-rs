@@ -332,6 +332,113 @@ fn compare_option_dates(
     }
 }
 
+/// Bind a user filter once while retaining adapter-specific sort validation timing.
+pub struct PreparedUserQuery<'a> {
+    params: &'a ListUsersParams,
+    fields: &'a UserConfig,
+    filter: Option<(&'a str, &'a UserFieldConfig, Value)>,
+}
+
+impl<'a> PreparedUserQuery<'a> {
+    /// Resolve and bind the filter without validating the sort declaration.
+    pub fn new(params: &'a ListUsersParams, fields: &'a UserConfig) -> AuthResult<Self> {
+        Ok(Self {
+            params,
+            fields,
+            filter: additional_filter(params, fields)?,
+        })
+    }
+
+    /// Validate a nonempty sort declaration before a SQL adapter executes its query.
+    pub fn validate_sort(&self) -> AuthResult<()> {
+        if let Some(name) = self
+            .params
+            .sort_by
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            && name != "_id"
+            && !UserView::NATIVE_FIELDS.contains(&name)
+            && declared_field(name, self.fields).is_none()
+        {
+            return Err(crate::AuthError::internal(format!(
+                "Field {name} not found in model user"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Count fresh raw rows without sorting, paging, or output transforms.
+    pub fn count<'r, T: 'r>(
+        &self,
+        users: impl IntoIterator<Item = &'r T>,
+        record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+    ) -> usize {
+        users
+            .into_iter()
+            .filter(|user| matches_record(record(user), self.params, &self.filter))
+            .count()
+    }
+
+    /// Select original rows, validating sort only when filtered rows require comparison.
+    /// SQL adapters must also call `validate_sort` before their database read.
+    pub fn select<T>(
+        &self,
+        mut users: Vec<T>,
+        record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+    ) -> AuthResult<(Vec<T>, usize)> {
+        let params = self.params;
+        let fields = self.fields;
+        users.retain(|user| matches_record(record(user), params, &self.filter));
+        if users.len() > 1 {
+            self.validate_sort()?;
+        }
+
+        if let Some(sort_by) = params.sort_by.as_deref().filter(|value| !value.is_empty()) {
+            let sort_direction = params
+                .sort_direction
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .unwrap_or("asc");
+            let additional_sort = additional_field(sort_by, fields).map(|(name, _)| name);
+
+            users.sort_by(|lhs, rhs| {
+                let ((lhs, left), (rhs, right)) = (record(lhs), record(rhs));
+                if let Some(name) = additional_sort {
+                    return compare_values(left.get(name), right.get(name), sort_direction);
+                }
+                match sort_by {
+                    "id" | "_id" | "email" | "name" | "username" | "role" => {
+                        compare_option_strings(
+                            string_field(lhs, sort_by),
+                            string_field(rhs, sort_by),
+                            sort_direction,
+                        )
+                    }
+                    "createdAt" | "updatedAt" | "banExpires" => compare_option_dates(
+                        date_field(lhs, sort_by),
+                        date_field(rhs, sort_by),
+                        sort_direction,
+                    ),
+                    "banned" => match sort_direction {
+                        "asc" => bool_field(lhs, sort_by).cmp(&bool_field(rhs, sort_by)),
+                        _ => bool_field(rhs, sort_by).cmp(&bool_field(lhs, sort_by)),
+                    },
+                    _ => compare_option_dates(
+                        date_field(lhs, "createdAt"),
+                        date_field(rhs, "createdAt"),
+                        sort_direction,
+                    ),
+                }
+            });
+        }
+
+        let total = users.len();
+        let paged = crate::query::paginate_memory(users, params.limit, params.offset);
+
+        Ok((paged, total))
+    }
+}
+
 /// Count matching rows without sorting, paging, or applying output transforms.
 pub fn count_users<'a, T: 'a>(
     users: impl IntoIterator<Item = &'a T>,
@@ -339,62 +446,15 @@ pub fn count_users<'a, T: 'a>(
     fields: &UserConfig,
     record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
 ) -> AuthResult<usize> {
-    let filter = additional_filter(params, fields)?;
-    Ok(users
-        .into_iter()
-        .filter(|user| matches_record(record(user), params, &filter))
-        .count())
+    Ok(PreparedUserQuery::new(params, fields)?.count(users, record))
 }
 
 /// Select raw user records while retaining each adapter's original row association.
 pub fn apply_list_users_by<T>(
-    mut users: Vec<T>,
+    users: Vec<T>,
     params: &ListUsersParams,
     fields: &UserConfig,
     record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
 ) -> AuthResult<(Vec<T>, usize)> {
-    let filter = additional_filter(params, fields)?;
-    users.retain(|user| matches_record(record(user), params, &filter));
-
-    if let Some(sort_by) = params.sort_by.as_deref().filter(|value| !value.is_empty()) {
-        let sort_direction = params
-            .sort_direction
-            .as_deref()
-            .filter(|value| !value.is_empty())
-            .unwrap_or("asc");
-        let additional_sort = additional_field(sort_by, fields).map(|(name, _)| name);
-
-        users.sort_by(|lhs, rhs| {
-            let ((lhs, left), (rhs, right)) = (record(lhs), record(rhs));
-            if let Some(name) = additional_sort {
-                return compare_values(left.get(name), right.get(name), sort_direction);
-            }
-            match sort_by {
-                "id" | "_id" | "email" | "name" | "username" | "role" => compare_option_strings(
-                    string_field(lhs, sort_by),
-                    string_field(rhs, sort_by),
-                    sort_direction,
-                ),
-                "createdAt" | "updatedAt" | "banExpires" => compare_option_dates(
-                    date_field(lhs, sort_by),
-                    date_field(rhs, sort_by),
-                    sort_direction,
-                ),
-                "banned" => match sort_direction {
-                    "asc" => bool_field(lhs, sort_by).cmp(&bool_field(rhs, sort_by)),
-                    _ => bool_field(rhs, sort_by).cmp(&bool_field(lhs, sort_by)),
-                },
-                _ => compare_option_dates(
-                    date_field(lhs, "createdAt"),
-                    date_field(rhs, "createdAt"),
-                    sort_direction,
-                ),
-            }
-        });
-    }
-
-    let total = users.len();
-    let paged = crate::query::paginate_memory(users, params.limit, params.offset);
-
-    Ok((paged, total))
+    PreparedUserQuery::new(params, fields)?.select(users, record)
 }

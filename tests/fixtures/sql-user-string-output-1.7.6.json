@@ -1,0 +1,134 @@
+{
+  "version": "1.7.6",
+  "backend": "sqlite",
+  "point": {
+    "events": [
+      [
+        "output",
+        "label",
+        {
+          "defined": true,
+          "value": null
+        }
+      ],
+      [
+        "output",
+        "note",
+        {
+          "defined": true,
+          "value": ""
+        }
+      ]
+    ],
+    "result": {
+      "marker": {
+        "own": true,
+        "value": {
+          "defined": true,
+          "value": "a"
+        }
+      },
+      "label": {
+        "own": true,
+        "value": {
+          "defined": true,
+          "value": null
+        }
+      },
+      "note": {
+        "own": true,
+        "value": {
+          "defined": true,
+          "value": ""
+        }
+      }
+    }
+  },
+  "batch": {
+    "events": [
+      [
+        "output",
+        "label",
+        {
+          "defined": true,
+          "value": null
+        }
+      ],
+      [
+        "output",
+        "label",
+        {
+          "defined": true,
+          "value": "blue"
+        }
+      ],
+      [
+        "output",
+        "note",
+        {
+          "defined": true,
+          "value": ""
+        }
+      ],
+      [
+        "output",
+        "note",
+        {
+          "defined": true,
+          "value": "visible"
+        }
+      ]
+    ],
+    "result": {
+      "users": [
+        {
+          "marker": {
+            "own": true,
+            "value": {
+              "defined": true,
+              "value": "a"
+            }
+          },
+          "label": {
+            "own": true,
+            "value": {
+              "defined": true,
+              "value": null
+            }
+          },
+          "note": {
+            "own": true,
+            "value": {
+              "defined": true,
+              "value": ""
+            }
+          }
+        },
+        {
+          "marker": {
+            "own": true,
+            "value": {
+              "defined": true,
+              "value": "b"
+            }
+          },
+          "label": {
+            "own": true,
+            "value": {
+              "defined": true,
+              "value": "blue"
+            }
+          },
+          "note": {
+            "own": true,
+            "value": {
+              "defined": true,
+              "value": "visible"
+            }
+          }
+        }
+      ],
+      "total": 2
+    }
+  }
+}

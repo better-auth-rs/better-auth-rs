@@ -241,6 +241,7 @@ pub struct AuthRoute {
 pub struct AuthInitContext<S: AuthSchema> {
     request_runtime: crate::request_runtime::RequestRuntime,
     plugin_fields: crate::plugin_runtime::ModelFields,
+    registered_model_field_names: Vec<(crate::store::schema::EntityRole, String)>,
     database_hooks: Vec<Arc<dyn crate::store::database_hooks::DatabaseHooks<S>>>,
     runtime: crate::plugin_runtime::PluginRuntime<S>,
     pub extensions: crate::RuntimeExtensions,
@@ -409,6 +410,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
         Self {
             request_runtime: Default::default(),
             plugin_fields: Default::default(),
+            registered_model_field_names: Vec::new(),
             database_hooks: Vec::new(),
             runtime: Default::default(),
             extensions: crate::RuntimeExtensions::default(),
@@ -445,7 +447,20 @@ impl<S: AuthSchema> AuthInitContext<S> {
         role: crate::store::schema::EntityRole,
         fields: crate::user_fields::UserConfig,
     ) -> AuthResult<()> {
-        self.plugin_fields.register(role, fields)
+        let names: Vec<_> = fields.fields().keys().cloned().collect();
+        self.plugin_fields.register(role, fields)?;
+        self.registered_model_field_names
+            .extend(names.into_iter().map(|name| (role, name)));
+        Ok(())
+    }
+
+    /// Take successful declarations after one plugin initializes, before the next plugin runs.
+    /// Names retain declaration order even when adapter policies reorder their own fields.
+    #[doc(hidden)]
+    pub fn take_registered_model_field_names(
+        &mut self,
+    ) -> Vec<(crate::store::schema::EntityRole, String)> {
+        std::mem::take(&mut self.registered_model_field_names)
     }
 
     /// Register the Organization plugin schema at its position in plugin initialization.

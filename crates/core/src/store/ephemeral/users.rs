@@ -546,6 +546,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let _ = params
             .limit
             .get_or_insert(self.config.advanced.database.find_many_limit());
+        let query = crate::user_query::PreparedUserQuery::new(&params, &self.config.user)?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 state
@@ -559,23 +560,17 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .collect::<AuthResult<Vec<_>>>()
             })
             .await?;
-        let (users, _) = crate::user_query::apply_list_users_by(
-            users,
-            &params,
-            &self.config.user,
-            |(snapshot, _)| (snapshot, &snapshot.additional_fields),
-        )?;
+        let (users, _) = query.select(users, |(snapshot, _)| {
+            (snapshot, &snapshot.additional_fields)
+        })?;
         let users = self
             .output_user_refs(users.into_iter().map(|(_, source)| source).collect())
             .await?;
         let total = self
             .raw("user", "count", |state| {
-                crate::user_query::count_users(
-                    state.users.snapshot()?.iter(),
-                    &params,
-                    &self.config.user,
-                    |snapshot| (snapshot, &snapshot.additional_fields),
-                )
+                Ok(query.count(state.users.snapshot()?.iter(), |snapshot| {
+                    (snapshot, &snapshot.additional_fields)
+                }))
             })
             .await?;
         Ok((users, total))

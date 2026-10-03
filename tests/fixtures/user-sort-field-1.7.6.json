@@ -1,0 +1,168 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "queries": [
+        {
+          "name": "unknown-zero",
+          "events": [],
+          "result": {
+            "users": [],
+            "total": 0
+          }
+        },
+        {
+          "name": "unknown-one",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha",
+                "rank": 20
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "unknown-two",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownDisplay not found in model user"
+          }
+        },
+        {
+          "name": "logical-rank",
+          "events": [
+            [
+              "output",
+              "label",
+              "beta"
+            ],
+            [
+              "output",
+              "label",
+              "alpha"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "beta",
+                "rank": 3
+              },
+              {
+                "label": "alpha",
+                "rank": 20
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "physical-rank",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha",
+                "rank": 20
+              }
+            ],
+            "total": 2
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "queries": [
+        {
+          "name": "unknown-zero",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownDisplay not found in model user"
+          }
+        },
+        {
+          "name": "unknown-one",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownDisplay not found in model user"
+          }
+        },
+        {
+          "name": "unknown-two",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownDisplay not found in model user"
+          }
+        },
+        {
+          "name": "logical-rank",
+          "events": [
+            [
+              "output",
+              "label",
+              "beta"
+            ],
+            [
+              "output",
+              "label",
+              "alpha"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "beta",
+                "rank": 3
+              },
+              {
+                "label": "alpha",
+                "rank": 20
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "physical-rank",
+          "events": [
+            [
+              "output",
+              "label",
+              "alpha"
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "label": "alpha",
+                "rank": 20
+              }
+            ],
+            "total": 2
+          }
+        }
+      ]
+    }
+  ]
+}

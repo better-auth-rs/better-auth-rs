@@ -1,0 +1,111 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "custom-before-device",
+      "component": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "label": {
+            "type": "string",
+            "default": "display-label"
+          },
+          "deviceCode": {
+            "type": "string"
+          },
+          "userCode": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          },
+          "lastPolledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pollingInterval": {
+            "type": "number"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "deviceCode",
+          "userCode",
+          "expiresAt",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "device-before-custom",
+      "component": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "deviceCode": {
+            "type": "string"
+          },
+          "userCode": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          },
+          "lastPolledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pollingInterval": {
+            "type": "number"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "default": "display-label"
+          }
+        },
+        "required": [
+          "id",
+          "deviceCode",
+          "userCode",
+          "expiresAt",
+          "status",
+          "label"
+        ]
+      }
+    }
+  ]
+}

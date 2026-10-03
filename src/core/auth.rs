@@ -227,8 +227,10 @@ impl<S: AuthSchema> AuthBuilder<S> {
         init_context.extensions.insert(telemetry);
 
         // Initialize all plugins.
+        let mut registered_model_field_names = Vec::with_capacity(self.plugins.len());
         for plugin in &self.plugins {
             plugin.on_init(&mut init_context).await?;
+            registered_model_field_names.push(init_context.take_registered_model_field_names());
         }
 
         let config = init_context.config.clone();
@@ -305,7 +307,12 @@ impl<S: AuthSchema> AuthBuilder<S> {
             &config.user,
             self.plugins
                 .iter()
-                .map(|plugin| plugin.openapi())
+                .zip(registered_model_field_names)
+                .map(|(plugin, fields)| {
+                    plugin
+                        .openapi()
+                        .map(|metadata| metadata.registered_field_names(fields))
+                })
                 .collect::<AuthResult<Vec<_>>>()?,
             init_parts.secondary_storage.is_some(),
             rate_limit_config.storage == Some(better_auth_core::RateLimitStorageKind::Database),

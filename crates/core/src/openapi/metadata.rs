@@ -1,6 +1,7 @@
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
 
+use crate::store::schema::EntityRole;
 use crate::{AuthError, AuthResult, AuthRoute, HttpMethod, user_fields::UserConfig};
 
 use super::{
@@ -16,6 +17,7 @@ pub struct OpenApiPluginMetadata {
     pub(super) id: String,
     pub(super) endpoints: Vec<Endpoint>,
     pub(super) models: IndexMap<String, ModelFields>,
+    pub(super) registered_field_names: Vec<(EntityRole, String)>,
 }
 
 impl OpenApiPluginMetadata {
@@ -159,7 +161,16 @@ impl OpenApiPluginMetadata {
             id,
             endpoints,
             models,
+            registered_field_names: Vec::new(),
         })
+    }
+
+    /// Attach successful declarations from this plugin's initialization without replacing policies.
+    /// The registry uses these names only to preserve model field insertion order.
+    #[doc(hidden)]
+    pub fn registered_field_names(mut self, fields: Vec<(EntityRole, String)>) -> Self {
+        self.registered_field_names = fields;
+        self
     }
 
     /// Add or replace declared fields. Physical table and column names do not change document names.
