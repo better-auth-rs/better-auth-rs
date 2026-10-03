@@ -6,6 +6,7 @@ mod tests {
     mod dynamic_fields;
     mod field_attributes;
     mod ids;
+    mod invitation_catalog;
     mod jwk_additional_fields;
     mod jwk_rate_limit_catalog;
     mod member_organization_role_catalog;
@@ -18,6 +19,7 @@ mod tests {
     mod session_catalog;
     mod sqlite_catalog;
     mod sqlite_json;
+    mod team_catalog;
     mod user_account_catalog;
     mod verification_catalog;
     mod wallet_additional_fields;

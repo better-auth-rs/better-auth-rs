@@ -1,0 +1,88 @@
+{
+  "version": "1.7.6",
+  "database": "sqlite",
+  "input": {
+    "createdAt": "2030-01-02T03:04:05.000Z",
+    "updatedAt": "2030-01-02T03:04:06.123Z"
+  },
+  "rows": [
+    {
+      "writer": "better-auth",
+      "storedBefore": {
+        "createdAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:06.123Z"
+        }
+      },
+      "reads": [
+        {
+          "reader": "better-auth",
+          "timestamps": {
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:06.123Z"
+          }
+        },
+        {
+          "reader": "better-auth-rs",
+          "timestamps": {
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:06.123Z"
+          }
+        }
+      ],
+      "storedAfter": {
+        "createdAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:06.123Z"
+        }
+      }
+    },
+    {
+      "writer": "better-auth-rs",
+      "storedBefore": {
+        "createdAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:06.123Z"
+        }
+      },
+      "reads": [
+        {
+          "reader": "better-auth",
+          "timestamps": {
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:06.123Z"
+          }
+        },
+        {
+          "reader": "better-auth-rs",
+          "timestamps": {
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:06.123Z"
+          }
+        }
+      ],
+      "storedAfter": {
+        "createdAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "storageClass": "text",
+          "value": "2030-01-02T03:04:06.123Z"
+        }
+      }
+    }
+  ]
+}

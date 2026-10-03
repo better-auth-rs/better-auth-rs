@@ -1,0 +1,29 @@
+{
+  "default": {},
+  "legacy": {
+    "organization": { "modelName": "organization" },
+    "team": {
+      "modelName": "team",
+      "fields": {
+        "name": "name",
+        "memberCount": "member_count",
+        "organizationId": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    }
+  },
+  "custom": {
+    "organization": { "modelName": "display_team_catalog_organizations" },
+    "team": {
+      "modelName": "display_catalog_teams",
+      "fields": {
+        "name": "display_name",
+        "memberCount": "display_member_count",
+        "organizationId": "workspace_link",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on"
+      }
+    }
+  }
+}

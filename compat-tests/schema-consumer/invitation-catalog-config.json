@@ -1,0 +1,37 @@
+{
+  "default": {},
+  "legacy": {
+    "user": { "modelName": "users" },
+    "organization": { "modelName": "organization" },
+    "invitation": {
+      "modelName": "invitation",
+      "fields": {
+        "organizationId": "organization_id",
+        "email": "email",
+        "role": "role",
+        "teamId": "team_id",
+        "status": "status",
+        "expiresAt": "expires_at",
+        "createdAt": "created_at",
+        "inviterId": "inviter_id"
+      }
+    }
+  },
+  "custom": {
+    "user": { "modelName": "display_invitation_catalog_users" },
+    "organization": { "modelName": "display_invitation_catalog_organizations" },
+    "invitation": {
+      "modelName": "display_catalog_invitations",
+      "fields": {
+        "organizationId": "workspace_link",
+        "email": "mail_label",
+        "role": "display_role",
+        "teamId": "group_link",
+        "status": "display_status",
+        "expiresAt": "valid_until",
+        "createdAt": "created_on",
+        "inviterId": "sender_link"
+      }
+    }
+  }
+}

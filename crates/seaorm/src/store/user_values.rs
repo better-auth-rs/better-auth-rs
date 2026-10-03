@@ -1,7 +1,8 @@
 use better_auth_core::{AuthResult, SchemaValue};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, Iden, Iterable, QueryFilter,
-    sea_query::{Expr, Query, SimpleExpr},
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, Iden, Iterable,
+    QueryFilter,
+    sea_query::{Expr, Query, SimpleExpr, Value},
 };
 
 use super::{
@@ -11,6 +12,7 @@ use super::{
 use crate::SeaOrmUserModel;
 
 fn fields<M: SeaOrmUserModel>(
+    backend: DbBackend,
     active: M::ActiveModel,
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
@@ -36,7 +38,16 @@ fn fields<M: SeaOrmUserModel>(
                 fields.push((column, Binding::for_column(column, value)));
             }
         } else if let sea_orm::ActiveValue::Set(value) = active.get(column) {
-            fields.push((column, Binding::Native(value)));
+            let binding = match (backend, key, value) {
+                (DbBackend::Sqlite, "createdAt" | "updatedAt", Value::ChronoDateTimeUtc(value)) => {
+                    Binding::Raw(better_auth_core::utils::date::serialize_option(
+                        &value,
+                        serde_json::value::Serializer,
+                    )?)
+                }
+                (_, _, value) => Binding::Native(value),
+            };
+            fields.push((column, binding));
         }
     }
     for column in <M::Entity as EntityTrait>::Column::iter() {
@@ -65,8 +76,8 @@ pub(super) async fn insert<M: SeaOrmUserModel>(
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
 ) -> AuthResult<M> {
-    let fields = fields::<M>(active, name, image)?;
     let backend = db.get_database_backend();
+    let fields = fields::<M>(backend, active, name, image)?;
     let (columns, bindings): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
     let values = record_bindings::bind(backend, bindings)?;
     let id = columns
@@ -108,8 +119,8 @@ pub(super) async fn update<M: SeaOrmUserModel>(
     image: SchemaValue<Option<String>>,
     id: sea_orm::Value,
 ) -> AuthResult<Option<M>> {
-    let fields = fields::<M>(active, name, image)?;
     let backend = db.get_database_backend();
+    let fields = fields::<M>(backend, active, name, image)?;
     let (columns, bindings): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
     let values = record_bindings::bind(backend, bindings)?;
     let mut query = M::Entity::update_many();

@@ -51,6 +51,12 @@ for name, configuration in session_catalog.items():
 member_organization_role_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/member-organization-role-catalog-config.json").read_text())
 for name, configuration in member_organization_role_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"member_organization_role_catalog_{name}.json").write_text(json.dumps(configuration))
+team_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/team-catalog-config.json").read_text())
+for name, configuration in team_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"team_catalog_{name}.json").write_text(json.dumps(configuration))
+invitation_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/invitation-catalog-config.json").read_text())
+for name, configuration in invitation_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"invitation_catalog_{name}.json").write_text(json.dumps(configuration))
 PY
 for case in default legacy customLong; do
   cargo run --locked -p better-auth-cli -- generate --database sqlite --schema-config "$schema_dir/verification_catalog_${case}.json" --output "$schema_dir/verification_catalog_${case}.rs"
@@ -82,6 +88,18 @@ done
 export BETTER_AUTH_MEMBER_ORGANIZATION_ROLE_CATALOG_DEFAULT_SCHEMA="$schema_dir/member_organization_role_catalog_default.rs"
 export BETTER_AUTH_MEMBER_ORGANIZATION_ROLE_CATALOG_LEGACY_SCHEMA="$schema_dir/member_organization_role_catalog_legacy.rs"
 export BETTER_AUTH_MEMBER_ORGANIZATION_ROLE_CATALOG_CUSTOM_SCHEMA="$schema_dir/member_organization_role_catalog_custom.rs"
+for case in default legacy custom; do
+  cargo run --locked -p better-auth-cli -- generate --plugins organization --database sqlite --schema-config "$schema_dir/team_catalog_${case}.json" --output "$schema_dir/team_catalog_${case}.rs"
+done
+export BETTER_AUTH_TEAM_CATALOG_DEFAULT_SCHEMA="$schema_dir/team_catalog_default.rs"
+export BETTER_AUTH_TEAM_CATALOG_LEGACY_SCHEMA="$schema_dir/team_catalog_legacy.rs"
+export BETTER_AUTH_TEAM_CATALOG_CUSTOM_SCHEMA="$schema_dir/team_catalog_custom.rs"
+for case in default legacy custom; do
+  cargo run --locked -p better-auth-cli -- generate --plugins organization --database sqlite --schema-config "$schema_dir/invitation_catalog_${case}.json" --output "$schema_dir/invitation_catalog_${case}.rs"
+done
+export BETTER_AUTH_INVITATION_CATALOG_DEFAULT_SCHEMA="$schema_dir/invitation_catalog_default.rs"
+export BETTER_AUTH_INVITATION_CATALOG_LEGACY_SCHEMA="$schema_dir/invitation_catalog_legacy.rs"
+export BETTER_AUTH_INVITATION_CATALOG_CUSTOM_SCHEMA="$schema_dir/invitation_catalog_custom.rs"
 for case in omitted empty explicitDefaults renamed; do
   cargo run --locked -p better-auth-cli -- generate --schema-config "$schema_dir/declarations_${case}.json" --output "$schema_dir/declarations_${case}.rs"
 done

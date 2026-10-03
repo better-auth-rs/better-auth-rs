@@ -43,6 +43,8 @@ pub(crate) fn sqlite_native_catalog(database: Database, role: Option<EntityRole>
                     | EntityRole::RateLimit
                     | EntityRole::Member
                     | EntityRole::OrganizationRole
+                    | EntityRole::Team
+                    | EntityRole::Invitation
             )
         )
 }
@@ -298,8 +300,17 @@ impl Entity {
                     Ok(Field {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
-                        ty: syn::parse_str(field.ty)
-                            .map_err(|error| format!("invalid field type: {error}"))?,
+                        ty: syn::parse_str(
+                            if database == Database::Sqlite
+                                && definition.role == Some(EntityRole::Invitation)
+                                && field.name == "role"
+                            {
+                                "Option<String>"
+                            } else {
+                                field.ty
+                            },
+                        )
+                        .map_err(|error| format!("invalid field type: {error}"))?,
                         column: if sqlite_catalog
                             && core_field(definition.role, field.column_name.unwrap_or(field.name))
                                 .is_some()
@@ -449,6 +460,31 @@ impl Entity {
                     entity.name, field.column
                 ));
             }
+        }
+        if database == Database::Sqlite
+            && entity.role == Some(EntityRole::Team)
+            && let Some(position) = entity
+                .fields
+                .iter()
+                .position(|field| field.registry_column == Some("member_count"))
+        {
+            // Builtin overrides pair registry fields with their original positions.
+            let member_count = entity.fields.remove(position);
+            entity.fields.insert(2, member_count);
+        }
+        if database == Database::Sqlite && entity.role == Some(EntityRole::Invitation) {
+            // Builtin overrides use the registry order before physical field ordering.
+            entity
+                .fields
+                .sort_by_key(|field| match field.registry_column {
+                    Some("id" | "organization_id" | "email" | "role") => 0,
+                    Some("team_id") => 1,
+                    Some("status") => 2,
+                    Some("expires_at") => 3,
+                    Some("created_at") => 4,
+                    Some("inviter_id") => 5,
+                    _ => 6,
+                });
         }
         Ok(entity)
     }

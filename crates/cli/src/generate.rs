@@ -426,6 +426,8 @@ fn gen_table(
                     "DateTimeUtc" | "Option<DateTimeUtc>" => {
                         quote!(column.custom(Alias::new("date"));)
                     }
+                    "i64" if entity.role == Some(EntityRole::Team)
+                        && definition.name == "member_count" => quote!(column.integer();),
                     "i64" => quote!(column.custom(Alias::new("bigint"));),
                     "Json" if entity.role == Some(EntityRole::OrganizationRole)
                         && definition.name == "permission" => quote!(column.text();),
@@ -556,6 +558,11 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
         .iter()
         .filter(|index| !(entity.session_row_presence && index.columns == ["expires_at"]))
         .filter(|index| {
+            !(database == Database::Sqlite
+                && entity.role == Some(EntityRole::Invitation)
+                && index.columns == ["status"])
+        })
+        .filter(|index| {
             !entity.fields.iter().any(|field| {
                 inline_native_unique(entity, field, database)
                     && index.unique
@@ -590,6 +597,8 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
                         | (Some(EntityRole::Account), Some("user_id"))
                         | (Some(EntityRole::Member), Some("organization_id" | "user_id"))
                         | (Some(EntityRole::OrganizationRole), Some("organization_id" | "role"))
+                        | (Some(EntityRole::Team), Some("organization_id"))
+                        | (Some(EntityRole::Invitation), Some("organization_id" | "email"))
                 ) || (entity.session_row_presence && field.registry_column == Some("user_id")))
                 && field.attributes.is_none()
                 && !unique && columns.as_slice() == [field.column.as_str()]
