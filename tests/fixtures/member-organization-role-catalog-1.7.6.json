@@ -1,0 +1,1071 @@
+{
+  "version": "1.7.6",
+  "database": "sqlite",
+  "cases": [
+    {
+      "name": "default",
+      "models": [
+        {
+          "model": "member",
+          "table": {
+            "type": "table",
+            "name": "member",
+            "tbl_name": "member"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "organizationId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "createdAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "member_userId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "userId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "member_organizationId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organizationId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organizationId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_member_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "user",
+              "from": "userId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "id": 1,
+              "seq": 0,
+              "table": "organization",
+              "from": "organizationId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        },
+        {
+          "model": "organizationRole",
+          "table": {
+            "type": "table",
+            "name": "organizationRole",
+            "tbl_name": "organizationRole"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "organizationId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "permission",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "createdAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "updatedAt",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "organizationRole_role_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "role"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "role",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "organizationRole_organizationId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organizationId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organizationId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_organizationRole_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "organization",
+              "from": "organizationId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "legacy",
+      "models": [
+        {
+          "model": "member",
+          "table": {
+            "type": "table",
+            "name": "member",
+            "tbl_name": "member"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "organization_id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "user_id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "created_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "member_user_id_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "user_id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "user_id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "member_organization_id_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organization_id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organization_id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_member_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "users",
+              "from": "user_id",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "id": 1,
+              "seq": 0,
+              "table": "organization",
+              "from": "organization_id",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        },
+        {
+          "model": "organizationRole",
+          "table": {
+            "type": "table",
+            "name": "organization_role",
+            "tbl_name": "organization_role"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "organization_id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "permission",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "created_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "updated_at",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "organization_role_role_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "role"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "role",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "organization_role_organization_id_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organization_id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "organization_id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_organization_role_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "organization",
+              "from": "organization_id",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "custom",
+      "models": [
+        {
+          "model": "member",
+          "table": {
+            "type": "table",
+            "name": "display_catalog_members",
+            "tbl_name": "display_catalog_members"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "workspace_link",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "person_link",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "display_role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "created_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "display_catalog_members_person_link_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "person_link"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "person_link",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "display_catalog_members_workspace_link_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "workspace_link"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "workspace_link",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_display_catalog_members_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "display_member_catalog_users",
+              "from": "person_link",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "id": 1,
+              "seq": 0,
+              "table": "display_member_catalog_organizations",
+              "from": "workspace_link",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        },
+        {
+          "model": "organizationRole",
+          "table": {
+            "type": "table",
+            "name": "display_catalog_organization_roles",
+            "tbl_name": "display_catalog_organization_roles"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "workspace_link",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "display_role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "display_permission",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "created_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "updated_on",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "display_catalog_organization_roles_display_role_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "display_role"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "display_role",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "display_catalog_organization_roles_workspace_link_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "workspace_link"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "workspace_link",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_display_catalog_organization_roles_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "display_member_catalog_organizations",
+              "from": "workspace_link",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

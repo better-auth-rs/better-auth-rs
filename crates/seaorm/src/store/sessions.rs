@@ -20,11 +20,31 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
+    pub(super) fn validate_session_fields(&self) -> AuthResult<()> {
+        if S::Session::active_column().is_some() {
+            return Ok(());
+        }
+        for (name, field) in self.config().session.field_schema().fields() {
+            let storage = better_auth_core::store::schema::resolve_field_name(
+                field.field_name.as_deref(),
+                name,
+            );
+            if name == "active" || storage == "active" {
+                let _ = S::Session::field_column(storage)?;
+                return Err(AuthError::config(
+                    "The active field policy requires an active-column Session model",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub(super) async fn output_sessions(
         &self,
         rows: &[S::Session],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
+        self.validate_session_fields()?;
         better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter(
             rows,
             &self.config().session,
@@ -38,6 +58,7 @@ where
         row: &S::Session,
         db: &impl ConnectionTrait,
     ) -> AuthResult<better_auth_core::wire::SessionView> {
+        self.validate_session_fields()?;
         better_auth_core::wire::SessionView::with_internal_fields_for_adapter(
             row,
             &self.config().session,
@@ -59,6 +80,7 @@ where
     where
         S::User: SeaOrmUserModel,
     {
+        self.validate_session_fields()?;
         better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter_batches_then(
             rows,
             &self.config().session,
@@ -93,6 +115,7 @@ where
         &self,
         active: &mut <S::Session as SeaOrmSessionModel>::ActiveModel,
     ) -> AuthResult<()> {
+        self.validate_session_fields()?;
         let schema = self.config().session.field_schema();
         let fields = schema
             .storage_fields_with_binding(Default::default(), false, |name, field, value| {
@@ -219,6 +242,7 @@ where
         if id.is_none() {
             active.not_set(S::Session::id_column());
         }
+        self.validate_session_fields()?;
         let schema = self.config().session.field_schema();
         let fields = schema
             .storage_fields_with_binding(fields, true, |name, field, value| {
@@ -347,6 +371,7 @@ where
             None => S::Session::token_column().eq(update.token.as_deref().unwrap_or(token)),
         };
         let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
+        self.validate_session_fields()?;
         let fields = self
             .config()
             .session
@@ -470,7 +495,10 @@ where
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(<S::Session as SeaOrmSessionModel>::token_column().eq(token))
-                    .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+                    .filter(
+                        Condition::all()
+                            .add_option(S::Session::active_column().map(|column| column.eq(true))),
+                    )
                     .one(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -505,7 +533,10 @@ where
         >(
             <S::Session as SeaOrmSessionModel>::Entity::find()
                 .filter(S::Session::token_column().eq(token))
-                .filter(S::Session::active_column().eq(true))
+                .filter(
+                    Condition::all()
+                        .add_option(S::Session::active_column().map(|column| column.eq(true))),
+                )
                 .limit(1),
             (S::Session::user_id_column(), S::User::id_column()),
             S::User::id_column(),
@@ -545,7 +576,7 @@ where
     > {
         let mut condition = Condition::all()
             .add(S::Session::token_column().is_in(tokens.iter().cloned()))
-            .add(S::Session::active_column().eq(true));
+            .add_option(S::Session::active_column().map(|column| column.eq(true)));
         if only_active {
             condition = condition.add(S::Session::expires_at_column().gt(Utc::now()));
         }
@@ -587,6 +618,7 @@ where
         let snapshots = if let Some(users) = native_users {
             self.native_session_snapshots(&rows, &users).await?
         } else {
+            self.validate_session_fields()?;
             better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter_then(
                 &rows,
                 &self.config().session,
@@ -650,7 +682,10 @@ where
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
-                    .filter(<S::Session as SeaOrmSessionModel>::active_column().eq(true))
+                    .filter(
+                        Condition::all()
+                            .add_option(S::Session::active_column().map(|column| column.eq(true))),
+                    )
                     .limit(super::pagination::default_limit(
                         self.config(),
                         self.connection().get_database_backend(),
@@ -798,7 +833,7 @@ where
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
         let condition = Condition::any()
             .add(S::Session::expires_at_column().lt(Utc::now()))
-            .add(S::Session::active_column().eq(false));
+            .add_option(S::Session::active_column().map(|column| column.eq(false)));
         self.delete_sessions_with_connection(self.connection(), None, condition, false)
             .await
             .map(Option::unwrap_or_default)

@@ -1,0 +1,591 @@
+{
+  "version": "1.7.6",
+  "database": "sqlite",
+  "cases": [
+    {
+      "name": "default",
+      "models": [
+        {
+          "model": "session",
+          "table": {
+            "type": "table",
+            "name": "session",
+            "tbl_name": "session"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "expiresAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "token",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "createdAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "updatedAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "ipAddress",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "userAgent",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "session_userId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 7,
+                  "name": "userId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 7,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "sqlite_autoindex_session_2",
+                "unique": 1,
+                "origin": "u",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "token"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "token",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_session_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "user",
+              "from": "userId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "legacy",
+      "models": [
+        {
+          "model": "session",
+          "table": {
+            "type": "table",
+            "name": "sessions",
+            "tbl_name": "sessions"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "expires_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "token",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "created_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "updated_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "ip_address",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "user_agent",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "user_id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "sessions_user_id_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 7,
+                  "name": "user_id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 7,
+                  "name": "user_id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "sqlite_autoindex_sessions_2",
+                "unique": 1,
+                "origin": "u",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "token"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "token",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_sessions_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "users",
+              "from": "user_id",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "custom",
+      "models": [
+        {
+          "model": "session",
+          "table": {
+            "type": "table",
+            "name": "display_catalog_sessions",
+            "tbl_name": "display_catalog_sessions"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "expires_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "session_key",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "created_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "updated_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "client_address",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "client_agent",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "member_link",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "display_catalog_sessions_member_link_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 7,
+                  "name": "member_link"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 7,
+                  "name": "member_link",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "sqlite_autoindex_display_catalog_sessions_2",
+                "unique": 1,
+                "origin": "u",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "session_key"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "session_key",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_display_catalog_sessions_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "display_session_catalog_users",
+              "from": "member_link",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

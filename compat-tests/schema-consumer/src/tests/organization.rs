@@ -201,7 +201,7 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         .count(&database)
         .await
         .unwrap();
-    database.execute_unprepared("INSERT INTO app_members (id, workspace_id, subject_id, access_role, created_at, badge) SELECT 'duplicate-membership', workspace_id, subject_id, access_role, created_at, badge FROM app_members LIMIT 1").await.unwrap();
+    database.execute_unprepared("INSERT INTO app_members (id, workspace_id, subject_id, access_role, createdAt, badge) SELECT 'duplicate-membership', workspace_id, subject_id, access_role, createdAt, badge FROM app_members LIMIT 1").await.unwrap();
     assert_eq!(
         generated::member::Entity::find()
             .count(&database)

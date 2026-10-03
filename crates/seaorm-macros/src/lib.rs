@@ -29,6 +29,14 @@ use syn::{DeriveInput, parse_macro_input};
 /// }
 /// ```
 ///
+/// # Session representation
+///
+/// Session models require `active` unless they explicitly use `#[auth(role = "session", row_presence)]`.
+/// The marker rejects fields whose Rust or serialized alias is `active` and returns no independent active column.
+/// Existing active-backed models retain their stored state and predicates. Row-presence models retain expiry checks.
+/// Use the marker for a fresh table or an application-owned migration; derive does not validate historical state.
+/// Runtime declarations that map logical `active` require an active-column model.
+///
 /// # Extra fields
 ///
 /// The struct may contain fields beyond the core set required by the auth

@@ -382,8 +382,8 @@ mod session {
         fn user_id_column() -> Self::Column {
             Column::UserId
         }
-        fn active_column() -> Self::Column {
-            Column::Active
+        fn active_column() -> Option<Self::Column> {
+            Some(Column::Active)
         }
         fn expires_at_column() -> Self::Column {
             Column::ExpiresAt

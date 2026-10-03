@@ -21,7 +21,7 @@ Account and Verification Memory fields store JSON as text and retain native arra
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
-The schema generator keeps its default table name when `modelName` is omitted or empty. Fresh SQLite generation uses upstream native table and column defaults for User, Account, Verification, JWK, and RateLimit; bundled entities retain their existing mappings. Generated SQLite User email is required by the database while its Rust input remains optional. See [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns) for configuration, preserved declarations, and migration boundaries.
+The schema generator keeps its default table name when `modelName` is omitted or empty. Fresh SQLite generation uses upstream native table and column defaults for User, Account, Verification, JWK, RateLimit, Member, and OrganizationRole; bundled entities retain their existing mappings. Generated SQLite User email is required by the database while its Rust input remains optional. Fresh SQLite Session generation uses an explicit row-presence model; `--session-active-column` retains the Rust active-column extension for regeneration. See [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns) for configuration, preserved declarations, and migration boundaries.
 
 Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display values through `SchemaValue<Option<String>>`; see [plugin fields](docs/content/docs/concepts/database.mdx#plugin-fields).
 

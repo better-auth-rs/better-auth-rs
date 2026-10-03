@@ -381,6 +381,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         "user",
         "users",
         "sessions",
+        "session",
         "account",
         "accounts",
         "verifications",

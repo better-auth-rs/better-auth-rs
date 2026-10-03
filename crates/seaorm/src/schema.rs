@@ -84,7 +84,9 @@ pub trait SeaOrmSessionModel:
     fn id_column() -> Self::Column;
     fn token_column() -> Self::Column;
     fn user_id_column() -> Self::Column;
-    fn active_column() -> Self::Column;
+    /// Return the independent active column, or `None` for an explicitly selected row-presence model.
+    /// Existing inactive rows require their active-backed model until an application-owned migration.
+    fn active_column() -> Option<Self::Column>;
     fn expires_at_column() -> Self::Column;
     fn created_at_column() -> Self::Column;
     fn parse_id(id: &str) -> AuthResult<Self::Id>;

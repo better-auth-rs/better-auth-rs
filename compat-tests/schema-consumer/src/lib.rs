@@ -8,12 +8,14 @@ mod tests {
     mod ids;
     mod jwk_additional_fields;
     mod jwk_rate_limit_catalog;
+    mod member_organization_role_catalog;
     mod model_declarations;
     mod organization;
     mod plugins;
     mod rate_limit_declarations;
     mod rate_limits;
     mod reference_fields;
+    mod session_catalog;
     mod sqlite_catalog;
     mod sqlite_json;
     mod user_account_catalog;
@@ -173,7 +175,7 @@ mod tests {
                 "UNIQUE constraint failed: user.email",
             ),
             (
-                "UPDATE sessions SET user_id = 'missing-user'",
+                "UPDATE session SET userId = 'missing-user'",
                 "FOREIGN KEY constraint failed",
             ),
             (

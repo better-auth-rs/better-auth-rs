@@ -1,0 +1,33 @@
+{
+  "default": {},
+  "legacy": {
+    "user": { "modelName": "users" },
+    "session": {
+      "modelName": "sessions",
+      "fields": {
+        "expiresAt": "expires_at",
+        "token": "token",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "ipAddress": "ip_address",
+        "userAgent": "user_agent",
+        "userId": "user_id"
+      }
+    }
+  },
+  "custom": {
+    "user": { "modelName": "display_session_catalog_users" },
+    "session": {
+      "modelName": "display_catalog_sessions",
+      "fields": {
+        "expiresAt": "expires_on",
+        "token": "session_key",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on",
+        "ipAddress": "client_address",
+        "userAgent": "client_agent",
+        "userId": "member_link"
+      }
+    }
+  }
+}

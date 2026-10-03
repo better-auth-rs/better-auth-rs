@@ -32,6 +32,7 @@ fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
             better_auth_schema_registry::core_fields(EntityRole::DeviceCode),
             config.0.get("deviceCode"),
             Database::Sqlite,
+            false,
         )
         .expect("ordinary CLI display column resolves");
         let column = &entity
@@ -59,6 +60,7 @@ fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
             false,
             IdGeneration::Random,
             Database::Sqlite,
+            false,
         )
         .expect("ordinary CLI display schema generates");
         assert!(schema.contains("pub label: Option<String>"));

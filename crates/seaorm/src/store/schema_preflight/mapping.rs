@@ -22,15 +22,15 @@ fn model<E: EntityTrait>(columns: Vec<String>) -> SchemaTable {
 }
 
 fn columns<C: ColumnTrait>(
-    role: EntityRole,
+    required: impl IntoIterator<Item = &'static str>,
     policies: &UserConfig,
     column: impl Fn(&str) -> AuthResult<C>,
     declared_plugin_fields: &[&str],
     extra_insert_columns: Vec<C>,
 ) -> AuthResult<Vec<String>> {
     let mut names = Vec::new();
-    for field in core_fields(role) {
-        let name = column(field.name)?.as_str().to_owned();
+    for field in required {
+        let name = column(field)?.as_str().to_owned();
         if !names.contains(&name) {
             names.push(name);
         }
@@ -71,7 +71,7 @@ fn organization<M: SeaOrmOrganizationModel>(
     fields: &UserConfig,
 ) -> AuthResult<SchemaTable> {
     Ok(model::<M::Entity>(columns(
-        role,
+        core_fields(role).iter().map(|field| field.name),
         fields,
         M::column,
         &[],
@@ -81,7 +81,7 @@ fn organization<M: SeaOrmOrganizationModel>(
 
 fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
     Ok(model::<M::Entity>(columns(
-        role,
+        core_fields(role).iter().map(|field| field.name),
         fields,
         M::column,
         &[],
@@ -105,7 +105,7 @@ where
 {
     let config = &settings.config;
     let mut expected = vec![model::<<S::User as SeaOrmUserModel>::Entity>(columns(
-        EntityRole::User,
+        core_fields(EntityRole::User).iter().map(|field| field.name),
         &config.user,
         S::User::field_column,
         S::User::PLUGIN_FIELDS,
@@ -117,7 +117,10 @@ where
         };
         expected.push(model::<<S::Session as SeaOrmSessionModel>::Entity>(
             columns(
-                EntityRole::Session,
+                core_fields(EntityRole::Session)
+                    .iter()
+                    .map(|field| field.name)
+                    .filter(|name| *name != "active" || S::Session::active_column().is_some()),
                 &fields,
                 S::Session::field_column,
                 S::Session::PLUGIN_FIELDS,
@@ -130,7 +133,9 @@ where
     };
     expected.push(model::<<S::Account as SeaOrmAccountModel>::Entity>(
         columns(
-            EntityRole::Account,
+            core_fields(EntityRole::Account)
+                .iter()
+                .map(|field| field.name),
             &fields,
             S::Account::field_column,
             &[],
@@ -143,7 +148,9 @@ where
         };
         expected.push(
             model::<<S::Verification as SeaOrmVerificationModel>::Entity>(columns(
-                EntityRole::Verification,
+                core_fields(EntityRole::Verification)
+                    .iter()
+                    .map(|field| field.name),
                 &fields,
                 S::Verification::field_column,
                 &[],

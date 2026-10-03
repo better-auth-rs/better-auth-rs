@@ -1,0 +1,49 @@
+{
+  "default": {},
+  "legacy": {
+    "user": { "modelName": "users" },
+    "organization": { "modelName": "organization" },
+    "member": {
+      "modelName": "member",
+      "fields": {
+        "organizationId": "organization_id",
+        "userId": "user_id",
+        "role": "role",
+        "createdAt": "created_at"
+      }
+    },
+    "organizationRole": {
+      "modelName": "organization_role",
+      "fields": {
+        "organizationId": "organization_id",
+        "role": "role",
+        "permission": "permission",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    }
+  },
+  "custom": {
+    "user": { "modelName": "display_member_catalog_users" },
+    "organization": { "modelName": "display_member_catalog_organizations" },
+    "member": {
+      "modelName": "display_catalog_members",
+      "fields": {
+        "organizationId": "workspace_link",
+        "userId": "person_link",
+        "role": "display_role",
+        "createdAt": "created_on"
+      }
+    },
+    "organizationRole": {
+      "modelName": "display_catalog_organization_roles",
+      "fields": {
+        "organizationId": "workspace_link",
+        "role": "display_role",
+        "permission": "display_permission",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on"
+      }
+    }
+  }
+}

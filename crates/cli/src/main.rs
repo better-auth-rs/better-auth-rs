@@ -40,6 +40,10 @@ enum Command {
         #[arg(long)]
         rate_limit_database: bool,
 
+        /// Retain the Rust active-column Session representation when regenerating SQLite models.
+        #[arg(long)]
+        session_active_column: bool,
+
         /// Match advanced.database.generate_id in the application's AuthConfig.
         #[arg(long, value_enum, default_value_t = schema_config::IdGeneration::Random)]
         generate_id: schema_config::IdGeneration,
@@ -71,6 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 mut plugins,
                 schema_config,
                 rate_limit_database,
+                session_active_column,
                 generate_id,
                 database,
             },
@@ -105,6 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         rate_limit_database,
         generate_id,
         database,
+        session_active_column,
     )?;
     if let Some(path) = output {
         if let Some(parent) = path.parent()

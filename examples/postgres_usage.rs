@@ -407,8 +407,8 @@ mod session {
             Column::UserId
         }
 
-        fn active_column() -> Self::Column {
-            Column::Active
+        fn active_column() -> Option<Self::Column> {
+            Some(Column::Active)
         }
 
         fn expires_at_column() -> Self::Column {

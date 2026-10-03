@@ -86,7 +86,7 @@ fn resolve_roots() -> (TokenStream, TokenStream) {
 
 pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     let (seaorm_root, core_root) = resolve_roots();
-    let (role, model_name) = match parse_options(input) {
+    let (role, model_name, row_presence) = match parse_options(input) {
         Ok(options) => options,
         Err(err) => return err.to_compile_error(),
     };
@@ -118,10 +118,9 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     let plugin = registry::plugin_field_names(role);
 
     // Validate core fields are present
-    if let Some(missing) = core
-        .iter()
-        .find(|required| !idents.iter().any(|ident| ident == *required))
-    {
+    if let Some(missing) = core.iter().find(|required| {
+        !(row_presence && **required == "active") && !idents.iter().any(|ident| ident == *required)
+    }) {
         return syn::Error::new_spanned(
             &input.ident,
             format!("missing required auth field `{missing}` for this role"),
@@ -174,6 +173,12 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             let mut column_aliases = field_aliases::field_aliases(&ident.to_string(), &name);
             column_aliases.sort();
             column_aliases.dedup();
+            if row_presence && column_aliases.iter().any(|alias| alias == "active") {
+                return Err(syn::Error::new_spanned(
+                    field,
+                    "row_presence session models cannot expose an active field",
+                ));
+            }
             field_columns.push(quote! { #(#column_aliases)|* => Ok(Column::#column), });
             if role != EntityRole::Session
                 && all_known.iter().any(|known| ident == known)
@@ -632,6 +637,18 @@ fn gen_session(
         quote! { fn active_team_id(&self) -> Option<&str> { None } }
     };
 
+    let active_value = if has("active") {
+        quote!(self.active)
+    } else {
+        quote!(true)
+    };
+    let active_column = if has("active") {
+        quote!(Some(Column::Active))
+    } else {
+        quote!(None)
+    };
+    let active_insert =
+        has("active").then(|| quote!(active: #seaorm_root::sea_orm::ActiveValue::Set(true),));
     let mut plugin_new_active = Vec::new();
     if has("impersonated_by") {
         plugin_new_active.push(quote! { impersonated_by: #seaorm_root::sea_orm::ActiveValue::Set(create_session.impersonated_by) });
@@ -698,7 +715,7 @@ fn gen_session(
             #impersonated_by_impl
             #active_org_impl
             #active_team_impl
-            fn active(&self) -> bool { self.active }
+            fn active(&self) -> bool { #active_value }
         }
 
         impl #seaorm_root::SeaOrmSessionModel for #ident {
@@ -733,7 +750,7 @@ fn gen_session(
             fn id_column() -> Self::Column { Column::Id }
             fn token_column() -> Self::Column { Column::Token }
             fn user_id_column() -> Self::Column { Column::UserId }
-            fn active_column() -> Self::Column { Column::Active }
+            fn active_column() -> Option<Self::Column> { #active_column }
             fn expires_at_column() -> Self::Column { Column::ExpiresAt }
             fn created_at_column() -> Self::Column { Column::CreatedAt }
             fn parse_id(id: &str) -> #core_root::AuthResult<Self::Id> {
@@ -758,7 +775,7 @@ fn gen_session(
                     updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
                     ip_address: #seaorm_root::sea_orm::ActiveValue::Set(create_session.ip_address),
                     user_agent: #seaorm_root::sea_orm::ActiveValue::Set(create_session.user_agent),
-                    active: #seaorm_root::sea_orm::ActiveValue::Set(true),
+                    #active_insert
                     #(#plugin_new_active,)*
                     #(#extras,)*
                 }
@@ -784,9 +801,10 @@ fn gen_session(
     })
 }
 
-fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>)> {
+fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>, bool)> {
     let mut parsed = None;
     let mut model_name = None;
+    let mut row_presence = false;
     for attr in &input.attrs {
         if !attr.path().is_ident("auth") {
             continue;
@@ -821,11 +839,14 @@ fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>
                     }
                 });
                 Ok(())
+            } else if meta.path.is_ident("row_presence") {
+                row_presence = true;
+                Ok(())
             } else if meta.path.is_ident("model_name") {
                 model_name = Some(meta.value()?.parse::<LitStr>()?);
                 Ok(())
             } else {
-                Err(meta.error("expected `role = \"...\"` or `model_name = \"...\"`"))
+                Err(meta.error("expected `role = \"...\"`, `model_name = \"...\"`, or `row_presence`"))
             }
         })?;
     }
@@ -844,5 +865,11 @@ fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>
             "model_name is supported for the rate_limit role",
         ));
     }
-    Ok((role, model_name))
+    if row_presence && role != EntityRole::Session {
+        return Err(syn::Error::new_spanned(
+            input,
+            "row_presence is supported for the session role",
+        ));
+    }
+    Ok((role, model_name, row_presence))
 }

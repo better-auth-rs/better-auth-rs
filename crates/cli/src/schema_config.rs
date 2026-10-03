@@ -41,6 +41,8 @@ pub(crate) fn sqlite_native_catalog(database: Database, role: Option<EntityRole>
                     | EntityRole::Verification
                     | EntityRole::Jwk
                     | EntityRole::RateLimit
+                    | EntityRole::Member
+                    | EntityRole::OrganizationRole
             )
         )
 }
@@ -170,6 +172,7 @@ pub(crate) struct Entity {
     pub table: String,
     pub role: Option<EntityRole>,
     pub fields: Vec<Field>,
+    pub session_row_presence: bool,
 }
 
 pub(crate) struct Field {
@@ -265,8 +268,13 @@ impl Entity {
         fields: &[FieldDef],
         config: Option<&ModelConfig>,
         database: Database,
+        session_active_column: bool,
     ) -> Result<Self, String> {
-        let sqlite_catalog = sqlite_native_catalog(database, definition.role);
+        let session_row_presence = database == Database::Sqlite
+            && definition.role == Some(EntityRole::Session)
+            && !session_active_column;
+        let sqlite_catalog =
+            sqlite_native_catalog(database, definition.role) || session_row_presence;
         let mut entity = Self {
             module: syn::parse_str(definition.mod_name)
                 .map_err(|error| format!("invalid model name: {error}"))?,
@@ -278,6 +286,7 @@ impl Entity {
                 definition.table_name.to_owned()
             },
             role: definition.role,
+            session_row_presence,
             fields: fields
                 .iter()
                 .map(|field| {

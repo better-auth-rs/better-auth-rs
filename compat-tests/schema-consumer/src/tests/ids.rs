@@ -6,7 +6,7 @@ use better_auth::{
         Database, SeaOrmAccountModel, SeaOrmOrganizationSchema, SeaOrmPluginSchema,
         SeaOrmSessionModel, SeaOrmStore, SeaOrmUserModel, SeaOrmVerificationModel,
         sea_orm::{
-            ConnectionTrait, DatabaseConnection, DbBackend, EntityName, Statement,
+            ConnectionTrait, DatabaseConnection, DbBackend, EntityName, IdenStatic, Statement,
             sea_query::{
                 Alias, MysqlQueryBuilder, PostgresQueryBuilder, QuotedBuilder, SeaRc,
                 SqliteQueryBuilder,
@@ -157,8 +157,12 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
     let user_table = quote_table(<S::User as SeaOrmUserModel>::Entity::default().table_name());
     let account_table =
         quote_table(<S::Account as SeaOrmAccountModel>::Entity::default().table_name());
+    let session_table =
+        quote_table(<S::Session as SeaOrmSessionModel>::Entity::default().table_name());
+    let session_user_id =
+        quote_table(<S::Session as SeaOrmSessionModel>::user_id_column().as_str());
     let row = database.query_one_raw(Statement::from_string(backend,
-        format!("SELECT CAST({type_function}({user_table}.id) AS TEXT) AS id_type, CAST({type_function}(sessions.user_id) AS TEXT) AS reference_type, CAST({type_function}({account_table}.owner_id) AS TEXT) AS owner_type FROM {user_table} JOIN sessions ON sessions.user_id = {user_table}.id JOIN {account_table} ON {account_table}.user_id = {user_table}.id")
+        format!("SELECT CAST({type_function}({user_table}.id) AS TEXT) AS id_type, CAST({type_function}({session_table}.{session_user_id}) AS TEXT) AS reference_type, CAST({type_function}({account_table}.owner_id) AS TEXT) AS owner_type FROM {user_table} JOIN {session_table} ON {session_table}.{session_user_id} = {user_table}.id JOIN {account_table} ON {account_table}.user_id = {user_table}.id")
     )).await.unwrap().unwrap();
     for column in ["id_type", "reference_type", "owner_type"] {
         assert_eq!(

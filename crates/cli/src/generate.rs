@@ -16,10 +16,14 @@ pub(crate) fn generate_schema(
     rate_limit_database: bool,
     generation: IdGeneration,
     database: Database,
+    session_active_column: bool,
 ) -> Result<String, String> {
     config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
     let mut session = registry::core_fields(EntityRole::Session).to_vec();
+    if database == Database::Sqlite && !session_active_column {
+        session.retain(|field| field.name != "active");
+    }
     let mut extra_entities: Vec<&ExtraEntitySchema> = Vec::new();
     if rate_limit_database {
         extra_entities.push(&registry::RATE_LIMIT);
@@ -69,7 +73,8 @@ pub(crate) fn generate_schema(
             None => entity.fields,
         };
         let configured = config.0.get(&model_name(entity.mod_name));
-        let mut entity = Entity::resolve(entity, fields, configured, database)?;
+        let mut entity =
+            Entity::resolve(entity, fields, configured, database, session_active_column)?;
         entity.resolve_ids(generation, database)?;
         definitions.push(entity);
     }
@@ -277,9 +282,10 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
             })
             .flatten()
             .map(|name| quote!(, model_name = #name));
+        let row_presence = entity.session_row_presence.then(|| quote!(, row_presence));
         quote! {
             #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
-            #[auth(role = #role #declaration)]
+            #[auth(role = #role #declaration #row_presence)]
         }
     } else {
         quote! { #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel)] }
@@ -410,7 +416,7 @@ fn gen_table(
                     }
                 });
             }
-            if sqlite_native_catalog(database, entity.role)
+            if (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
                 && field.attributes.is_none()
             {
                 let definition = core_field(entity.role, field.registry_column?)?;
@@ -421,6 +427,8 @@ fn gen_table(
                         quote!(column.custom(Alias::new("date"));)
                     }
                     "i64" => quote!(column.custom(Alias::new("bigint"));),
+                    "Json" if entity.role == Some(EntityRole::OrganizationRole)
+                        && definition.name == "permission" => quote!(column.text();),
                     _ => return None,
                 };
                 let unique = inline_native_unique(entity, field, database)
@@ -532,7 +540,7 @@ fn gen_column_type(field: &AdditionalField) -> TokenStream {
 }
 
 fn inline_native_unique(entity: &Entity, field: &Field, database: Database) -> bool {
-    sqlite_native_catalog(database, entity.role)
+    (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
         && field.attributes.is_none()
         && field.registry_column.is_some_and(|column| {
             core_field(entity.role, column).is_some()
@@ -546,6 +554,7 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     let table = &entity.table;
     let mut indexes: Vec<_> = registry::entity_indexes(entity.registry_table)
         .iter()
+        .filter(|index| !(entity.session_row_presence && index.columns == ["expires_at"]))
         .filter(|index| {
             !entity.fields.iter().any(|field| {
                 inline_native_unique(entity, field, database)
@@ -572,19 +581,20 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
             }
         }
     }
-    let native_index = entity.fields.iter().find(|field| {
-        matches!(database, Database::Sqlite)
-            && matches!(
-                (entity.role, field.registry_column),
-                (Some(EntityRole::Verification), Some("identifier"))
-                    | (Some(EntityRole::Account), Some("user_id"))
-            )
-            && field.attributes.is_none()
-    });
     indexes.into_iter().map(|(columns, unique)| {
-        let name = if let Some(field) = native_index
-            && !unique && columns.as_slice() == [field.column.as_str()]
-        {
+        let native_index = entity.fields.iter().find(|field| {
+            matches!(database, Database::Sqlite)
+                && (matches!(
+                    (entity.role, field.registry_column),
+                    (Some(EntityRole::Verification), Some("identifier"))
+                        | (Some(EntityRole::Account), Some("user_id"))
+                        | (Some(EntityRole::Member), Some("organization_id" | "user_id"))
+                        | (Some(EntityRole::OrganizationRole), Some("organization_id" | "role"))
+                ) || (entity.session_row_presence && field.registry_column == Some("user_id")))
+                && field.attributes.is_none()
+                && !unique && columns.as_slice() == [field.column.as_str()]
+        });
+        let name = if let Some(field) = native_index {
             sqlite_field_index_name(table, &field.column)
         } else {
             format!("idx_{table}_{}", columns.join("_"))

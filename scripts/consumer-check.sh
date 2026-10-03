@@ -45,6 +45,12 @@ for name, configuration in jwk_rate_limit_catalog.items():
 user_account_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/user-account-catalog-config.json").read_text())
 for name, configuration in user_account_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"user_account_catalog_{name}.json").write_text(json.dumps(configuration))
+session_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/session-catalog-config.json").read_text())
+for name, configuration in session_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"session_catalog_{name}.json").write_text(json.dumps(configuration))
+member_organization_role_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/member-organization-role-catalog-config.json").read_text())
+for name, configuration in member_organization_role_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"member_organization_role_catalog_{name}.json").write_text(json.dumps(configuration))
 PY
 for case in default legacy customLong; do
   cargo run --locked -p better-auth-cli -- generate --database sqlite --schema-config "$schema_dir/verification_catalog_${case}.json" --output "$schema_dir/verification_catalog_${case}.rs"
@@ -64,6 +70,18 @@ done
 export BETTER_AUTH_USER_ACCOUNT_CATALOG_DEFAULT_SCHEMA="$schema_dir/user_account_catalog_default.rs"
 export BETTER_AUTH_USER_ACCOUNT_CATALOG_LEGACY_SCHEMA="$schema_dir/user_account_catalog_legacy.rs"
 export BETTER_AUTH_USER_ACCOUNT_CATALOG_CUSTOM_SCHEMA="$schema_dir/user_account_catalog_custom.rs"
+for case in default legacy custom; do
+  cargo run --locked -p better-auth-cli -- generate --database sqlite --schema-config "$schema_dir/session_catalog_${case}.json" --output "$schema_dir/session_catalog_${case}.rs"
+done
+export BETTER_AUTH_SESSION_CATALOG_DEFAULT_SCHEMA="$schema_dir/session_catalog_default.rs"
+export BETTER_AUTH_SESSION_CATALOG_LEGACY_SCHEMA="$schema_dir/session_catalog_legacy.rs"
+export BETTER_AUTH_SESSION_CATALOG_CUSTOM_SCHEMA="$schema_dir/session_catalog_custom.rs"
+for case in default legacy custom; do
+  cargo run --locked -p better-auth-cli -- generate --plugins organization --database sqlite --schema-config "$schema_dir/member_organization_role_catalog_${case}.json" --output "$schema_dir/member_organization_role_catalog_${case}.rs"
+done
+export BETTER_AUTH_MEMBER_ORGANIZATION_ROLE_CATALOG_DEFAULT_SCHEMA="$schema_dir/member_organization_role_catalog_default.rs"
+export BETTER_AUTH_MEMBER_ORGANIZATION_ROLE_CATALOG_LEGACY_SCHEMA="$schema_dir/member_organization_role_catalog_legacy.rs"
+export BETTER_AUTH_MEMBER_ORGANIZATION_ROLE_CATALOG_CUSTOM_SCHEMA="$schema_dir/member_organization_role_catalog_custom.rs"
 for case in omitted empty explicitDefaults renamed; do
   cargo run --locked -p better-auth-cli -- generate --schema-config "$schema_dir/declarations_${case}.json" --output "$schema_dir/declarations_${case}.rs"
 done
@@ -90,8 +108,12 @@ cargo run --locked -p better-auth-cli -- generate --plugins all --generate-id se
 export BETTER_AUTH_POSTGRES_SERIAL_SCHEMA="$schema_dir/postgres_serial_schema.rs"
 cargo fmt --manifest-path compat-tests/schema-consumer/Cargo.toml -- --check
 cargo clippy --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --all-targets -- -D warnings
-# Forward test filters and harness options. Filtered runs omit the live PostgreSQL block.
+# Forward Cargo arguments. Filtered runs omit the cross-runtime contract and live PostgreSQL checks.
 cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml "$@"
+if [[ $# -eq 0 ]]; then
+  cargo build --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --example user_timestamp_interchange --message-format=json > "$schema_dir/user_timestamp_artifacts.jsonl"
+  BETTER_AUTH_TIMESTAMP_ARTIFACTS="$schema_dir/user_timestamp_artifacts.jsonl" bun --no-install test compat-tests/reference-server/consumer-contracts/user-timestamp-interchange.test.ts
+fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
   cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml tests::ids::live_postgres_generated_ids -- --ignored --exact
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests live_postgres -- --ignored
