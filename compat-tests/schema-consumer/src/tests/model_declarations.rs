@@ -50,7 +50,7 @@ async fn compare(name: &str, database: &DatabaseConnection, reports: &Reports) {
         ("user", "users", "email", "email"),
         ("session", "sessions", "ipAddress", "ip_address"),
         ("account", "accounts", "providerId", "provider_id"),
-        ("verification", "verifications", "identifier", "identifier"),
+        ("verification", "verification", "identifier", "identifier"),
     ] {
         let values = ["modelName", "fields"]
             .into_iter()

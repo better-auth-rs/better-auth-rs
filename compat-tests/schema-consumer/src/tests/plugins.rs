@@ -382,6 +382,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         "sessions",
         "accounts",
         "verifications",
+        "verification",
         "api_keys",
         "device_code",
         "two_factor",

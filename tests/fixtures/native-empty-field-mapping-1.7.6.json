@@ -1,0 +1,122 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "user-name",
+      "model": "user",
+      "field": "name",
+      "views": [
+        {
+          "view": "omitted",
+          "declaration": {},
+          "physicalColumn": "name"
+        },
+        {
+          "view": "empty",
+          "declaration": {
+            "fields": {
+              "name": ""
+            }
+          },
+          "physicalColumn": "name"
+        },
+        {
+          "view": "custom",
+          "declaration": {
+            "fields": {
+              "name": "stored_user_name"
+            }
+          },
+          "physicalColumn": "stored_user_name"
+        },
+        {
+          "view": "space",
+          "declaration": {
+            "fields": {
+              "name": " "
+            }
+          },
+          "physicalColumn": " "
+        }
+      ]
+    },
+    {
+      "name": "organization-name",
+      "model": "organization",
+      "field": "name",
+      "views": [
+        {
+          "view": "omitted",
+          "declaration": {},
+          "physicalColumn": "name"
+        },
+        {
+          "view": "empty",
+          "declaration": {
+            "fields": {
+              "name": ""
+            }
+          },
+          "physicalColumn": "name"
+        },
+        {
+          "view": "custom",
+          "declaration": {
+            "fields": {
+              "name": "stored_organization_name"
+            }
+          },
+          "physicalColumn": "stored_organization_name"
+        },
+        {
+          "view": "space",
+          "declaration": {
+            "fields": {
+              "name": " "
+            }
+          },
+          "physicalColumn": " "
+        }
+      ]
+    },
+    {
+      "name": "verification-created-at",
+      "model": "verification",
+      "field": "createdAt",
+      "views": [
+        {
+          "view": "omitted",
+          "declaration": {},
+          "physicalColumn": "createdAt"
+        },
+        {
+          "view": "empty",
+          "declaration": {
+            "fields": {
+              "createdAt": ""
+            }
+          },
+          "physicalColumn": "createdAt"
+        },
+        {
+          "view": "custom",
+          "declaration": {
+            "fields": {
+              "createdAt": "stored_verification_created_at"
+            }
+          },
+          "physicalColumn": "stored_verification_created_at"
+        },
+        {
+          "view": "space",
+          "declaration": {
+            "fields": {
+              "createdAt": " "
+            }
+          },
+          "physicalColumn": " "
+        }
+      ]
+    }
+  ]
+}

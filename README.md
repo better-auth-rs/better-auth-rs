@@ -21,7 +21,7 @@ Account and Verification Memory fields store JSON as text and retain native arra
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
-The schema generator keeps its default table name when `modelName` is omitted or empty. See [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns) for configuration and preserved declarations.
+The schema generator keeps its default table name when `modelName` is omitted or empty. Fresh SQLite generation uses `verification` and camelCase date columns for Verification; bundled entities retain their existing mappings. See [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns) for configuration, preserved declarations, and migration boundaries.
 
 Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display values through `SchemaValue<Option<String>>`; see [plugin fields](docs/content/docs/concepts/database.mdx#plugin-fields).
 
@@ -63,7 +63,7 @@ cargo install better-auth-cli --git https://github.com/better-auth-rs/better-aut
 better-auth-rs generate --output src/auth_schema.rs
 ```
 
-The CLI also preserves explicit core model declarations and the bound rate-limit model name for initialization telemetry; see [schema generation](docs/content/docs/concepts/database.mdx#generate-an-initial-schema).
+The CLI also preserves explicit core model declarations and the bound rate-limit model name for initialization telemetry. Empty native field mappings retain the model's resolved defaults and raw declarations; see [schema generation](docs/content/docs/concepts/database.mdx#generate-an-initial-schema).
 
 Use `--generate-id serial` for integer IDs. Use `--generate-id uuid --database postgres` for native PostgreSQL UUIDs. The database option also selects storage for fresh application JSON fields: SQLite uses scalar-capable `SqlText`, while PostgreSQL/MySQL retain `Json`. Match the generated schema to the database backend and `AuthConfig.advanced.database.generate_id`. Derived plugin and organization bindings expose declared ID references so Serial writes normalize numeric aliases after configured input transforms.
 

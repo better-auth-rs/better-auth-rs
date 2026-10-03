@@ -14,6 +14,7 @@ mod tests {
     mod rate_limits;
     mod reference_fields;
     mod sqlite_json;
+    mod verification_catalog;
     mod wallet_additional_fields;
 
     use std::sync::Arc;

@@ -11,6 +11,8 @@ mod empty_field_name_tests;
 mod empty_model_name_tests;
 #[cfg(test)]
 mod json_storage_tests;
+#[cfg(test)]
+mod native_empty_field_mapping_tests;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub(crate) enum IdGeneration {
@@ -244,12 +246,18 @@ impl Entity {
         config: Option<&ModelConfig>,
         database: Database,
     ) -> Result<Self, String> {
+        let sqlite_verification = matches!(database, Database::Sqlite)
+            && definition.role == Some(EntityRole::Verification);
         let mut entity = Self {
             module: syn::parse_str(definition.mod_name)
                 .map_err(|error| format!("invalid model name: {error}"))?,
             name: definition.mod_name,
             registry_table: definition.table_name,
-            table: definition.table_name.to_owned(),
+            table: if sqlite_verification {
+                "verification".to_owned()
+            } else {
+                definition.table_name.to_owned()
+            },
             role: definition.role,
             fields: fields
                 .iter()
@@ -264,7 +272,13 @@ impl Entity {
                         },
                         ty: syn::parse_str(field.ty)
                             .map_err(|error| format!("invalid field type: {error}"))?,
-                        column: field.column_name.unwrap_or(field.name).to_owned(),
+                        column: if sqlite_verification
+                            && matches!(field.name, "expires_at" | "created_at" | "updated_at")
+                        {
+                            field.name.to_lower_camel_case()
+                        } else {
+                            field.column_name.unwrap_or(field.name).to_owned()
+                        },
                         registry_column: Some(field.column_name.unwrap_or(field.name)),
                         serialized: (definition.mod_name == "user"
                             && matches!(
@@ -300,6 +314,9 @@ impl Entity {
                     .ok_or_else(|| {
                         format!("unknown configurable field `{}.{name}`", entity.name)
                     })?;
+                if column.is_empty() {
+                    continue;
+                }
                 field.column.clone_from(column);
                 if field.serialized.is_some() {
                     field.serialized = Some(column.clone());

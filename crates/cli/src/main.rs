@@ -44,7 +44,7 @@ enum Command {
         #[arg(long, value_enum, default_value_t = schema_config::IdGeneration::Random)]
         generate_id: schema_config::IdGeneration,
 
-        /// Select the database's ID and application JSON storage types.
+        /// Select database ID and JSON storage types and fresh catalog defaults.
         #[arg(long, value_enum, default_value_t = schema_config::Database::Sqlite)]
         database: schema_config::Database,
     },

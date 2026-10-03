@@ -111,7 +111,7 @@ Auth responses serialize timestamps as UTC ISO 8601 strings with three fractiona
 
 Configure `advanced.database.generate_id` with `Some(IdGeneration::Random)`, `Some(IdGeneration::Uuid)`, `Some(IdGeneration::Serial)`, `Some(IdGeneration::Database)`, or `Some(IdGeneration::Custom(generator))`. Omission uses `Random` through the `generate_id()` getter. Direct policy assignments now require `Some`. `Random` uses 32 alphanumeric characters. For SQL stores, `Serial` requires numeric auto-increment columns and `Database` requires application database defaults. The memory adapter uses its current table length plus one for `Serial`; deletion can therefore produce duplicate IDs. `Database` omits IDs in memory. PostgreSQL `Uuid` uses the database UUID default; SQLite generates UUIDs in Rust. These options do not change existing columns or migrations.
 
-Generate matching entities and an initial migration with `better-auth-rs generate --generate-id serial`, or `--generate-id uuid --database postgres`. The database option accepts `sqlite` (default), `postgres`, and `mysql`, and selects ID and application JSON storage types. Serial schemas use `i64` IDs and references for SQLite and `i32` for PostgreSQL and MySQL; PostgreSQL uses identity columns, SQLite uses integer primary keys, and MySQL uses auto-increment columns. UUID schemas use native `Uuid` fields and `pg_catalog.gen_random_uuid()` defaults for PostgreSQL; SQLite and MySQL retain text IDs. Use the generated schema with the selected database backend.
+Generate matching entities and an initial migration with `better-auth-rs generate --generate-id serial`, or `--generate-id uuid --database postgres`. The database option accepts `sqlite` (default), `postgres`, and `mysql`, and selects ID and application JSON storage types and fresh catalog defaults. Serial schemas use `i64` IDs and references for SQLite and `i32` for PostgreSQL and MySQL; PostgreSQL uses identity columns, SQLite uses integer primary keys, and MySQL uses auto-increment columns. UUID schemas use native `Uuid` fields and `pg_catalog.gen_random_uuid()` defaults for PostgreSQL; SQLite and MySQL retain text IDs. Use the generated schema with the selected database backend.
 
 `--generate-id database` preserves the upstream text-ID schema without inventing defaults. Add application-owned defaults before using `IdGeneration::Database`, or use an existing numeric or UUID schema with its own defaults. `AuthEntity` derives read the declared ID and user-reference types, parse public string IDs at the model boundary, and leave absent IDs unset. The generator marks additional ID references with `#[auth(reference)]`; use the same attribute on handwritten reference fields.
 
@@ -143,14 +143,16 @@ The tests create and remove isolated schemas. They do not establish upstream dri
 
 An omitted or empty `modelName` keeps the generator's default table name. Nonempty strings, including whitespace, remain unchanged. The original optional declaration remains unchanged for generated metadata.
 
-The CLI and bundled entities currently have these default table-name differences from Better Auth 1.7.6 when upstream `modelName` and adapter `usePlural` are omitted:
+For a legal native `fields` mapping, an empty string keeps the model's resolved column and serialization defaults. Nonempty values, including whitespace, remain unchanged. The CLI validates the field before applying the empty-value fallback and retains the original mapping declaration. This does not change each model's existing default names. The paired schema contract and the `displayUsername` generator regression pass.
+
+The CLI and bundled entities currently have these default table-name differences from Better Auth 1.7.6 when upstream `modelName` and adapter `usePlural` are omitted. The Verification row distinguishes fresh SQLite generation from the unchanged bundled and non-SQLite defaults:
 
 | Model | Rust default | Upstream default |
 | --- | --- | --- |
 | User | `users` | `user` |
 | Session | `sessions` | `session` |
 | Account | `accounts` | `account` |
-| Verification | `verifications` | `verification` |
+| Verification | CLI SQLite: `verification`; bundled and other CLI backends: `verifications` | `verification` |
 | RateLimit | `rate_limit` | `rateLimit` |
 | WalletAddress | `wallet_address` | `walletAddress` |
 | TwoFactor | `two_factor` | `twoFactor` |
@@ -162,7 +164,11 @@ The CLI and bundled entities currently have these default table-name differences
 
 Jwk, Organization, Member, Invitation, and Team have matching default table names. These are current representation differences and remain alignment work. Database interchangeability has not been established. Default column names and types also differ, so table-name-only renames would not establish interchangeability. Applications still own entity mappings and versioned migrations; this empty-name change does not rename existing tables or run a migration.
 
-The schema-only empty-name contract covers User, Organization, and RateLimit. The contract retains each runtime's actual defaults and proves that empty equals omission within that runtime. Organization, custom names, and whitespace provide direct cross-runtime controls. The other default-name comparisons above are source evidence, not additional runtime coverage.
+Fresh `--database sqlite` generation selects `verification`, `expiresAt`, `createdAt`, and `updatedAt` as the native Verification defaults. The native identifier and value columns use `TEXT`; the three native date columns use `date`. The native identifier index uses the resolved table and column names with the upstream 63-byte shortening rule. Explicit table and column mappings still take precedence, and raw optional declarations remain unchanged. Explicit field policy overrides retain their existing type and index rules.
+
+The pinned SQLite catalog contract passes for default mappings, explicit legacy mappings, and a long Unicode custom mapping. Strict Bun and the generated Rust consumer compare complete table, column, index, extended-index, and foreign-key catalog rows, including internal indexes and null values. Raw table/index DDL is retained separately as diagnostics. All 24 library consumers and five CLI tests also pass. The change does not modify bundled entities, `InitialAuthSchema`, migration names, existing generated source, or existing databases. Applications must provide versioned migrations when adopting new generated mappings. `date` has different SQLite affinity from the previous text-suffixed declaration; unchanged Chrono bindings do not establish date-text or query interchangeability. Other models, PostgreSQL/MySQL, Serial/UUID catalogs, and explicit type overrides remain outside this contract.
+
+The schema-only empty-name contract covers User, Organization, and RateLimit. The contract retains each runtime's actual defaults and proves that empty equals omission within that runtime. Organization, custom names, and whitespace provide direct cross-runtime controls. Apart from the separate Verification catalog contract, the other default-name comparisons above remain source evidence.
 
 Use upstream model names in `--schema-config`: `apikey`, `deviceCode`, `passkey`, `twoFactor`, `jwks`, and `walletAddress`. Enable the corresponding plugins when generating the schema. For example:
 

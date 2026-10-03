@@ -93,9 +93,11 @@ pub(crate) fn generate_schema(
         .map(|entity| gen_entity(entity, generation, config));
     let tables = definitions
         .iter()
-        .map(|entity| gen_table(entity, &definitions, generation))
+        .map(|entity| gen_table(entity, &definitions, generation, database))
         .collect::<Result<Vec<_>, _>>()?;
-    let indexes = definitions.iter().flat_map(gen_indexes);
+    let indexes = definitions
+        .iter()
+        .flat_map(|entity| gen_indexes(entity, database));
     let declarations = [
         ("user", "User"),
         ("session", "Session"),
@@ -298,6 +300,7 @@ fn gen_table(
     entity: &Entity,
     entities: &[Entity],
     generation: IdGeneration,
+    database: Database,
 ) -> Result<TokenStream, String> {
     let module = &entity.module;
     let table = &entity.table;
@@ -406,6 +409,23 @@ fn gen_table(
                     }
                 });
             }
+            if matches!(database, Database::Sqlite)
+                && entity.role == Some(EntityRole::Verification)
+                && field.attributes.is_none()
+            {
+                let data_type = match field.registry_column {
+                    Some("identifier" | "value") => quote!(column.text();),
+                    Some("expires_at" | "created_at" | "updated_at") => {
+                        quote!(column.custom(Alias::new("date"));)
+                    }
+                    _ => return None,
+                };
+                return Some(quote! {
+                    if column.get_column_name().as_str() == #name {
+                        #data_type
+                    }
+                });
+            }
             let attributes = field.attributes.as_ref()?;
             let data_type = gen_column_type(attributes);
             let nullability = if attributes.required != Some(false)
@@ -503,7 +523,7 @@ fn gen_column_type(field: &AdditionalField) -> TokenStream {
     }
 }
 
-fn gen_indexes(entity: &Entity) -> Vec<TokenStream> {
+fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     let table = &entity.table;
     let mut indexes: Vec<_> = registry::entity_indexes(entity.registry_table)
         .iter()
@@ -524,10 +544,44 @@ fn gen_indexes(entity: &Entity) -> Vec<TokenStream> {
             }
         }
     }
+    let verification_identifier = entity.fields.iter().find(|field| {
+        matches!(database, Database::Sqlite)
+            && entity.role == Some(EntityRole::Verification)
+            && field.registry_column == Some("identifier")
+            && field.attributes.is_none()
+    });
     indexes.into_iter().map(|(columns, unique)| {
-        let name = format!("idx_{table}_{}", columns.join("_"));
+        let name = if let Some(field) = verification_identifier
+            && !unique && columns.as_slice() == [field.column.as_str()]
+        {
+            verification_index_name(table, &field.column)
+        } else {
+            format!("idx_{table}_{}", columns.join("_"))
+        };
         let columns = columns.iter().map(|column| quote! { .col(Alias::new(#column)) });
         let unique = unique.then(|| quote! { .unique() });
         quote! { Index::create().name(#name).table(Alias::new(#table)) #(#columns)* #unique .to_owned() }
     }).collect()
+}
+
+fn verification_index_name(table: &str, column: &str) -> String {
+    let prefix = format!("{table}_{column}");
+    let name = format!("{prefix}_idx");
+    if name.len() <= 63 {
+        return name;
+    }
+    // Upstream hashes UTF-16 units but bounds the stored name in UTF-8 bytes.
+    let hash = name.encode_utf16().fold(2_166_136_261_u32, |hash, unit| {
+        (hash ^ u32::from(unit)).wrapping_mul(16_777_619)
+    });
+    let suffix = format!("_{hash:08x}_idx");
+    let mut bytes = 0;
+    let prefix: String = prefix
+        .chars()
+        .take_while(|character| {
+            bytes += character.len_utf8();
+            bytes <= 63 - suffix.len()
+        })
+        .collect();
+    format!("{prefix}{suffix}")
 }

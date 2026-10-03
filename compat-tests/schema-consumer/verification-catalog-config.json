@@ -1,0 +1,27 @@
+{
+  "default": {},
+  "legacy": {
+    "verification": {
+      "modelName": "verifications",
+      "fields": {
+        "identifier": "identifier",
+        "value": "value",
+        "expiresAt": "expires_at",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    }
+  },
+  "customLong": {
+    "verification": {
+      "modelName": "verification_catalog_display_archive_entries_xx📦_long",
+      "fields": {
+        "identifier": "lookup_identifier",
+        "value": "stored_value",
+        "expiresAt": "expires_on",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on"
+      }
+    }
+  }
+}
