@@ -1,0 +1,471 @@
+{
+  "version": "1.7.6",
+  "backend": "sqlite",
+  "points": [
+    {
+      "name": "sql-null",
+      "events": [
+        {
+          "field": "rank",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "highlighted",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "displayAt",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "settings",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "tags",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "scores",
+          "present": true,
+          "kind": "null",
+          "value": null
+        }
+      ],
+      "result": {
+        "marker": {
+          "own": true,
+          "present": true,
+          "value": "a"
+        },
+        "rank": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "highlighted": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "displayAt": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "settings": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "tags": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "scores": {
+          "own": true,
+          "present": true,
+          "value": null
+        }
+      }
+    },
+    {
+      "name": "json-null",
+      "events": [
+        {
+          "field": "rank",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "highlighted",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "displayAt",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "settings",
+          "present": true,
+          "kind": "string",
+          "value": "null"
+        },
+        {
+          "field": "tags",
+          "present": true,
+          "kind": "null",
+          "value": null
+        },
+        {
+          "field": "scores",
+          "present": true,
+          "kind": "null",
+          "value": null
+        }
+      ],
+      "result": {
+        "marker": {
+          "own": true,
+          "present": true,
+          "value": "d"
+        },
+        "rank": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "highlighted": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "displayAt": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "settings": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "tags": {
+          "own": true,
+          "present": true,
+          "value": null
+        },
+        "scores": {
+          "own": true,
+          "present": true,
+          "value": null
+        }
+      }
+    }
+  ],
+  "batch": {
+    "events": [
+      {
+        "field": "rank",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "rank",
+        "present": true,
+        "kind": "number",
+        "value": 0.5
+      },
+      {
+        "field": "rank",
+        "present": true,
+        "kind": "number",
+        "value": 12.5
+      },
+      {
+        "field": "rank",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "highlighted",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "highlighted",
+        "present": true,
+        "kind": "number",
+        "value": 0
+      },
+      {
+        "field": "highlighted",
+        "present": true,
+        "kind": "number",
+        "value": 1
+      },
+      {
+        "field": "highlighted",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "displayAt",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "displayAt",
+        "present": true,
+        "kind": "string",
+        "value": "2030-01-02T03:04:05.006Z"
+      },
+      {
+        "field": "displayAt",
+        "present": true,
+        "kind": "string",
+        "value": "2031-02-03T04:05:06.007Z"
+      },
+      {
+        "field": "displayAt",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "settings",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "settings",
+        "present": true,
+        "kind": "string",
+        "value": "{}"
+      },
+      {
+        "field": "settings",
+        "present": true,
+        "kind": "string",
+        "value": "{\"theme\":\"blue\"}"
+      },
+      {
+        "field": "settings",
+        "present": true,
+        "kind": "string",
+        "value": "null"
+      },
+      {
+        "field": "tags",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "tags",
+        "present": true,
+        "kind": "string",
+        "value": "[]"
+      },
+      {
+        "field": "tags",
+        "present": true,
+        "kind": "string",
+        "value": "[\"blue\",\"green\"]"
+      },
+      {
+        "field": "tags",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "scores",
+        "present": true,
+        "kind": "null",
+        "value": null
+      },
+      {
+        "field": "scores",
+        "present": true,
+        "kind": "string",
+        "value": "[]"
+      },
+      {
+        "field": "scores",
+        "present": true,
+        "kind": "string",
+        "value": "[1.25,2.5]"
+      },
+      {
+        "field": "scores",
+        "present": true,
+        "kind": "null",
+        "value": null
+      }
+    ],
+    "result": {
+      "users": [
+        {
+          "marker": {
+            "own": true,
+            "present": true,
+            "value": "a"
+          },
+          "rank": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "highlighted": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "displayAt": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "tags": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "scores": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        {
+          "marker": {
+            "own": true,
+            "present": true,
+            "value": "b"
+          },
+          "rank": {
+            "own": true,
+            "present": true,
+            "value": 0.5
+          },
+          "highlighted": {
+            "own": true,
+            "present": true,
+            "value": false
+          },
+          "displayAt": {
+            "own": true,
+            "present": true,
+            "value": "2030-01-02T03:04:05.006Z"
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": {}
+          },
+          "tags": {
+            "own": true,
+            "present": true,
+            "value": []
+          },
+          "scores": {
+            "own": true,
+            "present": true,
+            "value": []
+          }
+        },
+        {
+          "marker": {
+            "own": true,
+            "present": true,
+            "value": "c"
+          },
+          "rank": {
+            "own": true,
+            "present": true,
+            "value": 12.5
+          },
+          "highlighted": {
+            "own": true,
+            "present": true,
+            "value": true
+          },
+          "displayAt": {
+            "own": true,
+            "present": true,
+            "value": "2031-02-03T04:05:06.007Z"
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "blue"
+            }
+          },
+          "tags": {
+            "own": true,
+            "present": true,
+            "value": [
+              "blue",
+              "green"
+            ]
+          },
+          "scores": {
+            "own": true,
+            "present": true,
+            "value": [
+              1.25,
+              2.5
+            ]
+          }
+        },
+        {
+          "marker": {
+            "own": true,
+            "present": true,
+            "value": "d"
+          },
+          "rank": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "highlighted": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "displayAt": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "tags": {
+            "own": true,
+            "present": true,
+            "value": null
+          },
+          "scores": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        }
+      ],
+      "total": 4
+    }
+  }
+}

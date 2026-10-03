@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use serde_json::{Map, Value};
 use std::sync::{Arc, LazyLock};
 mod adapter;
+pub use adapter::FieldOutputCapabilities;
 mod batch;
 pub(crate) use batch::{
     project_fields_batches_then, project_fields_then, project_source_fields_batches_then,

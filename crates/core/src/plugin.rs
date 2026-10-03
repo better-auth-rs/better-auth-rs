@@ -436,8 +436,14 @@ impl<S: AuthSchema> AuthInitContext<S> {
 
     /// Register user schema fields in plugin registration order.
     pub fn register_user_fields(&mut self, fields: crate::user_fields::UserConfig) {
+        let names: Vec<_> = fields.fields().keys().cloned().collect();
         self.plugin_fields
             .extend(crate::store::schema::EntityRole::User, fields);
+        self.registered_model_field_names.extend(
+            names
+                .into_iter()
+                .map(|name| (crate::store::schema::EntityRole::User, name)),
+        );
     }
 
     /// Register adapter fields for core models, Organization, Team, or supported plugin display fields.

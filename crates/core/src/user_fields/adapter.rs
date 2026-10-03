@@ -3,6 +3,27 @@ use crate::AuthResult;
 use crate::store::schema::resolve_field_name;
 use serde_json::{Map, Value};
 
+/// Adapter capabilities for decoding values after an application output callback.
+#[derive(Clone, Copy, Debug)]
+pub struct FieldOutputCapabilities {
+    /// JSON values need no text decoding when the adapter supports native JSON.
+    pub supports_native_json: bool,
+    /// Array values need no text decoding when the adapter supports arrays.
+    pub supports_arrays: bool,
+    /// Boolean values need no numeric decoding when the adapter supports booleans.
+    pub supports_booleans: bool,
+}
+
+impl FieldOutputCapabilities {
+    pub(crate) const fn json_only(supports_native_json: bool) -> Self {
+        Self {
+            supports_native_json,
+            supports_arrays: true,
+            supports_booleans: true,
+        }
+    }
+}
+
 impl UserConfig {
     /// Apply storage policies before converting JSON for the selected adapter.
     pub async fn storage_fields_for_adapter(
@@ -81,11 +102,23 @@ impl UserFieldConfig {
         value: Option<Value>,
         supports_native_json: bool,
     ) -> AuthResult<Option<Value>> {
-        let mut value = self.prepare_output(value, supports_native_json)?;
+        let value = self.prepare_output(value, supports_native_json)?;
+        self.adapter_output_from_raw(
+            value,
+            FieldOutputCapabilities::json_only(supports_native_json),
+        )
+        .await
+    }
+
+    pub(crate) async fn adapter_output_from_raw(
+        &self,
+        mut value: Option<Value>,
+        capabilities: FieldOutputCapabilities,
+    ) -> AuthResult<Option<Value>> {
         if let Some(transform) = self.output_transform() {
             value = transform.call(value).await?;
         }
-        self.finish_output(value, supports_native_json)
+        self.finish_output(value, capabilities)
     }
 
     fn prepare_output(
@@ -110,7 +143,7 @@ impl UserFieldConfig {
     fn finish_output(
         &self,
         value: Option<Value>,
-        supports_native_json: bool,
+        capabilities: FieldOutputCapabilities,
     ) -> AuthResult<Option<Value>> {
         if self.references_id() {
             return value
@@ -127,9 +160,21 @@ impl UserFieldConfig {
         }
         Ok(value.map(|value| match value {
             Value::String(text)
-                if !supports_native_json && matches!(self.field_type, UserFieldType::Json) =>
+                if (!capabilities.supports_native_json
+                    && matches!(self.field_type, UserFieldType::Json))
+                    || (!capabilities.supports_arrays
+                        && matches!(
+                            self.field_type,
+                            UserFieldType::StringArray | UserFieldType::NumberArray
+                        )) =>
             {
                 crate::utils::json::safe_json_parse(&text)
+            }
+            Value::Number(number)
+                if !capabilities.supports_booleans
+                    && matches!(self.field_type, UserFieldType::Boolean) =>
+            {
+                Value::Bool(number.as_f64() == Some(1.0))
             }
             value => value,
         }))

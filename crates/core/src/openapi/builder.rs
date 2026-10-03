@@ -6,6 +6,8 @@ use serde_json::{Map, Value, json};
 
 use crate::{HttpMethod, user_fields::UserConfig};
 
+use super::metadata::{ordered_properties, property_key_order};
+
 /// Documentation supplied by an endpoint. The endpoint retains its own input validation.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,9 +85,12 @@ impl OpenApiBuilder {
         self
     }
 
-    pub fn user_input(self, fields: UserConfig) -> Self {
+    pub fn user_input(self, mut fields: UserConfig) -> Self {
         let mut properties = Map::new();
         let mut required = Vec::new();
+        fields
+            .fields_mut()
+            .sort_by(|left, _, right, _| property_key_order(left).cmp(&property_key_order(right)));
         for (name, field) in fields.fields() {
             if !field.input() {
                 continue;
@@ -114,7 +119,9 @@ impl OpenApiBuilder {
     pub fn model(self, logical_name: &str, fields: &UserConfig) -> Self {
         let mut properties = Map::new();
         let mut required = Vec::new();
-        for (name, field) in fields.fields() {
+        let mut fields: Vec<_> = fields.fields().iter().collect();
+        fields.sort_by_key(|(name, _)| property_key_order(name));
+        for (name, field) in fields {
             let _ = properties.insert(name.clone(), super::field_schema::component_property(field));
             if field.required == Some(true) && field.returned() && !required.contains(name) {
                 required.push(name.clone());
@@ -132,6 +139,7 @@ impl OpenApiBuilder {
         let mut properties =
             Map::from_iter([("id".into(), json!({"type":"string","readOnly":true}))]);
         properties.extend(fields);
+        let properties = ordered_properties(properties);
         let mut required = vec!["id".to_owned()];
         for name in required_fields {
             if !required.contains(&name) {
@@ -290,7 +298,7 @@ impl OpenApiBuilder {
                 }
             }
         }
-        let _ = schema.insert("properties".into(), json!(properties));
+        let _ = schema.insert("properties".into(), json!(ordered_properties(properties)));
         if !required.is_empty() {
             let _ = schema.insert("required".into(), json!(required));
         }

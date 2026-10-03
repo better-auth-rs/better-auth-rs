@@ -157,31 +157,24 @@ impl UserView {
             config,
             metadata,
             false,
-            supports_native_json,
+            super::FieldOutputCapabilities::json_only(supports_native_json),
             |_, _, _| Ok(None),
         )
         .await
     }
 
-    /// Project database rows with an adapter source for unprojected additional fields.
+    /// Project database rows with raw callback values for unprojected additional fields.
     /// `Some(Value::Null)` preserves a present null; `None` retains the serialized source.
+    /// Supplied non-reference extras use the adapter capabilities after their output callback.
     /// Native fields and completed adapter output do not use this accessor.
     pub async fn with_internal_fields_many_for_adapter_using<T: AuthUser>(
         users: &[T],
         config: &super::UserConfig,
         metadata: &MetadataMap,
-        supports_native_json: bool,
+        capabilities: super::FieldOutputCapabilities,
         read_extra: impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync,
     ) -> AuthResult<Vec<Self>> {
-        Self::project_many(
-            users,
-            config,
-            metadata,
-            false,
-            supports_native_json,
-            read_extra,
-        )
-        .await
+        Self::project_many(users, config, metadata, false, capabilities, read_extra).await
     }
 
     async fn project<T: AuthUser>(
@@ -197,7 +190,7 @@ impl UserView {
             config,
             metadata,
             public,
-            supports_native_json,
+            super::FieldOutputCapabilities::json_only(supports_native_json),
             |_, _, _| Ok(None),
         )
         .await?
@@ -209,7 +202,7 @@ impl UserView {
         config: &super::UserConfig,
         metadata: &MetadataMap,
         public: bool,
-        supports_native_json: bool,
+        capabilities: super::FieldOutputCapabilities,
         read_extra: impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync,
     ) -> AuthResult<Vec<Self>> {
         let mut rows = users
@@ -266,6 +259,7 @@ impl UserView {
                         } else {
                             read_extra(user, name, field)?
                         };
+                        let raw_extra = value.is_some() && field.references.is_none();
                         let value = value
                             .or_else(|| {
                                 model
@@ -278,7 +272,13 @@ impl UserView {
                                 ("displayUsername", true) => Some(json!(user.display_username())),
                                 _ => None,
                             });
-                        field.adapter_output(value, supports_native_json).await?
+                        if raw_extra {
+                            field.adapter_output_from_raw(value, capabilities).await?
+                        } else {
+                            field
+                                .adapter_output(value, capabilities.supports_native_json)
+                                .await?
+                        }
                     };
                     if name == "username" || name == "displayUsername" {
                         if let Some(fields) = &mut view.visible_fields {

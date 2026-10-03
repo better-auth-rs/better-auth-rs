@@ -6,7 +6,7 @@ use crate::{
     user_fields::{UserConfig, UserFieldType},
 };
 
-use super::OpenApiPluginMetadata;
+use super::{OpenApiPluginMetadata, metadata::property_key_order};
 
 impl OpenApiPluginMetadata {
     /// Apply the Organization plugin's configured field schemas at their route-specific merge boundaries.
@@ -172,6 +172,7 @@ fn overlay(
         base_fields.clone()
     };
     merged.extend(if base_last { base_fields } else { additional });
+    merged.sort_by(|left, _, right, _| property_key_order(left).cmp(&property_key_order(right)));
     let required: Vec<_> = merged
         .iter()
         .filter(|(_, (_, required))| *required)

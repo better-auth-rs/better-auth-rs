@@ -236,17 +236,29 @@ pub(super) fn project_field(
 }
 
 pub(super) fn model_projection(fields: &ModelFields) -> (Map<String, Value>, Vec<String>) {
+    let mut fields: Vec<_> = fields.iter().collect();
+    fields.sort_by_key(|(key, _)| property_key_order(key));
     (
         fields
             .iter()
-            .map(|(key, field)| (key.clone(), field.property.clone()))
+            .map(|&(key, field)| (key.clone(), field.property.clone()))
             .collect(),
         fields
             .iter()
             .filter(|(_, field)| field.required)
-            .map(|(key, _)| key.clone())
+            .map(|&(key, _)| key.clone())
             .collect(),
     )
+}
+
+pub(super) fn property_key_order(key: &str) -> (bool, u32) {
+    crate::utils::json::array_index(key).map_or((true, 0), |index| (false, index))
+}
+
+pub(super) fn ordered_properties(properties: Map<String, Value>) -> Map<String, Value> {
+    let mut fields: Vec<_> = properties.into_iter().collect();
+    fields.sort_by_key(|(key, _)| property_key_order(key));
+    fields.into_iter().collect()
 }
 
 pub(super) fn method_name(method: &HttpMethod) -> &'static str {

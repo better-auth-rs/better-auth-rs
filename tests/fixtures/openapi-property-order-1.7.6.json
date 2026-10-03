@@ -1,0 +1,2009 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "numeric-display-names",
+      "components": [
+        {
+          "model": "User",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "image": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "name",
+              "email",
+              "emailVerified",
+              "createdAt",
+              "updatedAt",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "image",
+            "createdAt",
+            "updatedAt",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Session",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ipAddress": {
+                "type": "string"
+              },
+              "userAgent": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "activeOrganizationId": {
+                "type": "string",
+                "readOnly": true
+              },
+              "activeTeamId": {
+                "type": "string",
+                "readOnly": true
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "expiresAt",
+              "token",
+              "createdAt",
+              "updatedAt",
+              "userId",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "userId",
+            "activeOrganizationId",
+            "activeTeamId",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Account",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "idToken": {
+                "type": "string"
+              },
+              "accessTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "accountId",
+              "providerId",
+              "userId",
+              "createdAt",
+              "updatedAt",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "accessToken",
+            "refreshToken",
+            "idToken",
+            "accessTokenExpiresAt",
+            "refreshTokenExpiresAt",
+            "scope",
+            "password",
+            "createdAt",
+            "updatedAt",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Verification",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "identifier",
+              "value",
+              "expiresAt",
+              "createdAt",
+              "updatedAt",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Organization",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "logo": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "metadata": {
+                "type": "string"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "name",
+              "slug",
+              "createdAt",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "name",
+            "slug",
+            "logo",
+            "createdAt",
+            "metadata",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Member",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "organizationId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "default": "member"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "organizationId",
+              "userId",
+              "role",
+              "createdAt",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "organizationId",
+            "userId",
+            "role",
+            "createdAt",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Invitation",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "organizationId": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "teamId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "default": "pending"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "inviterId": {
+                "type": "string"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "organizationId",
+              "email",
+              "status",
+              "expiresAt",
+              "createdAt",
+              "inviterId",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "organizationId",
+            "email",
+            "role",
+            "teamId",
+            "status",
+            "expiresAt",
+            "createdAt",
+            "inviterId",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "Team",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "memberCount": {
+                "type": "number",
+                "default": 0,
+                "readOnly": true
+              },
+              "organizationId": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "name",
+              "organizationId",
+              "createdAt",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "name",
+            "memberCount",
+            "organizationId",
+            "createdAt",
+            "updatedAt",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "OrganizationRole",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "organizationId": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "permission": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organizationId",
+              "role",
+              "permission",
+              "createdAt"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "organizationId",
+            "role",
+            "permission",
+            "createdAt",
+            "updatedAt",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "model": "DeviceCode",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              },
+              "deviceCode": {
+                "type": "string"
+              },
+              "userCode": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "status": {
+                "type": "string"
+              },
+              "lastPolledAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "pollingInterval": {
+                "type": "number"
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "2",
+              "10",
+              "4294967294",
+              "tail",
+              "01",
+              "4294967295",
+              "deviceCode",
+              "userCode",
+              "expiresAt",
+              "status"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "id",
+            "tail",
+            "01",
+            "4294967295",
+            "deviceCode",
+            "userCode",
+            "userId",
+            "expiresAt",
+            "status",
+            "lastPolledAt",
+            "pollingInterval",
+            "clientId",
+            "scope"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "path": "/sign-up/email",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the user"
+              },
+              "email": {
+                "type": "string",
+                "description": "The email of the user"
+              },
+              "password": {
+                "type": "string",
+                "description": "The password of the user"
+              },
+              "image": {
+                "type": "string",
+                "description": "The profile image URL of the user"
+              },
+              "callbackURL": {
+                "type": "string",
+                "description": "The URL to use for email verification callback"
+              },
+              "rememberMe": {
+                "type": "boolean",
+                "description": "If this is false, the session will not be remembered. Default is `true`."
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "password",
+              "2",
+              "10",
+              "4294967294",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "name",
+            "email",
+            "password",
+            "image",
+            "callbackURL",
+            "rememberMe",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "path": "/update-user",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the user"
+              },
+              "image": {
+                "type": "string",
+                "description": "The image of the user",
+                "nullable": true
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            }
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "name",
+            "image",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "path": "/organization/create",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "2": {
+                "type": "string"
+              },
+              "10": {
+                "type": "string"
+              },
+              "4294967294": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The name of the organization"
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The slug of the organization"
+              },
+              "userId": {
+                "type": "string",
+                "description": "The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: \"user-id\""
+              },
+              "logo": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The logo of the organization"
+              },
+              "metadata": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {},
+                "description": "The metadata of the organization"
+              },
+              "keepCurrentActiveOrganization": {
+                "type": "boolean",
+                "description": "Whether to keep the current active organization active after creating a new one. Eg: true"
+              },
+              "tail": {
+                "type": "string"
+              },
+              "01": {
+                "type": "string"
+              },
+              "4294967295": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "2",
+              "10",
+              "4294967294",
+              "name",
+              "slug",
+              "tail",
+              "01",
+              "4294967295"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "name",
+            "slug",
+            "userId",
+            "logo",
+            "metadata",
+            "keepCurrentActiveOrganization",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "path": "/organization/update",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "2": {
+                    "type": "string"
+                  },
+                  "10": {
+                    "type": "string"
+                  },
+                  "4294967294": {
+                    "type": "string"
+                  },
+                  "tail": {
+                    "type": "string"
+                  },
+                  "01": {
+                    "type": "string"
+                  },
+                  "4294967295": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The name of the organization"
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The slug of the organization"
+                  },
+                  "logo": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "The logo of the organization"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "description": "The metadata of the organization"
+                  }
+                }
+              },
+              "organizationId": {
+                "type": "string",
+                "description": "The organization ID. Eg: \"org-id\""
+              }
+            },
+            "required": [
+              "data"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "tail",
+            "01",
+            "4294967295",
+            "name",
+            "slug",
+            "logo",
+            "metadata"
+          ]
+        },
+        {
+          "path": "/organization/create-role",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "organizationId": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "description": "The name of the role to create"
+              },
+              "permission": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": "The permission to assign to the role"
+              },
+              "additionalFields": {
+                "type": "object",
+                "properties": {
+                  "2": {
+                    "type": "string"
+                  },
+                  "10": {
+                    "type": "string"
+                  },
+                  "4294967294": {
+                    "type": "string"
+                  },
+                  "tail": {
+                    "type": "string"
+                  },
+                  "01": {
+                    "type": "string"
+                  },
+                  "4294967295": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "2",
+                  "10",
+                  "4294967294",
+                  "tail",
+                  "01",
+                  "4294967295"
+                ]
+              }
+            },
+            "required": [
+              "role",
+              "permission"
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        },
+        {
+          "path": "/organization/update-role",
+          "schema": {
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "2": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "10": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "4294967294": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "permission": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "roleName": {
+                        "type": "string"
+                      },
+                      "tail": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "01": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "4294967295": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "roleName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The name of the role to update"
+                      }
+                    },
+                    "required": [
+                      "roleName"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "roleId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The id of the role to update"
+                      }
+                    },
+                    "required": [
+                      "roleId"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "propertyKeys": [
+            "2",
+            "10",
+            "4294967294",
+            "permission",
+            "roleName",
+            "tail",
+            "01",
+            "4294967295"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "runtime-before-explicit",
+      "components": [
+        {
+          "model": "User",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "image": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "label": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "emailVerified",
+              "createdAt",
+              "updatedAt",
+              "label",
+              "note"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "image",
+            "createdAt",
+            "updatedAt",
+            "label",
+            "note"
+          ]
+        },
+        {
+          "model": "Session",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ipAddress": {
+                "type": "string"
+              },
+              "userAgent": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "expiresAt",
+              "token",
+              "createdAt",
+              "updatedAt",
+              "userId",
+              "label",
+              "note"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "userId",
+            "label",
+            "note"
+          ]
+        },
+        {
+          "model": "Account",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "idToken": {
+                "type": "string"
+              },
+              "accessTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "label": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "accountId",
+              "providerId",
+              "userId",
+              "createdAt",
+              "updatedAt",
+              "label",
+              "note"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "accessToken",
+            "refreshToken",
+            "idToken",
+            "accessTokenExpiresAt",
+            "refreshTokenExpiresAt",
+            "scope",
+            "password",
+            "createdAt",
+            "updatedAt",
+            "label",
+            "note"
+          ]
+        },
+        {
+          "model": "Verification",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "label": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "value",
+              "expiresAt",
+              "createdAt",
+              "updatedAt",
+              "label",
+              "note"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt",
+            "label",
+            "note"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "path": "/sign-up/email",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the user"
+              },
+              "email": {
+                "type": "string",
+                "description": "The email of the user"
+              },
+              "password": {
+                "type": "string",
+                "description": "The password of the user"
+              },
+              "image": {
+                "type": "string",
+                "description": "The profile image URL of the user"
+              },
+              "callbackURL": {
+                "type": "string",
+                "description": "The URL to use for email verification callback"
+              },
+              "rememberMe": {
+                "type": "boolean",
+                "description": "If this is false, the session will not be remembered. Default is `true`."
+              },
+              "label": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "password",
+              "label",
+              "note"
+            ]
+          },
+          "propertyKeys": [
+            "name",
+            "email",
+            "password",
+            "image",
+            "callbackURL",
+            "rememberMe",
+            "label",
+            "note"
+          ]
+        },
+        {
+          "path": "/update-user",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the user"
+              },
+              "image": {
+                "type": "string",
+                "description": "The image of the user",
+                "nullable": true
+              },
+              "label": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "propertyKeys": [
+            "name",
+            "image",
+            "label",
+            "note"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "explicit-before-runtime",
+      "components": [
+        {
+          "model": "User",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "image": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "note": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "emailVerified",
+              "createdAt",
+              "updatedAt",
+              "note",
+              "label"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "image",
+            "createdAt",
+            "updatedAt",
+            "note",
+            "label"
+          ]
+        },
+        {
+          "model": "Session",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ipAddress": {
+                "type": "string"
+              },
+              "userAgent": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "expiresAt",
+              "token",
+              "createdAt",
+              "updatedAt",
+              "userId",
+              "note",
+              "label"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "userId",
+            "note",
+            "label"
+          ]
+        },
+        {
+          "model": "Account",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "idToken": {
+                "type": "string"
+              },
+              "accessTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "note": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "accountId",
+              "providerId",
+              "userId",
+              "createdAt",
+              "updatedAt",
+              "note",
+              "label"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "accessToken",
+            "refreshToken",
+            "idToken",
+            "accessTokenExpiresAt",
+            "refreshTokenExpiresAt",
+            "scope",
+            "password",
+            "createdAt",
+            "updatedAt",
+            "note",
+            "label"
+          ]
+        },
+        {
+          "model": "Verification",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "note": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "value",
+              "expiresAt",
+              "createdAt",
+              "updatedAt",
+              "note",
+              "label"
+            ]
+          },
+          "propertyKeys": [
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt",
+            "note",
+            "label"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "path": "/sign-up/email",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the user"
+              },
+              "email": {
+                "type": "string",
+                "description": "The email of the user"
+              },
+              "password": {
+                "type": "string",
+                "description": "The password of the user"
+              },
+              "image": {
+                "type": "string",
+                "description": "The profile image URL of the user"
+              },
+              "callbackURL": {
+                "type": "string",
+                "description": "The URL to use for email verification callback"
+              },
+              "rememberMe": {
+                "type": "boolean",
+                "description": "If this is false, the session will not be remembered. Default is `true`."
+              },
+              "note": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "password",
+              "note",
+              "label"
+            ]
+          },
+          "propertyKeys": [
+            "name",
+            "email",
+            "password",
+            "image",
+            "callbackURL",
+            "rememberMe",
+            "note",
+            "label"
+          ]
+        },
+        {
+          "path": "/update-user",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the user"
+              },
+              "image": {
+                "type": "string",
+                "description": "The image of the user",
+                "nullable": true
+              },
+              "note": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "propertyKeys": [
+            "name",
+            "image",
+            "note",
+            "label"
+          ]
+        }
+      ]
+    }
+  ]
+}

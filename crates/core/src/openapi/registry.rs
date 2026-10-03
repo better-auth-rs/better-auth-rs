@@ -7,7 +7,7 @@ use crate::{plugin_runtime::ModelFields as RegisteredFields, store::schema::Enti
 use super::{
     OpenApiBuilder, OpenApiPluginMetadata, OpenApiRouteMetadata, OpenApiSpec,
     catalog::{Endpoint, catalog},
-    metadata::{ModelFields, model_projection, project_field},
+    metadata::{ModelFields, model_projection, project_field, property_key_order},
 };
 
 struct Route {
@@ -45,12 +45,10 @@ impl OpenApiRegistry {
             .iter()
             .filter(|model| model.placement.is_none())
         {
-            if model.condition.as_deref() == Some("verification-database")
-                && secondary_storage
-                && !adapter_config.verification.store_in_database
-            {
-                continue;
-            }
+            let _ = declaration_order.insert(
+                model.key.clone(),
+                model.fields.iter().map(|field| field.key.clone()).collect(),
+            );
             let _ = models.insert(
                 model.key.clone(),
                 model
@@ -203,6 +201,23 @@ impl OpenApiRegistry {
                 );
             }
         }
+        for name in ["user", "session", "account", "verification"] {
+            if let Some(model) = models.get_mut(name)
+                && let Some(order) = declaration_order.get(name)
+            {
+                model.sort_by(|left, _, right, _| {
+                    order
+                        .get_index_of(left)
+                        .unwrap_or(usize::MAX)
+                        .cmp(&order.get_index_of(right).unwrap_or(usize::MAX))
+                });
+            }
+        }
+        if secondary_storage && !adapter_config.verification.store_in_database {
+            let _ = models.shift_remove("verification");
+        }
+        input_fields
+            .sort_by(|left, _, right, _| property_key_order(left).cmp(&property_key_order(right)));
         let input_properties = input_fields
             .iter()
             .filter_map(|(key, field)| {
@@ -250,16 +265,16 @@ impl OpenApiRegistry {
 
 fn registered_model_name(role: EntityRole) -> Option<&'static str> {
     match role {
+        EntityRole::User => Some("user"),
+        EntityRole::Session => Some("session"),
+        EntityRole::Account => Some("account"),
+        EntityRole::Verification => Some("verification"),
         EntityRole::ApiKey => Some("apikey"),
         EntityRole::DeviceCode => Some("deviceCode"),
         EntityRole::Passkey => Some("passkey"),
         EntityRole::Jwk => Some("jwks"),
         EntityRole::WalletAddress => Some("walletAddress"),
-        EntityRole::User
-        | EntityRole::Session
-        | EntityRole::Account
-        | EntityRole::Verification
-        | EntityRole::Organization
+        EntityRole::Organization
         | EntityRole::Member
         | EntityRole::Invitation
         | EntityRole::Team
