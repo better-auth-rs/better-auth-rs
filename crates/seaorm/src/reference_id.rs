@@ -93,6 +93,27 @@ pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
     column: impl Fn(&str) -> better_auth_core::AuthResult<<A::Entity as sea_orm::EntityTrait>::Column>,
 ) -> better_auth_core::AuthResult<()> {
     for (name, field) in fields.fields() {
+        if name != "id"
+            && backend == sea_orm::DbBackend::Sqlite
+            && matches!(
+                field.field_type,
+                better_auth_core::user_fields::UserFieldType::Json
+            )
+            && field.references.is_none()
+        {
+            use sea_orm::ColumnTrait;
+            let column = column(resolve_field_name(field.field_name.as_deref(), name))?;
+            if matches!(
+                column.def().get_column_type(),
+                ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
+            ) && let sea_orm::ActiveValue::Set(value) = active.get(column)
+            {
+                active
+                    .try_set(column, binding(value, backend)?)
+                    .map_err(crate::store::map_db_err)?;
+            }
+            continue;
+        }
         if name == "id" || !field.references_id() {
             continue;
         }

@@ -8,6 +8,8 @@ mod error;
 mod reference_id;
 mod transaction_connection;
 pub use reference_id::ReferenceId;
+/// Scalar-capable TEXT storage for adapter-converted application fields.
+pub use reference_id::ReferenceId as SqlText;
 pub use transaction_connection::TransactionConnection;
 mod sql_number;
 pub use sql_number::SqlNumber;

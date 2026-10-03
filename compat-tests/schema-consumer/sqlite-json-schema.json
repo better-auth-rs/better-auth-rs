@@ -1,0 +1,8 @@
+{
+  "organization": {
+    "additionalFields": {
+      "requiredSettings": { "type": "json", "fieldName": "stored_required_settings", "required": true },
+      "settings": { "type": "json", "fieldName": "stored_settings", "required": false }
+    }
+  }
+}

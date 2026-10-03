@@ -176,7 +176,12 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
     );
     assert_eq!(row.tags.unwrap().0, ["one", "two"]);
     assert_eq!(row.scores.unwrap().0, [1.25, 2.5]);
-    assert_eq!(row.payload, Some(json!({"nested":true})));
+    assert_eq!(
+        row.payload,
+        Some(better_auth::seaorm::SqlText::Text(
+            "{\"nested\":true}".into()
+        ))
+    );
     assert_eq!(row.enabled, Some(true));
     assert_eq!(row.score.map(f64::from), Some(4.5));
     assert_eq!(row.metadata, None);

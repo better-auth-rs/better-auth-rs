@@ -1,0 +1,1278 @@
+{
+  "version": "1.7.6",
+  "backend": "sqlite",
+  "cases": [
+    {
+      "name": "omitted",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "undefined",
+            "present": false
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "null",
+            "present": true,
+            "value": null
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": null
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "null",
+            "present": true,
+            "value": null
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": null
+        }
+      }
+    },
+    {
+      "name": "null",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "null",
+            "present": true,
+            "value": null
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "null"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "null"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "null"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "null"
+        }
+      }
+    },
+    {
+      "name": "object",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "light",
+              "enabled": true
+            }
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"light\",\"enabled\":true}"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "light",
+              "enabled": true
+            }
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "{\"theme\":\"light\",\"enabled\":true}"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"light\",\"enabled\":true}"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "light",
+              "enabled": true
+            }
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "{\"theme\":\"light\",\"enabled\":true}"
+        }
+      }
+    },
+    {
+      "name": "array",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "array",
+            "present": true,
+            "value": [
+              "display",
+              12
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "[\"display\",12]"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": [
+              "display",
+              12
+            ]
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "[\"display\",12]"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "[\"display\",12]"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": [
+              "display",
+              12
+            ]
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "[\"display\",12]"
+        }
+      }
+    },
+    {
+      "name": "encoded-string",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "\"display\""
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "\"display\""
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": "display"
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "\"display\""
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "\"display\""
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": "display"
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "\"display\""
+        }
+      }
+    },
+    {
+      "name": "invalid-text",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "not-json"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "not-json"
+        }
+      }
+    },
+    {
+      "name": "whitespace-object",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": " { \"theme\": \"spaced\" } "
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": " { \"theme\": \"spaced\" } "
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "spaced"
+            }
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": " { \"theme\": \"spaced\" } "
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": " { \"theme\": \"spaced\" } "
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "spaced"
+            }
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": " { \"theme\": \"spaced\" } "
+        }
+      }
+    },
+    {
+      "name": "integer",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "number",
+            "present": true,
+            "value": 12
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "12"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 12
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "12"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "12"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 12
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "12"
+        }
+      }
+    },
+    {
+      "name": "fractional",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "number",
+            "present": true,
+            "value": 12.5
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "12.5"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 12.5
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "12.5"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "12.5"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 12.5
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "12.5"
+        }
+      }
+    },
+    {
+      "name": "false",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "boolean",
+            "present": true,
+            "value": false
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "0"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 0
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "0"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "0"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 0
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "0"
+        }
+      }
+    },
+    {
+      "name": "true",
+      "create": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "boolean",
+            "present": true,
+            "value": true
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "1"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 1
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "1"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "1"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": 1
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "1"
+        }
+      }
+    }
+  ],
+  "updates": [
+    {
+      "name": "null",
+      "update": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "null",
+            "present": true,
+            "value": null
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "null"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "null"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "null"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "null"
+        }
+      }
+    },
+    {
+      "name": "invalid-text",
+      "update": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "not-json"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "not-json"
+        }
+      }
+    },
+    {
+      "name": "omitted",
+      "update": {
+        "events": [
+          {
+            "phase": "input",
+            "field": "requiredSettings",
+            "kind": "object",
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "not-json"
+        }
+      },
+      "read": {
+        "events": [
+          {
+            "phase": "output",
+            "field": "requiredSettings",
+            "kind": "string",
+            "present": true,
+            "value": "{\"theme\":\"default\"}"
+          },
+          {
+            "phase": "output",
+            "field": "settings",
+            "kind": "string",
+            "present": true,
+            "value": "not-json"
+          }
+        ],
+        "result": {
+          "requiredSettings": {
+            "own": true,
+            "present": true,
+            "value": {
+              "theme": "default"
+            }
+          },
+          "settings": {
+            "own": true,
+            "present": true,
+            "value": null
+          }
+        },
+        "storedPhysical": {
+          "stored_required_settings": "{\"theme\":\"default\"}",
+          "stored_settings": "not-json"
+        }
+      }
+    }
+  ]
+}

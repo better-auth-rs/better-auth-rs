@@ -1,6 +1,10 @@
 use super::*;
 use serde_json::{Value, json};
 
+#[expect(
+    clippy::expect_used,
+    reason = "Fixture and generated-model structure is a test precondition; absence must fail the test."
+)]
 fn table_name(source: &str, module: &str) -> String {
     let file = syn::parse_file(source).expect("generated schema parses");
     let model = file
@@ -35,6 +39,11 @@ fn table_name(source: &str, module: &str) -> String {
 }
 
 #[test]
+#[expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "Fixture and generated-model structure is a test precondition; absence must fail the test."
+)]
 fn empty_model_names_preserve_each_generator_default_and_raw_declaration() {
     let fixture: Value = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/empty-model-name-1.7.6.json"

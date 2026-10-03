@@ -2,6 +2,11 @@ use super::*;
 use serde_json::{Value, json};
 
 #[test]
+#[expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "Fixture and generated-model structure is a test precondition; absence must fail the test."
+)]
 fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
     let fixture: Value = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/empty-field-name-1.7.6.json"
@@ -26,6 +31,7 @@ fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
             definition,
             better_auth_schema_registry::core_fields(EntityRole::DeviceCode),
             config.0.get("deviceCode"),
+            Database::Sqlite,
         )
         .expect("ordinary CLI display column resolves");
         let column = &entity

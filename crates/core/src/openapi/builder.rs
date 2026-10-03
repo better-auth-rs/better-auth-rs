@@ -311,7 +311,7 @@ impl OpenApiBuilder {
 
     pub fn build(mut self) -> OpenApiSpec {
         self.spec.components = json!({
-            "schemas": self.models,
+            "schemas": ordered_properties(self.models),
             "securitySchemes": {
                 "apiKeyCookie": {"type":"apiKey","in":"cookie","name":"apiKeyCookie","description":"API Key authentication via cookie"},
                 "bearerAuth": {"type":"http","scheme":"bearer","description":"Bearer token authentication"},

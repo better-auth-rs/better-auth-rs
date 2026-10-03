@@ -68,7 +68,7 @@ pub(crate) fn generate_schema(
             None => entity.fields,
         };
         let configured = config.0.get(&model_name(entity.mod_name));
-        let mut entity = Entity::resolve(entity, fields, configured)?;
+        let mut entity = Entity::resolve(entity, fields, configured, database)?;
         entity.resolve_ids(generation, database)?;
         definitions.push(entity);
     }

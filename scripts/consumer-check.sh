@@ -9,6 +9,8 @@ cargo run --locked -p better-auth-cli -- generate --plugins all --output "$schem
 export BETTER_AUTH_GENERATED_SCHEMA="$schema_dir/auth_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins organization --schema-config compat-tests/schema-consumer/organization-schema.json --output "$schema_dir/organization_schema.rs"
 export BETTER_AUTH_ORGANIZATION_SCHEMA="$schema_dir/organization_schema.rs"
+cargo run --locked -p better-auth-cli -- generate --plugins organization --database sqlite --schema-config compat-tests/schema-consumer/sqlite-json-schema.json --output "$schema_dir/sqlite_json_schema.rs"
+export BETTER_AUTH_SQLITE_JSON_SCHEMA="$schema_dir/sqlite_json_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins all --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
 cargo run --locked -p better-auth-cli -- generate --plugins jwt --schema-config compat-tests/schema-consumer/jwk-fields-schema.json --output "$schema_dir/jwk_fields_schema.rs"

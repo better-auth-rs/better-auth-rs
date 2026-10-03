@@ -29,7 +29,7 @@ API Key expiration configuration accepts fractional seconds for its default and 
 
 Configure LINE code login with `GenericOAuthConfig::line` and read resolved provider inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Social profile fields preserve omitted and null email/verification values; callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
 
-Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page, including custom JWT discovery paths, registered model presence and declaration order, JavaScript field-key enumeration, and storage-dependent Verification components.
+Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page, including custom JWT discovery paths, registered model presence and declaration order, JavaScript model and field-key enumeration, and storage-dependent Verification components.
 
 The [JWT plugin](docs/content/docs/plugins/jwt.mdx) supports local and custom signing, server-only verification, and asymmetric session cookie caches. Database key selection follows the configured query limit.
 
@@ -65,7 +65,7 @@ better-auth-rs generate --output src/auth_schema.rs
 
 The CLI also preserves explicit core model declarations and the bound rate-limit model name for initialization telemetry; see [schema generation](docs/content/docs/concepts/database.mdx#generate-an-initial-schema).
 
-Use `--generate-id serial` for integer IDs. Use `--generate-id uuid --database postgres` for native PostgreSQL UUIDs. Match the generated schema to `AuthConfig.advanced.database.generate_id`. Derived plugin and organization bindings expose declared ID references so Serial writes normalize numeric aliases after configured input transforms.
+Use `--generate-id serial` for integer IDs. Use `--generate-id uuid --database postgres` for native PostgreSQL UUIDs. The database option also selects storage for fresh application JSON fields: SQLite uses scalar-capable `SqlText`, while PostgreSQL/MySQL retain `Json`. Match the generated schema to the database backend and `AuthConfig.advanced.database.generate_id`. Derived plugin and organization bindings expose declared ID references so Serial writes normalize numeric aliases after configured input transforms.
 
 Use this `src/main.rs`:
 

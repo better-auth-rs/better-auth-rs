@@ -9,6 +9,8 @@ use serde::Deserialize;
 mod empty_field_name_tests;
 #[cfg(test)]
 mod empty_model_name_tests;
+#[cfg(test)]
+mod json_storage_tests;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub(crate) enum IdGeneration {
@@ -240,6 +242,7 @@ impl Entity {
         definition: &ExtraEntitySchema,
         fields: &[FieldDef],
         config: Option<&ModelConfig>,
+        database: Database,
     ) -> Result<Self, String> {
         let mut entity = Self {
             module: syn::parse_str(definition.mod_name)
@@ -350,7 +353,14 @@ impl Entity {
                 let ident = syn::parse_str(&rust_name)
                     .or_else(|_| syn::parse_str(&format!("{rust_name}_")))
                     .map_err(|error| format!("invalid additional field `{name}`: {error}"))?;
-                let ty = field.rust_type()?;
+                let ty = if matches!(database, Database::Sqlite)
+                    && matches!(&field.field_type, FieldType::Name(name) if name == "json")
+                    && field.references.is_none()
+                {
+                    "better_auth::seaorm::SqlText"
+                } else {
+                    field.rust_type()?
+                };
                 // Upstream makes organization role fields optional while constructing update-role.
                 let ty = if field.required != Some(false)
                     && entity.role != Some(EntityRole::OrganizationRole)

@@ -632,7 +632,7 @@ where
     }
 }
 
-fn map_db_err(err: DbErr) -> AuthError {
+pub(crate) fn map_db_err(err: DbErr) -> AuthError {
     if let DbErr::Custom(message) = err {
         return AuthError::Database(DatabaseError::Query(message));
     }

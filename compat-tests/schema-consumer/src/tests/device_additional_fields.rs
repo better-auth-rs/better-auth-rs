@@ -5,7 +5,6 @@ use better_auth::seaorm::{
     Database, SeaOrmStore,
     sea_orm::{ColumnTrait, EntityTrait, QueryFilter},
 };
-use serde_json::json;
 use std::sync::Arc;
 
 mod mapped {
@@ -33,7 +32,9 @@ async fn generated_device_columns_preserve_declared_field_policies()
     );
     assert_eq!(
         persisted.details,
-        Some(json!({"channel":"ordinary","enabled":true}))
+        Some(better_auth::seaorm::SqlText::Text(
+            "{\"channel\":\"ordinary\",\"enabled\":true}".into()
+        ))
     );
     assert_eq!(persisted.revision.map(f64::from), Some(1.5));
     assert_eq!(persisted.client_id.as_deref(), Some("ordinary-client"));
