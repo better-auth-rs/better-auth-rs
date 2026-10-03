@@ -52,6 +52,8 @@ Use `call_endpoint` with `EndpointInput.request` to resolve a dynamic base URL f
 - Additional field policies control documented properties, required fields, and read-only flags. Schema generation does not call default factories, transforms, or validators.
 - User input properties are merged into the signup and update-user request bodies. The model projection and input projection retain their separate policy precedence.
 
-Custom plugins can attach `OpenApiRouteMetadata` with `AuthRoute::openapi`. Return custom model metadata from `AuthPlugin::openapi`. Metadata describes the endpoint; the endpoint retains responsibility for input validation.
+Custom plugins can attach `OpenApiRouteMetadata` with `AuthRoute::openapi`. Fields registered during initialization enter model components automatically. Final registered adapter policies replace explicit `AuthPlugin::openapi().model(...)` metadata for the same non-core model field. Explicit metadata still supplies unregistered fields, models, and routes. Core model and User input precedence remain unchanged. OrganizationRole retains its configured enablement and optional-field rules. Metadata describes the endpoint; the endpoint retains responsibility for input validation.
+
+Direct `OpenApiRegistry::new` callers must pass the resolved `ModelFields` as the final argument. `BetterAuth` supplies that value during initialization.
 
 The docs site consumes `docs/better-auth.json`, which is generated from the Rust docs profile. The runtime document uses the configuration of the serving authentication instance.

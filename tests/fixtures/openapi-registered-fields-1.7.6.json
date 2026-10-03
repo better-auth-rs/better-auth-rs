@@ -1,0 +1,1913 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "registered-only",
+      "schemas": {
+        "User": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "emailVerified": {
+              "type": "boolean",
+              "default": false,
+              "readOnly": true
+            },
+            "image": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Session": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "token": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ipAddress": {
+              "type": "string"
+            },
+            "userAgent": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "userId"
+          ]
+        },
+        "Account": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "accountId": {
+              "type": "string"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "accessToken": {
+              "type": "string"
+            },
+            "refreshToken": {
+              "type": "string"
+            },
+            "idToken": {
+              "type": "string"
+            },
+            "accessTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Verification": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "identifier": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "DeviceCode": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ]
+        },
+        "Jwks": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "jwk-default",
+              "readOnly": true
+            },
+            "docsNote": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "WalletAddress": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "Passkey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "passkey-name"
+            },
+            "aaguid": {
+              "type": "string",
+              "default": "display-aaguid",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Apikey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "api-key-name",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Organization": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "registered-organization-label"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "Team": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "registered-team-label"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "Widget": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "callbackCalls": {
+        "default": 0,
+        "input": 0,
+        "output": 0
+      }
+    },
+    {
+      "name": "organization-before",
+      "schemas": {
+        "User": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "emailVerified": {
+              "type": "boolean",
+              "default": false,
+              "readOnly": true
+            },
+            "image": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Session": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "token": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ipAddress": {
+              "type": "string"
+            },
+            "userAgent": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "activeOrganizationId": {
+              "type": "string",
+              "readOnly": true
+            },
+            "activeTeamId": {
+              "type": "string",
+              "readOnly": true
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "userId"
+          ]
+        },
+        "Account": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "accountId": {
+              "type": "string"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "accessToken": {
+              "type": "string"
+            },
+            "refreshToken": {
+              "type": "string"
+            },
+            "idToken": {
+              "type": "string"
+            },
+            "accessTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Verification": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "identifier": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Organization": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "logo": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "metadata": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "default": "registered-organization-label"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "createdAt"
+          ]
+        },
+        "OrganizationRole": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "permission": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "note": {
+              "type": "string",
+              "default": "role-note"
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "role",
+            "permission",
+            "createdAt"
+          ]
+        },
+        "Team": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "memberCount": {
+              "type": "number",
+              "default": 0,
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "label": {
+              "type": "string",
+              "default": "registered-team-label"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "organizationId",
+            "createdAt"
+          ]
+        },
+        "TeamMember": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "membershipKey": {
+              "type": "string",
+              "readOnly": true
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "teamId",
+            "userId"
+          ]
+        },
+        "Member": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string",
+              "default": "member"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "note": {
+              "type": "string",
+              "default": "member-note",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "userId",
+            "role",
+            "createdAt"
+          ]
+        },
+        "Invitation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "default": "pending"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "inviterId": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "email",
+            "status",
+            "expiresAt",
+            "createdAt",
+            "inviterId"
+          ]
+        },
+        "DeviceCode": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ]
+        },
+        "Jwks": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "jwk-default",
+              "readOnly": true
+            },
+            "docsNote": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "WalletAddress": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "Passkey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "passkey-name"
+            },
+            "aaguid": {
+              "type": "string",
+              "default": "display-aaguid",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Apikey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "api-key-name",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Widget": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "callbackCalls": {
+        "default": 0,
+        "input": 0,
+        "output": 0
+      }
+    },
+    {
+      "name": "organization-after",
+      "schemas": {
+        "User": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "emailVerified": {
+              "type": "boolean",
+              "default": false,
+              "readOnly": true
+            },
+            "image": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Session": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "token": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ipAddress": {
+              "type": "string"
+            },
+            "userAgent": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            },
+            "activeOrganizationId": {
+              "type": "string",
+              "readOnly": true
+            },
+            "activeTeamId": {
+              "type": "string",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "userId"
+          ]
+        },
+        "Account": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "accountId": {
+              "type": "string"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "accessToken": {
+              "type": "string"
+            },
+            "refreshToken": {
+              "type": "string"
+            },
+            "idToken": {
+              "type": "string"
+            },
+            "accessTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Verification": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "identifier": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "DeviceCode": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ]
+        },
+        "Jwks": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "jwk-default",
+              "readOnly": true
+            },
+            "docsNote": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "WalletAddress": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "Passkey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "passkey-name"
+            },
+            "aaguid": {
+              "type": "string",
+              "default": "display-aaguid",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Apikey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "api-key-name",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Organization": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "builtin-organization-label"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "logo": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "metadata": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "name",
+            "slug",
+            "createdAt"
+          ]
+        },
+        "Team": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "builtin-team-label"
+            },
+            "name": {
+              "type": "string"
+            },
+            "memberCount": {
+              "type": "number",
+              "default": 0,
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "name",
+            "organizationId",
+            "createdAt"
+          ]
+        },
+        "Widget": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "OrganizationRole": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "permission": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "note": {
+              "type": "string",
+              "default": "role-note"
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "role",
+            "permission",
+            "createdAt"
+          ]
+        },
+        "TeamMember": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "membershipKey": {
+              "type": "string",
+              "readOnly": true
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "teamId",
+            "userId"
+          ]
+        },
+        "Member": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string",
+              "default": "member"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "note": {
+              "type": "string",
+              "default": "member-note",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "userId",
+            "role",
+            "createdAt"
+          ]
+        },
+        "Invitation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "default": "pending"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "inviterId": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "email",
+            "status",
+            "expiresAt",
+            "createdAt",
+            "inviterId"
+          ]
+        }
+      },
+      "callbackCalls": {
+        "default": 0,
+        "input": 0,
+        "output": 0
+      }
+    },
+    {
+      "name": "organization-disabled",
+      "schemas": {
+        "User": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "emailVerified": {
+              "type": "boolean",
+              "default": false,
+              "readOnly": true
+            },
+            "image": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "email",
+            "emailVerified",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Session": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "token": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "ipAddress": {
+              "type": "string"
+            },
+            "userAgent": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "activeOrganizationId": {
+              "type": "string",
+              "readOnly": true
+            },
+            "activeTeamId": {
+              "type": "string",
+              "readOnly": true
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "userId"
+          ]
+        },
+        "Account": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "accountId": {
+              "type": "string"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "accessToken": {
+              "type": "string"
+            },
+            "refreshToken": {
+              "type": "string"
+            },
+            "idToken": {
+              "type": "string"
+            },
+            "accessTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "accountId",
+            "providerId",
+            "userId",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Verification": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "identifier": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "coreNote": {
+              "type": "string",
+              "default": "application-core-note"
+            }
+          },
+          "required": [
+            "id",
+            "identifier",
+            "value",
+            "expiresAt",
+            "createdAt",
+            "updatedAt"
+          ]
+        },
+        "Organization": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "logo": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "metadata": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string",
+              "default": "registered-organization-label"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "createdAt"
+          ]
+        },
+        "Team": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string"
+            },
+            "memberCount": {
+              "type": "number",
+              "default": 0,
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "label": {
+              "type": "string",
+              "default": "registered-team-label"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "organizationId",
+            "createdAt"
+          ]
+        },
+        "TeamMember": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "membershipKey": {
+              "type": "string",
+              "readOnly": true
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "teamId",
+            "userId"
+          ]
+        },
+        "Member": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string",
+              "default": "member"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "note": {
+              "type": "string",
+              "default": "member-note",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "userId",
+            "role",
+            "createdAt"
+          ]
+        },
+        "Invitation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "teamId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "default": "pending"
+            },
+            "expiresAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "inviterId": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "organizationId",
+            "email",
+            "status",
+            "expiresAt",
+            "createdAt",
+            "inviterId"
+          ]
+        },
+        "DeviceCode": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label"
+          ]
+        },
+        "Jwks": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "jwk-default",
+              "readOnly": true
+            },
+            "docsNote": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "WalletAddress": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "Passkey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "passkey-name"
+            },
+            "aaguid": {
+              "type": "string",
+              "default": "display-aaguid",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Apikey": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "name": {
+              "type": "string",
+              "default": "api-key-name",
+              "readOnly": true
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "Widget": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "readOnly": true
+            },
+            "label": {
+              "type": "string",
+              "default": "documentation-only"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "callbackCalls": {
+        "default": 0,
+        "input": 0,
+        "output": 0
+      }
+    }
+  ]
+}

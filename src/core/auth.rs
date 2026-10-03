@@ -239,6 +239,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
             init_parts.plugin_fields.resolve(&config);
         let adapter_fields = adapter_config.user.clone();
         let adapter_config = Arc::new(adapter_config);
+        let openapi_fields = model_fields.clone();
         let store = store.with_runtime(
             adapter_config.clone(),
             init_parts.database_hooks,
@@ -308,6 +309,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 .collect::<AuthResult<Vec<_>>>()?,
             init_parts.secondary_storage.is_some(),
             rate_limit_config.storage == Some(better_auth_core::RateLimitStorageKind::Database),
+            &openapi_fields,
         )?;
         init_parts.extensions.insert(openapi);
 

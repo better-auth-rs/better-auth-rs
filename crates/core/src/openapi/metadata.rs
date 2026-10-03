@@ -163,6 +163,8 @@ impl OpenApiPluginMetadata {
     }
 
     /// Add or replace declared fields. Physical table and column names do not change document names.
+    /// Final registered adapter policies replace metadata for the same model field.
+    /// This metadata supplies unregistered fields and models without changing runtime policies.
     pub fn model(mut self, name: impl Into<String>, fields: &UserConfig) -> Self {
         let name = name.into();
         let target = self.models.entry(name.clone()).or_default();

@@ -1,0 +1,463 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "queries": [
+        {
+          "name": "logical-eq-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": false
+              }
+            ],
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": null
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "alpha"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "(missing)"
+                  }
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "beta"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "physical-eq-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": false
+              }
+            ],
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": null
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "alpha"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "(missing)"
+                  }
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "beta"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "logical-ne-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": false
+              }
+            ],
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": "ordinary"
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "alpha"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "(missing)"
+                  }
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "gamma"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "ordinary"
+                  }
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "physical-ne-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": false
+              }
+            ],
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": "ordinary"
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "alpha"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "(missing)"
+                  }
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "gamma"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "ordinary"
+                  }
+                }
+              }
+            ],
+            "total": 2
+          }
+        }
+      ],
+      "errors": [
+        {
+          "name": "unknown-list",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownLabel not found in model user"
+          }
+        },
+        {
+          "name": "unknown-count",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownLabel not found in model user"
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "queries": [
+        {
+          "name": "logical-eq-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": null
+              }
+            ],
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": null
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "alpha"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": null
+                  }
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "beta"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "physical-eq-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": null
+              }
+            ],
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": null
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "alpha"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": null
+                  }
+                }
+              },
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "beta"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": null
+                  }
+                }
+              }
+            ],
+            "total": 2
+          }
+        },
+        {
+          "name": "logical-ne-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": "ordinary"
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "gamma"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "ordinary"
+                  }
+                }
+              }
+            ],
+            "total": 1
+          }
+        },
+        {
+          "name": "physical-ne-null",
+          "events": [
+            [
+              "output",
+              "label",
+              {
+                "defined": true,
+                "value": "ordinary"
+              }
+            ]
+          ],
+          "result": {
+            "users": [
+              {
+                "marker": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "gamma"
+                  }
+                },
+                "label": {
+                  "own": true,
+                  "value": {
+                    "defined": true,
+                    "value": "ordinary"
+                  }
+                }
+              }
+            ],
+            "total": 1
+          }
+        }
+      ],
+      "errors": [
+        {
+          "name": "unknown-list",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownLabel not found in model user"
+          }
+        },
+        {
+          "name": "unknown-count",
+          "events": [],
+          "error": {
+            "kind": "BetterAuthError",
+            "message": "Field unknownLabel not found in model user"
+          }
+        }
+      ]
+    }
+  ]
+}

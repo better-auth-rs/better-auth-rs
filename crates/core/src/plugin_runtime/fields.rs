@@ -215,6 +215,10 @@ impl ModelFields {
         self.models.get(&role).unwrap_or(&EMPTY)
     }
 
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (EntityRole, &UserConfig)> {
+        self.models.iter().map(|(role, fields)| (*role, fields))
+    }
+
     pub(crate) fn organization_output_field_names(
         &self,
         role: EntityRole,

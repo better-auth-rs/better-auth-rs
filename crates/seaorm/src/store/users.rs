@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use better_auth_core::store::schema::resolve_field_name;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, ModelTrait, QueryFilter,
+    QuerySelect,
 };
 
 use better_auth_core::store::UserStore;
@@ -15,6 +16,10 @@ use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
+
+fn column_value<E: EntityTrait>(model: &E::Model, column: E::Column) -> sea_orm::Value {
+    model.get(column)
+}
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -689,24 +694,30 @@ where
         )
         .await?;
 
-        let query_record = |model| {
+        let query_record = |model: S::User| {
             let view = better_auth_core::UserView::from_model(&model)?;
-            let fields = if self.config().user.fields().is_empty() {
-                serde_json::Map::new()
-            } else {
+            let mut fields = serde_json::Map::new();
+            if !self.config().user.fields().is_empty() {
                 let serialized = serde_json::to_value(&model)?;
-                self.config()
-                    .user
-                    .fields()
-                    .iter()
-                    .filter_map(|(name, field)| {
-                        let physical = resolve_field_name(field.field_name.as_deref(), name);
-                        serialized
-                            .get(physical)
-                            .map(|value| (physical.to_owned(), value.clone()))
-                    })
-                    .collect::<serde_json::Map<_, _>>()
-            };
+                for (name, field) in self.config().user.fields() {
+                    let physical = resolve_field_name(field.field_name.as_deref(), name);
+                    let value = if matches!(
+                        field.field_type,
+                        better_auth_core::user_fields::UserFieldType::String
+                    ) && field.references.is_none()
+                    {
+                        let column = S::User::field_column(physical)?;
+                        let value =
+                            column_value::<<S::User as SeaOrmUserModel>::Entity>(&model, column);
+                        Some(sea_orm::sea_query::sea_value_to_json_value(&value))
+                    } else {
+                        serialized.get(physical).cloned()
+                    };
+                    if let Some(value) = value {
+                        let _ = fields.insert(physical.to_owned(), value);
+                    }
+                }
+            }
             AuthResult::Ok((view, fields, model))
         };
         let records = models

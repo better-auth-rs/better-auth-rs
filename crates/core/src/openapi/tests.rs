@@ -9,6 +9,7 @@ fn core_spec() -> OpenApiSpec {
         [],
         false,
         false,
+        &Default::default(),
     )
     .unwrap()
     .generate("http://localhost:3000/api/auth")

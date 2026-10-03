@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 use serde_json::{Map, Value};
 
 use crate::{AuthConfig, AuthResult, HttpMethod, user_fields::UserConfig};
+use crate::{plugin_runtime::ModelFields as RegisteredFields, store::schema::EntityRole};
 
 use super::{
     OpenApiBuilder, OpenApiPluginMetadata, OpenApiRouteMetadata, OpenApiSpec,
@@ -26,12 +27,15 @@ pub struct OpenApiRegistry {
 }
 
 impl OpenApiRegistry {
+    /// Build documentation from configured metadata and policies returned by `ModelFields::resolve`.
+    /// Registered non-core fields replace metadata through the existing field projection.
     pub fn new(
         adapter_config: &AuthConfig,
         endpoint_user_fields: &UserConfig,
         plugins: impl IntoIterator<Item = OpenApiPluginMetadata>,
         secondary_storage: bool,
         database_rate_limit: bool,
+        registered_fields: &RegisteredFields,
     ) -> AuthResult<Self> {
         let catalog = catalog()?;
         let mut models: IndexMap<String, ModelFields> = IndexMap::new();
@@ -89,6 +93,61 @@ impl OpenApiRegistry {
                 if let Some(route) = prepare_route(&endpoint, Some(&plugin.id), disabled)? {
                     routes.push(route);
                 }
+            }
+        }
+        let organization = registered_fields.organization_fields(Default::default());
+        for (role, fields) in registered_fields.iter() {
+            let (name, fields) = match role {
+                EntityRole::Organization => ("organization", &organization.organization),
+                EntityRole::Member => ("member", &organization.member),
+                EntityRole::Invitation => ("invitation", &organization.invitation),
+                EntityRole::Team => ("team", &organization.team),
+                EntityRole::OrganizationRole => {
+                    ("organizationRole", &organization.organization_role)
+                }
+                EntityRole::ApiKey => ("apikey", fields),
+                EntityRole::DeviceCode => ("deviceCode", fields),
+                EntityRole::Passkey => ("passkey", fields),
+                EntityRole::Jwk => ("jwks", fields),
+                EntityRole::WalletAddress => ("walletAddress", fields),
+                EntityRole::User
+                | EntityRole::Session
+                | EntityRole::Account
+                | EntityRole::Verification
+                | EntityRole::TeamMember
+                | EntityRole::TwoFactor
+                | EntityRole::RateLimit => continue,
+            };
+            if fields.fields().is_empty() && !models.contains_key(name) {
+                continue;
+            }
+            // Dynamic-role configuration remains present when the model is disabled.
+            if role == EntityRole::OrganizationRole && !models.contains_key(name) {
+                continue;
+            }
+            let model = models.entry(name.into()).or_default();
+            model.extend(
+                fields
+                    .fields()
+                    .iter()
+                    .map(|(key, field)| (key.clone(), project_field(key, field, false))),
+            );
+            if matches!(
+                role,
+                EntityRole::Organization
+                    | EntityRole::Member
+                    | EntityRole::Invitation
+                    | EntityRole::Team
+                    | EntityRole::OrganizationRole
+            ) {
+                let order = registered_fields.organization_output_field_names(role, fields);
+                let position = |name: &str| {
+                    order
+                        .iter()
+                        .position(|field| field == name)
+                        .unwrap_or(usize::MAX)
+                };
+                model.sort_by(|left, _, right, _| position(left).cmp(&position(right)));
             }
         }
         for (key, field) in adapter_config.user.fields() {

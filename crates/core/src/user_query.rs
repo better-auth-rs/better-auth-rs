@@ -152,6 +152,18 @@ fn match_filter(
     matches(filter_value, operator)
 }
 
+fn declared_field<'a>(
+    name: &str,
+    fields: &'a UserConfig,
+) -> Option<(&'a str, &'a UserFieldConfig)> {
+    let (logical, field) = fields.fields().get_key_value(name).or_else(|| {
+        fields.fields().iter().find(|(logical, field)| {
+            resolve_field_name(field.field_name.as_deref(), logical) == name
+        })
+    })?;
+    Some((logical, field))
+}
+
 fn additional_field<'a>(
     name: &str,
     fields: &'a UserConfig,
@@ -159,12 +171,8 @@ fn additional_field<'a>(
     if name == "_id" || UserView::NATIVE_FIELDS.contains(&name) {
         return None;
     }
-    let (logical, field) = fields.fields().get_key_value(name).or_else(|| {
-        fields.fields().iter().find(|(logical, field)| {
-            resolve_field_name(field.field_name.as_deref(), logical) == name
-        })
-    })?;
-    if logical == "_id" || UserView::NATIVE_FIELDS.contains(&logical.as_str()) {
+    let (logical, field) = declared_field(name, fields)?;
+    if logical == "_id" || UserView::NATIVE_FIELDS.contains(&logical) {
         return None;
     }
     Some((
@@ -212,16 +220,25 @@ fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> {
 fn additional_filter<'a>(
     params: &ListUsersParams,
     fields: &'a UserConfig,
-) -> AuthResult<Option<(&'a str, Value)>> {
+) -> AuthResult<Option<(&'a str, &'a UserFieldConfig, Value)>> {
     let Some(value) = params.filter_value.as_ref() else {
         return Ok(None);
     };
-    let Some((name, field)) =
-        additional_field(params.filter_field.as_deref().unwrap_or("email"), fields)
-    else {
+    let name = params.filter_field.as_deref().unwrap_or("email");
+    if name == "_id" || UserView::NATIVE_FIELDS.contains(&name) {
         return Ok(None);
-    };
-    Ok(Some((name, bind_filter(field, value)?)))
+    }
+    let (logical, field) = declared_field(name, fields).ok_or_else(|| {
+        crate::AuthError::internal(format!("Field {name} not found in model user"))
+    })?;
+    if logical == "_id" || UserView::NATIVE_FIELDS.contains(&logical) {
+        return Ok(None);
+    }
+    Ok(Some((
+        resolve_field_name(field.field_name.as_deref(), logical),
+        field,
+        bind_filter(field, value)?,
+    )))
 }
 
 fn matches_value(actual: Option<&Value>, expected: &Value, operator: &str) -> bool {
@@ -251,15 +268,28 @@ fn matches_value(actual: Option<&Value>, expected: &Value, operator: &str) -> bo
 fn matches_record(
     (user, raw): (&UserView, &Map<String, Value>),
     params: &ListUsersParams,
-    filter: &Option<(&str, Value)>,
+    filter: &Option<(&str, &UserFieldConfig, Value)>,
 ) -> bool {
     matches_search(user, params)
         && match filter {
-            Some((name, value)) => match_filter(
-                value,
-                params.filter_operator.as_deref().unwrap_or("eq"),
-                |expected, operator| matches_value(raw.get(*name), expected, operator),
-            ),
+            Some((name, field, value)) => {
+                let operator = params.filter_operator.as_deref().unwrap_or("eq");
+                let actual = raw.get(*name);
+                if matches!(field.field_type, UserFieldType::String)
+                    && field.references.is_none()
+                    && value.is_null()
+                    && matches!(operator, "eq" | "ne")
+                {
+                    match operator {
+                        "eq" => actual.is_none_or(Value::is_null),
+                        _ => !matches!(actual, Some(Value::Null)),
+                    }
+                } else {
+                    match_filter(value, operator, |expected, operator| {
+                        matches_value(actual, expected, operator)
+                    })
+                }
+            }
             None => matches_filter(user, params),
         }
 }
