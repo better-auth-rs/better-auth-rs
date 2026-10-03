@@ -452,6 +452,109 @@ mod tests {
         )
     }
 
+    // Upstream source: packages/core/src/social-providers/google.ts :: google().createAuthorizationURL default scopes and OAuth endpoints.
+    #[test]
+    fn google_provider_uses_expected_configuration() {
+        let provider = OAuthProvider::google("client-id", "client-secret");
+
+        assert_eq!(
+            provider.auth_url,
+            "https://accounts.google.com/o/oauth2/v2/auth"
+        );
+        assert_eq!(provider.token_url, "https://oauth2.googleapis.com/token");
+        assert_eq!(
+            provider.user_info_url.as_deref(),
+            Some("https://www.googleapis.com/oauth2/v3/userinfo")
+        );
+        assert_eq!(
+            provider.scopes,
+            vec![
+                "email".to_string(),
+                "profile".to_string(),
+                "openid".to_string(),
+            ]
+        );
+        assert_eq!(
+            provider.authorization_params,
+            vec![("include_granted_scopes".to_string(), "true".to_string())]
+        );
+        assert!(provider.map_user_info.is_some());
+        assert!(provider.get_user_info.is_none());
+    }
+
+    // Upstream source: packages/core/src/social-providers/google.ts :: google().getUserInfo profile mapping.
+    #[test]
+    fn google_provider_maps_user_info() {
+        let provider = OAuthProvider::google("client-id", "client-secret");
+        let mapper = provider.map_user_info.unwrap();
+
+        let user = mapper(serde_json::json!({
+            "sub": "google-user-123",
+            "email": "user@example.com",
+            "name": "Workspace User",
+            "picture": "https://example.com/avatar.png",
+            "email_verified": true
+        }))
+        .unwrap();
+
+        assert_eq!(user.id, "google-user-123");
+        assert_eq!(user.email, "user@example.com");
+        assert_eq!(user.name.as_deref(), Some("Workspace User"));
+        assert_eq!(
+            user.image.as_deref(),
+            Some("https://example.com/avatar.png")
+        );
+        assert!(user.email_verified);
+    }
+
+    // Upstream source: packages/core/src/social-providers/discord.ts :: discord().createAuthorizationURL default scopes and OAuth endpoints.
+    #[test]
+    fn discord_provider_uses_expected_configuration() {
+        let provider = OAuthProvider::discord("client-id", "client-secret");
+
+        assert_eq!(
+            provider.auth_url,
+            "https://discord.com/api/oauth2/authorize"
+        );
+        assert_eq!(provider.token_url, "https://discord.com/api/oauth2/token");
+        assert_eq!(
+            provider.user_info_url.as_deref(),
+            Some("https://discord.com/api/users/@me")
+        );
+        assert_eq!(
+            provider.scopes,
+            vec!["identify".to_string(), "email".to_string()]
+        );
+        assert!(provider.authorization_params.is_empty());
+        assert!(provider.map_user_info.is_some());
+        assert!(provider.get_user_info.is_none());
+    }
+
+    // Upstream source: packages/core/src/social-providers/discord.ts :: discord().getUserInfo username fallback and static avatar mapping.
+    #[test]
+    fn discord_provider_maps_user_info() {
+        let provider = OAuthProvider::discord("client-id", "client-secret");
+        let mapper = provider.map_user_info.unwrap();
+
+        let user = mapper(serde_json::json!({
+            "id": "discord-user-123",
+            "email": "user@example.com",
+            "username": "discord-user",
+            "avatar": "avatar-hash",
+            "verified": true
+        }))
+        .unwrap();
+
+        assert_eq!(user.id, "discord-user-123");
+        assert_eq!(user.email, "user@example.com");
+        assert_eq!(user.name.as_deref(), Some("discord-user"));
+        assert_eq!(
+            user.image.as_deref(),
+            Some("https://cdn.discordapp.com/avatars/discord-user-123/avatar-hash.png")
+        );
+        assert!(user.email_verified);
+    }
+
     // Upstream source: packages/core/src/social-providers/github.ts :: github().createAuthorizationURL default scope list.
     #[test]
     fn github_provider_uses_ts_default_scopes() {
