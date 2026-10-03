@@ -5,7 +5,13 @@ use better_auth::{
     seaorm::{
         Database, SeaOrmAccountModel, SeaOrmOrganizationSchema, SeaOrmPluginSchema,
         SeaOrmSessionModel, SeaOrmStore, SeaOrmUserModel, SeaOrmVerificationModel,
-        sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement},
+        sea_orm::{
+            ConnectionTrait, DatabaseConnection, DbBackend, EntityName, Statement,
+            sea_query::{
+                Alias, MysqlQueryBuilder, PostgresQueryBuilder, QuotedBuilder, SeaRc,
+                SqliteQueryBuilder,
+            },
+        },
     },
 };
 use serde_json::json;
@@ -137,8 +143,22 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
     } else {
         "typeof"
     };
+    let quote_table = |name: &str| {
+        let identifier = SeaRc::new(Alias::new(name));
+        let mut sql = String::new();
+        match backend {
+            DbBackend::Postgres => PostgresQueryBuilder.prepare_iden(&identifier, &mut sql),
+            DbBackend::MySql => MysqlQueryBuilder.prepare_iden(&identifier, &mut sql),
+            DbBackend::Sqlite => SqliteQueryBuilder.prepare_iden(&identifier, &mut sql),
+            unknown => panic!("Unsupported database backend: {unknown:?}"),
+        }
+        sql
+    };
+    let user_table = quote_table(<S::User as SeaOrmUserModel>::Entity::default().table_name());
+    let account_table =
+        quote_table(<S::Account as SeaOrmAccountModel>::Entity::default().table_name());
     let row = database.query_one_raw(Statement::from_string(backend,
-        format!("SELECT CAST({type_function}(users.id) AS TEXT) AS id_type, CAST({type_function}(sessions.user_id) AS TEXT) AS reference_type, CAST({type_function}(accounts.owner_id) AS TEXT) AS owner_type FROM users JOIN sessions ON sessions.user_id = users.id JOIN accounts ON accounts.user_id = users.id")
+        format!("SELECT CAST({type_function}({user_table}.id) AS TEXT) AS id_type, CAST({type_function}(sessions.user_id) AS TEXT) AS reference_type, CAST({type_function}({account_table}.owner_id) AS TEXT) AS owner_type FROM {user_table} JOIN sessions ON sessions.user_id = {user_table}.id JOIN {account_table} ON {account_table}.user_id = {user_table}.id")
     )).await.unwrap().unwrap();
     for column in ["id_type", "reference_type", "owner_type"] {
         assert_eq!(
@@ -159,7 +179,9 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
     };
     assert!(
         database
-            .execute_unprepared(&format!("UPDATE accounts SET owner_id = '{absent_id}'"))
+            .execute_unprepared(&format!(
+                "UPDATE {account_table} SET owner_id = '{absent_id}'"
+            ))
             .await
             .is_err()
     );
@@ -211,7 +233,11 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
         .unwrap();
     let store = auth.store();
     let user = store
-        .create_user(CreateUser::new().with_name("Plugin owner"))
+        .create_user(
+            CreateUser::new()
+                .with_name("Plugin owner")
+                .with_email("plugin-owner@catalog.test"),
+        )
         .await
         .unwrap();
     let owner = user.id.typed().unwrap();
@@ -456,7 +482,11 @@ async fn database_id_mode_requires_application_defaults() {
         .unwrap();
     assert!(
         auth.store()
-            .create_user(CreateUser::new().with_name("No default"))
+            .create_user(
+                CreateUser::new()
+                    .with_name("No default")
+                    .with_email("no-default@catalog.test")
+            )
             .await
             .is_err()
     );

@@ -50,14 +50,14 @@ fn empty_model_names_preserve_each_generator_default_and_raw_declaration() {
     ))
     .expect("captured ordinary model-name fixture");
     for (model, module, rust_default, upstream_default) in [
-        ("user", "user", "users", "user"),
+        ("user", "user", "user", "user"),
         (
             "organization",
             "organization",
             "organization",
             "organization",
         ),
-        ("rateLimit", "rate_limit", "rate_limit", "rateLimit"),
+        ("rateLimit", "rate_limit", "rateLimit", "rateLimit"),
     ] {
         let captured = fixture["cases"]
             .as_array()
@@ -95,9 +95,7 @@ fn empty_model_names_preserve_each_generator_default_and_raw_declaration() {
                 captured["tableName"],
                 json!(nonempty.unwrap_or(upstream_default))
             );
-            if model == "organization" || nonempty.is_some() {
-                assert_eq!(json!(table), captured["tableName"]);
-            }
+            assert_eq!(json!(table), captured["tableName"]);
             assert_eq!(config.0[model].model_name.as_deref(), alias);
             if model == "user" {
                 let declaration = alias.map_or_else(

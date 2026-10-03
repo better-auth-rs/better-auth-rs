@@ -77,7 +77,7 @@ fn invalid_schema_configuration_preserves_existing_output() {
             "unsupported additional field type",
         ),
         (
-            r#"{"organization":{"modelName":"users"}}"#,
+            r#"{"organization":{"modelName":"user"}}"#,
             "duplicate database table",
         ),
         (

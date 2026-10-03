@@ -1,0 +1,63 @@
+{
+  "default": {},
+  "legacy": {
+    "user": {
+      "modelName": "users",
+      "fields": {
+        "name": "name",
+        "email": "email",
+        "emailVerified": "email_verified",
+        "image": "image",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    "account": {
+      "modelName": "accounts",
+      "fields": {
+        "accountId": "account_id",
+        "providerId": "provider_id",
+        "userId": "user_id",
+        "accessToken": "access_token",
+        "refreshToken": "refresh_token",
+        "idToken": "id_token",
+        "accessTokenExpiresAt": "access_token_expires_at",
+        "refreshTokenExpiresAt": "refresh_token_expires_at",
+        "scope": "scope",
+        "password": "password",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    }
+  },
+  "custom": {
+    "user": {
+      "modelName": "display_catalog_users",
+      "fields": {
+        "name": "display_name",
+        "email": "mail_label",
+        "emailVerified": "mail_confirmed",
+        "image": "portrait_text",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on"
+      }
+    },
+    "account": {
+      "modelName": "display_catalog_accounts",
+      "fields": {
+        "accountId": "subject_label",
+        "providerId": "provider_label",
+        "userId": "member_link",
+        "accessToken": "access_text",
+        "refreshToken": "refresh_text",
+        "idToken": "id_text",
+        "accessTokenExpiresAt": "access_until",
+        "refreshTokenExpiresAt": "refresh_until",
+        "scope": "scope_text",
+        "password": "password_text",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on"
+      }
+    }
+  }
+}

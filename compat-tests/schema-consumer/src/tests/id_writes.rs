@@ -40,7 +40,11 @@ pub(super) async fn reference_writes<
         .unwrap();
     let store = auth.store();
     let user = store
-        .create_user(CreateUser::new().with_name("Reference owner"))
+        .create_user(
+            CreateUser::new()
+                .with_name("Reference owner")
+                .with_email("reference-owner@catalog.test"),
+        )
         .await
         .unwrap();
     let owner = user.id.typed().unwrap();
@@ -299,7 +303,9 @@ async fn database_mode_preserves_distinct_text_reference_ids() {
         .with_plugin_schema::<database::AppPluginSchema>();
     use better_auth::__private_core::store::{MemberStore, UserStore};
     for id in ["1", "0x1"] {
-        let mut user = CreateUser::new().with_name("Literal");
+        let mut user = CreateUser::new()
+            .with_name("Literal")
+            .with_email(format!("literal-{id}@catalog.test"));
         user.id = Some(id.into());
         assert_eq!(
             store.create_user(user).await.unwrap().id.typed().unwrap(),

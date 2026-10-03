@@ -288,7 +288,7 @@ async fn generated_id_references_keep_database_bindings_and_output_conversion_or
     ] {
         database.execute_raw(Statement::from_sql_and_values(
             DbBackend::Sqlite,
-            "INSERT INTO app_users (id, name, email, email_verified, created_at, updated_at) VALUES (?, 'Reference', ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            "INSERT INTO app_users (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Reference', ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             [id.into(), format!("{id}@reference.example").into()],
         )).await.unwrap();
     }

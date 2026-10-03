@@ -39,6 +39,12 @@ for name, case in rate_limits.items():
 verification_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/verification-catalog-config.json").read_text())
 for name, configuration in verification_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"verification_catalog_{name}.json").write_text(json.dumps(configuration))
+jwk_rate_limit_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/jwk-rate-limit-catalog-config.json").read_text())
+for name, configuration in jwk_rate_limit_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"jwk_rate_limit_catalog_{name}.json").write_text(json.dumps(configuration))
+user_account_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/user-account-catalog-config.json").read_text())
+for name, configuration in user_account_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"user_account_catalog_{name}.json").write_text(json.dumps(configuration))
 PY
 for case in default legacy customLong; do
   cargo run --locked -p better-auth-cli -- generate --database sqlite --schema-config "$schema_dir/verification_catalog_${case}.json" --output "$schema_dir/verification_catalog_${case}.rs"
@@ -46,6 +52,18 @@ done
 export BETTER_AUTH_VERIFICATION_CATALOG_DEFAULT_SCHEMA="$schema_dir/verification_catalog_default.rs"
 export BETTER_AUTH_VERIFICATION_CATALOG_LEGACY_SCHEMA="$schema_dir/verification_catalog_legacy.rs"
 export BETTER_AUTH_VERIFICATION_CATALOG_CUSTOM_SCHEMA="$schema_dir/verification_catalog_customLong.rs"
+for case in default legacy custom; do
+  cargo run --locked -p better-auth-cli -- generate --plugins jwt --rate-limit-database --database sqlite --schema-config "$schema_dir/jwk_rate_limit_catalog_${case}.json" --output "$schema_dir/jwk_rate_limit_catalog_${case}.rs"
+done
+export BETTER_AUTH_JWK_RATE_LIMIT_CATALOG_DEFAULT_SCHEMA="$schema_dir/jwk_rate_limit_catalog_default.rs"
+export BETTER_AUTH_JWK_RATE_LIMIT_CATALOG_LEGACY_SCHEMA="$schema_dir/jwk_rate_limit_catalog_legacy.rs"
+export BETTER_AUTH_JWK_RATE_LIMIT_CATALOG_CUSTOM_SCHEMA="$schema_dir/jwk_rate_limit_catalog_custom.rs"
+for case in default legacy custom; do
+  cargo run --locked -p better-auth-cli -- generate --database sqlite --schema-config "$schema_dir/user_account_catalog_${case}.json" --output "$schema_dir/user_account_catalog_${case}.rs"
+done
+export BETTER_AUTH_USER_ACCOUNT_CATALOG_DEFAULT_SCHEMA="$schema_dir/user_account_catalog_default.rs"
+export BETTER_AUTH_USER_ACCOUNT_CATALOG_LEGACY_SCHEMA="$schema_dir/user_account_catalog_legacy.rs"
+export BETTER_AUTH_USER_ACCOUNT_CATALOG_CUSTOM_SCHEMA="$schema_dir/user_account_catalog_custom.rs"
 for case in omitted empty explicitDefaults renamed; do
   cargo run --locked -p better-auth-cli -- generate --schema-config "$schema_dir/declarations_${case}.json" --output "$schema_dir/declarations_${case}.rs"
 done

@@ -1,0 +1,45 @@
+{
+  "default": {},
+  "legacy": {
+    "jwks": {
+      "modelName": "jwks",
+      "fields": {
+        "publicKey": "public_key",
+        "privateKey": "private_key",
+        "createdAt": "created_at",
+        "expiresAt": "expires_at",
+        "alg": "alg",
+        "crv": "crv"
+      }
+    },
+    "rateLimit": {
+      "modelName": "rate_limit",
+      "fields": {
+        "key": "key",
+        "count": "count",
+        "lastRequest": "last_request"
+      }
+    }
+  },
+  "custom": {
+    "jwks": {
+      "modelName": "display_jwk_catalog",
+      "fields": {
+        "publicKey": "stored_public_key",
+        "privateKey": "stored_private_key",
+        "createdAt": "created_on",
+        "expiresAt": "expires_on",
+        "alg": "algorithm_label",
+        "crv": "curve_label"
+      }
+    },
+    "rateLimit": {
+      "modelName": "display_rate_limit_catalog",
+      "fields": {
+        "key": "bucket_label",
+        "count": "request_total",
+        "lastRequest": "last_seen_ms"
+      }
+    }
+  }
+}

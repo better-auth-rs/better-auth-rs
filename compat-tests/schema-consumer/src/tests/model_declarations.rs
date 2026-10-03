@@ -47,9 +47,9 @@ async fn compare(name: &str, database: &DatabaseConnection, reports: &Reports) {
     };
     let mut declarations = Map::new();
     for (model, default_table, field, default_column) in [
-        ("user", "users", "email", "email"),
+        ("user", "user", "email", "email"),
         ("session", "sessions", "ipAddress", "ip_address"),
-        ("account", "accounts", "providerId", "provider_id"),
+        ("account", "account", "providerId", "providerId"),
         ("verification", "verification", "identifier", "identifier"),
     ] {
         let values = ["modelName", "fields"]

@@ -1,0 +1,71 @@
+use better_auth::seaorm::{Database, sea_orm::EntityName};
+use serde_json::{Value, json};
+
+mod default {
+    include!(env!("BETTER_AUTH_USER_ACCOUNT_CATALOG_DEFAULT_SCHEMA"));
+}
+
+mod legacy {
+    include!(env!("BETTER_AUTH_USER_ACCOUNT_CATALOG_LEGACY_SCHEMA"));
+}
+
+mod custom {
+    include!(env!("BETTER_AUTH_USER_ACCOUNT_CATALOG_CUSTOM_SCHEMA"));
+}
+
+#[tokio::test]
+async fn generated_user_account_catalog_matches_pinned_sqlite() {
+    let mut cases = Vec::new();
+    for name in ["default", "legacy", "custom"] {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        let table_names = match name {
+            "default" => {
+                let _schema = default::AppAuthSchema;
+                default::create_auth_tables(&database).await.unwrap();
+                [
+                    default::user::Entity.table_name().to_owned(),
+                    default::account::Entity.table_name().to_owned(),
+                ]
+            }
+            "legacy" => {
+                let _schema = legacy::AppAuthSchema;
+                legacy::create_auth_tables(&database).await.unwrap();
+                [
+                    legacy::user::Entity.table_name().to_owned(),
+                    legacy::account::Entity.table_name().to_owned(),
+                ]
+            }
+            _ => {
+                let _schema = custom::AppAuthSchema;
+                custom::create_auth_tables(&database).await.unwrap();
+                [
+                    custom::user::Entity.table_name().to_owned(),
+                    custom::account::Entity.table_name().to_owned(),
+                ]
+            }
+        };
+        let mut models = Vec::new();
+        for (model, table_name) in ["user", "account"].into_iter().zip(table_names) {
+            let (mut catalog, ddl) = super::sqlite_catalog::observe(
+                &database,
+                &table_name,
+                "the generated model table exists in the SQLite catalog",
+            )
+            .await
+            .unwrap();
+            eprintln!("{}", json!({"case": name, "model": model, "ddl": ddl}));
+            catalog["model"] = json!(model);
+            models.push(catalog);
+        }
+        cases.push(json!({"name": name, "models": models}));
+        database.close().await.unwrap();
+    }
+    let expected: Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/user-account-catalog-1.7.6.json"
+    ))
+    .unwrap();
+    assert_eq!(
+        json!({"version": "1.7.6", "database": "sqlite", "cases": cases}),
+        expected
+    );
+}

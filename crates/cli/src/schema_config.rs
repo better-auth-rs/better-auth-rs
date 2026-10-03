@@ -31,6 +31,26 @@ pub(crate) enum Database {
     Mysql,
 }
 
+pub(crate) fn sqlite_native_catalog(database: Database, role: Option<EntityRole>) -> bool {
+    matches!(database, Database::Sqlite)
+        && matches!(
+            role,
+            Some(
+                EntityRole::User
+                    | EntityRole::Account
+                    | EntityRole::Verification
+                    | EntityRole::Jwk
+                    | EntityRole::RateLimit
+            )
+        )
+}
+
+pub(crate) fn core_field(role: Option<EntityRole>, column: &str) -> Option<&'static FieldDef> {
+    better_auth_schema_registry::core_fields(role?)
+        .iter()
+        .find(|field| field.column_name.unwrap_or(field.name) == column)
+}
+
 impl IdGeneration {
     pub(crate) fn rust_type(self, database: Database) -> &'static str {
         match (self, database) {
@@ -246,15 +266,14 @@ impl Entity {
         config: Option<&ModelConfig>,
         database: Database,
     ) -> Result<Self, String> {
-        let sqlite_verification = matches!(database, Database::Sqlite)
-            && definition.role == Some(EntityRole::Verification);
+        let sqlite_catalog = sqlite_native_catalog(database, definition.role);
         let mut entity = Self {
             module: syn::parse_str(definition.mod_name)
                 .map_err(|error| format!("invalid model name: {error}"))?,
             name: definition.mod_name,
             registry_table: definition.table_name,
-            table: if sqlite_verification {
-                "verification".to_owned()
+            table: if sqlite_catalog {
+                model_name(definition.mod_name)
             } else {
                 definition.table_name.to_owned()
             },
@@ -262,23 +281,25 @@ impl Entity {
             fields: fields
                 .iter()
                 .map(|field| {
+                    let logical_name = match (definition.mod_name, field.name) {
+                        ("api_key", "key_hash") => "key".to_owned(),
+                        ("passkey", "credential_id") => "credentialID".to_owned(),
+                        _ => field.name.to_lower_camel_case(),
+                    };
                     Ok(Field {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
-                        logical_name: match (definition.mod_name, field.name) {
-                            ("api_key", "key_hash") => "key".to_owned(),
-                            ("passkey", "credential_id") => "credentialID".to_owned(),
-                            _ => field.name.to_lower_camel_case(),
-                        },
                         ty: syn::parse_str(field.ty)
                             .map_err(|error| format!("invalid field type: {error}"))?,
-                        column: if sqlite_verification
-                            && matches!(field.name, "expires_at" | "created_at" | "updated_at")
+                        column: if sqlite_catalog
+                            && core_field(definition.role, field.column_name.unwrap_or(field.name))
+                                .is_some()
                         {
-                            field.name.to_lower_camel_case()
+                            logical_name.clone()
                         } else {
                             field.column_name.unwrap_or(field.name).to_owned()
                         },
+                        logical_name,
                         registry_column: Some(field.column_name.unwrap_or(field.name)),
                         serialized: (definition.mod_name == "user"
                             && matches!(

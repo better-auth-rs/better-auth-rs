@@ -378,8 +378,10 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         assert!(error.to_string().contains(expected), "{error}");
     }
     for default in [
+        "user",
         "users",
         "sessions",
+        "account",
         "accounts",
         "verifications",
         "verification",

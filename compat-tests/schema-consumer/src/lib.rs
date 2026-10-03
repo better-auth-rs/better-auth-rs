@@ -7,13 +7,16 @@ mod tests {
     mod field_attributes;
     mod ids;
     mod jwk_additional_fields;
+    mod jwk_rate_limit_catalog;
     mod model_declarations;
     mod organization;
     mod plugins;
     mod rate_limit_declarations;
     mod rate_limits;
     mod reference_fields;
+    mod sqlite_catalog;
     mod sqlite_json;
+    mod user_account_catalog;
     mod verification_catalog;
     mod wallet_additional_fields;
 
@@ -166,8 +169,8 @@ mod tests {
         // The database must enforce invariants when concurrent requests bypass prechecks.
         for (statement, expected) in [
             (
-                "INSERT INTO users (id, name, email, email_verified, image, created_at, updated_at, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username) SELECT 'duplicate', name, email, email_verified, image, created_at, updated_at, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username FROM users LIMIT 1",
-                "UNIQUE constraint failed: users.email",
+                "INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username) SELECT 'duplicate', name, email, emailVerified, image, createdAt, updatedAt, role, banned, ban_reason, ban_expires, metadata, two_factor_enabled, username, display_username FROM user LIMIT 1",
+                "UNIQUE constraint failed: user.email",
             ),
             (
                 "UPDATE sessions SET user_id = 'missing-user'",
@@ -184,7 +187,7 @@ mod tests {
                 "unexpected constraint error: {error}"
             );
         }
-        database.execute_unprepared("INSERT INTO accounts SELECT 'duplicate', account_id, provider_id, user_id, access_token, refresh_token, id_token, access_token_expires_at, refresh_token_expires_at, scope, password, created_at, updated_at FROM accounts LIMIT 1").await.unwrap();
+        database.execute_unprepared("INSERT INTO account SELECT 'duplicate', accountId, providerId, userId, accessToken, refreshToken, idToken, accessTokenExpiresAt, refreshTokenExpiresAt, scope, password, createdAt, updatedAt FROM account LIMIT 1").await.unwrap();
         let store =
             SeaOrmStore::<generated::AppAuthSchema>::new(AuthConfig::default(), database.clone());
         let store: &dyn better_auth::store::AuthStore<generated::AppAuthSchema> = &store;

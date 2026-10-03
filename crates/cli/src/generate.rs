@@ -1,5 +1,6 @@
 use crate::schema_config::{
-    AdditionalField, Database, Entity, FieldType, IdGeneration, OnDelete, SchemaConfig, model_name,
+    AdditionalField, Database, Entity, Field, FieldType, IdGeneration, OnDelete, SchemaConfig,
+    core_field, model_name, sqlite_native_catalog,
 };
 use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema};
 use proc_macro2::TokenStream;
@@ -409,20 +410,27 @@ fn gen_table(
                     }
                 });
             }
-            if matches!(database, Database::Sqlite)
-                && entity.role == Some(EntityRole::Verification)
+            if sqlite_native_catalog(database, entity.role)
                 && field.attributes.is_none()
             {
-                let data_type = match field.registry_column {
-                    Some("identifier" | "value") => quote!(column.text();),
-                    Some("expires_at" | "created_at" | "updated_at") => {
+                let definition = core_field(entity.role, field.registry_column?)?;
+                let data_type = match definition.ty {
+                    "String" | "Option<String>" => quote!(column.text();),
+                    "bool" => quote!(column.integer();),
+                    "DateTimeUtc" | "Option<DateTimeUtc>" => {
                         quote!(column.custom(Alias::new("date"));)
                     }
+                    "i64" => quote!(column.custom(Alias::new("bigint"));),
                     _ => return None,
                 };
+                let unique = inline_native_unique(entity, field, database)
+                    .then(|| quote!(column.unique_key();));
+                let required_email = (entity.role == Some(EntityRole::User)
+                    && definition.name == "email")
+                    .then(|| quote!(column.not_null();));
                 return Some(quote! {
                     if column.get_column_name().as_str() == #name {
-                        #data_type
+                        #data_type #unique #required_email
                     }
                 });
             }
@@ -523,10 +531,30 @@ fn gen_column_type(field: &AdditionalField) -> TokenStream {
     }
 }
 
+fn inline_native_unique(entity: &Entity, field: &Field, database: Database) -> bool {
+    sqlite_native_catalog(database, entity.role)
+        && field.attributes.is_none()
+        && field.registry_column.is_some_and(|column| {
+            core_field(entity.role, column).is_some()
+                && registry::entity_indexes(entity.registry_table)
+                    .iter()
+                    .any(|index| index.unique && index.columns == [column])
+        })
+}
+
 fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     let table = &entity.table;
     let mut indexes: Vec<_> = registry::entity_indexes(entity.registry_table)
         .iter()
+        .filter(|index| {
+            !entity.fields.iter().any(|field| {
+                inline_native_unique(entity, field, database)
+                    && index.unique
+                    && field
+                        .registry_column
+                        .is_some_and(|column| index.columns == [column])
+            })
+        })
         .filter_map(|index| {
             let columns = index
                 .columns
@@ -544,17 +572,20 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
             }
         }
     }
-    let verification_identifier = entity.fields.iter().find(|field| {
+    let native_index = entity.fields.iter().find(|field| {
         matches!(database, Database::Sqlite)
-            && entity.role == Some(EntityRole::Verification)
-            && field.registry_column == Some("identifier")
+            && matches!(
+                (entity.role, field.registry_column),
+                (Some(EntityRole::Verification), Some("identifier"))
+                    | (Some(EntityRole::Account), Some("user_id"))
+            )
             && field.attributes.is_none()
     });
     indexes.into_iter().map(|(columns, unique)| {
-        let name = if let Some(field) = verification_identifier
+        let name = if let Some(field) = native_index
             && !unique && columns.as_slice() == [field.column.as_str()]
         {
-            verification_index_name(table, &field.column)
+            sqlite_field_index_name(table, &field.column)
         } else {
             format!("idx_{table}_{}", columns.join("_"))
         };
@@ -564,7 +595,7 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     }).collect()
 }
 
-fn verification_index_name(table: &str, column: &str) -> String {
+fn sqlite_field_index_name(table: &str, column: &str) -> String {
     let prefix = format!("{table}_{column}");
     let name = format!("{prefix}_idx");
     if name.len() <= 63 {

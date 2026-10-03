@@ -61,7 +61,7 @@ async fn compare(name: &str, database: &DatabaseConnection, reports: &Reports) {
     }
     let table = case["options"]["rateLimit"]["modelName"]
         .as_str()
-        .unwrap_or("rate_limit");
+        .unwrap_or("rateLimit");
     let columns = database
         .query_all_raw(Statement::from_string(
             DbBackend::Sqlite,
@@ -72,7 +72,7 @@ async fn compare(name: &str, database: &DatabaseConnection, reports: &Reports) {
     for (field, default_column) in [
         ("key", "key"),
         ("count", "count"),
-        ("lastRequest", "last_request"),
+        ("lastRequest", "lastRequest"),
     ] {
         let column = case["options"]["rateLimit"]["fields"][field]
             .as_str()
