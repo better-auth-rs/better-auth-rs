@@ -30,7 +30,7 @@ This page documents the public configuration types in `crates/core/src/config.rs
 | `update_age` | `Option<chrono::Duration>` | `Some(1 day)` | Age threshold before refreshing a session |
 | `disable_session_refresh` | `bool` | `false` | Disable automatic refresh entirely |
 | `defer_session_refresh` | `bool` | `false` | Defer GET refresh and return `needsRefresh`; POST performs the refresh. POST returns 405 when disabled |
-| `fresh_age` | `Option<chrono::Duration>` | `None` | Optional freshness window for sensitive actions |
+| `fresh_age` | `Option<chrono::Duration>` | `None` | Freshness window for sensitive actions; `None` uses the upstream 24-hour default and zero disables freshness checks |
 | `cookie_name` | `String` | `"better-auth.session_token"` | Cookie name used for session transport |
 | `cookie_secure` | `bool` | Derived from `base_url` | `true` for HTTPS URLs, `false` for HTTP URLs |
 | `cookie_http_only` | `bool` | `true` | Prevent JavaScript access to the cookie |

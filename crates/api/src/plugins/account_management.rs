@@ -127,7 +127,7 @@ impl AccountManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
+        let (user, _session) = ctx.require_fresh_session(req).await?;
 
         let unlink_req: UnlinkAccountRequest = match better_auth_core::validate_request_body(req) {
             Ok(v) => v,

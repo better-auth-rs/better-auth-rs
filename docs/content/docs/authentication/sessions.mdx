@@ -94,7 +94,7 @@ config.session.cookie_same_site = SameSite::Lax;
 - `update_age = None`: each database read can refresh the session.
 - `disable_session_refresh = true`: never refresh automatically.
 - `defer_session_refresh = true`: `GET /get-session` reports `needsRefresh` without updating the stored expiry. `POST /get-session` performs the refresh.
-- `fresh_age`: optional window for treating a session as "fresh" for sensitive actions.
+- `fresh_age`: freshness window for sensitive actions. `None` uses the upstream default of 24 hours, while zero disables freshness checks.
 
 A `disableRefresh=true` query parameter prevents refresh for the request. Sessions created with `rememberMe: false` expire in the database after 24 hours. These sessions use browser-session cookies and a signed `dont_remember` marker; requests with this marker do not refresh the session automatically. Remembered sessions use the configured `expires_in` lifetime. `/get-session` responses include `Cache-Control: no-store` and `Pragma: no-cache`.
 

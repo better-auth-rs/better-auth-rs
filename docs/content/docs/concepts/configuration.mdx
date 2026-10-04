@@ -50,7 +50,10 @@ let config = AuthConfig::new("your-secret-key-at-least-32-characters-long")
   - `Some(duration)` refreshes only when the session is older than that duration.
   - `None` refreshes on every access.
   - `disable_session_refresh(true)` disables refresh entirely.
-- **`fresh_age` is optional.** Leave it `None` unless you need a freshness window for sensitive actions.
+- **`fresh_age` controls session freshness for sensitive actions.**
+  - `None` uses the upstream default of 24 hours.
+  - `Some(Duration::zero())` disables freshness checks.
+  - `Some(duration)` uses the configured freshness window.
 
 ## SessionConfig
 

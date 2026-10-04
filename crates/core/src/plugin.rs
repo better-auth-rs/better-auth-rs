@@ -295,6 +295,24 @@ impl<S: AuthSchema> AuthContext<S> {
             .map(|data| (data.user, data.session))
             .ok_or(AuthError::Unauthenticated)
     }
+
+    /// Require an authenticated session that is still within the configured freshness window.
+    pub async fn require_fresh_session(
+        &self,
+        req: &AuthRequest,
+    ) -> AuthResult<(crate::wire::UserView, crate::wire::SessionView)> {
+        let (user, session) = self.require_session(req).await?;
+
+        if !self.session_manager().is_session_fresh(&session) {
+            return Err(AuthError::Upstream {
+                status: 403,
+                code: "SESSION_NOT_FRESH",
+                message: "Session is not fresh",
+            });
+        }
+
+        Ok((user, session))
+    }
 }
 
 #[cfg(test)]
