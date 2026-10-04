@@ -172,6 +172,100 @@ async fn test_delete_user_immediate() {
     assert!(deleted_user.is_none());
 }
 
+// Upstream reference: packages/better-auth/src/api/routes/update-user.ts :: deleteUser checks session freshness when no password is provided.
+#[tokio::test]
+async fn test_delete_user_uses_default_fresh_age_when_not_configured() {
+    let plugin = UserManagementPlugin::new()
+        .delete_user_enabled(true)
+        .require_delete_verification(false);
+
+    let mut config = test_helpers::create_test_config();
+    config.session.fresh_age = None;
+
+    let ctx = test_helpers::create_test_context_with_config(config).await;
+
+    let (user, mut session) = test_helpers::create_user_and_session(
+        &ctx,
+        CreateUser::new()
+            .with_email("stale-default@test.com")
+            .with_name("Stale Default")
+            .with_email_verified(true),
+        Duration::hours(48),
+    )
+    .await;
+
+    session.created_at = chrono::Utc::now() - Duration::hours(25);
+
+    let body = DeleteUserRequest {
+        callback_url: None,
+        password: None,
+        token: None,
+    };
+
+    let result = delete_user_core(&body, &user, &session, &plugin.config, &ctx).await;
+
+    let err = result.expect_err("a session older than 24 hours should be stale");
+
+    let (status, code, message) = err.error_payload();
+
+    assert_eq!(status, 400);
+    assert_eq!(code.as_deref(), Some("SESSION_EXPIRED"));
+    assert_eq!(
+        message,
+        "Session expired. Re-authenticate to perform this action."
+    );
+
+    let user_still_exists = ctx.database.get_user_by_id(&user.id).await.unwrap();
+    assert!(
+        user_still_exists.is_some(),
+        "stale session must not delete the user"
+    );
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/update-user.ts :: deleteUser treats freshAge = 0 as disabling the freshness check.
+#[tokio::test]
+async fn test_delete_user_zero_fresh_age_disables_freshness_check() {
+    let plugin = UserManagementPlugin::new()
+        .delete_user_enabled(true)
+        .require_delete_verification(false);
+
+    let mut config = test_helpers::create_test_config();
+    config.session.fresh_age = Some(Duration::zero());
+
+    let ctx = test_helpers::create_test_context_with_config(config).await;
+
+    let (user, mut session) = test_helpers::create_user_and_session(
+        &ctx,
+        CreateUser::new()
+            .with_email("zero-fresh-age@test.com")
+            .with_name("Zero Fresh Age")
+            .with_email_verified(true),
+        Duration::hours(48),
+    )
+    .await;
+
+    session.created_at = chrono::Utc::now() - Duration::days(30);
+
+    let body = DeleteUserRequest {
+        callback_url: None,
+        password: None,
+        token: None,
+    };
+
+    let result = delete_user_core(&body, &user, &session, &plugin.config, &ctx).await;
+
+    let response = result.expect("fresh_age = 0 should disable freshness checks");
+
+    assert!(response.success);
+    assert_eq!(response.message, "User deleted");
+
+    let deleted_user = ctx.database.get_user_by_id(&user.id).await.unwrap();
+    assert!(
+        deleted_user.is_none(),
+        "user should be deleted when freshness checks are disabled"
+    );
+}
+
 // Upstream reference: packages/better-auth/src/api/routes/update-user.ts :: deleteUser calls `deleteSessionCookie(ctx)`, which clears the account_data cookie when account.storeAccountCookie is enabled.
 #[tokio::test]
 async fn test_delete_user_immediate_clears_account_cookie_when_enabled() {

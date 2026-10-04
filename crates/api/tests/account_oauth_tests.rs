@@ -16,8 +16,9 @@ use better_auth_core::entity::{AuthAccount, AuthSession, AuthUser};
 use better_auth_core::store::AuthStore;
 use better_auth_core::utils::cookie_utils::sign_cookie_value;
 use better_auth_core::{
-    AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthPlugin, AuthRequest,
-    CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager,
+    AccountConfig, AccountLinkingConfig, AuthConfig, AuthContext, AuthError, AuthPlugin,
+    AuthRequest, CreateAccount, CreateUser, CreateVerification, HttpMethod, SessionManager,
+    SessionView,
 };
 use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema as TestSchema;
 use better_auth_seaorm::{Database, SeaOrmStore};
@@ -1163,6 +1164,57 @@ async fn test_unlink_non_last_account_always_allowed() {
         Err(e) => panic!("Unlinking one of two accounts should succeed: {:?}", e),
         Ok(None) => panic!("Expected a response"),
     }
+}
+
+// Upstream reference: packages/better-auth/src/api/routes/account.ts :: unlinkAccount uses freshSessionMiddleware from packages/better-auth/src/api/routes/session.ts.
+#[tokio::test]
+async fn test_unlink_account_requires_fresh_session() {
+    let mut config = test_config_allow_unlinking_all();
+    config.session.fresh_age = Some(Duration::minutes(10));
+    let config = Arc::new(config);
+
+    let db = create_test_database().await;
+
+    let (user_id, session_token, account_id) = setup_user_with_account(
+        &db,
+        &config,
+        "unlink-stale@example.com",
+        "google",
+        Some("access-token".to_string()),
+        None,
+    )
+    .await;
+
+    let session = db.get_session(&session_token).await.unwrap().unwrap();
+
+    let mut stale_session = SessionView::from(&session);
+    stale_session.created_at = Utc::now() - Duration::minutes(20);
+
+    let ctx = AuthContext::new(config, db.clone());
+    let plugin = AccountManagementPlugin::new();
+
+    let mut req = AuthRequest::new(HttpMethod::Post, "/unlink-account");
+    req.body = Some(json!({ "accountId": account_id }).to_string().into_bytes());
+    req.headers
+        .insert("content-type".to_string(), "application/json".to_string());
+    req.set_virtual_session(stale_session);
+
+    let result = plugin.on_request(&req, &ctx).await;
+
+    match result {
+        Err(AuthError::Upstream { status, code, .. }) => {
+            assert_eq!(status, 403);
+            assert_eq!(code, "SESSION_NOT_FRESH");
+        }
+        other => panic!("expected SESSION_NOT_FRESH, got: {other:?}"),
+    }
+
+    let accounts = db.get_user_accounts(&user_id).await.unwrap();
+    assert_eq!(
+        accounts.len(),
+        1,
+        "stale session must not unlink the account"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

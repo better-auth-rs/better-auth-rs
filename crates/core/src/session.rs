@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use std::sync::Arc;
 
 use crate::config::AuthConfig;
@@ -373,17 +373,19 @@ impl<S: AuthSchema> SessionManager<S> {
         Ok(count)
     }
 
-    /// Check whether a session is "fresh" (created recently enough for
-    /// sensitive operations like password change or account deletion).
+    /// Check whether a session is "fresh". Matches upstream Better Auth semantics:
     ///
-    /// Returns `true` when `fresh_age` is set and
-    /// `session.created_at() + fresh_age > now`.
-    /// If `fresh_age` is `None`, the session is never considered fresh.
+    /// - `None` uses the default 24-hour freshness window.
+    /// - zero disables the freshness check.
+    /// - otherwise the session must be younger than `fresh_age`.
     pub fn is_session_fresh(&self, session: &impl AuthSession) -> bool {
-        match self.config.session.fresh_age {
-            Some(fresh_age) => session.created_at() + fresh_age > Utc::now(),
-            None => false,
-        }
+        let fresh_age = self
+            .config
+            .session
+            .fresh_age
+            .unwrap_or_else(|| Duration::hours(24));
+
+        fresh_age == Duration::zero() || session.created_at() + fresh_age > Utc::now()
     }
 
     /// Validate session token format
@@ -587,13 +589,14 @@ mod tests {
 
     // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
     #[test]
-    fn session_never_fresh_when_no_fresh_age() {
-        let mgr = test_manager(); // default: fresh_age = None
-        let session = SessionView {
+    fn session_uses_default_fresh_age_when_not_configured() {
+        let mgr = test_manager();
+
+        let fresh_session = SessionView {
             id: "s1".into(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: Utc::now() + Duration::hours(48),
             token: "tok".into(),
-            created_at: Utc::now(),
+            created_at: Utc::now() - Duration::hours(23),
             updated_at: Utc::now(),
             ip_address: None,
             user_agent: None,
@@ -603,7 +606,37 @@ mod tests {
             active: true,
             additional_fields: Default::default(),
         };
-        assert!(!mgr.is_session_fresh(&session));
+
+        let mut stale_session = fresh_session.clone();
+        stale_session.created_at = Utc::now() - Duration::hours(25);
+
+        assert!(mgr.is_session_fresh(&fresh_session));
+        assert!(!mgr.is_session_fresh(&stale_session));
+    }
+
+    #[test]
+    fn zero_fresh_age_disables_freshness_check() {
+        let mut config = AuthConfig::new("test-secret-min-32-chars-1234567");
+        config.session.fresh_age = Some(Duration::zero());
+
+        let runtime = tokio::runtime::Runtime::new().expect("runtime should build");
+        let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
+
+        let session = SessionView {
+            id: "s1".into(),
+            expires_at: Utc::now() + Duration::hours(1),
+            token: "tok".into(),
+            created_at: Utc::now() - Duration::days(30),
+            updated_at: Utc::now(),
+            ip_address: None,
+            user_agent: None,
+            user_id: "u1".into(),
+            impersonated_by: None,
+            active_organization_id: None,
+            active: true,
+            additional_fields: Default::default(),
+        };
+        assert!(mgr.is_session_fresh(&session));
     }
 
     // ── async operations ────────────────────────────────────────────────
