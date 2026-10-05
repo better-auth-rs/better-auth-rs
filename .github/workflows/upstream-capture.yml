@@ -29,7 +29,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Capture pinned Device request validation
+      - name: Capture pinned Device grant flows
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -37,7 +37,7 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun ./compat-tests/reference-server/contracts/device-request-validation-capture.mjs "$capture_dir/device-request-validation-1.7.6.json" 2>&1 | tee "$capture_dir/device-request-validation.log"
+          bun ./compat-tests/reference-server/contracts/device-grant-capture.mjs "$capture_dir/device-grant-1.7.6.json" 2>&1 | tee "$capture_dir/device-grant.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-device-validation-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-device-grant-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
