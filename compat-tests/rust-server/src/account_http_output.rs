@@ -22,7 +22,11 @@ use std::sync::Arc;
 struct Refresh;
 #[async_trait]
 impl OAuthRefreshTokenHandler for Refresh {
-    async fn refresh_access_token(&self, _: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        _: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         Ok(OAuthTokenSet {
             access_token: Some("new-access".into()),
             access_token_expires_at: Some("2100-01-01T00:00:00Z".parse().unwrap()),

@@ -374,7 +374,11 @@ impl OAuthUserInfoHandler for Custom {
 
 #[async_trait]
 impl OAuthRefreshTokenHandler for Custom {
-    async fn refresh_access_token(&self, refresh_token: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        refresh_token: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         self.events
             .lock()
             .unwrap()

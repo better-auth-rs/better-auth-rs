@@ -181,7 +181,11 @@ struct RotatingRefreshHandler {
 
 #[async_trait]
 impl OAuthRefreshTokenHandler for RotatingRefreshHandler {
-    async fn refresh_access_token(&self, refresh_token: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        refresh_token: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         let mut sequence = self.sequence.lock().unwrap();
         let (expected, response) = sequence.remove(0);
         if refresh_token != expected {

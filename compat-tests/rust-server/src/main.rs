@@ -440,7 +440,11 @@ struct CompatGoogleRefreshHandler {
 
 #[async_trait::async_trait]
 impl OAuthRefreshTokenHandler for CompatGoogleRefreshHandler {
-    async fn refresh_access_token(&self, _refresh_token: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        _refresh_token: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         let mode = *self.mode.lock().await;
         if mode == OAuthRefreshMode::Error {
             return Err("invalid refresh token".to_string());

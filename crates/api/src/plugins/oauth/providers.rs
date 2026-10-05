@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use better_auth_core::{AuthError, AuthResult, SchemaValue};
+use better_auth_core::{AuthError, AuthResult, NativeRequest, SchemaValue};
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::Deserialize;
@@ -160,7 +160,12 @@ pub trait OAuthUserInfoHandler: Send + Sync {
 
 #[async_trait]
 pub trait OAuthRefreshTokenHandler: Send + Sync {
-    async fn refresh_access_token(&self, refresh_token: &str) -> Result<OAuthTokenSet, String>;
+    /// Endpoint calls supply original request metadata; standalone calls may omit the context.
+    async fn refresh_access_token(
+        &self,
+        refresh_token: &str,
+        context: Option<NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String>;
 }
 
 #[async_trait]

@@ -88,6 +88,7 @@ mod google_test_support;
 #[cfg(test)]
 mod google_tests;
 
+pub use better_auth_core::NativeRequest;
 pub use generic::{
     GenericOAuthConfig, GenericOAuthProfileContext, GenericOAuthUserInfoHandler,
     OAuthAccountSubject, OAuthCodeExchange, OAuthProfile, OAuthProfileMapper,

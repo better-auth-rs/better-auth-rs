@@ -98,7 +98,11 @@ struct ProviderCalls {
 
 #[async_trait]
 impl OAuthRefreshTokenHandler for ProviderCalls {
-    async fn refresh_access_token(&self, refresh_token: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        refresh_token: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         assert_eq!(refresh_token, "provider-refresh");
         let _ = self.refresh.fetch_add(1, Ordering::SeqCst);
         Ok(OAuthTokenSet {

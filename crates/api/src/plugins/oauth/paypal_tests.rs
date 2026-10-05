@@ -509,7 +509,11 @@ impl OAuthUserInfoHandler for Custom {
 }
 #[async_trait]
 impl OAuthRefreshTokenHandler for Custom {
-    async fn refresh_access_token(&self, _token: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        _token: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         if self.0.ends_with("error") {
             return Err(format!("Ordinary PayPal {}", self.0));
         }

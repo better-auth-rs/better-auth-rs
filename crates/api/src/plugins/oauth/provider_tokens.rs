@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use better_auth_core::{AuthError, AuthRequest, AuthResult};
+use better_auth_core::{AuthError, AuthRequest, AuthResult, NativeRequest};
 use chrono::{DateTime, Duration, Utc};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::Value;
@@ -35,7 +35,13 @@ async fn refresh_tokens(
 ) -> AuthResult<OAuthTokenSet> {
     if let Some(handler) = &provider.config.refresh_access_token {
         return handler
-            .refresh_access_token(refresh_token)
+            .refresh_access_token(
+                refresh_token,
+                Some(NativeRequest {
+                    request: request.original_request(),
+                    headers: request.endpoint_headers(),
+                }),
+            )
             .await
             .map_err(AuthError::internal);
     }

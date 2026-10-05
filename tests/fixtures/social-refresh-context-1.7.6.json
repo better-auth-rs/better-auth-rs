@@ -1,0 +1,201 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "mode": "http",
+      "events": [
+        {
+          "token": "ordinary-old-refresh",
+          "hasContext": true,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "<owner-session-cookie>"
+            ],
+            [
+              "origin",
+              "http://social-refresh-context.test"
+            ],
+            [
+              "x-refresh-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": {
+            "url": "http://social-refresh-context.test/api/auth/refresh-token?label=ordinary",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "<owner-session-cookie>"
+              ],
+              [
+                "origin",
+                "http://social-refresh-context.test"
+              ],
+              [
+                "x-refresh-label",
+                "endpoint-label"
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": {
+          "accessToken": "ordinary-new-access",
+          "refreshToken": "ordinary-new-refresh",
+          "scope": "openid email",
+          "idToken": "ordinary-new-id",
+          "providerId": "google",
+          "accountId": "ordinary-local-account"
+        }
+      },
+      "stored": {
+        "accessToken": "ordinary-new-access",
+        "refreshToken": "ordinary-new-refresh",
+        "idToken": "ordinary-new-id",
+        "scope": "openid email",
+        "belongsToOwner": true
+      }
+    },
+    {
+      "mode": "native-headers",
+      "events": [
+        {
+          "token": "ordinary-old-refresh",
+          "hasContext": true,
+          "headers": [
+            [
+              "cookie",
+              "<owner-session-cookie>"
+            ],
+            [
+              "x-refresh-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": null
+        }
+      ],
+      "result": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": {
+          "accessToken": "ordinary-new-access",
+          "refreshToken": "ordinary-new-refresh",
+          "scope": "openid email",
+          "idToken": "ordinary-new-id",
+          "providerId": "google",
+          "accountId": "ordinary-local-account"
+        }
+      },
+      "stored": {
+        "accessToken": "ordinary-new-access",
+        "refreshToken": "ordinary-new-refresh",
+        "idToken": "ordinary-new-id",
+        "scope": "openid email",
+        "belongsToOwner": true
+      }
+    },
+    {
+      "mode": "native-request",
+      "events": [
+        {
+          "token": "ordinary-old-refresh",
+          "hasContext": true,
+          "headers": [
+            [
+              "cookie",
+              "<owner-session-cookie>"
+            ],
+            [
+              "x-refresh-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": {
+            "url": "http://social-refresh-context.test/original-source?label=ordinary",
+            "method": "GET",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "x-refresh-label",
+                "original-label"
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": {
+          "accessToken": "ordinary-new-access",
+          "refreshToken": "ordinary-new-refresh",
+          "scope": "openid email",
+          "idToken": "ordinary-new-id",
+          "providerId": "google",
+          "accountId": "ordinary-local-account"
+        }
+      },
+      "stored": {
+        "accessToken": "ordinary-new-access",
+        "refreshToken": "ordinary-new-refresh",
+        "idToken": "ordinary-new-id",
+        "scope": "openid email",
+        "belongsToOwner": true
+      }
+    },
+    {
+      "mode": "standalone",
+      "events": [
+        {
+          "token": "ordinary-old-refresh",
+          "hasContext": false,
+          "headers": null,
+          "request": null
+        }
+      ],
+      "result": {
+        "accessToken": "ordinary-new-access",
+        "refreshToken": "ordinary-new-refresh",
+        "idToken": "ordinary-new-id",
+        "tokenType": "Bearer",
+        "scopes": [
+          "openid",
+          "email"
+        ]
+      },
+      "stored": null
+    }
+  ]
+}

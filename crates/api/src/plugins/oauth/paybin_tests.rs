@@ -332,7 +332,11 @@ async fn application_verified_paybin_profile_uses_the_completed_signature_check(
 struct CustomRefresh(Arc<Mutex<Vec<String>>>);
 #[async_trait]
 impl OAuthRefreshTokenHandler for CustomRefresh {
-    async fn refresh_access_token(&self, token: &str) -> Result<OAuthTokenSet, String> {
+    async fn refresh_access_token(
+        &self,
+        token: &str,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<OAuthTokenSet, String> {
         self.0.lock().unwrap().push(token.into());
         Ok(OAuthTokenSet {
             access_token: Some("custom-access".into()),
