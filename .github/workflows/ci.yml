@@ -30,3 +30,12 @@ jobs:
             compat-tests/schema-consumer
       - uses: oven-sh/setup-bun@v2
       - run: ./scripts/check.sh
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --locked --features axum,seaorm2,redis-cache

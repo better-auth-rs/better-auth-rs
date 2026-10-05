@@ -2,6 +2,7 @@
 name = "better-auth-seaorm"
 version = { workspace = true }
 edition = { workspace = true }
+rust-version = { workspace = true }
 license = { workspace = true }
 description = "SeaORM integration for better-auth"
 repository = { workspace = true }
