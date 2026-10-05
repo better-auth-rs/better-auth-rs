@@ -2,6 +2,7 @@ use better_auth_core::{AuthContext, AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse};
 
 mod callbacks;
+mod credential;
 mod options;
 mod registration;
 pub use callbacks::*;
@@ -11,6 +12,8 @@ pub(super) mod handlers;
 pub(super) mod types;
 pub(super) mod webauthn;
 
+#[cfg(test)]
+mod credential_tests;
 #[cfg(test)]
 mod tests;
 

@@ -29,6 +29,7 @@ on:
           - client-configuration
           - device-validation
           - provider-options
+          - passkey
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string
@@ -160,3 +161,6 @@ jobs:
       - name: Check captured provider options
         if: env.CHECK_STAGE == 'provider-options'
         run: devenv shell -- ./scripts/check.sh provider-options
+      - name: Check Passkey storage and authentication
+        if: env.CHECK_STAGE == 'passkey'
+        run: devenv shell -- ./scripts/check.sh passkey

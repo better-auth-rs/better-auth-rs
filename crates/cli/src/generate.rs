@@ -1,6 +1,6 @@
 use crate::schema_config::{
     AdditionalField, Database, Entity, Field, FieldType, IdGeneration, OnDelete, SchemaConfig,
-    core_field, model_name, sqlite_native_catalog,
+    SchemaOptions, core_field, model_name, sqlite_native_catalog,
 };
 use better_auth_schema_registry::{self as registry, EntityRole, ExtraEntitySchema};
 use proc_macro2::TokenStream;
@@ -16,13 +16,12 @@ pub(crate) fn generate_schema(
     rate_limit_database: bool,
     generation: IdGeneration,
     database: Database,
-    session_active_column: bool,
-    device_code_legacy_schema: bool,
+    options: SchemaOptions,
 ) -> Result<String, String> {
     config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
     let mut session = registry::core_fields(EntityRole::Session).to_vec();
-    if !session_active_column {
+    if !options.session_active_column {
         session.retain(|field| field.name != "active");
     }
     let mut extra_entities: Vec<&ExtraEntitySchema> = Vec::new();
@@ -74,14 +73,7 @@ pub(crate) fn generate_schema(
             None => entity.fields,
         };
         let configured = config.0.get(&model_name(entity.mod_name));
-        let mut entity = Entity::resolve(
-            entity,
-            fields,
-            configured,
-            database,
-            session_active_column,
-            device_code_legacy_schema,
-        )?;
+        let mut entity = Entity::resolve(entity, fields, configured, database, options)?;
         entity.resolve_ids(generation, database)?;
         definitions.push(entity);
     }
@@ -295,9 +287,12 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
             .flatten()
             .map(|name| quote!(, model_name = #name));
         let row_presence = entity.session_row_presence.then(|| quote!(, row_presence));
+        let native_passkey = entity
+            .passkey_native_schema
+            .then(|| quote!(, native_passkey));
         quote! {
             #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel, AuthEntity)]
-            #[auth(role = #role #declaration #row_presence)]
+            #[auth(role = #role #declaration #row_presence #native_passkey)]
         }
     } else {
         quote! { #[derive(Clone, Debug, serde::Serialize, DeriveEntityModel)] }
@@ -327,7 +322,7 @@ fn gen_table(
         .iter()
         .filter(|entry| {
             !(database == Database::Mysql
-                && entity.role == Some(EntityRole::WalletAddress)
+                && (entity.role == Some(EntityRole::WalletAddress) || entity.passkey_native_schema)
                 && entry.0 == "user_id")
         })
         .filter(|entry| {
@@ -350,8 +345,9 @@ fn gen_table(
                 .ok_or_else(|| format!("foreign key target `{target}` is missing"))?;
             let name = format!("fk_{table}_{column}");
             let name = (!(database == Database::Postgres
-                && entity.role == Some(EntityRole::WalletAddress)))
-            .then(|| quote!(.name(#name)));
+                && (entity.role == Some(EntityRole::WalletAddress)
+                    || entity.passkey_native_schema)))
+                .then(|| quote!(.name(#name)));
             Ok(quote! {
                 .foreign_key(ForeignKey::create()
                     #name
@@ -444,7 +440,8 @@ fn gen_table(
             if database == Database::Sqlite
                 && (sqlite_native_catalog(database, entity.role)
                     || entity.session_row_presence
-                    || entity.device_code_native_schema)
+                    || entity.device_code_native_schema
+                    || entity.passkey_native_schema)
                 && field.attributes.is_none()
             {
                 let definition = core_field(entity.role, field.registry_column?)?;
@@ -454,7 +451,7 @@ fn gen_table(
                     "DateTimeUtc" | "Option<DateTimeUtc>" => {
                         quote!(column.custom(Alias::new("date"));)
                     }
-                    "i64" if matches!(
+                    "i64" if (entity.passkey_native_schema && definition.name == "counter") || matches!(
                         (entity.role, definition.name),
                         (Some(EntityRole::Team), "member_count")
                             | (Some(EntityRole::WalletAddress), "chain_id")
@@ -523,6 +520,7 @@ fn gen_server_native_column(
     if database == Database::Sqlite
         || !(entity.session_row_presence
             || entity.device_code_native_schema
+            || entity.passkey_native_schema
             || (database == Database::Mysql
                 && entity.role == Some(EntityRole::TeamMember)
                 && field.registry_column == Some("created_at"))
@@ -554,29 +552,31 @@ fn gen_server_native_column(
             quote!(column.string_len(191);)
         }
         (Database::Mysql, "String" | "Option<String>")
-            if matches!(
-                (entity.role, definition.name),
-                (Some(EntityRole::User), "name" | "email")
-                    | (Some(EntityRole::Session), "token")
-                    | (Some(EntityRole::Verification), "identifier")
-                    | (Some(EntityRole::RateLimit), "key")
-                    | (Some(EntityRole::Member), "role")
-                    | (Some(EntityRole::OrganizationRole), "role")
-                    | (
-                        Some(EntityRole::Invitation),
-                        "email" | "role" | "team_id" | "status"
-                    )
-            ) =>
+            if (entity.passkey_native_schema && definition.name == "credential_id")
+                || matches!(
+                    (entity.role, definition.name),
+                    (Some(EntityRole::User), "name" | "email")
+                        | (Some(EntityRole::Session), "token")
+                        | (Some(EntityRole::Verification), "identifier")
+                        | (Some(EntityRole::RateLimit), "key")
+                        | (Some(EntityRole::Member), "role")
+                        | (Some(EntityRole::OrganizationRole), "role")
+                        | (
+                            Some(EntityRole::Invitation),
+                            "email" | "role" | "team_id" | "status"
+                        )
+                ) =>
         {
             quote!(column.string_len(255);)
         }
         (_, "String" | "Option<String>") => quote!(column.text();),
         (_, "i64")
-            if matches!(
-                (entity.role, definition.name),
-                (Some(EntityRole::Team), "member_count")
-                    | (Some(EntityRole::WalletAddress), "chain_id")
-            ) =>
+            if (entity.passkey_native_schema && definition.name == "counter")
+                || matches!(
+                    (entity.role, definition.name),
+                    (Some(EntityRole::Team), "member_count")
+                        | (Some(EntityRole::WalletAddress), "chain_id")
+                ) =>
         {
             quote!(column.integer();)
         }
@@ -729,9 +729,17 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
                 .iter()
                 .map(|column| entity.column(column))
                 .collect::<Option<Vec<_>>>()?;
-            Some((columns, index.unique))
+            Some((
+                columns,
+                index.unique
+                    && !(entity.passkey_native_schema && index.columns == ["credential_id"]),
+            ))
         })
         .collect();
+    if entity.passkey_native_schema {
+        let user_id = entity.column("user_id");
+        indexes.sort_by_key(|(columns, _)| columns.first().copied() != user_id);
+    }
     for field in &entity.fields {
         if let Some(unique) = field.unique {
             indexes.retain(|(columns, _)| columns.as_slice() != [field.column.as_str()]);
@@ -742,7 +750,9 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     }
     indexes.into_iter().map(|(columns, unique)| {
         let native_index = entity.fields.iter().find(|field| {
-            ((entity.role == Some(EntityRole::WalletAddress)
+            ((entity.passkey_native_schema
+                && matches!(field.registry_column, Some("user_id" | "credential_id")))
+                || (entity.role == Some(EntityRole::WalletAddress)
                 && field.registry_column == Some("user_id"))
                 || (matches!(database, Database::Sqlite)
                 && (matches!(

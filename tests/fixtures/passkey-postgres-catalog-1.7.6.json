@@ -1,0 +1,358 @@
+{
+  "version": "1.7.6",
+  "database": "postgres",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "passkey",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "2",
+          "name": "name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "3",
+          "name": "publicKey",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "4",
+          "name": "userId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "5",
+          "name": "credentialID",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "6",
+          "name": "counter",
+          "type": "integer",
+          "nativeType": "int4",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "7",
+          "name": "deviceType",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "8",
+          "name": "backedUp",
+          "type": "boolean",
+          "nativeType": "bool",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "9",
+          "name": "transports",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "10",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "11",
+          "name": "aaguid",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"passkey\" (\"id\" text not null primary key, \"name\" text, \"publicKey\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"credentialID\" text not null, \"counter\" integer not null, \"deviceType\" text not null, \"backedUp\" boolean not null, \"transports\" text, \"createdAt\" timestamptz, \"aaguid\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"passkey_userId_idx\" on \"passkey\" (\"userId\");\n\ncreate index \"passkey_credentialID_idx\" on \"passkey\" (\"credentialID\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "passkey",
+            "name": "passkey_credentialID_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "credentialID"
+          },
+          {
+            "table": "passkey",
+            "name": "passkey_pkey",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          },
+          {
+            "table": "passkey",
+            "name": "passkey_userId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "userId"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "passkey",
+            "name": "passkey_userId_fkey",
+            "position": "1",
+            "column": "userId",
+            "targetTable": "user",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          }
+        ]
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "passkey": {
+          "modelName": "display_catalog_passkeys",
+          "fields": {
+            "name": "display_name",
+            "publicKey": "public_key_text",
+            "userId": "person_link",
+            "credentialID": "credential_label",
+            "counter": "signature_count",
+            "deviceType": "authenticator_kind",
+            "backedUp": "is_backed_up",
+            "transports": "transport_text",
+            "createdAt": "created_on",
+            "aaguid": "authenticator_guid"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_passkeys",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "2",
+          "name": "display_name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "3",
+          "name": "public_key_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "4",
+          "name": "person_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "5",
+          "name": "credential_label",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "6",
+          "name": "signature_count",
+          "type": "integer",
+          "nativeType": "int4",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "7",
+          "name": "authenticator_kind",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "8",
+          "name": "is_backed_up",
+          "type": "boolean",
+          "nativeType": "bool",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "9",
+          "name": "transport_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "10",
+          "name": "created_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "11",
+          "name": "authenticator_guid",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"display_catalog_passkeys\" (\"id\" text not null primary key, \"display_name\" text, \"public_key_text\" text not null, \"person_link\" text not null references \"user\" (\"id\") on delete cascade, \"credential_label\" text not null, \"signature_count\" integer not null, \"authenticator_kind\" text not null, \"is_backed_up\" boolean not null, \"transport_text\" text, \"created_on\" timestamptz, \"authenticator_guid\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_passkeys_person_link_idx\" on \"display_catalog_passkeys\" (\"person_link\");\n\ncreate index \"display_catalog_passkeys_credential_label_idx\" on \"display_catalog_passkeys\" (\"credential_label\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "display_catalog_passkeys",
+            "name": "display_catalog_passkeys_credential_label_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "credential_label"
+          },
+          {
+            "table": "display_catalog_passkeys",
+            "name": "display_catalog_passkeys_person_link_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "person_link"
+          },
+          {
+            "table": "display_catalog_passkeys",
+            "name": "display_catalog_passkeys_pkey",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "display_catalog_passkeys",
+            "name": "display_catalog_passkeys_person_link_fkey",
+            "position": "1",
+            "column": "person_link",
+            "targetTable": "user",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          }
+        ]
+      }
+    }
+  ]
+}

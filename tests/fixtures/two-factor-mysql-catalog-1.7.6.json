@@ -1,0 +1,474 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "twoFactor",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "twoFactor",
+          "position": "2",
+          "name": "secret",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "twoFactor",
+          "position": "3",
+          "name": "backupCodes",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "twoFactor",
+          "position": "4",
+          "name": "userId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "twoFactor",
+          "position": "5",
+          "name": "verified",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "twoFactor",
+          "position": "6",
+          "name": "failedVerificationCount",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "twoFactor",
+          "position": "7",
+          "name": "lockedUntil",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "user",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "user",
+          "position": "2",
+          "name": "name",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "user",
+          "position": "3",
+          "name": "email",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "user",
+          "position": "4",
+          "name": "emailVerified",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "user",
+          "position": "5",
+          "name": "image",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "user",
+          "position": "6",
+          "name": "createdAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "user",
+          "position": "7",
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "user",
+          "position": "8",
+          "name": "twoFactorEnabled",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `twoFactorEnabled` boolean);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `twoFactor` (`id` varchar(36) not null primary key, `secret` varchar(255) not null, `backupCodes` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `verified` boolean, `failedVerificationCount` integer, `lockedUntil` timestamp(3));\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `twoFactor_secret_idx` on `twoFactor` (`secret`);\n\ncreate index `twoFactor_userId_idx` on `twoFactor` (`userId`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "user": {
+          "indexes": [
+            {
+              "table": "user",
+              "name": "email",
+              "unique": "YES",
+              "position": "1",
+              "column": "email"
+            },
+            {
+              "table": "user",
+              "name": "PRIMARY",
+              "unique": "YES",
+              "position": "1",
+              "column": "id"
+            }
+          ],
+          "foreignKeys": []
+        },
+        "twoFactor": {
+          "indexes": [
+            {
+              "table": "twoFactor",
+              "name": "PRIMARY",
+              "unique": "YES",
+              "position": "1",
+              "column": "id"
+            },
+            {
+              "table": "twoFactor",
+              "name": "twoFactor_secret_idx",
+              "unique": "NO",
+              "position": "1",
+              "column": "secret"
+            },
+            {
+              "table": "twoFactor",
+              "name": "twoFactor_userId_idx",
+              "unique": "NO",
+              "position": "1",
+              "column": "userId"
+            }
+          ],
+          "foreignKeys": []
+        }
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_catalog_users",
+          "fields": {
+            "name": "display_name",
+            "email": "mail_label",
+            "emailVerified": "mail_confirmed",
+            "image": "portrait_text",
+            "createdAt": "created_on",
+            "updatedAt": "updated_on",
+            "twoFactorEnabled": "second_factor_enabled"
+          }
+        },
+        "twoFactor": {
+          "modelName": "display_catalog_two_factors",
+          "fields": {
+            "secret": "secret_text",
+            "backupCodes": "backup_text",
+            "userId": "person_link",
+            "verified": "is_verified",
+            "failedVerificationCount": "failure_count",
+            "lockedUntil": "locked_until_time"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_two_factors",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_two_factors",
+          "position": "2",
+          "name": "secret_text",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_two_factors",
+          "position": "3",
+          "name": "backup_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_two_factors",
+          "position": "4",
+          "name": "person_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_two_factors",
+          "position": "5",
+          "name": "is_verified",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_two_factors",
+          "position": "6",
+          "name": "failure_count",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_two_factors",
+          "position": "7",
+          "name": "locked_until_time",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "2",
+          "name": "display_name",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "3",
+          "name": "mail_label",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "4",
+          "name": "mail_confirmed",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "5",
+          "name": "portrait_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "6",
+          "name": "created_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "7",
+          "name": "updated_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "display_catalog_users",
+          "position": "8",
+          "name": "second_factor_enabled",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `display_catalog_users` (`id` varchar(36) not null primary key, `display_name` varchar(255) not null, `mail_label` varchar(255) not null unique, `mail_confirmed` boolean not null, `portrait_text` text, `created_on` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updated_on` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `second_factor_enabled` boolean);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `display_catalog_users` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `display_catalog_users` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_catalog_two_factors` (`id` varchar(36) not null primary key, `secret_text` varchar(255) not null, `backup_text` text not null, `person_link` varchar(36) not null references `display_catalog_users` (`id`) on delete cascade, `is_verified` boolean, `failure_count` integer, `locked_until_time` timestamp(3));\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `display_catalog_two_factors_secret_text_idx` on `display_catalog_two_factors` (`secret_text`);\n\ncreate index `display_catalog_two_factors_person_link_idx` on `display_catalog_two_factors` (`person_link`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "user": {
+          "indexes": [
+            {
+              "table": "display_catalog_users",
+              "name": "mail_label",
+              "unique": "YES",
+              "position": "1",
+              "column": "mail_label"
+            },
+            {
+              "table": "display_catalog_users",
+              "name": "PRIMARY",
+              "unique": "YES",
+              "position": "1",
+              "column": "id"
+            }
+          ],
+          "foreignKeys": []
+        },
+        "twoFactor": {
+          "indexes": [
+            {
+              "table": "display_catalog_two_factors",
+              "name": "display_catalog_two_factors_person_link_idx",
+              "unique": "NO",
+              "position": "1",
+              "column": "person_link"
+            },
+            {
+              "table": "display_catalog_two_factors",
+              "name": "display_catalog_two_factors_secret_text_idx",
+              "unique": "NO",
+              "position": "1",
+              "column": "secret_text"
+            },
+            {
+              "table": "display_catalog_two_factors",
+              "name": "PRIMARY",
+              "unique": "YES",
+              "position": "1",
+              "column": "id"
+            }
+          ],
+          "foreignKeys": []
+        }
+      }
+    }
+  ]
+}

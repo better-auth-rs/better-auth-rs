@@ -10,6 +10,7 @@ use sea_orm::{
 use serde_json::{Map, json};
 
 use better_auth_core::store::{PasskeyStore, schema::EntityRole};
+use better_auth_core::{PasskeyCredentialState, PasskeyStorage};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -23,6 +24,10 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Passke
 where
     S: AuthSchema + Send + Sync,
 {
+    fn passkey_storage(&self) -> PasskeyStorage {
+        P::Passkey::passkey_storage()
+    }
+
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         self.create_passkey_with_connection(self.connection(), input)
             .await
@@ -98,20 +103,39 @@ where
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
         let id = id.typed()?;
+        let (counter, fields) = match (P::Passkey::passkey_storage(), update) {
+            (PasskeyStorage::Native, UpdatePasskeyAuthentication::Native { counter }) => (
+                counter,
+                Map::from_iter([("counter".into(), json!(counter))]),
+            ),
+            (
+                PasskeyStorage::Legacy,
+                UpdatePasskeyAuthentication::Legacy {
+                    credential,
+                    counter,
+                    backed_up,
+                    device_type,
+                },
+            ) => (
+                counter,
+                Map::from_iter([
+                    ("counter".into(), json!(counter)),
+                    ("backed_up".into(), json!(backed_up)),
+                    ("device_type".into(), json!(device_type)),
+                    ("credential".into(), json!(credential)),
+                    ("updated_at".into(), json!(Utc::now())),
+                ]),
+            ),
+            _ => {
+                return Err(AuthError::config(
+                    "Passkey authentication update does not match the model storage mode",
+                ));
+            }
+        };
         let fields = self
             .model_fields
             .fields(EntityRole::Passkey)
-            .organization_storage_fields(
-                Map::from_iter([
-                    ("counter".into(), json!(update.counter)),
-                    ("backed_up".into(), json!(update.backed_up)),
-                    ("device_type".into(), json!(update.device_type)),
-                    ("credential".into(), json!(update.credential)),
-                    ("updated_at".into(), json!(Utc::now())),
-                ]),
-                Map::new(),
-                false,
-            )
+            .organization_storage_fields(fields, Map::new(), false)
             .await?;
         let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(model) = Entity::<P::Passkey>::find()
@@ -126,7 +150,7 @@ where
                 return Ok(None);
             };
 
-            let _ = i64::try_from(update.counter)
+            let _ = i64::try_from(counter)
                 .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
             let mut active = model.into_active_model();
             apply::<P::Passkey>(
@@ -147,17 +171,14 @@ where
             .remove(0))
     }
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
+        let mut fields = Map::from_iter([("name".into(), json!(name))]);
+        if P::Passkey::passkey_storage() == PasskeyStorage::Legacy {
+            let _ = fields.insert("updated_at".into(), json!(Utc::now()));
+        }
         let fields = self
             .model_fields
             .fields(EntityRole::Passkey)
-            .organization_storage_fields(
-                Map::from_iter([
-                    ("name".into(), json!(name)),
-                    ("updated_at".into(), json!(Utc::now())),
-                ]),
-                Map::new(),
-                false,
-            )
+            .organization_storage_fields(fields, Map::new(), false)
             .await?;
         let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(model) = Entity::<P::Passkey>::find()
@@ -216,6 +237,15 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     ) -> AuthResult<Passkey> {
         let counter = i64::try_from(input.counter)
             .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
+        let credential = match (P::Passkey::passkey_storage(), input.credential) {
+            (PasskeyStorage::Native, PasskeyCredentialState::Native) => None,
+            (PasskeyStorage::Legacy, PasskeyCredentialState::Legacy(value)) => Some(value),
+            _ => {
+                return Err(AuthError::config(
+                    "Passkey creation does not match the model storage mode",
+                ));
+            }
+        };
 
         let mut fields = Map::from_iter([
             ("public_key".to_owned(), json!(input.public_key)),
@@ -225,10 +255,14 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             ("device_type".to_owned(), json!(input.device_type)),
             ("backed_up".to_owned(), json!(input.backed_up)),
             ("transports".to_owned(), json!(input.transports)),
-            ("credential".to_owned(), json!(input.credential)),
-            ("created_at".to_owned(), json!(Utc::now())),
-            ("updated_at".to_owned(), json!(Utc::now())),
         ]);
+        if let Some(credential) = &credential {
+            let _ = fields.insert("credential".into(), json!(credential));
+        }
+        let _ = fields.insert("created_at".into(), json!(Utc::now()));
+        if credential.is_some() {
+            let _ = fields.insert("updated_at".into(), json!(Utc::now()));
+        }
         for (name, value) in [("name", input.name), ("aaguid", input.aaguid)] {
             if let Some(value) = value.json()? {
                 let _ = fields.insert(name.into(), value);

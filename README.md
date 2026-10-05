@@ -27,6 +27,8 @@ The schema generator keeps its default table name when `modelName` is omitted or
 
 Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display values through `SchemaValue<Option<String>>`; see [plugin fields](docs/content/docs/concepts/database.mdx#plugin-fields).
 
+Generate Passkey storage with `--plugins passkey` for the 11 standard columns, or add `--passkey-legacy-schema` to retain opaque credential storage. Bind the generated `AppPluginSchema`; see [Passkey storage modes](docs/content/docs/plugins/passkey.mdx#storage-modes) for typed inputs and application-owned migrations.
+
 API Key expiration configuration accepts fractional seconds for its default and fractional days for its bounds; see [API Key configuration](docs/content/docs/plugins/api-key.mdx#expiration-configuration) for units and the floating-point field migration.
 
 Configure Social Twitch with `OAuthProvider::twitch` and `TwitchOptions`, Social LINE with `OAuthProvider::line`, or Generic LINE with `GenericOAuthConfig::line` and resolved inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Use `OAuthProvider::gitlab_with_issuer` for self-hosted GitLab. Social refresh callbacks and custom ID-token verifiers receive optional request metadata through `NativeRequest`. Social profile fields preserve omitted and null email/verification values; callbacks preserve application errors; the guide describes provider-specific missing-profile responses.

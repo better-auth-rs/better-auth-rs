@@ -86,7 +86,7 @@ fn resolve_roots() -> (TokenStream, TokenStream) {
 
 pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     let (seaorm_root, core_root) = resolve_roots();
-    let (role, model_name, row_presence) = match parse_options(input) {
+    let (role, model_name, row_presence, native_passkey) = match parse_options(input) {
         Ok(options) => options,
         Err(err) => return err.to_compile_error(),
     };
@@ -119,7 +119,9 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
 
     // Validate core fields are present
     if let Some(missing) = core.iter().find(|required| {
-        !(row_presence && **required == "active") && !idents.iter().any(|ident| ident == *required)
+        !(row_presence && **required == "active"
+            || native_passkey && matches!(**required, "credential" | "updated_at"))
+            && !idents.iter().any(|ident| ident == *required)
     }) {
         return syn::Error::new_spanned(
             &input.ident,
@@ -177,6 +179,16 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 return Err(syn::Error::new_spanned(
                     field,
                     "row_presence session models cannot expose an active field",
+                ));
+            }
+            if native_passkey
+                && column_aliases.iter().any(|alias| {
+                    matches!(alias.as_str(), "credential" | "updated_at" | "updatedAt")
+                })
+            {
+                return Err(syn::Error::new_spanned(
+                    field,
+                    "native_passkey models cannot expose credential or updatedAt fields",
                 ));
             }
             field_columns.push(quote! { #(#column_aliases)|* => Ok(Column::#column), });
@@ -290,6 +302,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             fields,
             role,
             model_name.as_ref(),
+            native_passkey,
             &seaorm_root,
             &core_root,
         )
@@ -801,10 +814,11 @@ fn gen_session(
     })
 }
 
-fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>, bool)> {
+fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>, bool, bool)> {
     let mut parsed = None;
     let mut model_name = None;
     let mut row_presence = false;
+    let mut native_passkey = false;
     for attr in &input.attrs {
         if !attr.path().is_ident("auth") {
             continue;
@@ -842,11 +856,14 @@ fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>
             } else if meta.path.is_ident("row_presence") {
                 row_presence = true;
                 Ok(())
+            } else if meta.path.is_ident("native_passkey") {
+                native_passkey = true;
+                Ok(())
             } else if meta.path.is_ident("model_name") {
                 model_name = Some(meta.value()?.parse::<LitStr>()?);
                 Ok(())
             } else {
-                Err(meta.error("expected `role = \"...\"`, `model_name = \"...\"`, or `row_presence`"))
+                Err(meta.error("expected `role = \"...\"`, `model_name = \"...\"`, `row_presence`, or `native_passkey`"))
             }
         })?;
     }
@@ -871,5 +888,11 @@ fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>
             "row_presence is supported for the session role",
         ));
     }
-    Ok((role, model_name, row_presence))
+    if native_passkey && role != EntityRole::Passkey {
+        return Err(syn::Error::new_spanned(
+            input,
+            "native_passkey is supported for the passkey role",
+        ));
+    }
+    Ok((role, model_name, row_presence, native_passkey))
 }

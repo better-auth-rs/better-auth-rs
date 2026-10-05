@@ -86,8 +86,7 @@ fn empty_model_names_preserve_each_generator_default_and_raw_declaration() {
                 model == "rateLimit",
                 IdGeneration::Random,
                 Database::Sqlite,
-                false,
-                false,
+                Default::default(),
             )
             .expect("ordinary model schema generates");
             let table = table_name(&schema, module);

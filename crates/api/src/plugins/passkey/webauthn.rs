@@ -10,7 +10,7 @@ use url::Url;
 use uuid::Uuid;
 use webauthn_rs_core::WebauthnCore;
 use webauthn_rs_core::proto::{
-    AuthenticationState, Base64UrlSafeData, CreationChallengeResponse, Credential, CredentialID,
+    AuthenticationState, Base64UrlSafeData, CreationChallengeResponse, CredentialID,
     PublicKeyCredential, RegisterPublicKeyCredential, RegistrationState, RequestChallengeResponse,
     UserVerificationPolicy,
 };
@@ -29,24 +29,6 @@ pub(super) struct RegisteredPasskeyMetadata {
     pub extensions: Option<Value>,
 }
 
-#[derive(Debug)]
-pub(super) struct PasskeySnapshot {
-    pub serialized: String,
-    pub counter: u64,
-    pub backed_up: bool,
-    pub backup_eligible: bool,
-}
-
-impl PasskeySnapshot {
-    pub(super) fn device_type(&self) -> &'static str {
-        if self.backup_eligible {
-            "multiDevice"
-        } else {
-            "singleDevice"
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct StoredRegistrationState {
     pub user: super::PasskeyRegistrationUser,
@@ -62,12 +44,6 @@ pub(crate) struct RegistrationChallenge {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct AuthenticationChallenge {
     pub ast: AuthenticationState,
-}
-
-// Preserve the existing persisted credential envelope when using the core API.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct StoredPasskey {
-    pub cred: Credential,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -296,23 +272,6 @@ pub(super) fn decode_credential_id(credential_id: &str) -> AuthResult<Credential
         .or_else(|_| STANDARD.decode(credential_id))
         .map_err(|_| AuthError::bad_request("Invalid passkey credential id"))?;
     Ok(bytes.into())
-}
-
-pub(super) fn parse_stored_passkey(serialized: &str) -> AuthResult<StoredPasskey> {
-    let mut passkey: StoredPasskey = serde_json::from_str(serialized).map_err(|error| {
-        AuthError::internal(format!("Failed to decode stored passkey: {error}"))
-    })?;
-    passkey.cred.registration_policy = VERIFICATION_POLICY;
-    Ok(passkey)
-}
-
-pub(super) fn snapshot_passkey(passkey: &StoredPasskey) -> AuthResult<PasskeySnapshot> {
-    Ok(PasskeySnapshot {
-        serialized: serde_json::to_string(passkey)?,
-        counter: u64::from(passkey.cred.counter),
-        backed_up: passkey.cred.backup_state,
-        backup_eligible: passkey.cred.backup_eligible,
-    })
 }
 
 pub(super) fn extract_registration_metadata(

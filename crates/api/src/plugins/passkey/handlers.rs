@@ -1,5 +1,4 @@
 use better_auth_core::entity::{AuthPasskey, AuthUser};
-use better_auth_core::types::UpdatePasskeyAuthentication;
 use better_auth_core::wire::PasskeyView;
 use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification};
 use chrono::{Duration, Utc};
@@ -11,6 +10,7 @@ use crate::plugins::StatusResponse;
 use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 
 use super::PasskeyConfig;
+use super::credential::WebAuthnCredential;
 use super::types::{
     DeletePasskeyRequest, PasskeyResponse, SessionResponse, UpdatePasskeyRequest,
     VerifyAuthenticationRequest,
@@ -20,8 +20,7 @@ use super::webauthn::{
     StoredRegistrationState, VERIFICATION_POLICY, authentication_options_json, build_webauthn,
     challenge_cookie_name, create_challenge_cookie, credential_id_from_authentication,
     decode_challenge_cookie, decode_credential_id, generate_ts_user_handle, get_cookie_value,
-    parse_stored_passkey, parse_transports_csv, registration_options_json, resolve_origins,
-    snapshot_passkey,
+    parse_transports_csv, registration_options_json, resolve_origins,
 };
 
 pub(super) fn response_message<T>(status: u16, message: &str) -> PasskeyHandlerResult<T> {
@@ -174,11 +173,6 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     } else {
         Vec::new()
     };
-    let parsed_passkeys = stored_passkeys
-        .iter()
-        .filter_map(|passkey| parse_stored_passkey(passkey.credential()).ok())
-        .map(|passkey| passkey.cred)
-        .collect::<Vec<_>>();
     let allow_credentials_json = stored_passkeys
         .iter()
         .map(|passkey| {
@@ -204,9 +198,9 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
         super::PasskeyEndpoint::new(ctx, req, &Value::Null, &users),
     )
     .await?;
-    let discoverable = parsed_passkeys.is_empty();
+    let discoverable = stored_passkeys.is_empty();
     let (options, state) = webauthn
-        .new_challenge_authenticate_builder(parsed_passkeys, Some(VERIFICATION_POLICY))
+        .new_challenge_authenticate_builder(Vec::new(), Some(VERIFICATION_POLICY))
         .and_then(|builder| {
             webauthn.generate_challenge_authenticate(builder.allow_backup_eligible_upgrade(true))
         })
@@ -298,10 +292,11 @@ pub(super) async fn verify_authentication_core(
         return passkey_not_found();
     };
 
-    let mut stored_passkey = match parse_stored_passkey(passkey.credential()) {
-        Ok(passkey) => passkey,
-        Err(_) => return passkey_authentication_failure(),
-    };
+    let stored_passkey =
+        match WebAuthnCredential::from_record(&passkey, ctx.database.passkey_storage()) {
+            Ok(passkey) => passkey,
+            Err(_) => return passkey_authentication_failure(),
+        };
     let webauthn = match build_webauthn(config, &ctx.config, &origin) {
         Ok(webauthn) => webauthn,
         Err(_) => return passkey_authentication_failure(),
@@ -372,24 +367,13 @@ pub(super) async fn verify_authentication_core(
             return Err(super::registration::verification_error(error, false));
         }
     }
-    stored_passkey.cred.counter = authentication_result.counter();
-
-    let snapshot = match snapshot_passkey(&stored_passkey) {
-        Ok(snapshot) => snapshot,
+    let update = match stored_passkey.authentication_update(authentication_result.counter()) {
+        Ok(update) => update,
         Err(_) => return passkey_authentication_failure(),
     };
-    let device_type = snapshot.device_type().to_string();
     let updated_passkey = match ctx
         .database
-        .update_passkey_authentication(
-            &passkey.id().into_owned(),
-            UpdatePasskeyAuthentication {
-                credential: snapshot.serialized,
-                counter: snapshot.counter,
-                backed_up: snapshot.backed_up,
-                device_type,
-            },
-        )
+        .update_passkey_authentication(&passkey.id().into_owned(), update)
         .await
     {
         Ok(passkey) => passkey,

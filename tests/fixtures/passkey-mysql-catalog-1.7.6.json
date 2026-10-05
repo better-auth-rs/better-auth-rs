@@ -1,0 +1,336 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "passkey",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "2",
+          "name": "name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "3",
+          "name": "publicKey",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "4",
+          "name": "userId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "5",
+          "name": "credentialID",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "6",
+          "name": "counter",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "7",
+          "name": "deviceType",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "8",
+          "name": "backedUp",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "9",
+          "name": "transports",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "10",
+          "name": "createdAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "passkey",
+          "position": "11",
+          "name": "aaguid",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `passkey` (`id` varchar(36) not null primary key, `name` text, `publicKey` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `credentialID` varchar(255) not null, `counter` integer not null, `deviceType` text not null, `backedUp` boolean not null, `transports` text, `createdAt` timestamp(3), `aaguid` text);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `passkey_userId_idx` on `passkey` (`userId`);\n\ncreate index `passkey_credentialID_idx` on `passkey` (`credentialID`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "passkey",
+            "name": "passkey_credentialID_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "credentialID"
+          },
+          {
+            "table": "passkey",
+            "name": "passkey_userId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "userId"
+          },
+          {
+            "table": "passkey",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "passkey": {
+          "modelName": "display_catalog_passkeys",
+          "fields": {
+            "name": "display_name",
+            "publicKey": "public_key_text",
+            "userId": "person_link",
+            "credentialID": "credential_label",
+            "counter": "signature_count",
+            "deviceType": "authenticator_kind",
+            "backedUp": "is_backed_up",
+            "transports": "transport_text",
+            "createdAt": "created_on",
+            "aaguid": "authenticator_guid"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_passkeys",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "2",
+          "name": "display_name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "3",
+          "name": "public_key_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "4",
+          "name": "person_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "5",
+          "name": "credential_label",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "6",
+          "name": "signature_count",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "7",
+          "name": "authenticator_kind",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "8",
+          "name": "is_backed_up",
+          "type": "tinyint",
+          "nativeType": "tinyint(1)",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "9",
+          "name": "transport_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "10",
+          "name": "created_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_passkeys",
+          "position": "11",
+          "name": "authenticator_guid",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_catalog_passkeys` (`id` varchar(36) not null primary key, `display_name` text, `public_key_text` text not null, `person_link` varchar(36) not null references `user` (`id`) on delete cascade, `credential_label` varchar(255) not null, `signature_count` integer not null, `authenticator_kind` text not null, `is_backed_up` boolean not null, `transport_text` text, `created_on` timestamp(3), `authenticator_guid` text);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `display_catalog_passkeys_person_link_idx` on `display_catalog_passkeys` (`person_link`);\n\ncreate index `display_catalog_passkeys_credential_label_idx` on `display_catalog_passkeys` (`credential_label`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "display_catalog_passkeys",
+            "name": "display_catalog_passkeys_credential_label_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "credential_label"
+          },
+          {
+            "table": "display_catalog_passkeys",
+            "name": "display_catalog_passkeys_person_link_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "person_link"
+          },
+          {
+            "table": "display_catalog_passkeys",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      }
+    }
+  ]
+}

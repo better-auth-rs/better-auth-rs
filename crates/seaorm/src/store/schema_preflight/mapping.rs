@@ -81,7 +81,14 @@ fn organization<M: SeaOrmOrganizationModel>(
 
 fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
     Ok(model::<M::Entity>(columns(
-        core_fields(role).iter().map(|field| field.name),
+        core_fields(role)
+            .iter()
+            .filter(|field| {
+                !(role == EntityRole::Passkey
+                    && M::passkey_storage() == better_auth_core::PasskeyStorage::Native
+                    && matches!(field.name, "credential" | "updated_at"))
+            })
+            .map(|field| field.name),
         fields,
         M::column,
         &[],

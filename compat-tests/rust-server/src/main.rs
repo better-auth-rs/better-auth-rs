@@ -87,6 +87,7 @@ mod one_tap;
 mod openapi;
 mod organization_metadata;
 mod otp_callbacks;
+mod passkey_native;
 mod passkey_options;
 mod password_policy;
 mod password_security;
@@ -257,7 +258,11 @@ async fn reset_database_state(database: &DatabaseConnection) -> Result<(), DbErr
         plugin_schema::reset(database).await?;
     }
     device_code::Entity::delete_many().exec(database).await?;
-    passkey::Entity::delete_many().exec(database).await?;
+    if std::env::var("COMPAT_PROFILE").as_deref() == Ok("native-passkey") {
+        passkey_native::reset(database).await?;
+    } else {
+        passkey::Entity::delete_many().exec(database).await?;
+    }
     api_key::Entity::delete_many().exec(database).await?;
     two_factor::Entity::delete_many().exec(database).await?;
     better_auth_seaorm::store::entities::team_member::Entity::delete_many()
@@ -930,6 +935,9 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
     if device_profile == "plugin-schema" {
         plugin_schema::create_tables(&database).await?;
     }
+    if device_profile == "native-passkey" {
+        passkey_native::create_tables(&database).await?;
+    }
     let disabled_user_router = if device_profile == "user-fields" {
         user_fields::disabled_router(config.clone(), database.clone()).await?
     } else {
@@ -984,9 +992,17 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
             Arc::new(store.with_organization_schema::<organization_dynamic_fields::Models>())
         } else if device_profile == "plugin-schema" {
             Arc::new(store.with_plugin_schema::<plugin_schema::Models>())
+        } else if device_profile == "native-passkey" {
+            Arc::new(store.with_plugin_schema::<passkey_native::Models>())
         } else {
             Arc::new(store)
         };
+    if device_profile == "native-passkey" {
+        assert_eq!(
+            store.passkey_storage(),
+            better_auth_core::PasskeyStorage::Native
+        );
+    }
     let passkey_options_router = passkey_options.router(store.clone());
     let organization_callbacks =
         organization_callbacks::OrganizationCallbacks::new(&device_profile);

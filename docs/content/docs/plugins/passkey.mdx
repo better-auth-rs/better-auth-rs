@@ -11,6 +11,16 @@ Passkey lists, registration exclusions and authentication allow-lists use the da
 
 This example assumes you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
 
+For a new application-owned schema, generate and bind the Passkey model:
+
+```sh
+better-auth-rs generate --plugins passkey --output src/auth_schema.rs
+```
+
+```rust,ignore
+let store = store.with_plugin_schema::<auth_schema::AppPluginSchema>();
+```
+
 ```rust
 use better_auth::plugins::PasskeyPlugin;
 
@@ -25,6 +35,33 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
     .build()
     .await?;
 ```
+
+### Storage modes
+
+Fresh generated models use `PasskeyStorage::Native`: the 11 upstream columns contain the credential state, and createdAt is nullable. The private adapter reconstructs the WebauthnCore credential from the standard COSE public key, credential ID, counter, transports, and backup fields. Registration still verifies the full response before storage. Authentication still verifies the challenge, origin, RP ID, signature, and counter before session creation. Options generation reads only credential IDs and transports; it does not decode stored public keys.
+
+Add `--passkey-legacy-schema` when regenerating an existing Legacy schema. Bundled models and models without `#[auth(role = "passkey", native_passkey)]` retain `PasskeyStorage::Legacy`, including the opaque credential and updatedAt columns. Legacy store methods preserve arbitrary opaque strings exactly. Authentication requires the existing valid credential envelope; an envelope decoding error never selects Native mode.
+
+The store reports its mode through `passkey_storage()`. Custom stores and transactions default to Legacy and must explicitly report Native when using standard storage. Direct store callers use these types from `better_auth::prelude`:
+
+| Operation | Native input | Legacy input |
+| --- | --- | --- |
+| `CreatePasskey.credential` | `PasskeyCredentialState::Native` | `PasskeyCredentialState::Legacy(value)`; `String::into()` and `&str::into()` also select Legacy |
+| `update_passkey_authentication` | `UpdatePasskeyAuthentication::Native { counter }` | `UpdatePasskeyAuthentication::Legacy { credential, counter, backed_up, device_type }` |
+
+The selected input mode must match the store mode. A mismatch returns a configuration error. Native authentication updates only the counter; Legacy retains its envelope and metadata update contract. The plugin selects the mode automatically.
+
+The public Rust record preserves missing columns and nullable dates:
+
+| `Passkey` field | Type | Native representation |
+| --- | --- | --- |
+| `credential` | `SchemaValue<String>` | `Undefined` |
+| `updated_at` | `SchemaValue<DateTime<Utc>>` | `Undefined` |
+| `created_at` | `SchemaValue<Option<DateTime<Utc>>>` | `Typed(Some(date))` or `Typed(None)` for a stored null |
+
+The three `AuthPasskey` getters return references to these values. Use `.typed()?` only when a caller requires the default type. `PasskeyView.created_at` retains omission or null and formats present dates as UTC millisecond strings. The HTTP view does not expose credential or updatedAt.
+
+Applications own migration from Legacy to Native. Regeneration does not alter existing tables or convert opaque envelopes. Review column removal, nullable createdAt, server INTEGER counters, and nonunique credentialID indexes before binding the new model. Fresh MySQL has no automatic userId physical foreign key or database cascade; Rust reference conversion and owner/session checks remain unchanged. Explicit mappings retain precedence. See [database schema mapping](/docs/concepts/database#map-plugin-tables-and-columns) for backend types and migration boundaries.
 
 ### Configuration
 

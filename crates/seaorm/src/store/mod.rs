@@ -541,6 +541,9 @@ where
         }
         Ok(record)
     }
+    fn passkey_storage(&self) -> better_auth_core::PasskeyStorage {
+        <P::Passkey as crate::SeaOrmPluginModel>::passkey_storage()
+    }
     async fn create_passkey(
         &self,
         input: better_auth_core::CreatePasskey,

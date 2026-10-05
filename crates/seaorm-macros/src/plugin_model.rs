@@ -5,6 +5,7 @@ pub(super) fn generate(
     fields: &syn::FieldsNamed,
     role: EntityRole,
     model_name: Option<&LitStr>,
+    native_passkey: bool,
     seaorm_root: &TokenStream,
     core_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
@@ -104,6 +105,16 @@ pub(super) fn generate(
             quote!(f64::from(self.#ident.to_owned()))
         } else if role == EntityRole::WalletAddress && name == "chain_id" {
             quote!(i64::from(self.#ident))
+        } else if role == EntityRole::Passkey && name == "created_at" {
+            if identity::optional_inner(&field.ty).is_some() {
+                quote!(#core_root::SchemaValue::Typed(self.#ident))
+            } else {
+                quote!(#core_root::SchemaValue::Typed(Some(self.#ident)))
+            }
+        } else if role == EntityRole::Passkey
+            && matches!(name.as_str(), "credential" | "updated_at")
+        {
+            quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::ApiKey && name == "name"
             || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
         {
@@ -127,6 +138,15 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
+    let passkey_storage = native_passkey.then(|| {
+        output.push(quote!(credential: #core_root::SchemaValue::Undefined,));
+        output.push(quote!(updated_at: #core_root::SchemaValue::Undefined,));
+        quote! {
+            fn passkey_storage() -> #core_root::PasskeyStorage {
+                #core_root::PasskeyStorage::Native
+            }
+        }
+    });
     if matches!(
         role,
         EntityRole::DeviceCode | EntityRole::Jwk | EntityRole::WalletAddress
@@ -152,6 +172,7 @@ pub(super) fn generate(
             type ActiveModel = ActiveModel;
             type Column = Column;
             #declaration
+            #passkey_storage
             fn column(name: &str) -> #core_root::AuthResult<Column> {
                 match name { #(#columns)* _ => Err(#core_root::AuthError::config(format!("Unknown plugin model column: {name}"))) }
             }

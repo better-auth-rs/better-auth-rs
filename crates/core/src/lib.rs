@@ -111,9 +111,10 @@ pub use types::{
     CreateSession, CreateTwoFactor, CreateUser, CreateVerification, CreateWalletAddress,
     DeviceCode, DeviceCodeOwnership, ErrorCodeMessageResponse, ErrorMessageResponse, Headers,
     HealthCheckResponse, HttpMethod, Invitation, InvitationStatus, ListUsersParams, Member,
-    OkResponse, Organization, Passkey, RateLimitErrorResponse, RequestMeta, StatusMessageResponse,
-    StatusResponse, SuccessMessageResponse, SuccessResponse, TwoFactor, UpdateAccount,
-    UpdateApiKey, UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
+    OkResponse, Organization, Passkey, PasskeyCredentialState, PasskeyStorage,
+    RateLimitErrorResponse, RequestMeta, StatusMessageResponse, StatusResponse,
+    SuccessMessageResponse, SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey,
+    UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
     UpdateTwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
     WalletAddress,
 };

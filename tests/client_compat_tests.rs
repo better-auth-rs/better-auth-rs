@@ -565,6 +565,7 @@ async fn configuration_client_compat() {
         "passkey-first",
         "passkey-no-resolver",
         "passkey-stale",
+        "native-passkey",
         "two-factor-options",
         "two-factor-context",
         "two-factor-plain",
@@ -684,6 +685,8 @@ async fn configuration_client_compat() {
             run_client_compat_profile(&["./tests/config/request-api-key/"], profile).await;
         } else if profile == "native-dispatch" {
             run_client_compat_profile(&["./tests/config/native-dispatch/"], profile).await;
+        } else if profile == "native-passkey" {
+            run_client_compat_profile(&["./tests/phase8/passkey.test.ts"], profile).await;
         } else if profile.starts_with("request-otp-") {
             run_client_compat_profile(&["./tests/config/request-otp/"], profile).await;
         } else if profile.starts_with("request-oauth-") {

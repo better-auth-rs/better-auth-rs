@@ -3,11 +3,19 @@ use chrono::Utc;
 
 use super::EphemeralStore;
 use crate::store::PasskeyStore;
-use crate::{AuthError, AuthResult, CreatePasskey, Passkey, UpdatePasskeyAuthentication};
+use crate::{
+    AuthError, AuthResult, CreatePasskey, Passkey, PasskeyCredentialState,
+    UpdatePasskeyAuthentication,
+};
 
 #[async_trait]
 impl PasskeyStore for EphemeralStore {
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
+        let PasskeyCredentialState::Legacy(credential) = input.credential else {
+            return Err(AuthError::config(
+                "Native passkey creation requires Native storage",
+            ));
+        };
         let now = Utc::now();
         let fields = self
             .model_fields
@@ -26,10 +34,10 @@ impl PasskeyStore for EphemeralStore {
             device_type: input.device_type,
             backed_up: input.backed_up,
             transports: input.transports,
-            credential: input.credential,
+            credential: credential.into(),
             aaguid: fields.aaguid.map(Into::into).unwrap_or_default(),
-            created_at: now,
-            updated_at: now,
+            created_at: Some(now).into(),
+            updated_at: now.into(),
         };
         let row = self
             .raw("passkey", "create", |state| {
@@ -102,6 +110,17 @@ impl PasskeyStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
+        let UpdatePasskeyAuthentication::Legacy {
+            credential,
+            counter,
+            backed_up,
+            device_type,
+        } = update
+        else {
+            return Err(AuthError::config(
+                "Native passkey authentication updates require Native storage",
+            ));
+        };
         let fields = self
             .model_fields
             .passkey_fields_for_storage(Default::default(), Default::default(), false)
@@ -112,11 +131,11 @@ impl PasskeyStore for EphemeralStore {
                     return Ok(None);
                 };
                 fields.apply(&mut passkey);
-                passkey.credential = update.credential;
-                passkey.counter = update.counter;
-                passkey.backed_up = update.backed_up;
-                passkey.device_type = update.device_type;
-                passkey.updated_at = Utc::now();
+                passkey.credential = credential.into();
+                passkey.counter = counter;
+                passkey.backed_up = backed_up;
+                passkey.device_type = device_type;
+                passkey.updated_at = Utc::now().into();
                 Ok(Some(passkey.clone()))
             })
             .await?
@@ -139,7 +158,7 @@ impl PasskeyStore for EphemeralStore {
                     return Ok(None);
                 };
                 fields.apply(&mut passkey);
-                passkey.updated_at = Utc::now();
+                passkey.updated_at = Utc::now().into();
                 Ok(Some(passkey.clone()))
             })
             .await?

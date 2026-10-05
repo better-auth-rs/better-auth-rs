@@ -23,6 +23,10 @@ pub trait SeaOrmPluginModel:
     fn model_declaration() -> Option<better_auth_core::schema::ModelDeclaration> {
         None
     }
+    /// Select the passkey columns supported by this model.
+    fn passkey_storage() -> better_auth_core::PasskeyStorage {
+        better_auth_core::PasskeyStorage::Legacy
+    }
     /// Resolve a logical field name to its typed column.
     fn column(name: &str) -> AuthResult<Self::Column>;
     /// Return the canonical public name of a built-in column.

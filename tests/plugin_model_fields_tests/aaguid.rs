@@ -114,8 +114,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         .store()
         .update_passkey_authentication(
             &created.id,
-            UpdatePasskeyAuthentication {
-                credential: created.credential.clone(),
+            UpdatePasskeyAuthentication::Legacy {
+                credential: created.credential.typed()?.clone(),
                 counter: 1,
                 backed_up: created.backed_up,
                 device_type: created.device_type.clone(),

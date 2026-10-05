@@ -179,7 +179,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .create_passkey(input(&owner, "  Desk  "))
         .await?;
     assert_eq!(created.name.typed().unwrap().as_deref(), Some("Desk:out"));
-    assert_eq!(created.credential, "ordinary-private-record");
+    assert_eq!(created.credential.typed()?, "ordinary-private-record");
     assert_eq!(
         *events.lock().unwrap(),
         ["input:\"  Desk  \"", "output:\"Desk\""]
@@ -223,8 +223,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .store()
         .update_passkey_authentication(
             &created.id,
-            UpdatePasskeyAuthentication {
-                credential: created.credential.clone(),
+            UpdatePasskeyAuthentication::Legacy {
+                credential: created.credential.typed()?.clone(),
                 counter: created.counter,
                 backed_up: created.backed_up,
                 device_type: created.device_type.clone(),
@@ -275,11 +275,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .collect();
     names.sort();
     assert_eq!(names, ["Renewed:out", "Travel:out"]);
-    assert!(
-        listed
-            .iter()
-            .all(|row| row.credential == "ordinary-private-record")
-    );
+    assert!(listed.iter().all(|row| row.credential
+        == better_auth::SchemaValue::Typed("ordinary-private-record".to_owned())));
     let stored = raw.list_passkeys_by_user(&owner).await?;
     assert_eq!(
         listed.iter().map(|row| &row.id).collect::<Vec<_>>(),

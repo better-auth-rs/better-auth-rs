@@ -381,6 +381,9 @@ impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
+    fn passkey_storage(&self) -> crate::PasskeyStorage {
+        self.inner.passkey_storage()
+    }
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         self.inner.create_passkey(input).await
     }

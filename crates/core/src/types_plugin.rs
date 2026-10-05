@@ -59,6 +59,36 @@ pub struct UpdateTwoFactor {
     pub verified: Option<bool>,
 }
 
+/// Passkey persistence representation selected by the store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasskeyStorage {
+    /// Store the upstream standard columns without an opaque credential envelope.
+    Native,
+    /// Preserve the opaque credential envelope and the legacy update timestamp.
+    Legacy,
+}
+
+/// Credential state supplied when creating a passkey.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PasskeyCredentialState {
+    /// The standard columns contain the credential state.
+    Native,
+    /// Preserve these opaque bytes in the legacy credential column.
+    Legacy(String),
+}
+
+impl From<String> for PasskeyCredentialState {
+    fn from(value: String) -> Self {
+        Self::Legacy(value)
+    }
+}
+
+impl From<&str> for PasskeyCredentialState {
+    fn from(value: &str) -> Self {
+        Self::Legacy(value.to_owned())
+    }
+}
+
 /// Passkey response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Passkey {
@@ -81,16 +111,18 @@ pub struct Passkey {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(serialize_with = "crate::schema_value::serialize_optional_date")]
+    pub created_at: SchemaValue<Option<DateTime<Utc>>>,
     #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    pub updated_at: SchemaValue<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(deserialize_with = "deserialize_display_string")]
     pub aaguid: SchemaValue<Option<String>>,
     #[serde(skip_serializing, skip_deserializing, default)]
-    pub credential: String,
+    pub credential: SchemaValue<String>,
 }
 
 /// Input for creating a new passkey.
@@ -105,7 +137,7 @@ pub struct CreatePasskey {
     pub device_type: String,
     pub backed_up: bool,
     pub transports: Option<String>,
-    pub credential: String,
+    pub credential: PasskeyCredentialState,
     /// Omission and explicit null remain distinct during field input transforms.
     pub aaguid: SchemaValue<Option<String>>,
 }
@@ -118,11 +150,16 @@ pub struct UpdatePasskey {
 
 /// Input for updating stored passkey credential state after authentication.
 #[derive(Debug, Clone)]
-pub struct UpdatePasskeyAuthentication {
-    pub credential: String,
-    pub counter: u64,
-    pub backed_up: bool,
-    pub device_type: String,
+pub enum UpdatePasskeyAuthentication {
+    /// Update only the counter in an upstream standard record.
+    Native { counter: u64 },
+    /// Preserve the legacy opaque credential and metadata update contract.
+    Legacy {
+        credential: String,
+        counter: u64,
+        backed_up: bool,
+        device_type: String,
+    },
 }
 
 /// Device authorization code storage shape.
@@ -464,16 +501,16 @@ impl AuthPasskey for Passkey {
     fn transports(&self) -> Option<&str> {
         self.transports.as_deref()
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
+    fn created_at(&self) -> &SchemaValue<Option<DateTime<Utc>>> {
+        &self.created_at
     }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
+    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.updated_at
     }
     fn aaguid(&self) -> &SchemaValue<Option<String>> {
         &self.aaguid
     }
-    fn credential(&self) -> &str {
+    fn credential(&self) -> &SchemaValue<String> {
         &self.credential
     }
 }
@@ -490,8 +527,8 @@ impl<T: AuthPasskey> From<&T> for Passkey {
             device_type: passkey.device_type().to_owned(),
             backed_up: passkey.backed_up(),
             transports: passkey.transports().map(str::to_owned),
-            created_at: passkey.created_at(),
-            updated_at: passkey.updated_at(),
+            created_at: passkey.created_at().clone(),
+            updated_at: passkey.updated_at().clone(),
             aaguid: passkey.aaguid().clone(),
             credential: passkey.credential().to_owned(),
         }

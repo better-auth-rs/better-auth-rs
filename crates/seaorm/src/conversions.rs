@@ -116,10 +116,10 @@ impl From<&entities::passkey::Model> for Passkey {
             device_type: model.device_type.clone(),
             backed_up: model.backed_up,
             transports: model.transports.clone(),
-            created_at: model.created_at,
-            updated_at: model.updated_at,
+            created_at: Some(model.created_at).into(),
+            updated_at: model.updated_at.into(),
             aaguid: model.aaguid.clone().into(),
-            credential: model.credential.clone(),
+            credential: model.credential.clone().into(),
         }
     }
 }

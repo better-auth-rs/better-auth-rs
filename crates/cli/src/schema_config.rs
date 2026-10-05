@@ -71,6 +71,13 @@ impl IdGeneration {
 #[serde(transparent)]
 pub(crate) struct SchemaConfig(pub BTreeMap<String, ModelConfig>);
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct SchemaOptions {
+    pub session_active_column: bool,
+    pub device_code_legacy_schema: bool,
+    pub passkey_legacy_schema: bool,
+}
+
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ModelConfig {
@@ -177,6 +184,7 @@ pub(crate) struct Entity {
     pub fields: Vec<Field>,
     pub session_row_presence: bool,
     pub device_code_native_schema: bool,
+    pub passkey_native_schema: bool,
 }
 
 pub(crate) struct Field {
@@ -275,16 +283,24 @@ impl Entity {
         fields: &[FieldDef],
         config: Option<&ModelConfig>,
         database: Database,
-        session_active_column: bool,
-        device_code_legacy_schema: bool,
+        options: SchemaOptions,
     ) -> Result<Self, String> {
         let session_row_presence =
-            definition.role == Some(EntityRole::Session) && !session_active_column;
+            definition.role == Some(EntityRole::Session) && !options.session_active_column;
         let device_code_native_schema =
-            definition.role == Some(EntityRole::DeviceCode) && !device_code_legacy_schema;
+            definition.role == Some(EntityRole::DeviceCode) && !options.device_code_legacy_schema;
+        let passkey_native_schema =
+            definition.role == Some(EntityRole::Passkey) && !options.passkey_legacy_schema;
+        let fields = fields
+            .iter()
+            .filter(|field| {
+                !(passkey_native_schema && matches!(field.name, "credential" | "updated_at"))
+            })
+            .collect::<Vec<_>>();
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
             || device_code_native_schema
+            || passkey_native_schema
             || matches!(
                 definition.role,
                 Some(
@@ -313,6 +329,7 @@ impl Entity {
             role: definition.role,
             session_row_presence,
             device_code_native_schema,
+            passkey_native_schema,
             fields: fields
                 .iter()
                 .map(|field| {
@@ -325,7 +342,14 @@ impl Entity {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
                         ty: syn::parse_str(
-                            if definition.role == Some(EntityRole::Invitation)
+                            if passkey_native_schema && field.name == "created_at" {
+                                "Option<DateTimeUtc>"
+                            } else if passkey_native_schema
+                                && field.name == "counter"
+                                && database != Database::Sqlite
+                            {
+                                "i32"
+                            } else if definition.role == Some(EntityRole::Invitation)
                                 && field.name == "role"
                             {
                                 "Option<String>"
@@ -522,6 +546,15 @@ impl Entity {
                     Some("created_at") => 4,
                     Some("inviter_id") => 5,
                     _ => 6,
+                });
+        }
+        if passkey_native_schema {
+            entity
+                .fields
+                .sort_by_key(|field| match field.registry_column {
+                    Some("created_at") => 1,
+                    Some("aaguid") => 2,
+                    _ => 0,
                 });
         }
         Ok(entity)

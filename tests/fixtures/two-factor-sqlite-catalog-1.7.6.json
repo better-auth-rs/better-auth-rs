@@ -1,0 +1,1203 @@
+{
+  "version": "1.7.6",
+  "database": "sqlite",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "catalog": {
+        "user": {
+          "table": {
+            "type": "table",
+            "name": "user",
+            "tbl_name": "user"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "email",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "emailVerified",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "image",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "createdAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "updatedAt",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "twoFactorEnabled",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "sqlite_autoindex_user_2",
+                "unique": 1,
+                "origin": "u",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "email"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "email",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "sqlite_autoindex_user_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": []
+        },
+        "twoFactor": {
+          "table": {
+            "type": "table",
+            "name": "twoFactor",
+            "tbl_name": "twoFactor"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "secret",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "backupCodes",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "verified",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "failedVerificationCount",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "lockedUntil",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "twoFactor_userId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "userId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "twoFactor_secret_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "secret"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "secret",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_twoFactor_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "user",
+              "from": "userId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      },
+      "ddl": {
+        "user": [
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_user_1",
+            "tbl_name": "user",
+            "sql": null
+          },
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_user_2",
+            "tbl_name": "user",
+            "sql": null
+          },
+          {
+            "type": "table",
+            "name": "user",
+            "tbl_name": "user",
+            "sql": "CREATE TABLE \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null, \"twoFactorEnabled\" integer)"
+          }
+        ],
+        "twoFactor": [
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_twoFactor_1",
+            "tbl_name": "twoFactor",
+            "sql": null
+          },
+          {
+            "type": "index",
+            "name": "twoFactor_secret_idx",
+            "tbl_name": "twoFactor",
+            "sql": "CREATE INDEX \"twoFactor_secret_idx\" on \"twoFactor\" (\"secret\")"
+          },
+          {
+            "type": "index",
+            "name": "twoFactor_userId_idx",
+            "tbl_name": "twoFactor",
+            "sql": "CREATE INDEX \"twoFactor_userId_idx\" on \"twoFactor\" (\"userId\")"
+          },
+          {
+            "type": "table",
+            "name": "twoFactor",
+            "tbl_name": "twoFactor",
+            "sql": "CREATE TABLE \"twoFactor\" (\"id\" text not null primary key, \"secret\" text not null, \"backupCodes\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"verified\" integer, \"failedVerificationCount\" integer, \"lockedUntil\" date)"
+          }
+        ]
+      },
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null, \"twoFactorEnabled\" integer);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"twoFactor\" (\"id\" text not null primary key, \"secret\" text not null, \"backupCodes\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"verified\" integer, \"failedVerificationCount\" integer, \"lockedUntil\" date);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"twoFactor_secret_idx\" on \"twoFactor\" (\"secret\");\n\ncreate index \"twoFactor_userId_idx\" on \"twoFactor\" (\"userId\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "name": "legacy",
+      "configuration": {
+        "user": {
+          "modelName": "users",
+          "fields": {
+            "name": "name",
+            "email": "email",
+            "emailVerified": "email_verified",
+            "image": "image",
+            "createdAt": "created_at",
+            "updatedAt": "updated_at",
+            "twoFactorEnabled": "two_factor_enabled"
+          }
+        },
+        "twoFactor": {
+          "modelName": "two_factor",
+          "fields": {
+            "secret": "secret",
+            "backupCodes": "backup_codes",
+            "userId": "user_id",
+            "verified": "verified",
+            "failedVerificationCount": "failed_verification_count",
+            "lockedUntil": "locked_until"
+          }
+        }
+      },
+      "catalog": {
+        "user": {
+          "table": {
+            "type": "table",
+            "name": "users",
+            "tbl_name": "users"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "email",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "email_verified",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "image",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "created_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "updated_at",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "two_factor_enabled",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "sqlite_autoindex_users_2",
+                "unique": 1,
+                "origin": "u",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "email"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "email",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "sqlite_autoindex_users_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": []
+        },
+        "twoFactor": {
+          "table": {
+            "type": "table",
+            "name": "two_factor",
+            "tbl_name": "two_factor"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "secret",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "backup_codes",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "user_id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "verified",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "failed_verification_count",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "locked_until",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "two_factor_user_id_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "user_id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "user_id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "two_factor_secret_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "secret"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "secret",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_two_factor_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "users",
+              "from": "user_id",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      },
+      "ddl": {
+        "user": [
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_users_1",
+            "tbl_name": "users",
+            "sql": null
+          },
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_users_2",
+            "tbl_name": "users",
+            "sql": null
+          },
+          {
+            "type": "table",
+            "name": "users",
+            "tbl_name": "users",
+            "sql": "CREATE TABLE \"users\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"email_verified\" integer not null, \"image\" text, \"created_at\" date not null, \"updated_at\" date not null, \"two_factor_enabled\" integer)"
+          }
+        ],
+        "twoFactor": [
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_two_factor_1",
+            "tbl_name": "two_factor",
+            "sql": null
+          },
+          {
+            "type": "index",
+            "name": "two_factor_secret_idx",
+            "tbl_name": "two_factor",
+            "sql": "CREATE INDEX \"two_factor_secret_idx\" on \"two_factor\" (\"secret\")"
+          },
+          {
+            "type": "index",
+            "name": "two_factor_user_id_idx",
+            "tbl_name": "two_factor",
+            "sql": "CREATE INDEX \"two_factor_user_id_idx\" on \"two_factor\" (\"user_id\")"
+          },
+          {
+            "type": "table",
+            "name": "two_factor",
+            "tbl_name": "two_factor",
+            "sql": "CREATE TABLE \"two_factor\" (\"id\" text not null primary key, \"secret\" text not null, \"backup_codes\" text not null, \"user_id\" text not null references \"users\" (\"id\") on delete cascade, \"verified\" integer, \"failed_verification_count\" integer, \"locked_until\" date)"
+          }
+        ]
+      },
+      "migration": {
+        "initialSql": "create table \"users\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"email_verified\" integer not null, \"image\" text, \"created_at\" date not null, \"updated_at\" date not null, \"two_factor_enabled\" integer);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"users\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"two_factor\" (\"id\" text not null primary key, \"secret\" text not null, \"backup_codes\" text not null, \"user_id\" text not null references \"users\" (\"id\") on delete cascade, \"verified\" integer, \"failed_verification_count\" integer, \"locked_until\" date);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"two_factor_secret_idx\" on \"two_factor\" (\"secret\");\n\ncreate index \"two_factor_user_id_idx\" on \"two_factor\" (\"user_id\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_catalog_users",
+          "fields": {
+            "name": "display_name",
+            "email": "mail_label",
+            "emailVerified": "mail_confirmed",
+            "image": "portrait_text",
+            "createdAt": "created_on",
+            "updatedAt": "updated_on",
+            "twoFactorEnabled": "second_factor_enabled"
+          }
+        },
+        "twoFactor": {
+          "modelName": "display_catalog_two_factors",
+          "fields": {
+            "secret": "secret_text",
+            "backupCodes": "backup_text",
+            "userId": "person_link",
+            "verified": "is_verified",
+            "failedVerificationCount": "failure_count",
+            "lockedUntil": "locked_until_time"
+          }
+        }
+      },
+      "catalog": {
+        "user": {
+          "table": {
+            "type": "table",
+            "name": "display_catalog_users",
+            "tbl_name": "display_catalog_users"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "display_name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "mail_label",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "mail_confirmed",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "portrait_text",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "created_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "updated_on",
+              "type": "date",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "second_factor_enabled",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "sqlite_autoindex_display_catalog_users_2",
+                "unique": 1,
+                "origin": "u",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "mail_label"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 2,
+                  "name": "mail_label",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "sqlite_autoindex_display_catalog_users_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": []
+        },
+        "twoFactor": {
+          "table": {
+            "type": "table",
+            "name": "display_catalog_two_factors",
+            "tbl_name": "display_catalog_two_factors"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "secret_text",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "backup_text",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "person_link",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "is_verified",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "failure_count",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "locked_until_time",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "display_catalog_two_factors_person_link_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "person_link"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "person_link",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "display_catalog_two_factors_secret_text_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "secret_text"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 1,
+                  "name": "secret_text",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_display_catalog_two_factors_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "users",
+              "from": "person_link",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        }
+      },
+      "ddl": {
+        "user": [
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_display_catalog_users_1",
+            "tbl_name": "display_catalog_users",
+            "sql": null
+          },
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_display_catalog_users_2",
+            "tbl_name": "display_catalog_users",
+            "sql": null
+          },
+          {
+            "type": "table",
+            "name": "display_catalog_users",
+            "tbl_name": "display_catalog_users",
+            "sql": "CREATE TABLE \"display_catalog_users\" (\"id\" text not null primary key, \"display_name\" text not null, \"mail_label\" text not null unique, \"mail_confirmed\" integer not null, \"portrait_text\" text, \"created_on\" date not null, \"updated_on\" date not null, \"second_factor_enabled\" integer)"
+          }
+        ],
+        "twoFactor": [
+          {
+            "type": "index",
+            "name": "display_catalog_two_factors_person_link_idx",
+            "tbl_name": "display_catalog_two_factors",
+            "sql": "CREATE INDEX \"display_catalog_two_factors_person_link_idx\" on \"display_catalog_two_factors\" (\"person_link\")"
+          },
+          {
+            "type": "index",
+            "name": "display_catalog_two_factors_secret_text_idx",
+            "tbl_name": "display_catalog_two_factors",
+            "sql": "CREATE INDEX \"display_catalog_two_factors_secret_text_idx\" on \"display_catalog_two_factors\" (\"secret_text\")"
+          },
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_display_catalog_two_factors_1",
+            "tbl_name": "display_catalog_two_factors",
+            "sql": null
+          },
+          {
+            "type": "table",
+            "name": "display_catalog_two_factors",
+            "tbl_name": "display_catalog_two_factors",
+            "sql": "CREATE TABLE \"display_catalog_two_factors\" (\"id\" text not null primary key, \"secret_text\" text not null, \"backup_text\" text not null, \"person_link\" text not null references \"users\" (\"id\") on delete cascade, \"is_verified\" integer, \"failure_count\" integer, \"locked_until_time\" date)"
+          }
+        ]
+      },
+      "migration": {
+        "initialSql": "create table \"display_catalog_users\" (\"id\" text not null primary key, \"display_name\" text not null, \"mail_label\" text not null unique, \"mail_confirmed\" integer not null, \"portrait_text\" text, \"created_on\" date not null, \"updated_on\" date not null, \"second_factor_enabled\" integer);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"display_catalog_users\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"display_catalog_users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"display_catalog_two_factors\" (\"id\" text not null primary key, \"secret_text\" text not null, \"backup_text\" text not null, \"person_link\" text not null references \"users\" (\"id\") on delete cascade, \"is_verified\" integer, \"failure_count\" integer, \"locked_until_time\" date);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_two_factors_secret_text_idx\" on \"display_catalog_two_factors\" (\"secret_text\");\n\ncreate index \"display_catalog_two_factors_person_link_idx\" on \"display_catalog_two_factors\" (\"person_link\");",
+        "repeatedSql": ";"
+      }
+    }
+  ]
+}

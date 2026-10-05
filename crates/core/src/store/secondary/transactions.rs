@@ -300,6 +300,9 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
             .delete_user_optional(id, delete_database_sessions)
             .await
     }
+    fn passkey_storage(&self) -> crate::PasskeyStorage {
+        self.inner.passkey_storage()
+    }
     async fn create_passkey(&self, input: crate::CreatePasskey) -> AuthResult<crate::Passkey> {
         self.inner.create_passkey(input).await
     }

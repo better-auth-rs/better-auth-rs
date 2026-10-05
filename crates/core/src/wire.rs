@@ -541,7 +541,8 @@ pub struct PasskeyView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<Option<String>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
     pub aaguid: SchemaValue<Option<String>>,
@@ -559,9 +560,9 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
             device_type: pk.device_type().to_owned(),
             backed_up: pk.backed_up(),
             transports: pk.transports().map(str::to_owned),
-            created_at: pk
-                .created_at()
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            created_at: pk.created_at().as_ref().map(|date| {
+                date.map(|date| date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+            }),
             aaguid: pk.aaguid().clone(),
         }
     }

@@ -284,7 +284,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .store()
         .update_passkey_authentication(
             &passkey.id,
-            UpdatePasskeyAuthentication {
+            UpdatePasskeyAuthentication::Legacy {
                 credential: "updated-state".into(),
                 counter: 4,
                 backed_up: true,
@@ -300,7 +300,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(persisted.credential, "updated-state");
+    assert_eq!(persisted.credential.typed().unwrap(), "updated-state");
     assert!(persisted.backed_up);
     assert_eq!(
         auth.store()

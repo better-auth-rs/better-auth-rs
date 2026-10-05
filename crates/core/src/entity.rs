@@ -273,10 +273,10 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn device_type(&self) -> &str;
     fn backed_up(&self) -> bool;
     fn transports(&self) -> Option<&str>;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn created_at(&self) -> &SchemaValue<Option<DateTime<Utc>>>;
+    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>>;
     fn aaguid(&self) -> &SchemaValue<Option<String>>;
-    fn credential(&self) -> &str;
+    fn credential(&self) -> &SchemaValue<String>;
 }
 
 /// Minimal user info for member-related API responses.

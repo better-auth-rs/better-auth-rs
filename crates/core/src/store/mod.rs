@@ -278,6 +278,10 @@ pub trait AuthTransaction<S: AuthSchema>:
         ))
     }
 
+    /// Select the representation accepted by transactional passkey creation.
+    fn passkey_storage(&self) -> crate::PasskeyStorage {
+        crate::PasskeyStorage::Legacy
+    }
     async fn create_passkey(&self, passkey: CreatePasskey) -> AuthResult<Passkey>;
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<crate::wire::UserView>;
     async fn create_account(
@@ -1129,6 +1133,10 @@ pub enum ConsumeApiKeyResult {
 
 #[async_trait]
 pub trait PasskeyStore: Send + Sync {
+    /// Select the representation accepted by passkey creation and authentication updates.
+    fn passkey_storage(&self) -> crate::PasskeyStorage {
+        crate::PasskeyStorage::Legacy
+    }
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey>;
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>>;
     async fn get_passkey_by_credential_id(

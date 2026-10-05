@@ -184,6 +184,9 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
             .await
     }
 
+    fn passkey_storage(&self) -> crate::PasskeyStorage {
+        self.store.passkey_storage()
+    }
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         self.store.create_passkey(input).await
     }

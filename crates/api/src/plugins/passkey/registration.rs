@@ -13,6 +13,7 @@ use super::{
     PasskeyConfig, PasskeyCredential, PasskeyEndpoint, PasskeyExtensions, PasskeyRegistrationInfo,
     PasskeyRegistrationUser, PasskeyRegistrationVerification,
     callbacks::Users,
+    credential::WebAuthnCredential,
     handlers::{PasskeyHandlerOutcome, PasskeyHandlerResult, response_message},
     types::VerifyRegistrationRequest,
     webauthn::*,
@@ -200,8 +201,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
             .map_err(|error| {
                 AuthError::internal(format!("WebAuthn registration failed: {error}"))
             })?;
-        let stored = StoredPasskey { cred: credential };
-        let snapshot = snapshot_passkey(&stored)?;
+        let stored = WebAuthnCredential::registered(credential, ctx.database.passkey_storage());
         let metadata = extract_registration_metadata(&registration)?;
         let transports = registration
             .response
@@ -219,14 +219,14 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
                     public_key: base64::engine::general_purpose::STANDARD
                         .decode(&metadata.public_key)
                         .map_err(|error| AuthError::internal(error.to_string()))?,
-                    counter: snapshot.counter,
+                    counter: u64::from(stored.cred.counter),
                     transports: transports.clone(),
                 },
                 credential_type: "public-key",
                 attestation_object: registration.response.attestation_object.as_ref().to_vec(),
                 user_verified: stored.cred.user_verified,
-                credential_device_type: snapshot.device_type(),
-                credential_backed_up: snapshot.backed_up,
+                credential_device_type: stored.device_type(),
+                credential_backed_up: stored.cred.backup_state,
                 origin: client_origin(registration.response.client_data_json.as_ref())?,
                 rp_id: rp_id(config, &ctx.config)?,
                 authenticator_extension_results: metadata.extensions,
@@ -242,11 +242,11 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
                 .unwrap_or_default(),
             credential_id,
             public_key: metadata.public_key,
-            counter: snapshot.counter,
-            device_type: snapshot.device_type().into(),
-            backed_up: snapshot.backed_up,
+            counter: u64::from(stored.cred.counter),
+            device_type: stored.device_type().into(),
+            backed_up: stored.cred.backup_state,
             transports: Some(transports.unwrap_or_default().join(",")),
-            credential: snapshot.serialized,
+            credential: stored.create_state()?,
             aaguid: metadata
                 .aaguid
                 .map(|aaguid| Some(aaguid).into())

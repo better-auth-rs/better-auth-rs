@@ -96,7 +96,7 @@ fn merge_keeps_private_passkey_credential_updates() {
         device_type: "singleDevice".into(),
         backed_up: false,
         transports: None,
-        created_at: Utc::now().into(),
+        created_at: Some(Utc::now()).into(),
         updated_at: Utc::now().into(),
         aaguid: None.into(),
         credential: "private-before".into(),
