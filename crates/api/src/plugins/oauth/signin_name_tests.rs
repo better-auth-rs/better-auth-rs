@@ -132,7 +132,8 @@ async fn callback_names_normalize_for_storage_and_admission_without_changing_raw
             assert_eq!(
                 profile
                     .get_user_info(&OAuthUserInfoRequest::default())
-                    .await?,
+                    .await?
+                    .ok_or("missing ordinary profile")?,
                 raw
             );
         }

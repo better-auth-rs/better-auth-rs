@@ -90,8 +90,8 @@ impl<'a> GenericOAuthProfileContext<'a> {
 /// Fetches the raw profile used for Generic OAuth account recognition.
 #[async_trait]
 pub trait GenericOAuthUserInfoHandler: Send + Sync {
-    /// Return a provider profile or reject the authentication attempt.
-    async fn get_user_info(&self, tokens: &OAuthUserInfoRequest) -> AuthResult<Value>;
+    /// Return a raw provider profile, `None` when unavailable, or an application error.
+    async fn get_user_info(&self, tokens: &OAuthUserInfoRequest) -> AuthResult<Option<Value>>;
 
     /// Read resolved options and completed verification before mapping a profile.
     /// Existing handlers retain their token-based lookup unless they override this method.
@@ -99,7 +99,7 @@ pub trait GenericOAuthUserInfoHandler: Send + Sync {
         &self,
         tokens: &OAuthUserInfoRequest,
         _context: GenericOAuthProfileContext<'_>,
-    ) -> AuthResult<Value> {
+    ) -> AuthResult<Option<Value>> {
         self.get_user_info(tokens).await
     }
 }

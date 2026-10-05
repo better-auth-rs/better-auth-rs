@@ -5,8 +5,13 @@ use serde_json::Value;
 
 #[derive(Clone)]
 pub(super) enum ProviderKind {
+    Apple(super::apple::AppleOptions),
     Facebook(super::facebook::FacebookOptions),
     Cognito(super::super::CognitoOptions),
+    Microsoft {
+        options: super::microsoft::MicrosoftOptions,
+        token_endpoint_auth: Option<super::TokenEndpointAuth>,
+    },
     Paybin {
         issuer: String,
     },
@@ -14,6 +19,7 @@ pub(super) enum ProviderKind {
     PayPal,
     Google {
         jwks_url: String,
+        options: super::super::GoogleOptions,
     },
     GitHub {
         user_url: String,
@@ -27,6 +33,7 @@ pub(super) enum ProviderKind {
     Railway,
     Roblox,
     Notion,
+    Twitch(super::twitch::TwitchOptions),
     Vercel,
 
     Figma,
@@ -48,6 +55,7 @@ pub(super) enum ProviderKind {
     Cloudflare,
     Salesforce,
     Twitter,
+    TikTok,
     Vk,
     WeChat {
         refresh_url: String,
@@ -57,7 +65,11 @@ pub(super) enum ProviderKind {
 impl ProviderKind {
     pub(super) fn scopes(&self) -> &'static [&'static str] {
         match self {
+            Self::Apple(_) => &["email", "name"],
             Self::Facebook(_) => &["email", "public_profile"],
+            Self::Microsoft { .. } => {
+                &["openid", "profile", "email", "User.Read", "offline_access"]
+            }
             Self::Custom | Self::Vercel | Self::Zoom { .. } | Self::PayPal | Self::Notion => &[],
             Self::Google { .. } => &["email", "profile", "openid"],
             Self::GitHub { .. } => &["read:user", "user:email"],
@@ -83,15 +95,19 @@ impl ProviderKind {
                 &["openid", "email", "profile"]
             }
             Self::Roblox => &["openid", "profile"],
+            Self::Twitch(_) => &["user:read:email", "openid"],
             Self::Twitter => &["users.read", "tweet.read", "offline.access", "users.email"],
+            Self::TikTok => &["user.info.profile"],
             Self::Vk => &["email", "phone"],
             Self::WeChat { .. } => &["snsapi_login"],
         }
     }
     pub(super) fn decode_profile(&self, profile: Value) -> AuthResult<Option<OAuthUserInfo>> {
         let mapper = match self {
+            Self::Apple(_) => super::apple::decode_profile,
             Self::Facebook(_) => super::facebook::graph_profile,
             Self::Cognito(_) => super::super::cognito::decode_profile,
+            Self::Microsoft { .. } => super::microsoft::decode_profile,
             Self::Paybin { .. } => super::paybin::decode_profile,
             Self::PayPal => super::paypal::decode_profile,
             Self::Google { .. } => google_profile,
@@ -111,6 +127,7 @@ impl ProviderKind {
             Self::Railway => railway_profile,
             Self::Roblox => roblox_profile,
             Self::Notion => notion_profile,
+            Self::Twitch(_) => super::twitch::decode_profile,
             Self::Vercel if profile.is_null() => return Ok(None),
             Self::Figma if profile.is_null() => return Ok(None),
             Self::Salesforce if profile.is_null() => return Ok(None),
@@ -133,6 +150,7 @@ impl ProviderKind {
             Self::Cloudflare => cloudflare_profile,
             Self::Salesforce => salesforce_profile,
             Self::Twitter => super::twitter::decode_profile,
+            Self::TikTok => super::tiktok::decode_profile,
             Self::Vk => vk_profile,
             Self::WeChat { .. } => super::wechat::decode_profile,
             Self::GitHub { .. } | Self::Custom => {

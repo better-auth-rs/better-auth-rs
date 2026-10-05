@@ -509,11 +509,8 @@ pub(super) async fn handle_account_info(
     let (user, data) = if let Some(generic) = &provider.generic {
         let info = super::generic_profile::fetch_profile(generic, &request, None, None)
             .await
-            .map_err(|_| AuthError::Upstream {
-                status: 401,
-                code: "FAILED_TO_GET_USER_INFO",
-                message: "Failed to get user info",
-            })?;
+            .map_err(super::generic_profile::GenericProfileError::into_auth_error)?
+            .ok_or_else(super::social_profile::missing_profile)?;
         (info.user, info.data)
     } else {
         let info = fetch_user_info_from_provider(provider, request, None)

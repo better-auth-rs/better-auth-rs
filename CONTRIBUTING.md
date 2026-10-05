@@ -103,6 +103,8 @@ Push and pull-request runs execute all check stages. For a manual CI run, select
 
 `scripts/check.sh` accepts one optional stage: `dependencies`, `format`, `lint-default`, `lint-features`, `workspace-tests`, `rustls`, `rustdoc`, `consumer`, `fullstack`, `quick-start`, or `alignment`. No argument, or `all`, runs every stage in order. CI displays each stage as a separate step and installs the locked compatibility dependencies before any selected stage. To invoke one stage, use `devenv shell -- ./scripts/check.sh lint-default`. A local stage invocation requires its dependencies to be installed first. The alignment stage lets Cargo build its selected test targets; the compatibility harness builds its server once. No separate workspace build or workspace-test run is required before a focused alignment stage.
 
+The additional `client-configuration` stage runs only the existing configuration client compatibility test. Select this stage to investigate configuration contract failures. The `alignment` stage already includes this test, so `all` does not execute the additional stage again.
+
 The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing PostgreSQL contracts and the MySQL schema preflight contract. The MySQL test creates and deletes an isolated database, so its CI account needs those permissions. These tests do not establish upstream database sampling. To run the same complete check locally when needed, use:
 
 ```bash

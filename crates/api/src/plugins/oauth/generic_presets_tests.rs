@@ -274,7 +274,11 @@ async fn preset_requests_profiles_and_json_mapper_inputs_match_pinned_helpers() 
         );
         let events = Events::default();
         let (local, server) = local_profile(preset, case, requests.len(), events.clone()).await;
-        let profile = local.get_user_info(&tokens).await.unwrap();
+        let profile = local
+            .get_user_info(&tokens)
+            .await
+            .unwrap()
+            .unwrap_or(Value::Null);
         assert_eq!(profile, expected["profile"], "{id}: {}", case["name"]);
         if !profile.is_null() {
             let mut config = config(id, &fixture);
@@ -302,6 +306,7 @@ async fn preset_requests_profiles_and_json_mapper_inputs_match_pinned_helpers() 
             };
             let response = generic_profile::fetch_profile(&resolved, &tokens, None, None)
                 .await
+                .unwrap()
                 .unwrap();
             assert_eq!(
                 json!({ "user": response.user, "data": response.data }),

@@ -1,0 +1,851 @@
+{
+  "version": "1.7.6",
+  "metadata": {
+    "clientId": "ordinary-microsoft-client",
+    "clientSecret": "ordinary-microsoft-secret-0123456789",
+    "clientKey": "ordinary-client-key",
+    "secondaryClientId": "ordinary-secondary-client",
+    "callbackURL": "https://social-microsoft.example.test/api/auth/callback/microsoft",
+    "codeVerifier": "ordinary-microsoft-code-verifier-012345678901234567890123456789"
+  },
+  "authorization": [
+    {
+      "name": "defaults",
+      "options": {},
+      "url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id=ordinary-microsoft-client&state=ordinary-state&scope=openid+profile+email+User.Read+offline_access&redirect_uri=https%3A%2F%2Fsocial-microsoft.example.test%2Fapi%2Fauth%2Fcallback%2Fmicrosoft&login_hint=microsoft%40example.test&code_challenge_method=S256&code_challenge=XOuwo_Gv9sEptyzAzP-N_YkIdySdwDVYjriBl8w1X50"
+    },
+    {
+      "name": "empty defaults",
+      "options": {
+        "tenantId": "",
+        "authority": "",
+        "clientSecret": ""
+      },
+      "url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id=ordinary-microsoft-client&state=ordinary-state&scope=openid+profile+email+User.Read+offline_access&redirect_uri=https%3A%2F%2Fsocial-microsoft.example.test%2Fapi%2Fauth%2Fcallback%2Fmicrosoft&login_hint=microsoft%40example.test&code_challenge_method=S256&code_challenge=XOuwo_Gv9sEptyzAzP-N_YkIdySdwDVYjriBl8w1X50"
+    },
+    {
+      "name": "configured",
+      "options": {
+        "tenantId": "OrdinaryTenant",
+        "authority": "https://ordinary-authority.example.test///",
+        "scope": [
+          "extra",
+          "openid"
+        ],
+        "prompt": "consent",
+        "redirectURI": "https://app.example.test/configured-callback"
+      },
+      "requestScopes": [
+        "request",
+        "extra"
+      ],
+      "additionalParams": {
+        "domain_hint": "organizations"
+      },
+      "url": "https://ordinary-authority.example.test/OrdinaryTenant/oauth2/v2.0/authorize?response_type=code&client_id=ordinary-microsoft-client&state=ordinary-state&scope=openid+profile+email+User.Read+offline_access+extra+openid+request+extra&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&login_hint=microsoft%40example.test&prompt=consent&code_challenge_method=S256&code_challenge=XOuwo_Gv9sEptyzAzP-N_YkIdySdwDVYjriBl8w1X50&domain_hint=organizations"
+    },
+    {
+      "name": "empty scope",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": []
+      },
+      "requestScopes": [],
+      "url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id=ordinary-microsoft-client&state=ordinary-state&redirect_uri=https%3A%2F%2Fsocial-microsoft.example.test%2Fapi%2Fauth%2Fcallback%2Fmicrosoft&login_hint=microsoft%40example.test&code_challenge_method=S256&code_challenge=XOuwo_Gv9sEptyzAzP-N_YkIdySdwDVYjriBl8w1X50"
+    }
+  ],
+  "grants": [
+    {
+      "name": "defaults",
+      "options": {},
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "openid ordinary-returned-scope"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-microsoft-code-verifier-012345678901234567890123456789",
+            "client_key": "ordinary-client-key",
+            "redirect_uri": "https://social-microsoft.example.test/api/auth/callback/microsoft",
+            "client_id": "ordinary-microsoft-client",
+            "client_secret": "ordinary-microsoft-secret-0123456789"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "scope": "openid profile email User.Read offline_access",
+            "client_id": "ordinary-microsoft-client",
+            "client_secret": "ordinary-microsoft-secret-0123456789"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "openid ordinary-returned-scope"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ]
+        }
+      ],
+      "assertionCalls": []
+    },
+    {
+      "name": "configured scopes",
+      "options": {
+        "scope": [
+          "extra",
+          "openid"
+        ],
+        "redirectURI": "https://app.example.test/configured-callback"
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "openid ordinary-returned-scope"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-microsoft-code-verifier-012345678901234567890123456789",
+            "client_key": "ordinary-client-key",
+            "redirect_uri": "https://app.example.test/configured-callback",
+            "client_id": "ordinary-microsoft-client",
+            "client_secret": "ordinary-microsoft-secret-0123456789"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "scope": "openid profile email User.Read offline_access extra openid",
+            "client_id": "ordinary-microsoft-client",
+            "client_secret": "ordinary-microsoft-secret-0123456789"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "openid ordinary-returned-scope"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ]
+        }
+      ],
+      "assertionCalls": []
+    },
+    {
+      "name": "empty scope",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": []
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "openid ordinary-returned-scope"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-microsoft-code-verifier-012345678901234567890123456789",
+            "client_key": "ordinary-client-key",
+            "redirect_uri": "https://social-microsoft.example.test/api/auth/callback/microsoft",
+            "client_id": "ordinary-microsoft-client",
+            "client_secret": "ordinary-microsoft-secret-0123456789"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "scope": "",
+            "client_id": "ordinary-microsoft-client",
+            "client_secret": "ordinary-microsoft-secret-0123456789"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "openid ordinary-returned-scope"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ]
+        }
+      ],
+      "assertionCalls": []
+    },
+    {
+      "name": "public client",
+      "options": {
+        "clientSecret": ""
+      },
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "openid ordinary-returned-scope"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-microsoft-code-verifier-012345678901234567890123456789",
+            "client_key": "ordinary-client-key",
+            "redirect_uri": "https://social-microsoft.example.test/api/auth/callback/microsoft",
+            "client_id": "ordinary-microsoft-client"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "scope": "openid profile email User.Read offline_access",
+            "client_id": "ordinary-microsoft-client"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "openid ordinary-returned-scope"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ]
+        }
+      ],
+      "assertionCalls": []
+    },
+    {
+      "name": "assertion",
+      "options": {
+        "clientSecret": ""
+      },
+      "assertion": true,
+      "rawResponse": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "openid ordinary-returned-scope"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-microsoft-code-verifier-012345678901234567890123456789",
+            "client_key": "ordinary-client-key",
+            "redirect_uri": "https://social-microsoft.example.test/api/auth/callback/microsoft",
+            "client_id": "ordinary-microsoft-client",
+            "client_assertion": "ordinary-assertion",
+            "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "scope": "openid profile email User.Read offline_access",
+            "client_id": "ordinary-microsoft-client",
+            "client_assertion": "ordinary-assertion",
+            "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "openid ordinary-returned-scope"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "openid",
+            "ordinary-returned-scope"
+          ]
+        }
+      ],
+      "assertionCalls": [
+        {
+          "clientId": "ordinary-microsoft-client",
+          "tokenEndpoint": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+          "grantType": "authorization_code"
+        },
+        {
+          "clientId": "ordinary-microsoft-client",
+          "tokenEndpoint": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+          "grantType": "refresh_token"
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "name": "default fields",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US"
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "https://images.example.test/microsoft.png",
+          "emailVerified": false
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "https://images.example.test/microsoft.png",
+          "locale": "en-US"
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "absent fields",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "locale": "en-US"
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "emailVerified": false
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "locale": "en-US"
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "null fields",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": null,
+        "email": null,
+        "picture": null,
+        "locale": "en-US",
+        "email_verified": null
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "name": null,
+          "email": null,
+          "image": null,
+          "emailVerified": null
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": null,
+          "email": null,
+          "picture": null,
+          "locale": "en-US",
+          "email_verified": null
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "primary email",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US",
+        "verified_primary_email": [
+          "microsoft@example.test"
+        ]
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "https://images.example.test/microsoft.png",
+          "emailVerified": true
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "https://images.example.test/microsoft.png",
+          "locale": "en-US",
+          "verified_primary_email": [
+            "microsoft@example.test"
+          ]
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "secondary email",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US",
+        "verified_secondary_email": [
+          "microsoft@example.test"
+        ]
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "https://images.example.test/microsoft.png",
+          "emailVerified": true
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "https://images.example.test/microsoft.png",
+          "locale": "en-US",
+          "verified_secondary_email": [
+            "microsoft@example.test"
+          ]
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "explicit false",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US",
+        "email_verified": false,
+        "verified_primary_email": [
+          "microsoft@example.test"
+        ]
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "https://images.example.test/microsoft.png",
+          "emailVerified": false
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "https://images.example.test/microsoft.png",
+          "locale": "en-US",
+          "email_verified": false,
+          "verified_primary_email": [
+            "microsoft@example.test"
+          ]
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "explicit true",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US",
+        "email_verified": true
+      },
+      "options": {},
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "https://images.example.test/microsoft.png",
+          "emailVerified": true
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "https://images.example.test/microsoft.png",
+          "locale": "en-US",
+          "email_verified": true
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    },
+    {
+      "name": "photo default",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US"
+      },
+      "options": {},
+      "accessToken": "ordinary-access",
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "data:image/jpeg;base64, /9j/4AAQSkY=",
+          "emailVerified": false
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "data:image/jpeg;base64, /9j/4AAQSkY=",
+          "locale": "en-US"
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [
+        {
+          "url": "https://graph.microsoft.com/v1.0/me/photos/48x48/%24value",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access"
+        }
+      ],
+      "mapperInputs": []
+    },
+    {
+      "name": "photo mapped",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US"
+      },
+      "options": {
+        "profilePhotoSize": 96
+      },
+      "accessToken": "ordinary-access",
+      "mapped": {
+        "name": "Mapped Microsoft Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "result": {
+        "user": {
+          "name": "Mapped Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": null,
+          "emailVerified": true,
+          "locale": "zh-TW"
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "data:image/jpeg;base64, /9j/4AAQSkY=",
+          "locale": "en-US"
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [
+        {
+          "url": "https://graph.microsoft.com/v1.0/me/photos/96x96/%24value",
+          "method": "GET",
+          "authorization": "Bearer ordinary-access"
+        }
+      ],
+      "mapperInputs": [
+        {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "data:image/jpeg;base64, /9j/4AAQSkY=",
+          "locale": "en-US"
+        }
+      ]
+    },
+    {
+      "name": "photo disabled",
+      "profile": {
+        "oid": "ordinary-microsoft-owner",
+        "sub": "ordinary-app-subject",
+        "name": "Microsoft Owner",
+        "email": "microsoft@example.test",
+        "picture": "https://images.example.test/microsoft.png",
+        "locale": "en-US"
+      },
+      "options": {
+        "disableProfilePhoto": true
+      },
+      "accessToken": "ordinary-access",
+      "result": {
+        "user": {
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "image": "https://images.example.test/microsoft.png",
+          "emailVerified": false
+        },
+        "data": {
+          "oid": "ordinary-microsoft-owner",
+          "sub": "ordinary-app-subject",
+          "name": "Microsoft Owner",
+          "email": "microsoft@example.test",
+          "picture": "https://images.example.test/microsoft.png",
+          "locale": "en-US"
+        }
+      },
+      "subject": "ordinary-microsoft-owner",
+      "requests": [],
+      "mapperInputs": []
+    }
+  ],
+  "custom": {
+    "result": {
+      "user": {
+        "id": "application-owner",
+        "name": "Application Owner",
+        "email": "application@example.test",
+        "emailVerified": true
+      },
+      "data": {
+        "source": "application"
+      }
+    },
+    "calls": 1,
+    "mapperCalls": 0,
+    "requests": []
+  },
+  "signed": [
+    {
+      "tenant": "common",
+      "tid": "ordinary-tenant",
+      "audience": "ordinary-microsoft-client",
+      "authority": "https://ordinary-authority.example.test",
+      "verified": true,
+      "requests": [
+        {
+          "url": "https://ordinary-authority.example.test/common/discovery/v2.0/keys",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "tenant": "organizations",
+      "tid": "ordinary-tenant",
+      "audience": "ordinary-secondary-client",
+      "authority": "https://ordinary-authority.example.test",
+      "verified": true,
+      "requests": [
+        {
+          "url": "https://ordinary-authority.example.test/organizations/discovery/v2.0/keys",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "tenant": "consumers",
+      "tid": "9188040d-6c67-4c5b-b112-36a304b66dad",
+      "audience": "ordinary-microsoft-client",
+      "authority": "https://ordinary-authority.example.test",
+      "verified": true,
+      "requests": [
+        {
+          "url": "https://ordinary-authority.example.test/consumers/discovery/v2.0/keys",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "tenant": "OrdinaryTenant",
+      "tid": "OrdinaryTenant",
+      "audience": "ordinary-microsoft-client",
+      "authority": "https://ordinary-authority.example.test",
+      "verified": true,
+      "requests": [
+        {
+          "url": "https://ordinary-authority.example.test/OrdinaryTenant/discovery/v2.0/keys",
+          "method": "GET"
+        }
+      ]
+    }
+  ]
+}

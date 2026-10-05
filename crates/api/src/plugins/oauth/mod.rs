@@ -9,6 +9,11 @@ use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
 mod account;
+#[cfg(test)]
+mod apple_flow_tests;
+#[cfg(test)]
+mod apple_tests;
+pub use providers::apple::AppleOptions;
 mod authorization;
 mod callback;
 mod cognito;
@@ -26,9 +31,16 @@ mod generic;
 mod generic_presets;
 mod generic_profile;
 pub(super) mod google;
+pub use google::GoogleOptions;
+#[cfg(all(test, feature = "axum"))]
+mod google_client_ids_tests;
 mod handlers;
 mod id_token;
 pub use providers::facebook::FacebookOptions;
+pub use providers::microsoft::{MicrosoftOptions, MicrosoftProfilePhotoSize};
+#[cfg(all(test, feature = "axum"))]
+mod microsoft_tests;
+pub use providers::twitch::TwitchOptions;
 mod line;
 mod microsoft_entra;
 pub(crate) use handlers::validate_redirect_target;
@@ -58,6 +70,8 @@ mod social_profile;
 mod social_token_wire_tests;
 mod state;
 mod state_json;
+#[cfg(all(test, feature = "axum"))]
+mod tiktok_tests;
 mod token;
 #[cfg(test)]
 mod twitter_tests;

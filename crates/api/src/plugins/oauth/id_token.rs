@@ -5,9 +5,11 @@ use super::resolved::ResolvedProvider;
 use super::types::OAuthIdTokenRequest;
 
 pub(super) enum VerifiedIdToken {
+    Apple(serde_json::Value),
     Google(VerifiedGoogleClaims),
     Generic(serde_json::Value),
     Cognito(serde_json::Value),
+    Microsoft(serde_json::Value),
     Paybin(serde_json::Value),
     PayPal(serde_json::Value),
     Facebook(serde_json::Value),
@@ -30,6 +32,14 @@ pub(super) async fn verify(
             && provider.config.get_user_info.is_none()
         {
             accepted.claims().map(VerifiedIdToken::Google).map(Some)
+        } else if provider.config.microsoft_options().is_some()
+            && provider.config.get_user_info.is_none()
+        {
+            accepted.value().map(VerifiedIdToken::Microsoft).map(Some)
+        } else if provider.config.apple_options().is_some()
+            && provider.config.get_user_info.is_none()
+        {
+            accepted.value().map(VerifiedIdToken::Apple).map(Some)
         } else if provider.config.cognito_options().is_some()
             && provider.config.get_user_info.is_none()
         {
@@ -72,6 +82,20 @@ pub(super) async fn verify(
             .map(VerifiedIdToken::Facebook)
             .map(Some);
     }
+    if let Some(options) = provider.config.microsoft_options() {
+        return options
+            .verify(&provider.config.client_id, token, nonce)
+            .await
+            .map(VerifiedIdToken::Microsoft)
+            .map(Some);
+    }
+    if let Some(options) = provider.config.apple_options() {
+        return options
+            .verify(&provider.config.client_id, token, nonce)
+            .await
+            .map(VerifiedIdToken::Apple)
+            .map(Some);
+    }
     if let Some(options) = provider.config.cognito_options() {
         return options
             .verify(&provider.config.client_id, token, nonce)
@@ -80,14 +104,9 @@ pub(super) async fn verify(
             .map(Some);
     }
     if let Some(jwks_url) = provider.config.google_jwks_url() {
-        let claims = google::verify(
-            token,
-            std::slice::from_ref(&provider.config.client_id),
-            nonce,
-            jwks_url,
-        )
-        .await
-        .ok_or_else(invalid)?;
+        let claims = google::verify(token, &provider.config.google_client_ids(), nonce, jwks_url)
+            .await
+            .ok_or_else(invalid)?;
         if !claims.matches_hosted_domain(provider.config.google_hosted_domain()) {
             return Err(invalid());
         }

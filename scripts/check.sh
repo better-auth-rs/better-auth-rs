@@ -25,6 +25,10 @@ run_stage() {
     fullstack) cargo check --locked --manifest-path examples/fullstack/backend/Cargo.toml ;;
     quick-start) bun scripts/quick-start-check.ts ;;
     alignment) ./scripts/alignment-check.sh --skip-build ;;
+    client-configuration)
+      cargo test --locked --test client_compat_tests -- \
+        --ignored --nocapture --exact --test-threads=1 configuration_client_compat
+      ;;
     *) echo "Unknown check stage: $1" >&2; exit 1 ;;
   esac
 }

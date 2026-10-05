@@ -1,0 +1,273 @@
+{
+  "version": "1.7.6",
+  "clientId": "ordinary-twitch-client",
+  "clientSecret": "ordinary-twitch-secret-at-least-32-characters",
+  "clientKey": "ordinary-twitch-key",
+  "callbackURL": "https://app.example.test/api/auth/callback/twitch",
+  "codeVerifier": "ordinary-twitch-code-verifier-at-least-forty-three-characters",
+  "endpoints": {
+    "authorization": "https://id.twitch.tv/oauth2/authorize",
+    "token": "https://id.twitch.tv/oauth2/token"
+  },
+  "authorization": [
+    {
+      "name": "defaults",
+      "options": {},
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22preferred_username%22%3Anull%2C%22picture%22%3Anull%7D%7D"
+    },
+    {
+      "name": "appended",
+      "options": {
+        "scope": [
+          "extra",
+          "openid"
+        ]
+      },
+      "requestScopes": [
+        "request",
+        "extra"
+      ],
+      "additionalParams": {
+        "request_marker": "ordinary"
+      },
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid+extra+openid+request+extra&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22preferred_username%22%3Anull%2C%22picture%22%3Anull%7D%7D&request_marker=ordinary"
+    },
+    {
+      "name": "disabled",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": [
+          "extra"
+        ]
+      },
+      "requestScopes": [
+        "request"
+      ],
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=extra+request&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22preferred_username%22%3Anull%2C%22picture%22%3Anull%7D%7D"
+    },
+    {
+      "name": "empty scopes",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": []
+      },
+      "requestScopes": [],
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22preferred_username%22%3Anull%2C%22picture%22%3Anull%7D%7D"
+    },
+    {
+      "name": "configured claims",
+      "options": {
+        "claims": [
+          "picture",
+          "locale",
+          "email",
+          "locale"
+        ]
+      },
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22picture%22%3Anull%2C%22locale%22%3Anull%7D%7D"
+    },
+    {
+      "name": "empty claims",
+      "options": {
+        "claims": []
+      },
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%7D%7D"
+    },
+    {
+      "name": "configured prompt",
+      "options": {
+        "prompt": "consent"
+      },
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22preferred_username%22%3Anull%2C%22picture%22%3Anull%7D%7D"
+    },
+    {
+      "name": "configured endpoints",
+      "options": {
+        "authorizationEndpoint": "https://twitch.example.test/authorize?marker=configured",
+        "redirectURI": "https://app.example.test/configured-callback"
+      },
+      "url": "https://twitch.example.test/authorize?marker=configured&response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&claims=%7B%22id_token%22%3A%7B%22email%22%3Anull%2C%22email_verified%22%3Anull%2C%22preferred_username%22%3Anull%2C%22picture%22%3Anull%7D%7D"
+    },
+    {
+      "name": "request claims",
+      "options": {},
+      "additionalParams": {
+        "claims": "{\"id_token\":{\"preferred_username\":null}}"
+      },
+      "url": "https://id.twitch.tv/oauth2/authorize?response_type=code&client_id=ordinary-twitch-client&state=ordinary-state&scope=user%3Aread%3Aemail+openid&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&claims=%7B%22id_token%22%3A%7B%22preferred_username%22%3Anull%7D%7D"
+    }
+  ],
+  "profiles": [
+    {
+      "name": "populated profile",
+      "profile": {
+        "sub": "ordinary-twitch-user",
+        "preferred_username": "Twitch Reader",
+        "email": "twitch@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/twitch.png",
+        "locale": "en-US"
+      },
+      "result": {
+        "user": {
+          "name": "Twitch Reader",
+          "email": "twitch@example.test",
+          "image": "https://images.example.test/twitch.png",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-twitch-user",
+          "preferred_username": "Twitch Reader",
+          "email": "twitch@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/twitch.png",
+          "locale": "en-US"
+        }
+      }
+    },
+    {
+      "name": "nullable display fields",
+      "profile": {
+        "sub": "ordinary-twitch-user",
+        "preferred_username": null,
+        "email": "twitch@example.test",
+        "email_verified": true,
+        "picture": null,
+        "locale": "en-US"
+      },
+      "result": {
+        "user": {
+          "name": null,
+          "email": "twitch@example.test",
+          "image": null,
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-twitch-user",
+          "preferred_username": null,
+          "email": "twitch@example.test",
+          "email_verified": true,
+          "picture": null,
+          "locale": "en-US"
+        }
+      }
+    },
+    {
+      "name": "absent display fields",
+      "profile": {
+        "sub": "ordinary-twitch-user",
+        "email": "twitch@example.test",
+        "email_verified": true
+      },
+      "result": {
+        "user": {
+          "email": "twitch@example.test",
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "ordinary-twitch-user",
+          "email": "twitch@example.test",
+          "email_verified": true
+        }
+      }
+    }
+  ],
+  "mapperPatch": {
+    "name": "Mapped Twitch Reader",
+    "image": null,
+    "emailVerified": false,
+    "locale": "en-GB"
+  },
+  "mapperInputs": [
+    {
+      "sub": "ordinary-twitch-user",
+      "preferred_username": "Twitch Reader",
+      "email": "twitch@example.test",
+      "email_verified": true,
+      "picture": "https://images.example.test/twitch.png",
+      "locale": "en-US"
+    }
+  ],
+  "mappedResult": {
+    "user": {
+      "name": "Mapped Twitch Reader",
+      "email": "twitch@example.test",
+      "image": null,
+      "emailVerified": false,
+      "locale": "en-GB"
+    },
+    "data": {
+      "sub": "ordinary-twitch-user",
+      "preferred_username": "Twitch Reader",
+      "email": "twitch@example.test",
+      "email_verified": true,
+      "picture": "https://images.example.test/twitch.png",
+      "locale": "en-US"
+    }
+  },
+  "customResult": {
+    "user": {
+      "id": "ordinary-twitch-user",
+      "name": "Custom Twitch Reader",
+      "email": "custom-twitch@example.test",
+      "image": null,
+      "emailVerified": true,
+      "source": "custom"
+    },
+    "data": {
+      "sub": "ordinary-twitch-user",
+      "source": "custom"
+    }
+  },
+  "customCalls": 1,
+  "customMapperCalls": 0,
+  "requests": [
+    {
+      "url": "https://id.twitch.tv/oauth2/token",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "grant_type=authorization_code&code=ordinary-code&client_key=ordinary-twitch-key&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Ftwitch&client_id=ordinary-twitch-client&client_secret=ordinary-twitch-secret-at-least-32-characters"
+    },
+    {
+      "url": "https://id.twitch.tv/oauth2/token",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=ordinary-twitch-client&client_secret=ordinary-twitch-secret-at-least-32-characters"
+    }
+  ],
+  "grantTokens": [
+    {
+      "tokenType": "Bearer",
+      "accessToken": "ordinary-access",
+      "refreshToken": "ordinary-refresh",
+      "scopes": [
+        "user:read:email",
+        "openid"
+      ],
+      "idToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvcmRpbmFyeS10d2l0Y2gtdXNlciIsInByZWZlcnJlZF91c2VybmFtZSI6IlR3aXRjaCBSZWFkZXIiLCJlbWFpbCI6InR3aXRjaEBleGFtcGxlLnRlc3QiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC90d2l0Y2gucG5nIiwibG9jYWxlIjoiZW4tVVMifQ.kXiwLNqXRMEPdQJ-4wRCHrNIIB6Mj_5KCwPt-EMVRs8",
+      "raw": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "user:read:email openid",
+        "id_token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvcmRpbmFyeS10d2l0Y2gtdXNlciIsInByZWZlcnJlZF91c2VybmFtZSI6IlR3aXRjaCBSZWFkZXIiLCJlbWFpbCI6InR3aXRjaEBleGFtcGxlLnRlc3QiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC90d2l0Y2gucG5nIiwibG9jYWxlIjoiZW4tVVMifQ.kXiwLNqXRMEPdQJ-4wRCHrNIIB6Mj_5KCwPt-EMVRs8"
+      }
+    },
+    {
+      "accessToken": "ordinary-access",
+      "refreshToken": "ordinary-refresh",
+      "tokenType": "Bearer",
+      "scopes": [
+        "user:read:email",
+        "openid"
+      ],
+      "idToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvcmRpbmFyeS10d2l0Y2gtdXNlciIsInByZWZlcnJlZF91c2VybmFtZSI6IlR3aXRjaCBSZWFkZXIiLCJlbWFpbCI6InR3aXRjaEBleGFtcGxlLnRlc3QiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC90d2l0Y2gucG5nIiwibG9jYWxlIjoiZW4tVVMifQ.kXiwLNqXRMEPdQJ-4wRCHrNIIB6Mj_5KCwPt-EMVRs8"
+    }
+  ]
+}

@@ -27,10 +27,10 @@ impl OAuthTokenHandler for Provider {
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for Provider {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
-        Ok(
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
+        Ok(Some(
             json!({ "id": "stable-subject", "email": "unverified@example.com", "emailVerified": false }),
-        )
+        ))
     }
 }
 
@@ -221,8 +221,8 @@ struct MutableProfile(Mutex<Value>);
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for MutableProfile {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
-        Ok(self.0.lock().unwrap().clone())
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
+        Ok(Some(self.0.lock().unwrap().clone()))
     }
 }
 

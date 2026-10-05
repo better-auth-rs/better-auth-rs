@@ -93,9 +93,9 @@ struct GenericProfile(ProviderState);
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for GenericProfile {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
         self.0.events.lock().unwrap().push("custom");
-        Ok(self.0.profile.lock().unwrap().clone())
+        Ok(Some(self.0.profile.lock().unwrap().clone()))
     }
 }
 

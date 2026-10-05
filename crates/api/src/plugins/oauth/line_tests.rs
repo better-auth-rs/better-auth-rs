@@ -177,14 +177,14 @@ struct Observer {
 }
 #[async_trait]
 impl GenericOAuthUserInfoHandler for Observer {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
         panic!("LINE must receive resolved context");
     }
     async fn get_user_info_with_context(
         &self,
         tokens: &OAuthUserInfoRequest,
         context: GenericOAuthProfileContext<'_>,
-    ) -> AuthResult<Value> {
+    ) -> AuthResult<Option<Value>> {
         assert_eq!(context.client_id(), CLIENT_ID);
         assert!(context.expected_nonce().is_none());
         assert!(context.verified_claims().is_none());
@@ -315,6 +315,7 @@ async fn line_profile_context_forwards_the_expected_nonce_with_form_encoding() {
             GenericOAuthProfileContext::new(&config, Some(nonce), None),
         )
         .await
+        .unwrap()
         .unwrap();
     assert_eq!(result, case["profile"]);
     assert_eq!(

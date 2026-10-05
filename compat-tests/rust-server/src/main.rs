@@ -567,14 +567,14 @@ impl GenericOAuthUserInfoHandler for MockGenericUserInfo {
     async fn get_user_info(
         &self,
         _tokens: &OAuthUserInfoRequest,
-    ) -> better_auth::AuthResult<serde_json::Value> {
-        Ok(serde_json::json!({
+    ) -> better_auth::AuthResult<Option<serde_json::Value>> {
+        Ok(Some(serde_json::json!({
             "id": "mock-account-id",
             "email": "mock@example.com",
             "name": "Mock OAuth User",
             "image": null,
             "emailVerified": true,
-        }))
+        })))
     }
 }
 

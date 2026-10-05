@@ -1,0 +1,243 @@
+{
+  "version": "1.7.6",
+  "metadata": {
+    "clientId": "ordinary-google-web-client",
+    "additionalClientIds": [
+      "ordinary-google-native-client"
+    ],
+    "explicitOneTapClientId": "ordinary-google-one-tap-client",
+    "clientSecret": "ordinary-google-client-secret",
+    "callbackURL": "http://localhost:3000/api/auth/callback/google",
+    "codeVerifier": "ordinary-google-client-ids-verifier-01234567890123456789",
+    "profile": {
+      "sub": "ordinary-google-owner",
+      "name": "Google Owner",
+      "email": "google-owner@example.test",
+      "email_verified": true,
+      "picture": "https://images.example.test/google.png",
+      "hd": "example.test"
+    }
+  },
+  "authorization": {
+    "origin": "https://accounts.google.com",
+    "path": "/o/oauth2/v2/auth",
+    "query": {
+      "response_type": "code",
+      "client_id": "ordinary-google-web-client",
+      "state": "ordinary-state",
+      "scope": "email profile openid",
+      "redirect_uri": "http://localhost:3000/api/auth/callback/google",
+      "hd": "example.test",
+      "code_challenge_method": "S256",
+      "code_challenge": "ioJDU3ZlbP1hFD8sS6AHocU6zD-OEdIk0tRX3vxmx3Q",
+      "include_granted_scopes": "true"
+    }
+  },
+  "grants": {
+    "rawResponse": {
+      "access_token": "ordinary-access",
+      "refresh_token": "ordinary-refresh",
+      "token_type": "Bearer"
+    },
+    "requests": [
+      {
+        "method": "POST",
+        "contentType": "application/x-www-form-urlencoded",
+        "accept": "application/json",
+        "authorization": null,
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "ordinary-code",
+          "code_verifier": "ordinary-google-client-ids-verifier-01234567890123456789",
+          "redirect_uri": "http://localhost:3000/api/auth/callback/google",
+          "client_id": "ordinary-google-web-client",
+          "client_secret": "ordinary-google-client-secret"
+        }
+      },
+      {
+        "method": "POST",
+        "contentType": "application/x-www-form-urlencoded",
+        "accept": "application/json",
+        "authorization": null,
+        "body": {
+          "grant_type": "refresh_token",
+          "refresh_token": "ordinary-refresh",
+          "client_id": "ordinary-google-web-client",
+          "client_secret": "ordinary-google-client-secret"
+        }
+      }
+    ],
+    "tokens": [
+      {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer"
+        }
+      },
+      {
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "tokenType": "Bearer",
+        "scopes": []
+      }
+    ]
+  },
+  "flows": [
+    {
+      "mode": "direct",
+      "audience": "ordinary-google-web-client",
+      "result": {
+        "status": 200,
+        "location": null,
+        "user": {
+          "name": "Mapped Google Owner",
+          "email": "google-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/google.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-google-owner"
+        },
+        "sessions": 1,
+        "mapperInputs": [
+          {
+            "sub": "ordinary-google-owner",
+            "aud": "ordinary-google-web-client",
+            "name": "Google Owner",
+            "hd": "example.test"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "direct",
+      "audience": "ordinary-google-native-client",
+      "result": {
+        "status": 200,
+        "location": null,
+        "user": {
+          "name": "Mapped Google Owner",
+          "email": "google-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/google.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-google-owner"
+        },
+        "sessions": 1,
+        "mapperInputs": [
+          {
+            "sub": "ordinary-google-owner",
+            "aud": "ordinary-google-native-client",
+            "name": "Google Owner",
+            "hd": "example.test"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "code",
+      "audience": "ordinary-google-web-client",
+      "result": {
+        "status": 302,
+        "location": "http://localhost:3000/welcome",
+        "user": {
+          "name": "Mapped Google Owner",
+          "email": "google-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/google.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-google-owner"
+        },
+        "sessions": 1,
+        "mapperInputs": [
+          {
+            "sub": "ordinary-google-owner",
+            "aud": "ordinary-google-web-client",
+            "name": "Google Owner",
+            "hd": "example.test"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "code",
+      "audience": "ordinary-google-native-client",
+      "result": {
+        "status": 302,
+        "location": "http://localhost:3000/welcome",
+        "user": {
+          "name": "Mapped Google Owner",
+          "email": "google-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/google.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-google-owner"
+        },
+        "sessions": 1,
+        "mapperInputs": [
+          {
+            "sub": "ordinary-google-owner",
+            "aud": "ordinary-google-native-client",
+            "name": "Google Owner",
+            "hd": "example.test"
+          }
+        ]
+      }
+    },
+    {
+      "mode": "oneTap",
+      "audience": "ordinary-google-native-client",
+      "result": {
+        "status": 200,
+        "location": null,
+        "user": {
+          "name": "Google Owner",
+          "email": "google-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/google.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-google-owner"
+        },
+        "sessions": 1,
+        "mapperInputs": []
+      }
+    },
+    {
+      "mode": "oneTap",
+      "audience": "ordinary-google-one-tap-client",
+      "oneTapClientIds": [
+        "ordinary-google-one-tap-client"
+      ],
+      "result": {
+        "status": 200,
+        "location": null,
+        "user": {
+          "name": "Google Owner",
+          "email": "google-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/google.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-google-owner"
+        },
+        "sessions": 1,
+        "mapperInputs": []
+      }
+    }
+  ]
+}

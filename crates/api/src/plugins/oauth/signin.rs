@@ -16,6 +16,7 @@ pub(super) struct OAuthSignInOptions<'a> {
     pub(super) profile: Option<&'a serde_json::Value>,
     pub(super) body: serde_json::Value,
     pub(super) disable_sign_up: bool,
+    pub(super) override_user_info: bool,
     pub(super) callback_url: &'a str,
     pub(super) email_verification:
         Option<&'a crate::plugins::email_verification::EmailVerificationPlugin>,
@@ -278,7 +279,7 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?;
         }
 
-        if provider.config.override_user_info_on_sign_in {
+        if options.override_user_info {
             user = ctx
                 .database
                 .update_user(
@@ -462,7 +463,7 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?;
         }
 
-        if provider.config.override_user_info_on_sign_in {
+        if options.override_user_info {
             linked_user = ctx
                 .database
                 .update_user(
@@ -679,6 +680,7 @@ pub(crate) async fn sign_in_verified_profile(
             profile: Some(&user.data),
             body: req.body_as_json()?,
             disable_sign_up,
+            override_user_info: false,
             callback_url: "/",
             email_verification: None,
         },
@@ -767,3 +769,7 @@ pub(super) fn callback_path(request: &AuthRequest) -> &str {
         request.path()
     }
 }
+
+#[cfg(test)]
+#[path = "signin_override_tests.rs"]
+mod override_tests;

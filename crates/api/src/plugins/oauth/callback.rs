@@ -273,8 +273,8 @@ pub(super) async fn handle_callback(
     .await
     {
         Ok(Some(response)) => response,
-        Err(error) if provider.generic.is_none() => return Err(error),
-        Ok(None) | Err(_) => return redirect_on_error("unable_to_get_user_info", None),
+        Err(error) => return Err(error),
+        Ok(None) => return redirect_on_error("unable_to_get_user_info", None),
     };
 
     let callback_body = if req.method() == &better_auth_core::HttpMethod::Post {
@@ -320,6 +320,7 @@ pub(super) async fn handle_callback(
             profile: Some(&user_info.data),
             body: callback_body,
             disable_sign_up,
+            override_user_info: provider.config.override_user_info_on_sign_in,
             callback_url: &payload.callback_url,
             email_verification: config.email_verification.as_deref(),
         },

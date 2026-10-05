@@ -24,8 +24,10 @@ pub(super) async fn fetch_user_info_with_claims(
             Some(VerifiedIdToken::Generic(claims)) => Some(claims),
             None => None,
             Some(
-                VerifiedIdToken::Google(_)
+                VerifiedIdToken::Apple(_)
+                | VerifiedIdToken::Google(_)
                 | VerifiedIdToken::Cognito(_)
+                | VerifiedIdToken::Microsoft(_)
                 | VerifiedIdToken::Paybin(_)
                 | VerifiedIdToken::PayPal(_)
                 | VerifiedIdToken::Facebook(_),
@@ -37,7 +39,7 @@ pub(super) async fn fetch_user_info_with_claims(
         };
         return super::generic_profile::fetch_user_info(generic, &request, expected_nonce, claims)
             .await
-            .map(Some);
+            .map_err(super::generic_profile::GenericProfileError::into_auth_error);
     }
     if let Some(handler) = &provider.config.get_user_info {
         let response = handler.get_user_info(request).await?;
@@ -46,6 +48,24 @@ pub(super) async fn fetch_user_info_with_claims(
             let _ = response.user.email_verified()?;
         }
         return Ok(response);
+    }
+    if let Some(options) = provider.config.microsoft_options() {
+        let claims = match claims {
+            Some(VerifiedIdToken::Microsoft(claims)) => Some(claims),
+            None => None,
+            Some(_) => {
+                return Err(AuthError::internal(
+                    "Non-Microsoft claims supplied to Microsoft",
+                ));
+            }
+        };
+        return super::providers::microsoft::fetch_user_info(
+            &provider.config,
+            options,
+            request,
+            claims,
+        )
+        .await;
     }
     if provider.config.is_paypal() {
         let claims = match claims {
@@ -114,6 +134,9 @@ pub(super) async fn fetch_user_info_with_claims(
         return super::cognito::fetch_user_info(&provider.config, request, claims).await;
     }
     let claims = match claims {
+        Some(VerifiedIdToken::Apple(claims)) if provider.config.apple_options().is_some() => {
+            Some(VerifiedIdToken::Apple(claims))
+        }
         Some(VerifiedIdToken::Google(claims)) if provider.config.paybin_issuer().is_none() => {
             Some(VerifiedIdToken::Google(claims))
         }
@@ -194,6 +217,20 @@ pub(super) async fn fetch_user_info_for_code(
     request: OAuthUserInfoRequest,
     expected_nonce: Option<&str>,
 ) -> AuthResult<Option<OAuthUserInfoResponse>> {
+    if let Some(generic) = &provider.generic {
+        return match super::generic_profile::fetch_user_info(
+            generic,
+            &request,
+            expected_nonce,
+            None,
+        )
+        .await
+        {
+            Ok(response) => Ok(response),
+            Err(super::generic_profile::GenericProfileError::Identity(_)) => Ok(None),
+            Err(super::generic_profile::GenericProfileError::Profile(error)) => Err(error),
+        };
+    }
     let claims = if provider.config.get_user_info.is_none()
         && let Some(jwks_url) = provider.config.google_jwks_url()
     {
@@ -202,7 +239,7 @@ pub(super) async fn fetch_user_info_for_code(
         };
         let Some(claims) = google::verify(
             token,
-            std::slice::from_ref(&provider.config.client_id),
+            &provider.config.google_client_ids(),
             expected_nonce,
             jwks_url,
         )
@@ -225,7 +262,9 @@ async fn fetch_default_user_info(
     let Some(mut response) = fetch_social_user_info(provider, request, claims).await? else {
         return Ok(None);
     };
-    let mapped = if let Some(mapper) = &provider.config.map_profile_to_user {
+    let mapped = if !provider.config.is_tiktok()
+        && let Some(mapper) = &provider.config.map_profile_to_user
+    {
         Some(mapper.map_profile(&response.data).await?)
     } else {
         None
@@ -252,6 +291,8 @@ async fn fetch_default_user_info(
         Some("twitter")
     } else if provider.config.is_roblox() {
         Some("roblox")
+    } else if provider.config.is_tiktok() {
+        Some("tiktok")
     } else if provider.config.wechat_refresh_url().is_some() {
         Some("wechat")
     } else {
@@ -313,6 +354,12 @@ async fn fetch_social_user_info(
         return super::providers::wechat::fetch_user_info(&provider.config, &request).await;
     }
     let data = match claims {
+        Some(VerifiedIdToken::Apple(claims)) => {
+            let Some(profile) = super::providers::apple::profile(&request, Some(claims))? else {
+                return Ok(None);
+            };
+            profile
+        }
         Some(VerifiedIdToken::Google(claims)) => {
             let claims = claims.into_value();
             if !google::hosted_domain_allowed(provider.config.google_hosted_domain(), &claims) {
@@ -322,6 +369,18 @@ async fn fetch_social_user_info(
         }
         Some(VerifiedIdToken::Paybin(claims)) => claims,
         Some(_) => return Err(AuthError::internal("Unexpected verified Social profile")),
+        None if provider.config.twitch_options().is_some() => {
+            let Some(profile) = super::providers::twitch::fetch_profile(&request)? else {
+                return Ok(None);
+            };
+            profile
+        }
+        None if provider.config.apple_options().is_some() => {
+            let Some(profile) = super::providers::apple::profile(&request, None)? else {
+                return Ok(None);
+            };
+            profile
+        }
         None if provider.config.line_verify_url().is_some() => {
             let Some(profile) =
                 super::providers::line::fetch_profile(&provider.config, &request).await?

@@ -53,12 +53,16 @@ async fn refresh_tokens(
     {
         Some(RefreshTokenParameters::Static(parameters)) => parameters.clone(),
         Some(RefreshTokenParameters::Dynamic(handler)) => handler.parameters(request).await?,
+        None if provider.generic.is_none() && provider.config.microsoft_options().is_some() => {
+            HashMap::from([(
+                "scope".into(),
+                provider.config.social_scopes(None).join(" "),
+            )])
+        }
         None => HashMap::new(),
     };
     let mut request = TokenRequest::refresh_token(refresh_token, &extra, &[]);
-    request
-        .authenticate(authentication(provider, TokenGrantType::RefreshToken))
-        .await?;
+    authenticate_request(&mut request, provider, TokenGrantType::RefreshToken).await?;
     let value = request.send(token_endpoint).await?;
     let mut tokens = parse_token_response(value)?;
     tokens.raw = None;
@@ -140,9 +144,7 @@ async fn exchange_code(
             .unwrap_or(&empty_params),
         resources: &[],
     });
-    request
-        .authenticate(authentication(provider, TokenGrantType::AuthorizationCode))
-        .await?;
+    authenticate_request(&mut request, provider, TokenGrantType::AuthorizationCode).await?;
     let value = request.send(token_endpoint).await?;
     apply_default_expiry(parse_token_response(value)?, provider)
 }
@@ -156,6 +158,35 @@ fn token_endpoint(provider: &ResolvedProvider) -> AuthResult<&str> {
         });
     }
     Ok(&provider.config.token_url)
+}
+
+async fn authenticate_request(
+    request: &mut TokenRequest,
+    provider: &ResolvedProvider,
+    grant_type: TokenGrantType,
+) -> AuthResult<()> {
+    if provider.generic.is_none() && provider.config.is_tiktok() {
+        request.body.extend([
+            (
+                "client_key".into(),
+                provider
+                    .config
+                    .client_key
+                    .as_deref()
+                    .unwrap_or("undefined")
+                    .into(),
+            ),
+            (
+                "client_secret".into(),
+                provider.config.client_secret.clone(),
+            ),
+        ]);
+        Ok(())
+    } else {
+        request
+            .authenticate(authentication(provider, grant_type))
+            .await
+    }
 }
 
 fn authentication(

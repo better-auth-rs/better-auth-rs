@@ -260,10 +260,13 @@ impl PresetProfile {
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for PresetProfile {
-    async fn get_user_info(&self, tokens: &OAuthUserInfoRequest) -> AuthResult<Value> {
+    async fn get_user_info(&self, tokens: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
         match super::social_profile::fetch_http_profile(self.request(tokens)).await? {
-            Some(profile) => self.preset.profile(profile),
-            None => Ok(Value::Null),
+            Some(profile) => self
+                .preset
+                .profile(profile)
+                .map(|profile| (!profile.is_null()).then_some(profile)),
+            None => Ok(None),
         }
     }
 }

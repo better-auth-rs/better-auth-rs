@@ -64,7 +64,7 @@ fn token_json(token: OAuthTokenSet) -> Value {
     Value::Object(fields)
 }
 
-async fn grants(
+pub(super) async fn grants(
     mut config: OAuthProvider,
     callback: &str,
     verifier: &str,

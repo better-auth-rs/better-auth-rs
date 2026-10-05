@@ -1,0 +1,476 @@
+{
+  "version": "1.7.6",
+  "profile": {
+    "id": "ordinary-profile-subject",
+    "email": "reader@example.test",
+    "name": "Profile Reader",
+    "emailVerified": true,
+    "email_verified": true,
+    "image": null,
+    "picture": null
+  },
+  "errorBody": {
+    "code": "PROFILE_BUSY",
+    "message": "Profile service is busy",
+    "retryAfter": 17
+  },
+  "errorHeaders": {
+    "retry-after": "17",
+    "x-profile-error": "application"
+  },
+  "cases": [
+    {
+      "name": "custom-null",
+      "source": "custom",
+      "result": "null",
+      "helper": {
+        "outcome": {
+          "kind": "absent"
+        },
+        "events": [
+          "get"
+        ],
+        "requests": []
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/error?error=unable_to_get_user_info",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token",
+          "get"
+        ],
+        "requests": [],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "custom-success",
+      "source": "custom",
+      "result": "success",
+      "helper": {
+        "outcome": {
+          "kind": "profile",
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader"
+          },
+          "data": {
+            "id": "ordinary-profile-subject",
+            "email": "reader@example.test",
+            "name": "Profile Reader",
+            "emailVerified": true,
+            "email_verified": true,
+            "image": null,
+            "picture": null
+          },
+          "subject": "ordinary-profile-subject"
+        },
+        "events": [
+          "get",
+          "map",
+          "subject"
+        ],
+        "requests": []
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/welcome",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token",
+          "get",
+          "map",
+          "subject"
+        ],
+        "requests": [],
+        "storage": {
+          "user": [
+            {
+              "email": "mapped@example.test",
+              "name": "Mapped Reader",
+              "emailVerified": true
+            }
+          ],
+          "account": [
+            {
+              "providerId": "generic",
+              "accountId": "ordinary-profile-subject"
+            }
+          ],
+          "sessions": 1
+        }
+      }
+    },
+    {
+      "name": "custom-error",
+      "source": "custom",
+      "result": "error",
+      "helper": {
+        "outcome": {
+          "kind": "error",
+          "response": {
+            "status": 429,
+            "location": null,
+            "body": {
+              "code": "PROFILE_BUSY",
+              "message": "Profile service is busy",
+              "retryAfter": 17
+            },
+            "headers": {
+              "retry-after": "17",
+              "x-profile-error": "application"
+            }
+          }
+        },
+        "events": [
+          "get"
+        ],
+        "requests": []
+      },
+      "callback": {
+        "response": {
+          "status": 429,
+          "location": null,
+          "body": {
+            "code": "PROFILE_BUSY",
+            "message": "Profile service is busy",
+            "retryAfter": 17
+          },
+          "headers": {
+            "retry-after": "17",
+            "x-profile-error": "application"
+          }
+        },
+        "events": [
+          "token",
+          "get"
+        ],
+        "requests": [],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "mapper-error",
+      "source": "custom",
+      "result": "mapper-error",
+      "helper": {
+        "outcome": {
+          "kind": "error",
+          "response": {
+            "status": 429,
+            "location": null,
+            "body": {
+              "code": "PROFILE_BUSY",
+              "message": "Profile service is busy",
+              "retryAfter": 17
+            },
+            "headers": {
+              "retry-after": "17",
+              "x-profile-error": "application"
+            }
+          }
+        },
+        "events": [
+          "get",
+          "map"
+        ],
+        "requests": []
+      },
+      "callback": {
+        "response": {
+          "status": 429,
+          "location": null,
+          "body": {
+            "code": "PROFILE_BUSY",
+            "message": "Profile service is busy",
+            "retryAfter": 17
+          },
+          "headers": {
+            "retry-after": "17",
+            "x-profile-error": "application"
+          }
+        },
+        "events": [
+          "token",
+          "get",
+          "map"
+        ],
+        "requests": [],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "missing-url",
+      "source": "missing",
+      "result": "null",
+      "helper": {
+        "outcome": {
+          "kind": "absent"
+        },
+        "events": [],
+        "requests": []
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/error?error=unable_to_get_user_info",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token"
+        ],
+        "requests": [],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "http-null",
+      "source": "http",
+      "result": "null",
+      "helper": {
+        "outcome": {
+          "kind": "absent"
+        },
+        "events": [
+          "http"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ]
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/error?error=unable_to_get_user_info",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token",
+          "http"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "http-empty",
+      "source": "http",
+      "result": "empty",
+      "helper": {
+        "outcome": {
+          "kind": "absent"
+        },
+        "events": [
+          "http"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ]
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/error?error=unable_to_get_user_info",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token",
+          "http"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "http-error",
+      "source": "http",
+      "result": "error",
+      "helper": {
+        "outcome": {
+          "kind": "absent"
+        },
+        "events": [
+          "http"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ]
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/error?error=unable_to_get_user_info",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token",
+          "http"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ],
+        "storage": {
+          "user": [],
+          "account": [],
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "http-success",
+      "source": "http",
+      "result": "success",
+      "helper": {
+        "outcome": {
+          "kind": "profile",
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader"
+          },
+          "data": {
+            "id": "ordinary-profile-subject",
+            "email": "reader@example.test",
+            "name": "Profile Reader",
+            "emailVerified": true,
+            "email_verified": true,
+            "image": null,
+            "picture": null
+          },
+          "subject": "ordinary-profile-subject"
+        },
+        "events": [
+          "http",
+          "map",
+          "subject"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ]
+      },
+      "callback": {
+        "response": {
+          "status": 302,
+          "location": "http://localhost:3000/welcome",
+          "body": null,
+          "headers": {}
+        },
+        "events": [
+          "token",
+          "http",
+          "map",
+          "subject"
+        ],
+        "requests": [
+          {
+            "path": "/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-profile-access"
+          }
+        ],
+        "storage": {
+          "user": [
+            {
+              "email": "mapped@example.test",
+              "name": "Mapped Reader",
+              "emailVerified": true
+            }
+          ],
+          "account": [
+            {
+              "providerId": "generic",
+              "accountId": "ordinary-profile-subject"
+            }
+          ],
+          "sessions": 1
+        }
+      }
+    }
+  ],
+  "presetAbsence": [
+    {
+      "name": "entra-no-token",
+      "result": null
+    },
+    {
+      "name": "line-null",
+      "result": null
+    },
+    {
+      "name": "line-empty",
+      "result": null
+    },
+    {
+      "name": "line-error",
+      "result": null
+    }
+  ]
+}

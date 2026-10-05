@@ -8,6 +8,13 @@ use crate::plugins::json_body;
 
 pub(super) const JWKS_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
 
+/// Google audience options. Authorization and token requests use the primary client ID.
+#[derive(Clone, Debug, Default)]
+pub struct GoogleOptions {
+    /// Additional accepted ID-token audiences after `OAuthProvider::client_id`.
+    pub additional_client_ids: Vec<String>,
+}
+
 pub(crate) struct VerifiedGoogleClaims(Value);
 
 impl VerifiedGoogleClaims {

@@ -69,6 +69,7 @@ async fn id_token_profile_is_preferred_and_mapping_cannot_change_account_subject
     };
     let response = fetch_user_info(&provider, &tokens, None, None)
         .await
+        .unwrap()
         .unwrap();
     assert_eq!(response.user.id, "immutable-subject");
     assert_eq!(
@@ -125,6 +126,7 @@ async fn mapped_null_omits_image_without_changing_raw_profile() {
     };
     let response = fetch_user_info(&provider, &tokens, None, None)
         .await
+        .unwrap()
         .unwrap();
     assert_eq!(response.user.name, None);
     assert_eq!(response.user.image, None);
@@ -137,9 +139,9 @@ async fn mapped_null_omits_image_without_changing_raw_profile() {
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for RawProfile {
-    async fn get_user_info(&self, _tokens: &OAuthUserInfoRequest) -> AuthResult<Value> {
+    async fn get_user_info(&self, _tokens: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(self.profile.clone())
+        Ok(Some(self.profile.clone()))
     }
 }
 
@@ -179,6 +181,7 @@ async fn generic_profile_preserves_email_presence_without_normalization() {
         );
         let response = fetch_profile(&provider, &OAuthUserInfoRequest::default(), None, None)
             .await
+            .unwrap()
             .unwrap();
         let user = serde_json::to_value(response.user).unwrap();
         assert_eq!(user.get("email"), email.as_ref(), "{label}");
@@ -268,6 +271,7 @@ async fn generic_profile_preserves_name_presence_and_mapper_overrides() {
             );
             let response = fetch_profile(&provider, &OAuthUserInfoRequest::default(), None, None)
                 .await
+                .unwrap()
                 .unwrap();
             let user = serde_json::to_value(response.user).unwrap();
             let case = format!("{raw_label}/{mapped_label}");
@@ -317,6 +321,7 @@ async fn custom_profile_and_subject_callbacks_receive_original_data() {
     };
     let response = fetch_user_info(&provider, &tokens, None, None)
         .await
+        .unwrap()
         .unwrap();
     assert_eq!(response.user.id, "tenant:42");
     assert_eq!(
@@ -377,6 +382,7 @@ async fn id_token_without_email_falls_back_to_userinfo_with_access_token() {
     };
     let response = fetch_user_info(&provider, &tokens, None, None)
         .await
+        .unwrap()
         .unwrap();
     assert_eq!(response.user.id, "userinfo-subject");
     assert_eq!(
@@ -462,6 +468,7 @@ async fn account_subject_is_validated_before_local_account_lookup() {
         assert_eq!(
             fetch_user_info(&provider, &OAuthUserInfoRequest::default(), None, None)
                 .await
+                .unwrap()
                 .unwrap()
                 .user
                 .id,

@@ -104,9 +104,15 @@ struct ProfileAccount {
     refresh_token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     id_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::utils::date::serialize_option"
+    )]
     access_token_expires_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::utils::date::serialize_option"
+    )]
     refresh_token_expires_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scope: Option<String>,
@@ -541,8 +547,8 @@ impl OAuthProxyPlugin {
         .await
         {
             Ok(Some(info)) => info,
-            Err(error) if provider.generic.is_none() => return Err(error),
-            Ok(None) | Err(_) => {
+            Err(error) => return Err(error),
+            Ok(None) => {
                 return Ok(Some(redirect_error(
                     error_url,
                     "unable_to_get_user_info",
@@ -758,6 +764,7 @@ impl OAuthProxyPlugin {
                 profile: provider_profile.as_ref(),
                 body: Value::Null,
                 disable_sign_up: profile.disable_sign_up.unwrap_or(false),
+                override_user_info: false,
                 callback_url: &profile.callback_url,
                 email_verification: ctx
                     .extensions

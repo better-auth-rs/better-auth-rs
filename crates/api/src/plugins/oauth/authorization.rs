@@ -30,6 +30,9 @@ pub(super) fn build_authorization_url(
     input: AuthorizationRequest<'_>,
 ) -> AuthResult<String> {
     let generic = provider.generic.as_ref();
+    if generic.is_none() && provider.config.is_tiktok() {
+        return super::providers::tiktok::authorization_url(&provider.config, input);
+    }
     let input = if generic.is_none() && provider.config.omits_login_hint() {
         AuthorizationRequest {
             login_hint: None,
@@ -44,6 +47,16 @@ pub(super) fn build_authorization_url(
         input
     };
     let options = generic.map(|generic| &generic.config);
+    if generic.is_none()
+        && provider.config.microsoft_options().is_some()
+        && provider.config.client_id.is_empty()
+    {
+        better_auth_core::observability::logger::current().error(
+            "Client Id is required for Microsoft Entra ID. Make sure to provide it in the options.",
+            &[],
+        );
+        return Err(AuthError::internal("CLIENT_ID_AND_SECRET_REQUIRED"));
+    }
     if generic.is_none()
         && let Some(options) = provider.config.cognito_options()
     {
@@ -150,7 +163,13 @@ pub(super) fn build_authorization_url(
             options
                 .and_then(|options| options.response_type.as_deref())
                 .filter(|value| !value.is_empty())
-                .unwrap_or("code"),
+                .unwrap_or_else(|| {
+                    if generic.is_none() && provider.config.apple_options().is_some() {
+                        "code id_token"
+                    } else {
+                        "code"
+                    }
+                }),
         );
         set("client_id", &provider.config.client_id);
         set("state", input.state);
@@ -189,7 +208,12 @@ pub(super) fn build_authorization_url(
             ),
             (
                 "response_mode",
-                options.and_then(|options| options.response_mode.as_deref()),
+                options
+                    .and_then(|options| options.response_mode.as_deref())
+                    .or_else(|| {
+                        (generic.is_none() && provider.config.apple_options().is_some())
+                            .then_some("form_post")
+                    }),
             ),
         ] {
             if let Some(value) = value.filter(|value| !value.is_empty()) {
@@ -200,6 +224,11 @@ pub(super) fn build_authorization_url(
             set("code_challenge_method", "S256");
             set("code_challenge", input.code_challenge);
         }
+    }
+    if generic.is_none()
+        && let Some(options) = provider.config.twitch_options()
+    {
+        set("claims", &options.authorization_claims()?);
     }
     let omit_configured_permissions =
         generic.is_none() && provider.config.is_discord() && !scopes.contains(&"bot");

@@ -26,6 +26,7 @@ on:
           - fullstack
           - quick-start
           - alignment
+          - client-configuration
 
 permissions:
   contents: read
@@ -43,7 +44,7 @@ env:
 
 jobs:
   check:
-    if: github.ref != 'refs/heads/codex/upstream-capture'
+    if: github.ref != 'refs/heads/codex/upstream-capture' || github.event_name == 'workflow_dispatch'
     name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0}', inputs.stage) || 'Full acceptance - all stages' }}
     runs-on: ubuntu-latest
     services:
@@ -137,3 +138,6 @@ jobs:
       - name: Check upstream alignment
         if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'alignment'
         run: devenv shell -- ./scripts/check.sh alignment
+      - name: Check client configuration compatibility
+        if: env.CHECK_STAGE == 'client-configuration'
+        run: devenv shell -- ./scripts/check.sh client-configuration

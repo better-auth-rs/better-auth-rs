@@ -46,30 +46,28 @@ struct EntraProfile;
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for EntraProfile {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
-        Err(AuthError::internal(
-            "Microsoft Entra ID requires verified ID-token claims",
-        ))
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
+        Ok(None)
     }
 
     async fn get_user_info_with_context(
         &self,
         tokens: &OAuthUserInfoRequest,
         context: GenericOAuthProfileContext<'_>,
-    ) -> AuthResult<Value> {
-        let claims = context
-            .verified_claims()
-            .ok_or_else(|| {
-                AuthError::internal("Microsoft Entra ID requires verified ID-token claims")
-            })?
-            .as_value();
-        let token_profile = profile(claims, None)?;
+    ) -> AuthResult<Option<Value>> {
+        let Some(claims) = context.verified_claims() else {
+            return Ok(None);
+        };
+        let claims = claims.as_value();
+        let Some(token_profile) = profile(claims, None)? else {
+            return Ok(None);
+        };
         let Some(access_token) = tokens
             .access_token
             .as_deref()
             .filter(|value| !value.is_empty())
         else {
-            return Ok(token_profile);
+            return Ok(Some(token_profile));
         };
         let endpoint = context
             .user_info_url()
@@ -82,7 +80,7 @@ impl GenericOAuthUserInfoHandler for EntraProfile {
             .map_err(|error| request_error("request failed", error))?;
         // The upstream Entra helper retains the verified token profile after a Graph HTTP error.
         if !response.status().is_success() {
-            return Ok(token_profile);
+            return Ok(Some(token_profile));
         }
         let graph: Value = response
             .json()
@@ -90,18 +88,20 @@ impl GenericOAuthUserInfoHandler for EntraProfile {
             .map_err(|error| request_error("response failed", error))?;
         if !claims.get("sub").is_some_and(Value::is_string) || graph.get("sub") != claims.get("sub")
         {
-            return Ok(token_profile);
+            return Ok(Some(token_profile));
         }
         profile(claims, Some(&graph))
     }
 }
 
-fn profile(claims: &Value, graph: Option<&Value>) -> AuthResult<Value> {
-    let oid = claims
+fn profile(claims: &Value, graph: Option<&Value>) -> AuthResult<Option<Value>> {
+    let Some(oid) = claims
         .get("oid")
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| AuthError::internal("Microsoft Entra ID claims have no object ID"))?;
+    else {
+        return Ok(None);
+    };
     let mut output = graph
         .and_then(Value::as_object)
         .cloned()
@@ -145,7 +145,7 @@ fn profile(claims: &Value, graph: Option<&Value>) -> AuthResult<Value> {
     };
     let _ = output.insert("email".into(), email);
     let _ = output.insert("emailVerified".into(), verified);
-    Ok(Value::Object(output))
+    Ok(Some(Value::Object(output)))
 }
 
 fn non_null<'a>(profile: &'a Value, field: &str) -> Option<&'a Value> {

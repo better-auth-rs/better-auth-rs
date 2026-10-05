@@ -146,14 +146,14 @@ struct Observer {
 }
 #[async_trait]
 impl GenericOAuthUserInfoHandler for Observer {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
         panic!("Entra must receive verified claims");
     }
     async fn get_user_info_with_context(
         &self,
         tokens: &OAuthUserInfoRequest,
         context: GenericOAuthProfileContext<'_>,
-    ) -> AuthResult<Value> {
+    ) -> AuthResult<Option<Value>> {
         assert_eq!(context.verified_claims().unwrap().as_value()["iss"], ISSUER);
         self.calls.lock().unwrap().push("get");
         self.inner.get_user_info_with_context(tokens, context).await

@@ -1,0 +1,288 @@
+{
+  "metadata": {
+    "claims": {
+      "sub": "ordinary-profile-override-owner",
+      "email": "profile-override@example.test",
+      "email_verified": true,
+      "name": "Raw Provider Name",
+      "picture": "https://images.example.test/raw-provider.png",
+      "nonce": "ordinary-profile-nonce",
+      "iss": "https://accounts.google.com",
+      "aud": "client"
+    },
+    "mappedProfile": {
+      "name": "Provider Name",
+      "image": "https://images.example.test/provider.png"
+    },
+    "storedProfile": {
+      "name": "Stored Name",
+      "image": "https://images.example.test/stored.png"
+    }
+  },
+  "rows": [
+    {
+      "entry": "direct",
+      "overrideUserInfoOnSignIn": false,
+      "statuses": [
+        200,
+        200
+      ],
+      "location": null,
+      "firstResponseUser": {
+        "name": "Provider Name",
+        "image": "https://images.example.test/provider.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "before": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "after": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "responseUser": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "identity": {
+        "sameUser": true,
+        "sameAccount": true,
+        "accountMatchesUser": true,
+        "provider": "google",
+        "subject": "ordinary-profile-override-owner",
+        "userCount": 1,
+        "accountCount": 1,
+        "sessionCount": 2,
+        "sessionsMatchUser": true,
+        "distinctSessions": true,
+        "firstSessionPreserved": true
+      },
+      "mapperInputs": [
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        },
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        }
+      ]
+    },
+    {
+      "entry": "direct",
+      "overrideUserInfoOnSignIn": true,
+      "statuses": [
+        200,
+        200
+      ],
+      "location": null,
+      "firstResponseUser": {
+        "name": "Provider Name",
+        "image": "https://images.example.test/provider.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "before": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "after": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "responseUser": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "identity": {
+        "sameUser": true,
+        "sameAccount": true,
+        "accountMatchesUser": true,
+        "provider": "google",
+        "subject": "ordinary-profile-override-owner",
+        "userCount": 1,
+        "accountCount": 1,
+        "sessionCount": 2,
+        "sessionsMatchUser": true,
+        "distinctSessions": true,
+        "firstSessionPreserved": true
+      },
+      "mapperInputs": [
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        },
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        }
+      ]
+    },
+    {
+      "entry": "callback",
+      "overrideUserInfoOnSignIn": false,
+      "statuses": [
+        200,
+        200,
+        302
+      ],
+      "location": "http://localhost:3000/welcome",
+      "firstResponseUser": {
+        "name": "Provider Name",
+        "image": "https://images.example.test/provider.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "before": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "after": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "responseUser": null,
+      "identity": {
+        "sameUser": true,
+        "sameAccount": true,
+        "accountMatchesUser": true,
+        "provider": "google",
+        "subject": "ordinary-profile-override-owner",
+        "userCount": 1,
+        "accountCount": 1,
+        "sessionCount": 2,
+        "sessionsMatchUser": true,
+        "distinctSessions": true,
+        "firstSessionPreserved": true
+      },
+      "mapperInputs": [
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        },
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        }
+      ]
+    },
+    {
+      "entry": "callback",
+      "overrideUserInfoOnSignIn": true,
+      "statuses": [
+        200,
+        200,
+        302
+      ],
+      "location": "http://localhost:3000/welcome",
+      "firstResponseUser": {
+        "name": "Provider Name",
+        "image": "https://images.example.test/provider.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "before": {
+        "name": "Stored Name",
+        "image": "https://images.example.test/stored.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "after": {
+        "name": "Provider Name",
+        "image": "https://images.example.test/provider.png",
+        "email": "profile-override@example.test",
+        "emailVerified": true
+      },
+      "responseUser": null,
+      "identity": {
+        "sameUser": true,
+        "sameAccount": true,
+        "accountMatchesUser": true,
+        "provider": "google",
+        "subject": "ordinary-profile-override-owner",
+        "userCount": 1,
+        "accountCount": 1,
+        "sessionCount": 2,
+        "sessionsMatchUser": true,
+        "distinctSessions": true,
+        "firstSessionPreserved": true
+      },
+      "mapperInputs": [
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        },
+        {
+          "sub": "ordinary-profile-override-owner",
+          "email": "profile-override@example.test",
+          "email_verified": true,
+          "name": "Raw Provider Name",
+          "picture": "https://images.example.test/raw-provider.png",
+          "nonce": "ordinary-profile-nonce",
+          "iss": "https://accounts.google.com",
+          "aud": "client"
+        }
+      ]
+    }
+  ]
+}

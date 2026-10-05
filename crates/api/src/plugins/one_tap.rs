@@ -12,7 +12,7 @@ use super::{
 #[derive(Clone, better_auth_core::PluginConfig)]
 #[plugin(name = "OneTapPlugin")]
 pub struct OneTapConfig {
-    /// Accepted client IDs; defaults to the Google OAuth provider client ID.
+    /// Accepted client IDs; defaults to all configured Google OAuth client IDs.
     #[config(default = None)]
     pub client_id: Option<Vec<String>>,
     /// Reject registration of new accounts.
@@ -54,7 +54,7 @@ impl OneTapPlugin {
         let audience = self.config.client_id.clone().unwrap_or_else(|| {
             provider
                 .filter(|provider| !provider.client_id.is_empty())
-                .map(|provider| vec![provider.client_id.clone()])
+                .map(OAuthProvider::google_client_ids)
                 .unwrap_or_default()
         });
         let Some(first_audience) = audience.first() else {

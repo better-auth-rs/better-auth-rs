@@ -37,7 +37,7 @@ struct LineProfile {
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for LineProfile {
-    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Value> {
+    async fn get_user_info(&self, _: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
         Err(AuthError::internal(
             "LINE requires resolved profile context",
         ))
@@ -47,9 +47,9 @@ impl GenericOAuthUserInfoHandler for LineProfile {
         &self,
         tokens: &OAuthUserInfoRequest,
         context: GenericOAuthProfileContext<'_>,
-    ) -> AuthResult<Value> {
+    ) -> AuthResult<Option<Value>> {
         if let Some(claims) = context.verified_claims() {
-            return profile(claims.as_value());
+            return profile(claims.as_value()).map(Some);
         }
         let client = reqwest::Client::new();
         let request =
@@ -70,14 +70,21 @@ impl GenericOAuthUserInfoHandler for LineProfile {
         let response = request
             .send()
             .await
-            .map_err(|error| request_error("request failed", error))?
-            .error_for_status()
             .map_err(|error| request_error("request failed", error))?;
-        let claims: Value = response
-            .json()
+        let success = response.status().is_success();
+        let body = response
+            .text()
             .await
             .map_err(|error| request_error("response failed", error))?;
-        profile(&claims)
+        if !success || body.is_empty() {
+            return Ok(None);
+        }
+        let Some(claims) = serde_json::from_str::<Option<Value>>(&body)
+            .map_err(|error| AuthError::internal(format!("Invalid LINE response: {error}")))?
+        else {
+            return Ok(None);
+        };
+        profile(&claims).map(Some)
     }
 }
 

@@ -12,15 +12,38 @@ pub(super) struct ProfileResponse {
     pub data: Value,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub(super) enum GenericProfileError {
+    #[error(transparent)]
+    Profile(#[from] AuthError),
+    #[error(transparent)]
+    Identity(AuthError),
+}
+
+impl GenericProfileError {
+    pub(super) fn into_auth_error(self) -> AuthError {
+        match self {
+            Self::Profile(error) => error,
+            Self::Identity(_) => super::social_profile::missing_profile(),
+        }
+    }
+}
+
 pub(super) async fn fetch_user_info(
     provider: &ResolvedGenericOAuth,
     tokens: &OAuthUserInfoRequest,
     expected_nonce: Option<&str>,
     verified_claims: Option<Value>,
-) -> AuthResult<OAuthUserInfoResponse> {
-    let response = fetch_profile(provider, tokens, expected_nonce, verified_claims).await?;
+) -> Result<Option<OAuthUserInfoResponse>, GenericProfileError> {
+    let Some(response) = fetch_profile(provider, tokens, expected_nonce, verified_claims).await?
+    else {
+        return Ok(None);
+    };
     let subject = if let Some(resolver) = &provider.config.account_subject {
-        resolver.resolve_subject(tokens, &response.data).await?
+        resolver
+            .resolve_subject(tokens, &response.data)
+            .await
+            .map_err(GenericProfileError::Identity)?
     } else {
         let field = if provider.is_oidc { "sub" } else { "id" };
         response
@@ -30,9 +53,11 @@ pub(super) async fn fetch_user_info(
             .unwrap_or_default()
     };
     if subject.trim().is_empty() || matches!(subject.as_str(), "undefined" | "null") {
-        return Err(AuthError::internal("OAUTH_ACCOUNT_SUBJECT_INVALID"));
+        return Err(GenericProfileError::Identity(AuthError::internal(
+            "OAUTH_ACCOUNT_SUBJECT_INVALID",
+        )));
     }
-    Ok(OAuthUserInfoResponse {
+    Ok(Some(OAuthUserInfoResponse {
         user: OAuthUserInfo {
             additional_fields: response.user.additional_fields,
             id: subject,
@@ -42,7 +67,7 @@ pub(super) async fn fetch_user_info(
             email_verified: response.user.email_verified,
         },
         data: response.data,
-    })
+    }))
 }
 
 pub(super) async fn fetch_profile(
@@ -50,7 +75,7 @@ pub(super) async fn fetch_profile(
     tokens: &OAuthUserInfoRequest,
     expected_nonce: Option<&str>,
     verified_claims: Option<Value>,
-) -> AuthResult<ProfileResponse> {
+) -> Result<Option<ProfileResponse>, GenericProfileError> {
     let verified_claims = if verified_claims.is_some() {
         verified_claims
     } else if let (Some(token), Some(verifier)) = (
@@ -62,7 +87,9 @@ pub(super) async fn fetch_profile(
                 .verify(token, expected_nonce)
                 .await
                 .map_err(|error| {
-                    AuthError::internal(format!("ID token verification failed: {error}"))
+                    GenericProfileError::Identity(AuthError::internal(format!(
+                        "ID token verification failed: {error}"
+                    )))
                 })?,
         )
     } else {
@@ -83,6 +110,9 @@ pub(super) async fn fetch_profile(
     } else {
         default_profile(provider, tokens, verified_claims).await?
     };
+    let Some(raw) = raw.filter(|profile| !profile.is_null()) else {
+        return Ok(None);
+    };
     let profile = raw
         .as_object()
         .ok_or_else(|| AuthError::internal("OAuth user info must be an object"))?;
@@ -100,7 +130,7 @@ pub(super) async fn fetch_profile(
         better_auth_core::SchemaValue::from_json(profile.get("emailVerified").cloned())
     });
     let _ = super::providers::profile_email_verified(&email_verified)?;
-    Ok(ProfileResponse {
+    Ok(Some(ProfileResponse {
         user: AccountInfoUser {
             id: None,
             additional_fields: mapped.additional_fields,
@@ -115,14 +145,14 @@ pub(super) async fn fetch_profile(
             email_verified,
         },
         data: raw,
-    })
+    }))
 }
 
 async fn default_profile(
     provider: &ResolvedGenericOAuth,
     tokens: &OAuthUserInfoRequest,
     verified_claims: Option<Value>,
-) -> AuthResult<Value> {
+) -> AuthResult<Option<Value>> {
     let claims = verified_claims.or_else(|| tokens.id_token.as_deref().and_then(decode_claims));
     if let Some(Value::Object(claims)) = claims
         && claims.get("sub").is_some_and(truthy)
@@ -138,15 +168,17 @@ async fn default_profile(
             }
         }
         profile.extend(claims);
-        return Ok(Value::Object(profile));
+        return Ok(Some(Value::Object(profile)));
     }
 
-    let endpoint = provider
+    let Some(endpoint) = provider
         .config
         .user_info_url
         .as_deref()
         .filter(|endpoint| !endpoint.is_empty())
-        .ok_or_else(|| AuthError::internal("Unable to get user info"))?;
+    else {
+        return Ok(None);
+    };
     // Upstream uses the literal `undefined` when a token set has no access token.
     let access_token = tokens.access_token.as_deref().unwrap_or("undefined");
     let response = reqwest::Client::new()
@@ -154,13 +186,20 @@ async fn default_profile(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|error| AuthError::internal(format!("User info request failed: {error}")))?
-        .error_for_status()
         .map_err(|error| AuthError::internal(format!("User info request failed: {error}")))?;
-    let mut profile: Map<String, Value> = response
-        .json()
+    let success = response.status().is_success();
+    let body = response
+        .text()
         .await
+        .map_err(|error| AuthError::internal(format!("User info response failed: {error}")))?;
+    if !success || body.is_empty() {
+        return Ok(None);
+    }
+    let profile: Option<Map<String, Value>> = serde_json::from_str(&body)
         .map_err(|error| AuthError::internal(format!("Invalid user info response: {error}")))?;
+    let Some(mut profile) = profile else {
+        return Ok(None);
+    };
     let verified = profile
         .get("email_verified")
         .filter(|value| !value.is_null())
@@ -175,7 +214,7 @@ async fn default_profile(
             let _ = profile.remove("image");
         }
     }
-    Ok(Value::Object(profile))
+    Ok(Some(Value::Object(profile)))
 }
 
 fn string(profile: &Map<String, Value>, field: &str) -> Option<String> {
@@ -247,3 +286,7 @@ fn number_subject(value: f64) -> String {
 #[cfg(test)]
 #[path = "generic_profile_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "axum"))]
+#[path = "generic_profile_results_tests.rs"]
+mod result_tests;

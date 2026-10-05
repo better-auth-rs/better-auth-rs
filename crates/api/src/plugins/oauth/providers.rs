@@ -5,12 +5,16 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+pub(super) mod apple;
 mod constructors;
 pub(super) mod defaults;
 pub(super) mod facebook;
 pub(super) mod line;
+pub(super) mod microsoft;
 pub(super) mod paybin;
 pub(super) mod paypal;
+pub(super) mod tiktok;
+pub(super) mod twitch;
 pub(super) mod twitter;
 pub(super) mod wechat;
 use super::OAuthProfileMapper;
@@ -209,6 +213,13 @@ pub struct OAuthProvider {
 }
 
 impl OAuthProvider {
+    pub(super) fn microsoft_options(&self) -> Option<&super::MicrosoftOptions> {
+        match &self.kind {
+            ProviderKind::Microsoft { options, .. } => Some(options),
+            _ => None,
+        }
+    }
+
     pub(super) fn cognito_options(&self) -> Option<&super::CognitoOptions> {
         match &self.kind {
             ProviderKind::Cognito(options) => Some(options),
@@ -240,15 +251,19 @@ impl OAuthProvider {
         };
         let request = reqwest::Client::new()
             .request(method, url)
-            .bearer_auth(access_token)
-            .header(
+            .bearer_auth(access_token);
+        let request = if self.is_tiktok() {
+            request
+        } else {
+            request.header(
                 "Accept",
                 if self.is_twitter() || self.cognito_options().is_some() {
                     "*/*"
                 } else {
                     "application/json"
                 },
-            );
+            )
+        };
         if matches!(self.kind, ProviderKind::Linear) {
             request.json(&serde_json::json!({
                 "query": "query { viewer { id name email avatarUrl active createdAt updatedAt } }"
@@ -281,6 +296,9 @@ impl OAuthProvider {
             );
         }
         match self.kind {
+            ProviderKind::Apple(_) => Some(
+                "Client ID and client secret are required for Apple. Make sure to provide them in the options.",
+            ),
             ProviderKind::Facebook(_) => Some(
                 "Client ID and client secret are required for Facebook. Make sure to provide them in the options.",
             ),
@@ -311,6 +329,10 @@ impl OAuthProvider {
             ProviderKind::WeChat { refresh_url } => Some(refresh_url),
             _ => None,
         }
+    }
+
+    pub(super) fn is_tiktok(&self) -> bool {
+        matches!(self.kind, ProviderKind::TikTok)
     }
 
     pub(super) fn is_twitter(&self) -> bool {
@@ -348,7 +370,9 @@ impl OAuthProvider {
                 | ProviderKind::Linear
                 | ProviderKind::Reddit
                 | ProviderKind::Roblox
+                | ProviderKind::TikTok
                 | ProviderKind::Notion
+                | ProviderKind::Twitch(_)
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { pkce: false }
                 | ProviderKind::WeChat { .. }
@@ -356,13 +380,14 @@ impl OAuthProvider {
     }
 
     pub(super) fn forwards_code_verifier(&self) -> bool {
-        matches!(self.kind, ProviderKind::Zoom { .. }) || self.uses_pkce()
+        matches!(self.kind, ProviderKind::Zoom { .. } | ProviderKind::TikTok) || self.uses_pkce()
     }
 
     pub(super) fn omits_login_hint(&self) -> bool {
         matches!(
             self.kind,
-            ProviderKind::Cognito(_)
+            ProviderKind::Apple(_)
+                | ProviderKind::Cognito(_)
                 | ProviderKind::Discord
                 | ProviderKind::Spotify
                 | ProviderKind::HuggingFace
@@ -380,6 +405,8 @@ impl OAuthProvider {
                 | ProviderKind::Salesforce
                 | ProviderKind::Railway
                 | ProviderKind::Roblox
+                | ProviderKind::TikTok
+                | ProviderKind::Twitch(_)
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { .. }
                 | ProviderKind::Twitter
@@ -393,7 +420,8 @@ impl OAuthProvider {
             ProviderKind::Custom
             | ProviderKind::PayPal
             | ProviderKind::Reddit
-            | ProviderKind::WeChat { .. } => None,
+            | ProviderKind::WeChat { .. }
+            | ProviderKind::TikTok => None,
             _ => self.client_key.as_deref(),
         }
     }
@@ -401,7 +429,10 @@ impl OAuthProvider {
     pub(super) fn omits_device_id(&self) -> bool {
         matches!(
             self.kind,
-            ProviderKind::Facebook(_)
+            ProviderKind::Microsoft { .. }
+                | ProviderKind::Google { .. }
+                | ProviderKind::Apple(_)
+                | ProviderKind::Facebook(_)
                 | ProviderKind::Discord
                 | ProviderKind::Cognito(_)
                 | ProviderKind::PayPal
@@ -417,7 +448,9 @@ impl OAuthProvider {
                 | ProviderKind::Salesforce
                 | ProviderKind::Railway
                 | ProviderKind::Roblox
+                | ProviderKind::TikTok
                 | ProviderKind::Notion
+                | ProviderKind::Twitch(_)
                 | ProviderKind::Kakao
                 | ProviderKind::Zoom { .. }
                 | ProviderKind::Twitter
@@ -465,7 +498,11 @@ impl OAuthProvider {
     }
 
     pub(super) fn token_endpoint_auth(&self) -> Option<&TokenEndpointAuth> {
-        match self.kind {
+        match &self.kind {
+            ProviderKind::Microsoft {
+                token_endpoint_auth,
+                ..
+            } => token_endpoint_auth.as_ref(),
             ProviderKind::Cloudflare => self.token_endpoint_auth.as_ref(),
             _ => None,
         }
@@ -498,9 +535,19 @@ impl OAuthProvider {
 
     pub(super) fn google_jwks_url(&self) -> Option<&str> {
         match &self.kind {
-            ProviderKind::Google { jwks_url } => Some(jwks_url),
+            ProviderKind::Google { jwks_url, .. } => Some(jwks_url),
             _ => None,
         }
+    }
+
+    pub(in crate::plugins) fn google_client_ids(&self) -> Vec<String> {
+        let additional = match &self.kind {
+            ProviderKind::Google { options, .. } => options.additional_client_ids.as_slice(),
+            _ => &[],
+        };
+        std::iter::once(self.client_id.clone())
+            .chain(additional.iter().cloned())
+            .collect()
     }
 
     pub(super) fn google_hosted_domain(&self) -> Option<&str> {
@@ -512,7 +559,10 @@ impl OAuthProvider {
 
     #[cfg(test)]
     pub(super) fn set_google_jwks_url(&mut self, url: String) {
-        self.kind = ProviderKind::Google { jwks_url: url };
+        let ProviderKind::Google { jwks_url, .. } = &mut self.kind else {
+            panic!("Google fixture requires a Google provider");
+        };
+        *jwks_url = url;
     }
 
     pub(super) fn github_endpoints(&self) -> Option<(&str, &str)> {
@@ -597,13 +647,15 @@ impl OAuthProvider {
             | ProviderKind::Polar
             | ProviderKind::PayPal
             | ProviderKind::Cognito(_)
+            | ProviderKind::Microsoft { .. }
             | ProviderKind::Paybin { .. }
             | ProviderKind::Atlassian => self
                 .prompt
                 .as_deref()
                 .filter(|value| !value.is_empty())
                 .or_else(|| matches!(self.kind, ProviderKind::Discord).then_some("none")),
-            ProviderKind::Facebook(_)
+            ProviderKind::Apple(_)
+            | ProviderKind::Facebook(_)
             | ProviderKind::GitLab
             | ProviderKind::Spotify
             | ProviderKind::HuggingFace
@@ -621,10 +673,12 @@ impl OAuthProvider {
             | ProviderKind::Salesforce
             | ProviderKind::Railway
             | ProviderKind::Notion
+            | ProviderKind::Twitch(_)
             | ProviderKind::Kakao
             | ProviderKind::Twitter
             | ProviderKind::WeChat { .. }
             | ProviderKind::Vk
+            | ProviderKind::TikTok
             | ProviderKind::Zoom { .. } => None,
         }
     }

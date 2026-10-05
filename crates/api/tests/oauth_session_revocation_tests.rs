@@ -240,10 +240,10 @@ struct ProfileOnly {
 
 #[async_trait]
 impl GenericOAuthUserInfoHandler for ProfileOnly {
-    async fn get_user_info(&self, _tokens: &OAuthUserInfoRequest) -> AuthResult<Value> {
-        Ok(
+    async fn get_user_info(&self, _tokens: &OAuthUserInfoRequest) -> AuthResult<Option<Value>> {
+        Ok(Some(
             json!({ "name": "Updated operator", "email": "operator@example.com", "emailVerified": true }),
-        )
+        ))
     }
 }
 

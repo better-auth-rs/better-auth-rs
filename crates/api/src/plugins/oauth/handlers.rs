@@ -390,14 +390,7 @@ async fn sign_in_with_id_token_core(
         id_token.nonce.as_deref(),
         claims,
     )
-    .await
-    .map_err(|error| {
-        if provider.generic.is_some() {
-            super::social_profile::missing_profile()
-        } else {
-            error
-        }
-    })?
+    .await?
     .ok_or_else(super::social_profile::missing_profile)?;
     if user_info.user.email()?.is_none_or(str::is_empty) {
         return Err(AuthError::Upstream {
@@ -423,6 +416,7 @@ async fn sign_in_with_id_token_core(
             disable_sign_up: provider.config.disable_implicit_sign_up()
                 && !body.request_sign_up.unwrap_or(false)
                 || provider.config.disable_sign_up(),
+            override_user_info: false,
             callback_url: body.callback_url.as_deref().unwrap_or("/"),
             email_verification: config.email_verification.as_deref(),
         },
@@ -468,14 +462,7 @@ async fn link_with_id_token_core(
         id_token.nonce.as_deref(),
         claims,
     )
-    .await
-    .map_err(|error| {
-        if provider.generic.is_some() {
-            super::social_profile::missing_profile()
-        } else {
-            error
-        }
-    })?
+    .await?
     .ok_or_else(super::social_profile::missing_profile)?;
 
     let Some(provider_email) = response.user.email()?.filter(|email| !email.is_empty()) else {

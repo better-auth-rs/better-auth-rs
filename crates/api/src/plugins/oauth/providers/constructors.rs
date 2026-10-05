@@ -1,9 +1,43 @@
 use better_auth_core::{AuthError, AuthResult};
 
-use super::super::{CognitoOptions, google};
+use super::super::{CognitoOptions, GoogleOptions, TwitchOptions, google};
 use super::{OAuthProvider, ProviderKind};
 
 impl OAuthProvider {
+    /// Configure Social Microsoft with its tenant, authority, photo, and assertion options.
+    pub fn microsoft(
+        client_id: &str,
+        client_secret: &str,
+        options: super::microsoft::MicrosoftOptions,
+    ) -> AuthResult<Self> {
+        if !client_secret.is_empty() && options.client_assertion.is_some() {
+            return Err(AuthError::internal(
+                "Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
+            ));
+        }
+        let authorization = format!(
+            "{}/{}/oauth2/v2.0/authorize",
+            options.authority(),
+            options.tenant()
+        );
+        let token = format!(
+            "{}/{}/oauth2/v2.0/token",
+            options.authority(),
+            options.tenant()
+        );
+        let token_endpoint_auth = options
+            .client_assertion
+            .clone()
+            .map(super::TokenEndpointAuth::PrivateKeyJwt);
+        Ok(Self {
+            kind: ProviderKind::Microsoft {
+                options,
+                token_endpoint_auth,
+            },
+            ..Self::custom(client_id, client_secret, &authorization, &token)
+        })
+    }
+
     /// Configure a Cognito hosted domain and its fixed user-pool issuer and JWKS.
     /// Set `identity_provider` through `authorization_params` to select a federated provider.
     pub fn cognito(
@@ -72,9 +106,19 @@ impl OAuthProvider {
 
     /// Configure Google with its built-in endpoints and profile decoder.
     pub fn google(client_id: &str, client_secret: &str) -> Self {
+        Self::google_with_options(client_id, client_secret, GoogleOptions::default())
+    }
+
+    /// Configure Google with additional ID-token audiences.
+    pub fn google_with_options(
+        client_id: &str,
+        client_secret: &str,
+        options: GoogleOptions,
+    ) -> Self {
         Self {
             kind: ProviderKind::Google {
                 jwks_url: google::JWKS_URL.to_owned(),
+                options,
             },
             user_info_url: Some("https://www.googleapis.com/oauth2/v3/userinfo".into()),
             authorization_params: vec![("include_granted_scopes".into(), "true".into())],
@@ -460,6 +504,19 @@ impl OAuthProvider {
         }
     }
 
+    /// Configure Twitch with requested ID-token claims and client-secret-post grants.
+    pub fn twitch(client_id: &str, client_secret: &str, options: TwitchOptions) -> Self {
+        Self {
+            kind: ProviderKind::Twitch(options),
+            ..Self::custom(
+                client_id,
+                client_secret,
+                "https://id.twitch.tv/oauth2/authorize",
+                "https://id.twitch.tv/oauth2/token",
+            )
+        }
+    }
+
     /// Configure Notion with its user-owned integration and owner profile.
     pub fn notion(client_id: &str, client_secret: &str) -> Self {
         Self {
@@ -484,6 +541,22 @@ impl OAuthProvider {
                 client_secret,
                 "https://apis.roblox.com/oauth/v1/authorize",
                 "https://apis.roblox.com/oauth/v1/token",
+            )
+        }
+    }
+
+    /// Configure TikTok with a client key, comma-separated scopes, and its HTTP profile.
+    /// TikTok sends the client key and secret in both token grants.
+    pub fn tiktok(client_key: &str, client_secret: &str) -> Self {
+        Self {
+            kind: ProviderKind::TikTok,
+            client_key: Some(client_key.into()),
+            user_info_url: Some("https://open.tiktokapis.com/v2/user/info/?fields=open_id,avatar_large_url,display_name,username".into()),
+            ..Self::custom(
+                "",
+                client_secret,
+                "https://www.tiktok.com/v2/auth/authorize",
+                "https://open.tiktokapis.com/v2/oauth/token/",
             )
         }
     }
