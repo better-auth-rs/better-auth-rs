@@ -59,7 +59,12 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         let pending = tokio::spawn(async move {
             if role == EntityRole::Passkey {
                 let row = store.create_passkey(input(&owner, " Desk ")).await?;
-                Ok((row.created_at, row.name))
+                Ok((
+                    row.created_at
+                        .typed()?
+                        .expect("Legacy passkey creation returns createdAt"),
+                    row.name,
+                ))
             } else {
                 let row = store
                     .create_api_key(api_key::input(Some(" Desk "), "ordinary-order"))
@@ -108,7 +113,13 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 .get_passkey_by_credential_id("credential: Desk ")
                 .await?
                 .unwrap();
-            assert_eq!(stored.created_at, created_at);
+            assert_eq!(
+                stored
+                    .created_at
+                    .typed()?
+                    .expect("Legacy passkey storage retains createdAt"),
+                created_at
+            );
             assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
         } else {
             let stored = raw.get_api_key_by_hash("ordinary-order").await?.unwrap();
