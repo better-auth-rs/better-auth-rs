@@ -53,12 +53,11 @@ async fn insert_wallet<M: SeaOrmPluginModel>(
             .zip(values)
             .map(|(column, value)| column.save_as(Expr::val(value)));
         // Keep SeaORM's insert executor and primary-key metadata; only replace the native date binding.
-        let mut query = Query::insert();
-        query
+        *insert.query() = Query::insert()
             .into_table(Entity::<M>::default().table_ref())
             .columns(columns.iter().copied())
-            .values_panic(values);
-        *insert.query() = query;
+            .values_panic(values)
+            .to_owned();
     }
     let model = insert
         .exec_with_returning(connection)
