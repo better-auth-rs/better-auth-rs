@@ -644,14 +644,21 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
             "device-authorization",
             <Self as better_auth_core::AuthPlugin<S>>::routes(self),
         )?;
-        if self.config.grant_fields.is_none() {
-            return Ok(metadata);
+        let metadata = if self.config.grant_fields.is_some() {
+            metadata.device_authorization_grant(
+                &self.config.grant_metadata.request_error_codes,
+                &self.config.grant_metadata.request_responses,
+                &self.config.grant_metadata.verification_properties,
+            )?
+        } else {
+            metadata
+        };
+        if let Some(fields) = &self.config.request_fields {
+            let (properties, required) = fields.openapi();
+            metadata.device_authorization_request_fields(properties, &required)
+        } else {
+            Ok(metadata)
         }
-        metadata.device_authorization_grant(
-            &self.config.grant_metadata.request_error_codes,
-            &self.config.grant_metadata.request_responses,
-            &self.config.grant_metadata.verification_properties,
-        )
     }
 
     fn routes(&self) -> Vec<better_auth_core::AuthRoute> {

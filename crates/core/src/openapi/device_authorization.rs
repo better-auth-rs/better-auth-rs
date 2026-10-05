@@ -5,6 +5,51 @@ use crate::{AuthError, AuthResult};
 use super::{OpenApiPluginMetadata, metadata::ordered_properties};
 
 impl OpenApiPluginMetadata {
+    /// Document explicitly declared Device request fields in JavaScript property order.
+    pub fn device_authorization_request_fields(
+        mut self,
+        additional_properties: Map<String, Value>,
+        required_fields: &[String],
+    ) -> AuthResult<Self> {
+        if additional_properties.is_empty() {
+            return Ok(self);
+        }
+        let code = self
+            .endpoint_mut("deviceCode")
+            .ok_or_else(|| AuthError::config("OpenAPI Device endpoint deviceCode is absent"))?;
+        let request = code
+            .metadata
+            .request_body
+            .as_mut()
+            .and_then(|body| body.pointer_mut("/content/application~1json/schema"))
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| AuthError::config("OpenAPI Device request schema is absent"))?;
+        let mut required = request
+            .get("required")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        required.extend(required_fields.iter().cloned().map(Value::String));
+        let properties = request
+            .get_mut("properties")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| AuthError::config("OpenAPI Device request properties are absent"))?;
+        properties.extend(additional_properties);
+        *properties = ordered_properties(std::mem::take(properties));
+        // Zod builds required names while enumerating the final object shape.
+        let required: Vec<_> = properties
+            .keys()
+            .map(|name| Value::String(name.clone()))
+            .filter(|name| required.contains(name))
+            .collect();
+        if required.is_empty() {
+            let _ = request.remove("required");
+        } else {
+            let _ = request.insert("required".into(), Value::Array(required));
+        }
+        Ok(self)
+    }
+
     /// Apply Device grant documentation without changing the pinned standalone endpoints.
     pub fn device_authorization_grant(
         mut self,

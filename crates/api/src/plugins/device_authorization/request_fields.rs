@@ -59,7 +59,16 @@ type FieldFuture = Pin<Box<dyn Future<Output = FieldResult> + Send>>;
 
 /// Validate one declared additional request field without changing native request fields.
 #[derive(Clone)]
-pub struct DeviceRequestField(Callback);
+pub struct DeviceRequestField {
+    callback: Callback,
+    openapi: Option<RequestFieldSchema>,
+}
+
+#[derive(Clone)]
+struct RequestFieldSchema {
+    schema: Value,
+    required: bool,
+}
 
 #[derive(Clone)]
 enum Callback {
@@ -70,7 +79,10 @@ enum Callback {
 impl DeviceRequestField {
     /// Use a synchronous field schema.
     pub fn new(callback: impl Fn(Option<Value>) -> FieldResult + Send + Sync + 'static) -> Self {
-        Self(Callback::Sync(Arc::new(callback)))
+        Self {
+            callback: Callback::Sync(Arc::new(callback)),
+            openapi: None,
+        }
     }
 
     /// Await a field schema once, without emulating JavaScript's async-detection probe.
@@ -79,13 +91,23 @@ impl DeviceRequestField {
         F: Fn(Option<Value>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = FieldResult> + Send + 'static,
     {
-        Self(Callback::Async(Arc::new(move |value| {
-            Box::pin(callback(value))
-        })))
+        Self {
+            callback: Callback::Async(Arc::new(move |value| Box::pin(callback(value)))),
+            openapi: None,
+        }
+    }
+
+    /// Document the input schema and input requiredness without executing the validator.
+    ///
+    /// Defaults and transformations do not determine input requiredness. This declaration
+    /// changes documentation only; the callback remains responsible for validation.
+    pub fn openapi_schema(mut self, schema: Value, required: bool) -> Self {
+        self.openapi = Some(RequestFieldSchema { schema, required });
+        self
     }
 
     pub(super) async fn validate(&self, value: Option<Value>) -> FieldResult {
-        match &self.0 {
+        match &self.callback {
             Callback::Sync(callback) => callback(value),
             Callback::Async(callback) => callback(value).await,
         }
@@ -133,5 +155,19 @@ impl DeviceRequestFields {
             callback(issues)?;
         }
         Ok(())
+    }
+
+    pub(super) fn openapi(&self) -> (Map<String, Value>, Vec<String>) {
+        let mut properties = Map::new();
+        let mut required = Vec::new();
+        for (name, field) in &self.fields {
+            if let Some(metadata) = &field.openapi {
+                let _ = properties.insert(name.clone(), metadata.schema.clone());
+                if metadata.required {
+                    required.push(name.clone());
+                }
+            }
+        }
+        (properties, required)
     }
 }

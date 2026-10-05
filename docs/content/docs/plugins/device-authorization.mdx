@@ -65,7 +65,19 @@ Configure grant documentation before calling `DeviceAuthorizationPlugin::grant`.
 
 `DeviceGrant::verification_openapi_properties(Map<String, Value>)` adds documented `/device` verification properties after the native properties. Initialization rejects declarations named `user_code`, `status`, `client_id`, or `scope`. Numeric property names follow JavaScript enumeration order. This metadata does not register stored fields or produce verification values; configure `stored_fields` and `verification_context` for those behaviors.
 
-Schema generation does not execute grant callbacks. The standalone Device document remains unchanged. A configured grant documents `client_id` as optional even when all metadata maps are empty. OpenAPI schemas for arbitrary `DeviceRequestField` validation callbacks remain unsupported; metadata does not infer their additional request fields, transformations, or required values. CI must validate the new metadata contract against pinned 1.7.6 before document parity is claimed.
+Schema generation does not execute grant callbacks. Without explicit request-field documentation, the standalone Device document remains unchanged. A configured grant documents `client_id` as optional even when all metadata maps are empty. CI must validate the metadata contract against pinned 1.7.6 before document parity is claimed.
+
+Attach request documentation with `DeviceRequestField::openapi_schema(schema, required)`. Supply a JSON OpenAPI schema for the validator's input. Set `required` from input presence: a field with a default can remain optional even when validation always returns a value. A transformation documents its input type, not its output type. The declaration changes documentation only and does not execute or replace validation.
+
+```rust
+let label = DeviceRequestField::new(validate_label)
+    .openapi_schema(serde_json::json!({ "type": "string", "minLength": 2 }), true);
+let request_fields = DeviceRequestFields::new().field("label", label)?;
+```
+
+Annotated fields appear in `/device/code` with or without a grant. Standalone requests retain the required native `client_id`; only a configured grant makes that field optional. Native `client_id`, `user_id`, and `scope` cannot be redefined through `DeviceRequestFields::field`. Replacing an additional field preserves its declaration position and replaces its schema and requiredness. Property keys and required names use JavaScript enumeration order, including numeric field names.
+
+Unannotated validators remain absent from generated request documentation. The library does not infer schemas, defaults, transformations, or requiredness from Rust callbacks. A schema declaration does not add a SQL field, issue a credential, or change client and owner checks. The separate request-schema CI contract compares complete serialized Device operations against pinned 1.7.6 and checks that schema generation calls no validation or grant callback.
 
 ## Adapter field policies
 
