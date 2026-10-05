@@ -11,7 +11,6 @@ pub mod schema;
 pub mod store;
 mod types;
 mod types_org;
-mod utils;
 
 pub use better_auth_seaorm_macros::AuthEntity;
 pub use hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks, current_request_hook_context};

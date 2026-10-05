@@ -35,8 +35,9 @@ use async_trait::async_trait;
 use better_auth_core::store::{
     AuthTransaction, BoxedTransactionValue, TransactionStore, TransactionWork,
 };
-use chrono::{DateTime, Utc};
 use sea_orm::{DatabaseConnection, DatabaseTransaction, DbErr, SqlErr, TransactionTrait};
+
+pub(crate) use better_auth_core::store::adapter::{cancelled_by_hook, parse_optional_rfc3339};
 
 use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult, DatabaseError};
@@ -177,21 +178,4 @@ fn map_db_err(err: DbErr) -> AuthError {
         }
         Some(_) | None => AuthError::Database(DatabaseError::Query(err.to_string())),
     }
-}
-
-pub(crate) fn cancelled_by_hook(operation: &str) -> AuthError {
-    AuthError::forbidden(format!("{operation} cancelled by database hook"))
-}
-
-fn parse_rfc3339(value: &str, field: &str) -> Result<DateTime<Utc>, AuthError> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|_| AuthError::bad_request(format!("Invalid RFC 3339 timestamp for {field}")))
-}
-
-fn parse_optional_rfc3339(
-    value: Option<&str>,
-    field: &str,
-) -> Result<Option<DateTime<Utc>>, AuthError> {
-    value.map(|inner| parse_rfc3339(inner, field)).transpose()
 }
