@@ -108,7 +108,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          key: devenv-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}
+          key: devenv-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}
           workspaces: |
             .
             compat-tests/rust-server

@@ -495,6 +495,9 @@ fn gen_server_native_column(
 ) -> Option<TokenStream> {
     if database == Database::Sqlite
         || !(entity.session_row_presence
+            || (database == Database::Mysql
+                && entity.role == Some(EntityRole::TeamMember)
+                && field.registry_column == Some("created_at"))
             || matches!(
                 entity.role,
                 Some(
