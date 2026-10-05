@@ -6,6 +6,8 @@ description: SeaORM-backed database integration for Better Auth.
 Better Auth uses your application's SeaORM entities and `DatabaseConnection`
 for auth persistence through the `seaorm2` feature on `better-auth`.
 
+The SeaORM integration enables SQLite, PostgreSQL, and MySQL drivers. Use the matching backend when generating entities with the CLI. Driver availability does not establish complete schema or value compatibility with the upstream adapter; the [alignment inventory](https://github.com/better-auth-rs/better-auth-rs/blob/master/docs/upstream-alignment-backlog.md) records the verified contracts.
+
 The supported public path is:
 
 1. Enable the `seaorm2` feature on `better-auth`.

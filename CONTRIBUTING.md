@@ -99,7 +99,7 @@ contract. For more detail, see
 
 During development, select the affected test targets or compatibility profiles. Reuse passing focused checks while the relevant source, fixtures, configuration, and dependencies remain unchanged. Use GitHub Actions for complete acceptance. Push a checkpoint commit to a `codex/` branch to start CI without opening a pull request. Require a successful CI run for the same commit before merging into `master`.
 
-The CI job provides PostgreSQL and runs the existing live database tests through the consumer runner. MySQL acceptance remains separate work. To run the same complete check locally when needed, use:
+The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing PostgreSQL contracts and the MySQL schema preflight contract. The MySQL test creates and deletes an isolated database, so its CI account needs those permissions. These tests do not establish upstream database sampling. To run the same complete check locally when needed, use:
 
 ```bash
 devenv test
@@ -118,7 +118,7 @@ devenv shell -- ./scripts/consumer-check.sh --lib tests::ids
 devenv shell -- env COMPAT_TEST_PROFILE=request-oauth-memory cargo test --locked --test client_compat_tests configuration_client_compat -- --ignored --nocapture
 ```
 
-During development, select the affected consumer target with `./scripts/consumer-check.sh --lib <filter>` or `./scripts/consumer-check.sh --test <target>`. Argument-bearing runs check consumer formatting and run the selected Cargo tests. The unfiltered command also runs all-target Clippy, the cross-runtime contract, and configured live PostgreSQL tests. These focused checks do not replace successful CI acceptance before merging into `master`.
+During development, select the affected consumer target with `./scripts/consumer-check.sh --lib <filter>` or `./scripts/consumer-check.sh --test <target>`. Argument-bearing runs check consumer formatting and run the selected Cargo tests. The unfiltered command also runs all-target Clippy, the cross-runtime contract, and configured live PostgreSQL/MySQL tests. Set `BETTER_AUTH_TEST_POSTGRES_URL` and `BETTER_AUTH_TEST_MYSQL_URL` to enable the corresponding database checks. These focused checks do not replace successful CI acceptance before merging into `master`.
 
 The consumer script generates fresh schemas on every run. Identical generated files retain stable include paths and modification times under the ignored consumer `target/generated-schemas` directory. This preserves Cargo build results when the generated source does not change.
 

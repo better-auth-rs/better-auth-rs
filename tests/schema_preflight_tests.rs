@@ -24,6 +24,9 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+#[path = "schema_preflight_tests/mysql.rs"]
+mod mysql;
+
 #[derive(Clone)]
 struct Observe(Arc<AtomicUsize>);
 

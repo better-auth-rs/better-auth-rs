@@ -134,7 +134,7 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `native-tls` | Default TLS backend |
 | `rustls` | Alternative TLS backend; disable default features |
 | `axum` | Routes and session extractors |
-| `seaorm2` | SeaORM store and entity derives |
+| `seaorm2` | SeaORM store, entity derives, and SQLite/PostgreSQL/MySQL drivers |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
 
 Plugins can register adapter field policies for supported typed model fields and declared DeviceCode, JWK, or WalletAddress additional fields. Supported native display fields use their logical name when `field_name` is omitted or empty; see [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies). Wallet create and lookup methods are also available through `AuthTransaction`. Memory Device create, ordinary update, and code lookups read each additional field when its output callback runs. Ordinary JSON uses stored text, while reference arrays reach callbacks before public string conversion; see [Device field policies](docs/content/docs/plugins/device-authorization.mdx#adapter-field-policies) for the supported Memory representations. Direct Organization store configuration also resolves built-in field order.
