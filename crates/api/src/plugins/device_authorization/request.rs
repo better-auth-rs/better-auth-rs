@@ -1,6 +1,7 @@
 use super::{
-    DEVICE_GRANT_TYPE, DeviceFieldValidation, DeviceRequestFields, DeviceRequestIssue,
-    types::{DeviceActionRequest, DeviceCodeRequest, DeviceTokenRequest},
+    DEVICE_GRANT_TYPE, DeviceAuthorizationRequest, DeviceFieldValidation, DeviceRequestFields,
+    DeviceRequestIssue,
+    types::{DeviceActionRequest, DeviceTokenRequest},
 };
 use crate::plugins::json_body;
 use better_auth_core::{AuthError, AuthRequest, AuthResult, endpoint_input::ValidatedBody};
@@ -82,11 +83,12 @@ fn parse<T: DeserializeOwned + Serialize + Send + Sync + 'static>(
 pub(super) async fn code_with_fields(
     req: &AuthRequest,
     schema: &DeviceRequestFields,
+    grant: bool,
 ) -> AuthResult<ValidatedBody> {
     let body = req.input_body()?;
     let (mut output, issues) = fields(
         body.as_ref(),
-        &[("client_id", true), ("user_id", false), ("scope", false)],
+        &[("client_id", !grant), ("user_id", false), ("scope", false)],
         false,
     );
     let mut issues = (!issues.is_empty()).then_some(issues);
@@ -109,28 +111,30 @@ pub(super) async fn code_with_fields(
     if let Some(issues) = &issues {
         schema.report(issues)?;
     }
-    finish::<DeviceCodeRequest>(output, issues, true)
+    finish::<DeviceAuthorizationRequest>(output, issues, true)
 }
 
 pub(super) async fn read_code(
     req: &AuthRequest,
     schema: Option<&DeviceRequestFields>,
-) -> AuthResult<DeviceCodeRequest> {
-    if let Some(body) = req.validated_body::<DeviceCodeRequest>() {
+    grant: bool,
+) -> AuthResult<DeviceAuthorizationRequest> {
+    if let Some(body) = req.validated_body::<DeviceAuthorizationRequest>() {
         return Ok(body.clone());
     }
     let validated = match schema {
-        Some(schema) => code_with_fields(req, schema).await?,
+        Some(schema) => code_with_fields(req, schema, grant).await?,
+        None if grant => code_with_fields(req, &DeviceRequestFields::new(), true).await?,
         None => code(req)?,
     };
     validated
-        .get::<DeviceCodeRequest>()
+        .get::<DeviceAuthorizationRequest>()
         .cloned()
         .ok_or_else(|| AuthError::internal("Device validator returned a different body type"))
 }
 
 pub(super) fn code(req: &AuthRequest) -> AuthResult<ValidatedBody> {
-    parse::<DeviceCodeRequest>(
+    parse::<DeviceAuthorizationRequest>(
         req,
         &[("client_id", true), ("user_id", false), ("scope", false)],
         true,
@@ -167,8 +171,8 @@ pub(super) fn read<T: Clone + Send + Sync + 'static>(
 
 pub(super) fn normalize_code(
     req: &AuthRequest,
-    mut body: DeviceCodeRequest,
-) -> AuthResult<DeviceCodeRequest> {
+    mut body: DeviceAuthorizationRequest,
+) -> AuthResult<DeviceAuthorizationRequest> {
     let original = req.original_request().unwrap_or(req);
     if original.headers.get("content-type").is_some_and(|value| {
         value
@@ -192,28 +196,19 @@ pub(super) fn normalize_code(
                 .into());
             }
             match field {
-                "client_id" => body.client_id = value.unwrap_or_default(),
+                "client_id" => body.client_id = value,
                 "user_id" => body.user_id = value,
                 "scope" => body.scope = value,
                 _ => {}
             }
         }
     }
+    body.client_id = body.client_id.filter(|value| !value.is_empty());
     body.user_id = body.user_id.filter(|value| !value.is_empty());
     body.scope = body.scope.filter(|value| !value.is_empty());
-    let mut projection = serde_json::to_value(&body)?;
-    if body.client_id.is_empty()
-        && let Some(object) = projection.as_object_mut()
-    {
-        let _ = object.remove("client_id");
-    }
+    let projection = serde_json::to_value(&body)?;
     let mut normalized = req.clone();
     normalized.set_endpoint_body(ValidatedBody::new(Some(projection), body.clone()));
     better_auth_core::hooks::update_request_hook_context(&normalized)?;
-    if body.client_id.is_empty() {
-        return Err(
-            super::device_error_response(400, "invalid_request", "client_id is required")?.into(),
-        );
-    }
     Ok(body)
 }

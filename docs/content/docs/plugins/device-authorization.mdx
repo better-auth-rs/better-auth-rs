@@ -20,11 +20,11 @@ The default device-code generator uses ASCII letters and digits. Its default len
 
 An omitted or empty `verification_uri` selects `/device`. The complete verification URI replaces the first existing `user_code` query parameter and removes later duplicates, or appends the parameter when absent. Other query pairs retain their order, and the fragment remains unchanged.
 
-The plugin retries a unique-constraint collision at most three times. Each retry generates both codes again. Other persistence errors propagate. Client validation and `on_device_auth_request` run once before generation.
+The plugin retries a unique-constraint collision at most three times. Each retry generates both codes again. Other persistence errors propagate. Request authorization, applicable client validation, and `on_device_auth_request` run before generation and are not repeated on a collision.
 
 The generator methods now accept asynchronous closures. Change a synchronous closure from `|| value` to `|| async { Ok(value) }`. Keep application-owned admission policy in `validate_client`; a valid device token does not establish machine inventory identity.
 
-All four POST routes validate their bodies before authentication and endpoint middleware. `/device/code` returns OAuth `invalid_request` validation errors. The other routes use `VALIDATION_ERROR`. Empty `client_id` is rejected; empty `user_id` and `scope` are omitted before callbacks and persistence. Form requests reject repeated nonempty values for these three fields. Endpoint hooks retain the original input.
+All four POST routes validate their bodies before authentication and endpoint middleware. `/device/code` returns OAuth `invalid_request` validation errors. The other routes use `VALIDATION_ERROR`. Without a grant, `client_id` is required. Empty base fields are omitted before callbacks and persistence; issuance requires a client binding after request authorization. Form requests reject repeated nonempty values for these three fields. Endpoint hooks retain the original input.
 
 `DeviceCode.client_id` and `DeviceCode.scope` use `SchemaValue<Option<String>>` so native store reads retain omitted memory fields and SQL null values. Use `json()` to inspect presence and `typed()` for a present nullable string. Device review responses preserve the same distinction.
 
@@ -37,9 +37,25 @@ SeaORM models use `Option<better_auth::seaorm::SqlNumber>` with `#[sea_orm(colum
 
 Configure `DeviceAuthorizationPlugin::request_fields` with `DeviceRequestFields` to validate additional `/device/code` fields. Add fields in order with `DeviceRequestField::new` or `new_async`. A callback receives `Option<serde_json::Value>` and returns `DeviceFieldValidation::Value` or `Issues` through `AuthResult`. `None` preserves omission; `Some(Value::Null)` preserves explicit null. Unknown fields are removed from the validated projection. The original HTTP body remains available to request hooks.
 
-`DeviceRequestIssue` preserves the message, relative path, and validator-specific details. `on_validation_error` receives all issues before the default OAuth `invalid_request` error. An application error propagates unchanged. Native client, user, and scope fields cannot be redefined. Request fields do not authorize the request or become stored fields; use the adapter policies below for persistence. This request-validation interface does not implement full grant authorization, optional client binding, redemption policy, or verification context.
+`DeviceRequestIssue` preserves the message, relative path, and validator-specific details. `on_validation_error` receives all issues before the default OAuth `invalid_request` error. An application error propagates unchanged. Native client, user, and scope fields cannot be redefined. Request fields do not authorize the request or become stored fields; configure a grant for authorization and declared adapter policies for persistence.
 
 Route authors can install an async body validator with `AuthRoute::body_validator_async`. Existing `.body_validator(callback)` calls remain unchanged. `better_auth::plugin::BodyValidator` is now a wrapper: replace direct `Arc::new(callback)` construction with `BodyValidator::new(callback)`, and call `validate(&request).await`. Validation runs once before query validation, required headers, and endpoint middleware. Rust does not emulate JavaScript's async-detection probe, repeated callbacks, or task scheduling.
+
+## Grant callbacks
+
+Configure ordinary plugin options and request fields before calling the terminal `DeviceAuthorizationPlugin::grant` builder. `DeviceGrant<S>::new(authorize_request, assert_session_redemption)` requires both callbacks and uses the application's `AuthSchema`. The builder returns an `impl AuthPlugin<S>` through the existing typed callback registration. An unconfigured plugin retains its standalone behavior.
+
+Both callbacks return `DeviceGrantFuture` with `Box::pin(async move { ... })`. They borrow the existing `EndpointContext<S>`, which exposes the validated body, original HTTP request, explicit native headers, and active authentication runtime. Request authorization also receives `&DeviceAuthorizationRequest`; session policy receives `&DeviceCode`. Callback errors propagate unchanged.
+
+Only a configured grant makes the request `client_id` optional. The request callback runs after empty-value and form normalization. It returns `Some(DeviceGrantAuthorization { client_id, additional_fields })` to supply the binding and logical fields to store. That result selects the effective client and does not call `validate_client`. Returning `None` requires a request client and a configured `validate_client` callback that accepts that client. An empty effective client is rejected. `on_device_auth_request` receives the effective client and the normalized request scope.
+
+Use `DeviceGrant::stored_fields(UserConfig)` to declare stored fields. Initialization registers these declarations through `ModelFields`. The configured SQL model must contain the declared columns. Grant declarations cannot redefine native DeviceCode fields, including `scope`; the separate adapter scope policy remains available. Authorization fields pass through existing defaults and transforms. Typed native fields continue to determine the generated codes, client, user, status, expiry, interval, and scope.
+
+The required session policy runs in `/device/token` after ordinary client validation, code lookup, and the existing stored-client comparison. The shared redemption helper runs its polling, expiry, status, user, and atomic-consumption checks afterward. The policy cannot replace those checks or their ownership condition. Configure the policy for the application's intended issuer before enabling grant requests.
+
+`DeviceGrant::verification_context` accepts a synchronous callback returning `AuthResult<Option<Map<String, Value>>>`. The callback runs only after the existing session claim and owner check succeeds. It receives the projected stored row, including the bound user and declared fields. The response merges the additional display fields before its native fields. Native fields retain precedence even when their values are omitted. No callback or a `None` result adds no fields.
+
+These contracts follow pinned 1.7.6 `plugins/device-authorization/routes.mjs:199–244` for issuance, `:436–451` for session policy, and `:528–560` for verification context. `index.mjs:42–64` defines additional-field restrictions and stored schema composition. CI must validate the paired ordinary-flow contracts before runtime parity is claimed. Grant request error metadata, custom OpenAPI responses, verification OpenAPI properties, arbitrary JavaScript values, and async callback scheduling remain outside this implementation.
 
 ## Adapter field policies
 
@@ -65,7 +81,7 @@ The helper authorizes the issuer, enforces the polling interval, updates `lastPo
 
 Set `EndpointContext.transaction` when the caller runs inside an active transaction. The helper uses that transaction for every store operation, including user lookup. `AuthTransaction` exposes the DeviceCode store operations. The default `/device/token` route uses the same helper and creates its session after consumption, using the consumed row's bound user ID.
 
-The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates and full grant authorization or verification callbacks remain outside this API slice.
+The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates remain outside this API slice. Configured grant callbacks use the same native bindings and consumption path.
 
 ## Atomic consumption and transactions
 
@@ -73,4 +89,4 @@ The ownership condition currently supports `DeviceCodeOwnership::ClientId(String
 
 `AuthTransaction` includes DeviceCode operations. Memory and SeaORM execute these operations through the active transaction; secondary storage forwards them to that transaction. Memory validates consumed records against the original transaction state before merging any changes. A code created and consumed in the same transaction needs no existing live record. An output error from an ordinary consumption propagates after deletion. An output error propagated out of a transaction aborts that transaction.
 
-Issuer ownership currently supports only `ClientId`. Additional fields registered by a custom plugin use the same store operations. Grant callback configuration and additional ownership predicates remain unsupported.
+Issuer ownership currently supports only `ClientId`. Additional fields registered by a custom plugin or grant use the same store operations. Additional ownership predicates remain unsupported.

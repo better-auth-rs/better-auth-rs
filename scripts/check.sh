@@ -36,10 +36,11 @@ run_stage() {
         plugin::tests::async_body_dispatch:: \
         plugins::device_authorization::tests:: \
         plugins::two_factor::tests::
-      cargo test --locked --test device_request_validation_tests \
+      cargo test --locked --test device_request_validation_tests --test device_grant_tests \
         --test device_issuance_tests --test native_endpoint_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
+        ./compat-tests/reference-server/contracts/device-grant.test.ts \
         ./compat-tests/reference-server/contracts/device-issuance.test.ts
       ;;
     provider-options)

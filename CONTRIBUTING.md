@@ -105,7 +105,7 @@ Push and pull-request runs execute all check stages. For a manual CI run, select
 
 The additional `client-configuration` stage runs the existing configuration client compatibility test. Set the optional CI `profile` input to select one existing configuration, such as `oauth-proxy`. An empty input runs all configuration profiles. The harness rejects unknown names. The `profile` input applies only to this focused stage; complete acceptance remains unfiltered. The `alignment` stage already includes this test, so `all` does not execute the additional stage again.
 
-The additional `device-validation` stage checks formatting, core/API Clippy, asynchronous dispatch order, Device and Two Factor regressions, native endpoint projection, and paired Device request and issuance contracts. The workspace and alignment stages already cover these tests, so `all` does not repeat this focused stage.
+The additional `device-validation` stage checks formatting, core/API Clippy, asynchronous dispatch order, Device and Two Factor regressions, native endpoint projection, and paired Device request, grant, and issuance contracts. The workspace and alignment stages already cover these tests, so `all` does not repeat this focused stage.
 
 The additional `provider-options` stage checks API Clippy and the captured Google client-ID, Microsoft, Twitch, profile-override, and Generic profile-result contracts. The stage enables Axum for the real HTTP fixtures. The workspace and alignment stages cover the same contracts during complete acceptance.
 

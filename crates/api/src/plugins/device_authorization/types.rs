@@ -1,12 +1,18 @@
 use serde::{Deserialize, Serialize};
 
+/// The validated and normalized request passed to a configured Device grant.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct DeviceCodeRequest {
+pub struct DeviceAuthorizationRequest {
+    /// Declared additional request fields after validation.
     #[serde(default, flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub client_id: String,
+    /// Optional only when a grant supplies request authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    /// User to pre-bind through the existing native request field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
+    /// Requested native scope after empty-value normalization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
 }
@@ -52,6 +58,8 @@ pub(super) struct DeviceVerifyResponse {
 
 #[derive(Debug, Serialize)]
 pub(super) struct DeviceReviewContext {
+    #[serde(flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
     pub client_id: better_auth_core::SchemaValue<Option<String>>,
     #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]

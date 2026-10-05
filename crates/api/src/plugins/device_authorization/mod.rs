@@ -1,8 +1,10 @@
+mod grant;
 mod redemption;
 mod request;
 mod request_fields;
 pub use better_auth_core::DeviceCodeOwnership;
 use chrono::{Duration, Utc};
+pub use grant::{DeviceGrant, DeviceGrantAuthorization, DeviceGrantFuture};
 use rand::{
     RngCore,
     distributions::{Alphanumeric, DistString},
@@ -18,6 +20,7 @@ use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+pub use types::DeviceAuthorizationRequest;
 use url::Url;
 
 use crate::plugins::endpoint_context::EndpointContext;
@@ -79,6 +82,7 @@ struct DeviceAuthorizationConfig {
     on_device_auth_request: Option<Arc<DeviceAuthRequestCallback>>,
     verification_uri: Option<String>,
     request_fields: Option<DeviceRequestFields>,
+    grant_fields: Option<better_auth_core::user_fields::UserConfig>,
 }
 
 impl Default for DeviceAuthorizationConfig {
@@ -94,6 +98,7 @@ impl Default for DeviceAuthorizationConfig {
             on_device_auth_request: None,
             verification_uri: None,
             request_fields: None,
+            grant_fields: None,
         }
     }
 }
@@ -126,6 +131,7 @@ impl fmt::Debug for DeviceAuthorizationConfig {
                 "request_fields",
                 &self.request_fields.as_ref().map(|_| "configured"),
             )
+            .field("grant", &self.grant_fields.as_ref().map(|_| "configured"))
             .finish()
     }
 }
@@ -250,22 +256,44 @@ impl DeviceAuthorizationPlugin {
         self
     }
 
-    async fn handle_device_code(
+    async fn handle_device_code<S: better_auth_core::AuthSchema>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         let body = request::normalize_code(
             req,
-            request::read_code(req, self.config.request_fields.as_ref()).await?,
+            request::read_code(
+                req,
+                self.config.request_fields.as_ref(),
+                self.config.grant_fields.is_some(),
+            )
+            .await?,
         )?;
 
-        if !self.validate_client_id(&body.client_id).await? {
-            return device_error_response(400, "invalid_client", INVALID_CLIENT_ID);
-        }
+        let authorization = if self.config.grant_fields.is_some() {
+            let endpoint = EndpointContext::new(Some(req), serde_json::to_value(&body)?, ctx);
+            self.authorize_request(&body, &endpoint).await?
+        } else {
+            let Some(client_id) = body.client_id.as_ref() else {
+                return Err(device_error_response(
+                    400,
+                    "invalid_request",
+                    "client_id is required",
+                )?
+                .into());
+            };
+            if !self.validate_client_id(client_id).await? {
+                return device_error_response(400, "invalid_client", INVALID_CLIENT_ID);
+            }
+            DeviceGrantAuthorization {
+                client_id: client_id.clone(),
+                additional_fields: Default::default(),
+            }
+        };
 
         if let Some(callback) = &self.config.on_device_auth_request {
-            callback(body.client_id.clone(), body.scope.clone()).await?;
+            callback(authorization.client_id.clone(), body.scope.clone()).await?;
         }
 
         let expires_at = Utc::now() + self.config.expires_in;
@@ -277,7 +305,7 @@ impl DeviceAuthorizationPlugin {
             match ctx
                 .database
                 .create_device_code(CreateDeviceCode {
-                    additional_fields: Default::default(),
+                    additional_fields: authorization.additional_fields.clone(),
                     device_code: device_code.clone(),
                     user_code: user_code.clone(),
                     user_id: body.user_id.clone().filter(|id| !id.is_empty()),
@@ -285,7 +313,7 @@ impl DeviceAuthorizationPlugin {
                     status: DEVICE_STATUS_PENDING.to_string(),
                     last_polled_at: None,
                     polling_interval: Some(polling_interval),
-                    client_id: Some(body.client_id.clone()),
+                    client_id: Some(authorization.client_id.clone()),
                     scope: body
                         .scope
                         .clone()
@@ -326,10 +354,10 @@ impl DeviceAuthorizationPlugin {
         )
     }
 
-    async fn handle_device_token(
+    async fn handle_device_token<S: better_auth_core::AuthSchema>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         let body: DeviceTokenRequest = request::read(req, request::token)?;
 
@@ -339,10 +367,11 @@ impl DeviceAuthorizationPlugin {
 
         let endpoint = EndpointContext::new(Some(req), serde_json::to_value(&body)?, ctx);
         let client_id = body.client_id;
+        let grant = self.configured_grant(ctx)?;
         let redemption = redeem_device_code(
             &endpoint,
             &body.device_code,
-            move |device_code, _endpoint| {
+            move |device_code, endpoint| {
                 Box::pin(async move {
                     let stored_client_id: Option<String> = serde_json::from_value(
                         device_code
@@ -359,6 +388,11 @@ impl DeviceAuthorizationPlugin {
                             CLIENT_ID_MISMATCH,
                         )?
                         .into());
+                    }
+                    if let Some(grant) = grant {
+                        grant
+                            .assert_session_redemption(device_code, endpoint)
+                            .await?;
                     }
                     Ok(DeviceCodeRedemptionAuthorization {
                         ownership: DeviceCodeOwnership::ClientId(client_id),
@@ -419,10 +453,10 @@ impl DeviceAuthorizationPlugin {
         .with_header("Pragma", "no-cache"))
     }
 
-    async fn handle_device_verify(
+    async fn handle_device_verify<S: better_auth_core::AuthSchema>(
         &self,
         req: &AuthRequest,
-        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+        ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         let Some(user_code) = req.query_string("user_code")?.map(str::to_owned) else {
             return device_error_response(400, "invalid_request", INVALID_REQUEST);
@@ -453,6 +487,14 @@ impl DeviceAuthorizationPlugin {
         }
         let can_review = user_id.is_some()
             && device_code.user_id.as_deref() == user_id.as_ref().and_then(|id| id.as_str());
+        let additional_fields = if can_review {
+            match self.configured_grant(ctx)? {
+                Some(grant) => grant.verification_context_for(&device_code)?,
+                None => Default::default(),
+            }
+        } else {
+            Default::default()
+        };
 
         AuthResponse::json(
             200,
@@ -460,6 +502,7 @@ impl DeviceAuthorizationPlugin {
                 user_code,
                 status: device_code.status,
                 review: can_review.then_some(DeviceReviewContext {
+                    additional_fields,
                     client_id: device_code.client_id,
                     scope: device_code.scope,
                 }),
@@ -598,15 +641,16 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
         use better_auth_core::AuthRoute;
         let code = AuthRoute::post("/device/code", "deviceCode")
             .allowed_media_types(&["application/json", "application/x-www-form-urlencoded"]);
-        let code = match &self.config.request_fields {
-            Some(fields) => {
-                let fields = fields.clone();
+        let grant = self.config.grant_fields.is_some();
+        let code = match (&self.config.request_fields, grant) {
+            (None, false) => code.body_validator(request::code),
+            (fields, grant) => {
+                let fields = fields.as_ref().cloned().unwrap_or_default();
                 code.body_validator_async(move |request| {
                     let fields = fields.clone();
-                    async move { request::code_with_fields(&request, &fields).await }
+                    async move { request::code_with_fields(&request, &fields, grant).await }
                 })
             }
-            None => code.body_validator(request::code),
         };
         vec![
             code,
@@ -639,7 +683,7 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
         Ok(Some(response))
     }
 
-    async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+    async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
         for (name, length) in [
             ("deviceCodeLength", self.config.device_code_length),
             ("userCodeLength", self.config.user_code_length),
@@ -649,6 +693,9 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
                     "{name} must be between 1 and 191"
                 )));
             }
+        }
+        if let Some(fields) = &self.config.grant_fields {
+            grant::register_fields(ctx, fields)?;
         }
         Ok(())
     }
