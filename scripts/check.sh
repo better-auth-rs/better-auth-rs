@@ -21,7 +21,10 @@ run_stage() {
     workspace-tests) cargo test --workspace --locked --features axum,seaorm2,redis-cache --no-fail-fast ;;
     rustls) cargo check -p better-auth --locked --no-default-features --features rustls,axum,seaorm2,redis-cache ;;
     rustdoc) RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features axum,seaorm2,redis-cache ;;
-    consumer) ./scripts/consumer-check.sh ;;
+    consumer)
+      cargo clippy --locked -p better-auth-cli -- -D warnings
+      ./scripts/consumer-check.sh
+      ;;
     fullstack) cargo check --locked --manifest-path examples/fullstack/backend/Cargo.toml ;;
     quick-start) bun scripts/quick-start-check.ts ;;
     alignment) ./scripts/alignment-check.sh --skip-build ;;
@@ -38,12 +41,14 @@ run_stage() {
         plugins::device_authorization::tests:: \
         plugins::two_factor::tests::
       cargo test --locked --test device_request_validation_tests --test device_grant_tests \
-        --test device_grant_metadata_tests --test openapi_property_order_tests \
+        --test device_grant_metadata_tests --test device_request_schema_tests \
+        --test openapi_property_order_tests \
         --test device_issuance_tests --test native_endpoint_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
         ./compat-tests/reference-server/contracts/device-grant.test.ts \
         ./compat-tests/reference-server/contracts/device-grant-metadata.test.ts \
+        ./compat-tests/reference-server/contracts/device-request-schema.test.ts \
         ./compat-tests/reference-server/contracts/openapi-property-order.test.ts \
         ./compat-tests/reference-server/contracts/device-issuance.test.ts
       ;;
@@ -51,12 +56,14 @@ run_stage() {
       cargo clippy --locked -p better-auth-api --features axum -- -D warnings
       cargo test --locked -p better-auth-api --features axum --lib -- \
         plugins::oauth::google_client_ids_tests:: \
+        plugins::oauth::gitlab_issuer_tests:: \
         plugins::oauth::microsoft_tests:: \
         plugins::oauth::providers::twitch::tests:: \
         plugins::oauth::signin::override_tests:: \
         plugins::oauth::generic_profile::result_tests::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/google-client-ids.test.ts \
+        ./compat-tests/reference-server/contracts/gitlab-issuer.test.ts \
         ./compat-tests/reference-server/contracts/social-microsoft.test.ts \
         ./compat-tests/reference-server/contracts/twitch-provider.test.ts \
         ./compat-tests/reference-server/contracts/oauth-profile-override.test.ts \
