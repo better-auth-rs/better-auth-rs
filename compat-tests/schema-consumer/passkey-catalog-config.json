@@ -1,0 +1,37 @@
+{
+  "default": {},
+  "legacy": {
+    "passkey": {
+      "modelName": "passkeys",
+      "fields": {
+        "name": "name",
+        "publicKey": "public_key",
+        "userId": "user_id",
+        "credentialID": "credential_id",
+        "counter": "counter",
+        "deviceType": "device_type",
+        "backedUp": "backed_up",
+        "transports": "transports",
+        "createdAt": "created_at",
+        "aaguid": "aaguid"
+      }
+    }
+  },
+  "custom": {
+    "passkey": {
+      "modelName": "display_catalog_passkeys",
+      "fields": {
+        "name": "display_name",
+        "publicKey": "public_key_text",
+        "userId": "person_link",
+        "credentialID": "credential_label",
+        "counter": "signature_count",
+        "deviceType": "authenticator_kind",
+        "backedUp": "is_backed_up",
+        "transports": "transport_text",
+        "createdAt": "created_on",
+        "aaguid": "authenticator_guid"
+      }
+    }
+  }
+}

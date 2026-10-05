@@ -17,6 +17,8 @@ on:
       - compat-tests/schema-consumer/session-catalog-config.json
       - compat-tests/schema-consumer/device-code-catalog-config.json
       - compat-tests/schema-consumer/wallet-address-catalog-config.json
+      - compat-tests/schema-consumer/two-factor-catalog-config.json
+      - compat-tests/schema-consumer/passkey-catalog-config.json
 
 permissions:
   contents: read
@@ -67,7 +69,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Capture pinned WalletAddress catalogs and storage
+      - name: Capture pinned TwoFactor and Passkey catalogs
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -75,8 +77,10 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          for backend in sqlite postgres mysql; do
-            bun --no-install ./compat-tests/reference-server/contracts/wallet-address-catalog-capture.mjs "$backend" "$capture_dir/wallet-address-$backend-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/wallet-address-$backend-catalog.log"
+          for plugin in two-factor passkey; do
+            for backend in sqlite postgres mysql; do
+              bun --no-install "./compat-tests/reference-server/contracts/$plugin-catalog-capture.mjs" "$backend" "$capture_dir/$plugin-$backend-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/$plugin-$backend-catalog.log"
+            done
           done
           (
             cd "$capture_dir"
@@ -85,7 +89,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-wallet-address-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-two-factor-passkey-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14

@@ -1,0 +1,53 @@
+{
+  "default": {},
+  "legacy": {
+    "user": {
+      "modelName": "users",
+      "fields": {
+        "name": "name",
+        "email": "email",
+        "emailVerified": "email_verified",
+        "image": "image",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "twoFactorEnabled": "two_factor_enabled"
+      }
+    },
+    "twoFactor": {
+      "modelName": "two_factor",
+      "fields": {
+        "secret": "secret",
+        "backupCodes": "backup_codes",
+        "userId": "user_id",
+        "verified": "verified",
+        "failedVerificationCount": "failed_verification_count",
+        "lockedUntil": "locked_until"
+      }
+    }
+  },
+  "custom": {
+    "user": {
+      "modelName": "display_catalog_users",
+      "fields": {
+        "name": "display_name",
+        "email": "mail_label",
+        "emailVerified": "mail_confirmed",
+        "image": "portrait_text",
+        "createdAt": "created_on",
+        "updatedAt": "updated_on",
+        "twoFactorEnabled": "second_factor_enabled"
+      }
+    },
+    "twoFactor": {
+      "modelName": "display_catalog_two_factors",
+      "fields": {
+        "secret": "secret_text",
+        "backupCodes": "backup_text",
+        "userId": "person_link",
+        "verified": "is_verified",
+        "failedVerificationCount": "failure_count",
+        "lockedUntil": "locked_until_time"
+      }
+    }
+  }
+}
