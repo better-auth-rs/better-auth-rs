@@ -1,0 +1,27 @@
+{
+  "default": {},
+  "legacy": {
+    "walletAddress": {
+      "modelName": "wallet_address",
+      "fields": {
+        "userId": "user_id",
+        "address": "address",
+        "chainId": "chain_id",
+        "isPrimary": "is_primary",
+        "createdAt": "created_at"
+      }
+    }
+  },
+  "custom": {
+    "walletAddress": {
+      "modelName": "display_catalog_wallets",
+      "fields": {
+        "userId": "person_link",
+        "address": "wallet_text",
+        "chainId": "network_number",
+        "isPrimary": "preferred_wallet",
+        "createdAt": "created_on"
+      }
+    }
+  }
+}
