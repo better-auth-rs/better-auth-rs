@@ -4,6 +4,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use super::ValidatedBody;
 
 type ValidationFuture = Pin<Box<dyn Future<Output = AuthResult<ValidatedBody>> + Send>>;
+type SyncCallback = dyn Fn(&AuthRequest) -> AuthResult<ValidatedBody> + Send + Sync;
 
 /// One body validator, evaluated before query validation and endpoint middleware.
 #[derive(Clone)]
@@ -11,7 +12,7 @@ pub struct BodyValidator(Callback);
 
 #[derive(Clone)]
 enum Callback {
-    Sync(Arc<dyn Fn(&AuthRequest) -> AuthResult<ValidatedBody> + Send + Sync>),
+    Sync(Arc<SyncCallback>),
     Async(Arc<dyn Fn(AuthRequest) -> ValidationFuture + Send + Sync>),
 }
 
