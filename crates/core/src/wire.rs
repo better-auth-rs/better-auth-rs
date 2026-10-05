@@ -161,7 +161,17 @@ impl From<&UserView> for UserView {
 impl<T: AuthSession> From<&T> for SessionView {
     fn from(session: &T) -> Self {
         Self {
-            visible_fields: session.field_presence().cloned(),
+            visible_fields: Some(session.field_presence().cloned().unwrap_or_else(|| {
+                [
+                    ("impersonated_by", "impersonatedBy"),
+                    ("active_organization_id", "activeOrganizationId"),
+                    ("active_team_id", "activeTeamId"),
+                ]
+                .into_iter()
+                .filter(|(field, _)| T::PLUGIN_FIELDS.contains(field))
+                .map(|(_, name)| name.to_owned())
+                .collect()
+            })),
             id: session.id().into_owned(),
             expires_at: session.expires_at(),
             token: session.token().to_owned(),
