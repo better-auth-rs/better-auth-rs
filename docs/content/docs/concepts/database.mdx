@@ -176,7 +176,7 @@ The CLI and bundled entities currently have these default table-name differences
 | TwoFactor | `two_factor` | `twoFactor` |
 | DeviceCode | `device_code` | `deviceCode` |
 | TeamMember | `team_member` | `teamMember` |
-| OrganizationRole | CLI SQLite: `organizationRole`; bundled and other CLI backends: `organization_role` | `organizationRole` |
+| OrganizationRole | CLI generation: `organizationRole`; bundled: `organization_role` | `organizationRole` |
 | ApiKey | `api_keys` | `apikey` |
 | Passkey | `passkeys` | `passkey` |
 
@@ -194,7 +194,7 @@ Fresh PostgreSQL and MySQL JWK generation selects native camelCase columns. Its 
 
 Fresh PostgreSQL and MySQL RateLimit generation selects `rateLimit` and `lastRequest`. The key column uses TEXT on PostgreSQL and VARCHAR(255) on MySQL. The count column uses INTEGER and lastRequest uses BIGINT. With the default ID mode, all four columns are nonnullable and have no SQL default. Explicit mappings, field policies, ID modes, SQLite generation, and runtime counter behavior retain their existing rules. Focused CI run 37324630769 passed the default/custom upstream and generated Rust column comparisons on both backends. These contracts do not establish numeric value interchangeability or index naming.
 
-Fresh PostgreSQL and MySQL Member generation retains `member` and selects native camelCase columns. PostgreSQL uses TEXT role and TIMESTAMPTZ createdAt; MySQL uses VARCHAR(255) role and TIMESTAMP(3) createdAt. With the default ID mode, all five columns are nonnullable and have no SQL default. Explicit mappings, field policies, ID/reference rules, SQLite generation, and authorization behavior remain unchanged. Default/custom column contracts require CI acceptance. OrganizationRole permission representation remains a separate storage contract.
+Fresh PostgreSQL and MySQL Member generation retains `member` and selects native camelCase columns. PostgreSQL uses TEXT role and TIMESTAMPTZ createdAt; MySQL uses VARCHAR(255) role and TIMESTAMP(3) createdAt. With the default ID mode, all five columns are nonnullable and have no SQL default. Explicit mappings, field policies, ID/reference rules, SQLite generation, and authorization behavior remain unchanged. Focused CI run 37326615310 passed the default/custom upstream and generated Rust column comparisons on both backends. OrganizationRole permission representation remains a separate storage contract.
 
 Fresh SQLite Member and OrganizationRole generation uses native camelCase columns, TEXT strings, and literal `date` columns with existing nullability and no SQL defaults. Member retains `member`; OrganizationRole selects `organizationRole`. Each model's two native nonunique indexes use the resolved table and column names through the existing shortening rule. Foreign keys retain the resolved User and Organization targets. Native OrganizationRole permission uses TEXT DDL while its Rust model remains `Json`; the generator does not change permission encoding or runtime policies. Explicit field policies keep their existing type and index rules.
 
@@ -431,6 +431,10 @@ Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and 
 Internal behavior tests also use a bundled schema. Dual-server and client SDK compatibility checks compare behavior with the TypeScript reference server.
 
 ## JSON field bindings
+
+Fresh PostgreSQL and MySQL OrganizationRole schemas store native `permission` as JSON text in a TEXT column. The generated SeaORM field is `String`; public `OrganizationRole.permission` remains `SchemaValue<serde_json::Value>`. Native create and update writes encode the final permission value once, and reads parse the stored text before returning the public record. Parse errors propagate. Explicit permission field policies keep their existing transform order and output representation. Physical field renaming alone does not enable a replacement policy.
+
+Regenerating these server schemas changes the stored model field type and uses upstream table and column names unless explicit mappings override them. Existing generated files and databases do not change automatically. Applications that adopt the new schema must migrate their existing JSON permission column to TEXT and review direct model access. Keep the existing JSON or JSONB model until that migration is complete. Bundled models and SQLite generation retain their existing representation; this change does not rewrite migration history, IDs, references, or permission evaluation.
 
 For fresh application JSON declarations without references, `--database sqlite` generates `SqlText` or `Option<SqlText>`. The fully qualified type is `better_auth::seaorm::SqlText`, an alias of the existing scalar-capable `ReferenceId` storage implementation. The alias alone does not declare a reference. PostgreSQL and MySQL continue to generate `Json`; native overrides and reference fields retain their existing types. User and Session additional-field generation remains unsupported.
 

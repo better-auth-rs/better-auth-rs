@@ -502,6 +502,7 @@ fn gen_server_native_column(
                     | EntityRole::Jwk
                     | EntityRole::RateLimit
                     | EntityRole::Member
+                    | EntityRole::OrganizationRole
             )
         )
         || field.attributes.is_some()
@@ -517,11 +518,18 @@ fn gen_server_native_column(
                     | (Some(EntityRole::Verification), "identifier")
                     | (Some(EntityRole::RateLimit), "key")
                     | (Some(EntityRole::Member), "role")
+                    | (Some(EntityRole::OrganizationRole), "role")
             ) =>
         {
             quote!(column.string_len(255);)
         }
         (_, "String" | "Option<String>") => quote!(column.text();),
+        (_, "Json")
+            if entity.role == Some(EntityRole::OrganizationRole)
+                && definition.name == "permission" =>
+        {
+            quote!(column.text();)
+        }
         (_, "bool") => quote!(column.boolean();),
         (Database::Postgres, "DateTimeUtc" | "Option<DateTimeUtc>") => {
             quote!(column.timestamp_with_time_zone();)
@@ -543,7 +551,12 @@ fn gen_server_native_column(
     let default = matches!(
         (entity.role, definition.name),
         (
-            Some(EntityRole::User | EntityRole::Account | EntityRole::Verification),
+            Some(
+                EntityRole::User
+                    | EntityRole::Account
+                    | EntityRole::Verification
+                    | EntityRole::OrganizationRole
+            ),
             "created_at"
         ) | (
             Some(EntityRole::User | EntityRole::Verification),

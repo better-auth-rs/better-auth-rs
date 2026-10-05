@@ -14,6 +14,24 @@ use chrono::Utc;
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
 use serde_json::json;
 
+fn encode_native_permission<M: SeaOrmOrganizationModel>(
+    core: &mut serde_json::Map<String, serde_json::Value>,
+    config: &better_auth_core::user_fields::UserConfig,
+) -> AuthResult<()> {
+    if !config.fields().contains_key("permission")
+        && matches!(
+            M::column("permission")?.def().get_column_type(),
+            sea_orm::ColumnType::Text
+                | sea_orm::ColumnType::String(_)
+                | sea_orm::ColumnType::Char(_)
+        )
+        && let Some(permission) = core.get_mut("permission")
+    {
+        *permission = json!(better_auth_core::utils::json::stringify(permission)?);
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationRoleStore
     for SeaOrmStore<S, O, P>
@@ -49,6 +67,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.insert(name.into(), value);
             }
         }
+        encode_native_permission::<O::OrganizationRole>(&mut core, &config)?;
         models::insert::<O::OrganizationRole, _>(
             self.connection(),
             core,
@@ -192,6 +211,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.entry(name).or_insert(value);
             }
         }
+        encode_native_permission::<O::OrganizationRole>(&mut core, &config)?;
         let updated_id = core
             .get("id")
             .and_then(serde_json::Value::as_str)

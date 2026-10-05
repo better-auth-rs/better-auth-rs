@@ -288,6 +288,7 @@ impl Entity {
                         | EntityRole::Jwk
                         | EntityRole::RateLimit
                         | EntityRole::Member
+                        | EntityRole::OrganizationRole
                 )
             );
         let mut entity = Self {
@@ -319,6 +320,11 @@ impl Entity {
                                 && field.name == "role"
                             {
                                 "Option<String>"
+                            } else if database != Database::Sqlite
+                                && definition.role == Some(EntityRole::OrganizationRole)
+                                && field.name == "permission"
+                            {
+                                "String"
                             } else {
                                 field.ty
                             },

@@ -14,6 +14,7 @@ mod tests {
     mod member_server_catalog;
     mod model_declarations;
     mod organization;
+    mod organization_role_server;
     mod plugins;
     mod rate_limit_declarations;
     mod rate_limit_server_catalog;

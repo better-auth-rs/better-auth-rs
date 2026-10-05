@@ -1,0 +1,320 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "organizationRole",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "organizationRole",
+          "position": "2",
+          "name": "organizationId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "organizationRole",
+          "position": "3",
+          "name": "role",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "organizationRole",
+          "position": "4",
+          "name": "permission",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "organizationRole",
+          "position": "5",
+          "name": "createdAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "organizationRole",
+          "position": "6",
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `activeOrganizationId` text);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `organization` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `slug` varchar(255) not null unique, `logo` text, `createdAt` timestamp(3) not null, `metadata` text);\n\ncreate table `organizationRole` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `role` varchar(255) not null, `permission` text not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3));\n\ncreate table `member` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `role` varchar(255) not null, `createdAt` timestamp(3) not null);\n\ncreate table `invitation` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `email` varchar(255) not null, `role` varchar(255), `status` varchar(255) not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `inviterId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `organizationRole_organizationId_idx` on `organizationRole` (`organizationId`);\n\ncreate index `organizationRole_role_idx` on `organizationRole` (`role`);\n\ncreate index `member_organizationId_idx` on `member` (`organizationId`);\n\ncreate index `member_userId_idx` on `member` (`userId`);\n\ncreate index `invitation_organizationId_idx` on `invitation` (`organizationId`);\n\ncreate index `invitation_email_idx` on `invitation` (`email`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-editor",
+          "permission": {
+            "organization": [
+              "update"
+            ],
+            "member": [
+              "create"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": null,
+          "id": "<role-id>"
+        },
+        "read": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-editor",
+          "permission": {
+            "organization": [
+              "update"
+            ],
+            "member": [
+              "create"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": null,
+          "id": "<role-id>"
+        },
+        "updated": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-maintainer",
+          "permission": {
+            "member": [
+              "update",
+              "delete"
+            ],
+            "organization": [
+              "delete",
+              "update"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": null,
+          "id": "<role-id>"
+        },
+        "reread": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-maintainer",
+          "permission": {
+            "member": [
+              "update",
+              "delete"
+            ],
+            "organization": [
+              "delete",
+              "update"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<role-id>"
+        },
+        "storedCreated": "{\"organization\":[\"update\"],\"member\":[\"create\"]}",
+        "storedUpdated": "{\"member\":[\"update\",\"delete\"],\"organization\":[\"delete\",\"update\"]}"
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_member_catalog_users"
+        },
+        "organization": {
+          "modelName": "display_member_catalog_organizations"
+        },
+        "member": {
+          "modelName": "display_catalog_members",
+          "fields": {
+            "organizationId": "workspace_link",
+            "userId": "person_link",
+            "role": "display_role",
+            "createdAt": "created_on"
+          }
+        },
+        "organizationRole": {
+          "modelName": "display_catalog_organization_roles",
+          "fields": {
+            "organizationId": "workspace_link",
+            "role": "display_role",
+            "permission": "display_permission",
+            "createdAt": "created_on",
+            "updatedAt": "updated_on"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_organization_roles",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_organization_roles",
+          "position": "2",
+          "name": "workspace_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_organization_roles",
+          "position": "3",
+          "name": "display_role",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_organization_roles",
+          "position": "4",
+          "name": "display_permission",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_organization_roles",
+          "position": "5",
+          "name": "created_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "display_catalog_organization_roles",
+          "position": "6",
+          "name": "updated_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `display_member_catalog_users` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `display_member_catalog_users` (`id`) on delete cascade, `activeOrganizationId` text);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `display_member_catalog_users` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_member_catalog_organizations` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `slug` varchar(255) not null unique, `logo` text, `createdAt` timestamp(3) not null, `metadata` text);\n\ncreate table `display_catalog_organization_roles` (`id` varchar(36) not null primary key, `workspace_link` varchar(36) not null references `display_member_catalog_organizations` (`id`) on delete cascade, `display_role` varchar(255) not null, `display_permission` text not null, `created_on` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updated_on` timestamp(3));\n\ncreate table `display_catalog_members` (`id` varchar(36) not null primary key, `workspace_link` varchar(36) not null references `display_member_catalog_organizations` (`id`) on delete cascade, `person_link` varchar(36) not null references `display_member_catalog_users` (`id`) on delete cascade, `display_role` varchar(255) not null, `created_on` timestamp(3) not null);\n\ncreate table `invitation` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `display_member_catalog_organizations` (`id`) on delete cascade, `email` varchar(255) not null, `role` varchar(255), `status` varchar(255) not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `inviterId` varchar(36) not null references `display_member_catalog_users` (`id`) on delete cascade);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `display_catalog_organization_roles_workspace_link_idx` on `display_catalog_organization_roles` (`workspace_link`);\n\ncreate index `display_catalog_organization_roles_display_role_idx` on `display_catalog_organization_roles` (`display_role`);\n\ncreate index `display_catalog_members_workspace_link_idx` on `display_catalog_members` (`workspace_link`);\n\ncreate index `display_catalog_members_person_link_idx` on `display_catalog_members` (`person_link`);\n\ncreate index `invitation_organizationId_idx` on `invitation` (`organizationId`);\n\ncreate index `invitation_email_idx` on `invitation` (`email`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-editor",
+          "permission": {
+            "organization": [
+              "update"
+            ],
+            "member": [
+              "create"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": null,
+          "id": "<role-id>"
+        },
+        "read": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-editor",
+          "permission": {
+            "organization": [
+              "update"
+            ],
+            "member": [
+              "create"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": null,
+          "id": "<role-id>"
+        },
+        "updated": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-maintainer",
+          "permission": {
+            "member": [
+              "update",
+              "delete"
+            ],
+            "organization": [
+              "delete",
+              "update"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": null,
+          "id": "<role-id>"
+        },
+        "reread": {
+          "organizationId": "<organization-id>",
+          "role": "catalog-maintainer",
+          "permission": {
+            "member": [
+              "update",
+              "delete"
+            ],
+            "organization": [
+              "delete",
+              "update"
+            ]
+          },
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<role-id>"
+        },
+        "storedCreated": "{\"organization\":[\"update\"],\"member\":[\"create\"]}",
+        "storedUpdated": "{\"member\":[\"update\",\"delete\"],\"organization\":[\"delete\",\"update\"]}"
+      }
+    }
+  ]
+}

@@ -132,6 +132,23 @@ pub(super) fn generate(
                             value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
                         }
                     }
+                } else if role == EntityRole::OrganizationRole {
+                    quote! {
+                        let value = if matches!(
+                            #seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(),
+                            #seaorm_root::sea_orm::ColumnType::Text
+                                | #seaorm_root::sea_orm::ColumnType::String(_)
+                                | #seaorm_root::sea_orm::ColumnType::Char(_)
+                        ) {
+                            value.map(|value| {
+                                let text: String = #core_root::serde_json::from_value(value)?;
+                                #core_root::serde_json::from_str::<#core_root::serde_json::Value>(&text)
+                            }).transpose()?
+                        } else {
+                            value
+                        };
+                        #core_root::SchemaValue::from_json(value)
+                    }
                 } else {
                     quote!(#core_root::SchemaValue::from_json(value))
                 };
