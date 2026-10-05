@@ -15,6 +15,7 @@ mod tests {
     mod model_declarations;
     mod organization;
     mod organization_role_server;
+    mod organization_server_schema;
     mod plugins;
     mod rate_limit_declarations;
     mod rate_limit_server_catalog;
@@ -25,6 +26,7 @@ mod tests {
     mod sqlite_catalog;
     mod sqlite_json;
     mod team_catalog;
+    mod team_invitation_server;
     mod user_account_catalog;
     mod verification_catalog;
     mod verification_server_catalog;

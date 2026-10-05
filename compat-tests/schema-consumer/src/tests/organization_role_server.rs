@@ -1,4 +1,7 @@
-use super::server_catalog::{self, TestResult};
+use super::{
+    organization_server_schema::{mysql as mysql_default, postgres as postgres_default},
+    server_catalog::{self, TestResult},
+};
 use axum::{Router, body::Body, http::Request};
 use better_auth::{
     AuthConfig, AuthSchema, BetterAuth,
@@ -19,19 +22,9 @@ use tower::ServiceExt;
 const ORIGIN: &str = "http://catalog.example.test";
 const SECRET: &str = "ordinary-server-catalog-secret-at-least-32-characters";
 
-mod postgres_default {
-    include!(env!(
-        "BETTER_AUTH_ORGANIZATION_ROLE_SERVER_POSTGRES_DEFAULT_SCHEMA"
-    ));
-}
 mod postgres_custom {
     include!(env!(
         "BETTER_AUTH_ORGANIZATION_ROLE_SERVER_POSTGRES_CUSTOM_SCHEMA"
-    ));
-}
-mod mysql_default {
-    include!(env!(
-        "BETTER_AUTH_ORGANIZATION_ROLE_SERVER_MYSQL_DEFAULT_SCHEMA"
     ));
 }
 mod mysql_custom {

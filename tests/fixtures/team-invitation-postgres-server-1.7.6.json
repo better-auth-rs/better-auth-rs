@@ -1,0 +1,482 @@
+{
+  "version": "1.7.6",
+  "database": "postgres",
+  "teams": {
+    "enabled": true,
+    "defaultTeam": {
+      "enabled": false
+    }
+  },
+  "cases": [
+    {
+      "model": "team",
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "team",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "2",
+          "name": "name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "3",
+          "name": "memberCount",
+          "type": "integer",
+          "nativeType": "int4",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "4",
+          "name": "organizationId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "5",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "6",
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"activeOrganizationId\" text, \"activeTeamId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"organization\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"team\" (\"id\" text not null primary key, \"name\" text not null, \"memberCount\" integer not null, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"createdAt\" timestamptz not null, \"updatedAt\" timestamptz);\n\ncreate table \"teamMember\" (\"id\" text not null primary key, \"teamId\" text not null references \"team\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"membershipKey\" text unique, \"createdAt\" timestamptz);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"teamId\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"team_organizationId_idx\" on \"team\" (\"organizationId\");\n\ncreate index \"teamMember_teamId_idx\" on \"teamMember\" (\"teamId\");\n\ncreate index \"teamMember_userId_idx\" on \"teamMember\" (\"userId\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "read": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "reread": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "member": {
+          "teamId": "<team-id>",
+          "userId": "<owner-id>",
+          "createdAt": "<member-created-at>",
+          "id": "<member-id>"
+        },
+        "before": 0,
+        "after": 1
+      }
+    },
+    {
+      "model": "team",
+      "name": "custom",
+      "configuration": {
+        "organization": {
+          "modelName": "display_team_catalog_organizations"
+        },
+        "team": {
+          "modelName": "display_catalog_teams",
+          "fields": {
+            "name": "display_name",
+            "memberCount": "display_member_count",
+            "organizationId": "workspace_link",
+            "createdAt": "created_on",
+            "updatedAt": "updated_on"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_teams",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "2",
+          "name": "display_name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "3",
+          "name": "display_member_count",
+          "type": "integer",
+          "nativeType": "int4",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "4",
+          "name": "workspace_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "5",
+          "name": "created_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "6",
+          "name": "updated_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"activeOrganizationId\" text, \"activeTeamId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"display_team_catalog_organizations\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"display_catalog_teams\" (\"id\" text not null primary key, \"display_name\" text not null, \"display_member_count\" integer not null, \"workspace_link\" text not null references \"display_team_catalog_organizations\" (\"id\") on delete cascade, \"created_on\" timestamptz not null, \"updated_on\" timestamptz);\n\ncreate table \"teamMember\" (\"id\" text not null primary key, \"teamId\" text not null references \"display_catalog_teams\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"membershipKey\" text unique, \"createdAt\" timestamptz);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"display_team_catalog_organizations\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"display_team_catalog_organizations\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"teamId\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_teams_workspace_link_idx\" on \"display_catalog_teams\" (\"workspace_link\");\n\ncreate index \"teamMember_teamId_idx\" on \"teamMember\" (\"teamId\");\n\ncreate index \"teamMember_userId_idx\" on \"teamMember\" (\"userId\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "read": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "reread": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "member": {
+          "teamId": "<team-id>",
+          "userId": "<owner-id>",
+          "createdAt": "<member-created-at>",
+          "id": "<member-id>"
+        },
+        "before": 0,
+        "after": 1
+      }
+    },
+    {
+      "model": "invitation",
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "invitation",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "2",
+          "name": "organizationId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "3",
+          "name": "email",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "4",
+          "name": "role",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "5",
+          "name": "teamId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "6",
+          "name": "status",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "7",
+          "name": "expiresAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "8",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "table": "invitation",
+          "position": "9",
+          "name": "inviterId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"activeOrganizationId\" text, \"activeTeamId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"organization\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"team\" (\"id\" text not null primary key, \"name\" text not null, \"memberCount\" integer not null, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"createdAt\" timestamptz not null, \"updatedAt\" timestamptz);\n\ncreate table \"teamMember\" (\"id\" text not null primary key, \"teamId\" text not null references \"team\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"membershipKey\" text unique, \"createdAt\" timestamptz);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"teamId\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"team_organizationId_idx\" on \"team\" (\"organizationId\");\n\ncreate index \"teamMember_teamId_idx\" on \"teamMember\" (\"teamId\");\n\ncreate index \"teamMember_userId_idx\" on \"teamMember\" (\"userId\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "model": "invitation",
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_invitation_catalog_users"
+        },
+        "organization": {
+          "modelName": "display_invitation_catalog_organizations"
+        },
+        "invitation": {
+          "modelName": "display_catalog_invitations",
+          "fields": {
+            "organizationId": "workspace_link",
+            "email": "mail_label",
+            "role": "display_role",
+            "teamId": "group_link",
+            "status": "display_status",
+            "expiresAt": "valid_until",
+            "createdAt": "created_on",
+            "inviterId": "sender_link"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_invitations",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "2",
+          "name": "workspace_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "3",
+          "name": "mail_label",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "4",
+          "name": "display_role",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "5",
+          "name": "group_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "6",
+          "name": "display_status",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "7",
+          "name": "valid_until",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "8",
+          "name": "created_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "9",
+          "name": "sender_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"display_invitation_catalog_users\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"display_invitation_catalog_users\" (\"id\") on delete cascade, \"activeOrganizationId\" text, \"activeTeamId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"display_invitation_catalog_users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"display_invitation_catalog_organizations\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"team\" (\"id\" text not null primary key, \"name\" text not null, \"memberCount\" integer not null, \"organizationId\" text not null references \"display_invitation_catalog_organizations\" (\"id\") on delete cascade, \"createdAt\" timestamptz not null, \"updatedAt\" timestamptz);\n\ncreate table \"teamMember\" (\"id\" text not null primary key, \"teamId\" text not null references \"team\" (\"id\") on delete cascade, \"userId\" text not null references \"display_invitation_catalog_users\" (\"id\") on delete cascade, \"membershipKey\" text unique, \"createdAt\" timestamptz);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"display_invitation_catalog_organizations\" (\"id\") on delete cascade, \"userId\" text not null references \"display_invitation_catalog_users\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"display_catalog_invitations\" (\"id\" text not null primary key, \"workspace_link\" text not null references \"display_invitation_catalog_organizations\" (\"id\") on delete cascade, \"mail_label\" text not null, \"display_role\" text, \"group_link\" text, \"display_status\" text not null, \"valid_until\" timestamptz not null, \"created_on\" timestamptz default CURRENT_TIMESTAMP not null, \"sender_link\" text not null references \"display_invitation_catalog_users\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"team_organizationId_idx\" on \"team\" (\"organizationId\");\n\ncreate index \"teamMember_teamId_idx\" on \"teamMember\" (\"teamId\");\n\ncreate index \"teamMember_userId_idx\" on \"teamMember\" (\"userId\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"display_catalog_invitations_workspace_link_idx\" on \"display_catalog_invitations\" (\"workspace_link\");\n\ncreate index \"display_catalog_invitations_mail_label_idx\" on \"display_catalog_invitations\" (\"mail_label\");",
+        "repeatedSql": ";"
+      }
+    }
+  ]
+}

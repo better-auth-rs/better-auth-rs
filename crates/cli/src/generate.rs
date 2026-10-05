@@ -503,6 +503,8 @@ fn gen_server_native_column(
                     | EntityRole::RateLimit
                     | EntityRole::Member
                     | EntityRole::OrganizationRole
+                    | EntityRole::Team
+                    | EntityRole::Invitation
             )
         )
         || field.attributes.is_some()
@@ -519,11 +521,20 @@ fn gen_server_native_column(
                     | (Some(EntityRole::RateLimit), "key")
                     | (Some(EntityRole::Member), "role")
                     | (Some(EntityRole::OrganizationRole), "role")
+                    | (
+                        Some(EntityRole::Invitation),
+                        "email" | "role" | "team_id" | "status"
+                    )
             ) =>
         {
             quote!(column.string_len(255);)
         }
         (_, "String" | "Option<String>") => quote!(column.text();),
+        (_, "i64")
+            if entity.role == Some(EntityRole::Team) && definition.name == "member_count" =>
+        {
+            quote!(column.integer();)
+        }
         (_, "Json")
             if entity.role == Some(EntityRole::OrganizationRole)
                 && definition.name == "permission" =>
@@ -556,6 +567,7 @@ fn gen_server_native_column(
                     | EntityRole::Account
                     | EntityRole::Verification
                     | EntityRole::OrganizationRole
+                    | EntityRole::Invitation
             ),
             "created_at"
         ) | (

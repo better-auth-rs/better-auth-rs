@@ -1,0 +1,482 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "teams": {
+    "enabled": true,
+    "defaultTeam": {
+      "enabled": false
+    }
+  },
+  "cases": [
+    {
+      "model": "team",
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "team",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "2",
+          "name": "name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "3",
+          "name": "memberCount",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "4",
+          "name": "organizationId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "5",
+          "name": "createdAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team",
+          "position": "6",
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `activeOrganizationId` text, `activeTeamId` text);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `organization` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `slug` varchar(255) not null unique, `logo` text, `createdAt` timestamp(3) not null, `metadata` text);\n\ncreate table `team` (`id` varchar(36) not null primary key, `name` text not null, `memberCount` integer not null, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `createdAt` timestamp(3) not null, `updatedAt` timestamp(3));\n\ncreate table `teamMember` (`id` varchar(36) not null primary key, `teamId` varchar(36) not null references `team` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `membershipKey` varchar(255) unique, `createdAt` timestamp(3));\n\ncreate table `member` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `role` varchar(255) not null, `createdAt` timestamp(3) not null);\n\ncreate table `invitation` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `email` varchar(255) not null, `role` varchar(255), `teamId` varchar(255), `status` varchar(255) not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `inviterId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `team_organizationId_idx` on `team` (`organizationId`);\n\ncreate index `teamMember_teamId_idx` on `teamMember` (`teamId`);\n\ncreate index `teamMember_userId_idx` on `teamMember` (`userId`);\n\ncreate index `member_organizationId_idx` on `member` (`organizationId`);\n\ncreate index `member_userId_idx` on `member` (`userId`);\n\ncreate index `invitation_organizationId_idx` on `invitation` (`organizationId`);\n\ncreate index `invitation_email_idx` on `invitation` (`email`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "read": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "reread": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "member": {
+          "teamId": "<team-id>",
+          "userId": "<owner-id>",
+          "createdAt": "<member-created-at>",
+          "id": "<member-id>"
+        },
+        "before": 0,
+        "after": 1
+      }
+    },
+    {
+      "model": "team",
+      "name": "custom",
+      "configuration": {
+        "organization": {
+          "modelName": "display_team_catalog_organizations"
+        },
+        "team": {
+          "modelName": "display_catalog_teams",
+          "fields": {
+            "name": "display_name",
+            "memberCount": "display_member_count",
+            "organizationId": "workspace_link",
+            "createdAt": "created_on",
+            "updatedAt": "updated_on"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_teams",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "2",
+          "name": "display_name",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "3",
+          "name": "display_member_count",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "4",
+          "name": "workspace_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "5",
+          "name": "created_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_teams",
+          "position": "6",
+          "name": "updated_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `activeOrganizationId` text, `activeTeamId` text);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_team_catalog_organizations` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `slug` varchar(255) not null unique, `logo` text, `createdAt` timestamp(3) not null, `metadata` text);\n\ncreate table `display_catalog_teams` (`id` varchar(36) not null primary key, `display_name` text not null, `display_member_count` integer not null, `workspace_link` varchar(36) not null references `display_team_catalog_organizations` (`id`) on delete cascade, `created_on` timestamp(3) not null, `updated_on` timestamp(3));\n\ncreate table `teamMember` (`id` varchar(36) not null primary key, `teamId` varchar(36) not null references `display_catalog_teams` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `membershipKey` varchar(255) unique, `createdAt` timestamp(3));\n\ncreate table `member` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `display_team_catalog_organizations` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `role` varchar(255) not null, `createdAt` timestamp(3) not null);\n\ncreate table `invitation` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `display_team_catalog_organizations` (`id`) on delete cascade, `email` varchar(255) not null, `role` varchar(255), `teamId` varchar(255), `status` varchar(255) not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `inviterId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `display_catalog_teams_workspace_link_idx` on `display_catalog_teams` (`workspace_link`);\n\ncreate index `teamMember_teamId_idx` on `teamMember` (`teamId`);\n\ncreate index `teamMember_userId_idx` on `teamMember` (`userId`);\n\ncreate index `member_organizationId_idx` on `member` (`organizationId`);\n\ncreate index `member_userId_idx` on `member` (`userId`);\n\ncreate index `invitation_organizationId_idx` on `invitation` (`organizationId`);\n\ncreate index `invitation_email_idx` on `invitation` (`email`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "read": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "reread": {
+          "name": "Catalog team",
+          "organizationId": "<organization-id>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "id": "<team-id>"
+        },
+        "member": {
+          "teamId": "<team-id>",
+          "userId": "<owner-id>",
+          "createdAt": "<member-created-at>",
+          "id": "<member-id>"
+        },
+        "before": 0,
+        "after": 1
+      }
+    },
+    {
+      "model": "invitation",
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "invitation",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "2",
+          "name": "organizationId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "3",
+          "name": "email",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "4",
+          "name": "role",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "5",
+          "name": "teamId",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "6",
+          "name": "status",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "7",
+          "name": "expiresAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "invitation",
+          "position": "8",
+          "name": "createdAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "invitation",
+          "position": "9",
+          "name": "inviterId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `activeOrganizationId` text, `activeTeamId` text);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `organization` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `slug` varchar(255) not null unique, `logo` text, `createdAt` timestamp(3) not null, `metadata` text);\n\ncreate table `team` (`id` varchar(36) not null primary key, `name` text not null, `memberCount` integer not null, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `createdAt` timestamp(3) not null, `updatedAt` timestamp(3));\n\ncreate table `teamMember` (`id` varchar(36) not null primary key, `teamId` varchar(36) not null references `team` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `membershipKey` varchar(255) unique, `createdAt` timestamp(3));\n\ncreate table `member` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `role` varchar(255) not null, `createdAt` timestamp(3) not null);\n\ncreate table `invitation` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `organization` (`id`) on delete cascade, `email` varchar(255) not null, `role` varchar(255), `teamId` varchar(255), `status` varchar(255) not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `inviterId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `team_organizationId_idx` on `team` (`organizationId`);\n\ncreate index `teamMember_teamId_idx` on `teamMember` (`teamId`);\n\ncreate index `teamMember_userId_idx` on `teamMember` (`userId`);\n\ncreate index `member_organizationId_idx` on `member` (`organizationId`);\n\ncreate index `member_userId_idx` on `member` (`userId`);\n\ncreate index `invitation_organizationId_idx` on `invitation` (`organizationId`);\n\ncreate index `invitation_email_idx` on `invitation` (`email`);",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "model": "invitation",
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_invitation_catalog_users"
+        },
+        "organization": {
+          "modelName": "display_invitation_catalog_organizations"
+        },
+        "invitation": {
+          "modelName": "display_catalog_invitations",
+          "fields": {
+            "organizationId": "workspace_link",
+            "email": "mail_label",
+            "role": "display_role",
+            "teamId": "group_link",
+            "status": "display_status",
+            "expiresAt": "valid_until",
+            "createdAt": "created_on",
+            "inviterId": "sender_link"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_invitations",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "2",
+          "name": "workspace_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "3",
+          "name": "mail_label",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "4",
+          "name": "display_role",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "5",
+          "name": "group_link",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "6",
+          "name": "display_status",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "7",
+          "name": "valid_until",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "8",
+          "name": "created_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "display_catalog_invitations",
+          "position": "9",
+          "name": "sender_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `display_invitation_catalog_users` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `display_invitation_catalog_users` (`id`) on delete cascade, `activeOrganizationId` text, `activeTeamId` text);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `display_invitation_catalog_users` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_invitation_catalog_organizations` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `slug` varchar(255) not null unique, `logo` text, `createdAt` timestamp(3) not null, `metadata` text);\n\ncreate table `team` (`id` varchar(36) not null primary key, `name` text not null, `memberCount` integer not null, `organizationId` varchar(36) not null references `display_invitation_catalog_organizations` (`id`) on delete cascade, `createdAt` timestamp(3) not null, `updatedAt` timestamp(3));\n\ncreate table `teamMember` (`id` varchar(36) not null primary key, `teamId` varchar(36) not null references `team` (`id`) on delete cascade, `userId` varchar(36) not null references `display_invitation_catalog_users` (`id`) on delete cascade, `membershipKey` varchar(255) unique, `createdAt` timestamp(3));\n\ncreate table `member` (`id` varchar(36) not null primary key, `organizationId` varchar(36) not null references `display_invitation_catalog_organizations` (`id`) on delete cascade, `userId` varchar(36) not null references `display_invitation_catalog_users` (`id`) on delete cascade, `role` varchar(255) not null, `createdAt` timestamp(3) not null);\n\ncreate table `display_catalog_invitations` (`id` varchar(36) not null primary key, `workspace_link` varchar(36) not null references `display_invitation_catalog_organizations` (`id`) on delete cascade, `mail_label` varchar(255) not null, `display_role` varchar(255), `group_link` varchar(255), `display_status` varchar(255) not null, `valid_until` timestamp(3) not null, `created_on` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `sender_link` varchar(36) not null references `display_invitation_catalog_users` (`id`) on delete cascade);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate index `team_organizationId_idx` on `team` (`organizationId`);\n\ncreate index `teamMember_teamId_idx` on `teamMember` (`teamId`);\n\ncreate index `teamMember_userId_idx` on `teamMember` (`userId`);\n\ncreate index `member_organizationId_idx` on `member` (`organizationId`);\n\ncreate index `member_userId_idx` on `member` (`userId`);\n\ncreate index `display_catalog_invitations_workspace_link_idx` on `display_catalog_invitations` (`workspace_link`);\n\ncreate index `display_catalog_invitations_mail_label_idx` on `display_catalog_invitations` (`mail_label`);",
+        "repeatedSql": ";"
+      }
+    }
+  ]
+}

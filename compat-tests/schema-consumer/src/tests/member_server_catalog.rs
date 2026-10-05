@@ -1,20 +1,15 @@
-use super::server_catalog::{self, TestResult};
+use super::{
+    organization_server_schema::{mysql as mysql_default, postgres as postgres_default},
+    server_catalog::{self, TestResult},
+};
 use better_auth::seaorm::{
     DatabaseConnection,
     sea_orm::{DbBackend, EntityName},
 };
 use serde_json::{Value, json};
 
-mod postgres_default {
-    include!(env!("BETTER_AUTH_MEMBER_SERVER_POSTGRES_DEFAULT_SCHEMA"));
-}
-
 mod postgres_custom {
     include!(env!("BETTER_AUTH_MEMBER_SERVER_POSTGRES_CUSTOM_SCHEMA"));
-}
-
-mod mysql_default {
-    include!(env!("BETTER_AUTH_MEMBER_SERVER_MYSQL_DEFAULT_SCHEMA"));
 }
 
 mod mysql_custom {

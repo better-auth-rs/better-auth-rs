@@ -258,13 +258,16 @@ The optional `rateLimit` schema entry accepts `modelName` and mappings for `key`
 {"rateLimit":{"modelName":"request_limits","fields":{"key":"bucket","count":"requests","lastRequest":"requested_at_ms"}}}
 ```
 
-Bind the generated `AppPluginSchema` through `with_plugin_schema`. The rate-limit model uses a unique string key, `SqlNumber` count stored in an INTEGER column, and an `i64` timestamp in Unix milliseconds. `SqlNumber` preserves fractional counters read from SQLite; comparisons retain the configured floating-point window and maximum without integer conversion.
+Bind the generated `AppPluginSchema` through `with_plugin_schema`. The rate-limit model uses a unique string key, `SqlNumber` count stored in an INTEGER column, and an `i64` timestamp in Unix milliseconds. `SqlNumber` reads signed integer counters from PostgreSQL and MySQL and preserves fractional counters read from SQLite. Comparisons retain the configured floating-point window and maximum without integer conversion.
 
 Custom auth stores implement `RateLimitStore::consume_rate_limit` as one atomic decision and update. Concurrent callers must share the same unique key and conditional counter updates. A denied request must not change the counter or timestamp. The cleanup window belongs to the current request's configured rules; the store must not retain a historical maximum.
 
 The SeaORM adapter prunes old rows only after a successful expired-window reset. Better Auth 1.7.6 logs pruning failures and preserves that successful decision. The adapter follows this specific behavior; counter reads, inserts, and updates still propagate errors. SQLite binds NaN comparisons as SQL NULL and preserves Infinity, matching the upstream database adapter's numerical behavior.
 
 ## Organization models
+
+Fresh PostgreSQL and MySQL Team generation uses native camelCase columns and an INTEGER `memberCount`. The generated storage field is `i32`; the public Team count retains its existing type. Fresh Invitation generation uses the field order for enabled teams, nullable role and teamId columns, and the native createdAt timestamp default. MySQL uses VARCHAR(255) for invitation email, role, teamId, and status. Explicit mappings and field policies retain precedence. Applications must use versioned migrations when adopting regenerated schemas and update direct model access for the changed field types. Existing generated files, bundled models, and SQLite Team count types do not change automatically. Teams-disabled column omission and null-role route behavior remain separate alignment work.
+
 
 Use `--schema-config` to generate Organization tables with application column names and additional fields:
 

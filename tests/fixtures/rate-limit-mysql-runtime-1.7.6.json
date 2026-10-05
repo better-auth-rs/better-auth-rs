@@ -1,0 +1,81 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "rule": {
+        "window": 600,
+        "max": 100
+      },
+      "key": "192.0.2.10|/ordinary-counter",
+      "steps": [
+        {
+          "allowed": true,
+          "retryAfter": null,
+          "row": {
+            "key": "192.0.2.10|/ordinary-counter",
+            "count": 1,
+            "lastRequest": "<last-request>",
+            "id": "<counter-id>"
+          },
+          "rawCount": 1
+        },
+        {
+          "allowed": true,
+          "retryAfter": null,
+          "row": {
+            "key": "192.0.2.10|/ordinary-counter",
+            "count": 2,
+            "lastRequest": "<last-request>",
+            "id": "<counter-id>"
+          },
+          "rawCount": 2
+        }
+      ]
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "rateLimit": {
+          "modelName": "display_rate_limit_catalog",
+          "fields": {
+            "key": "bucket_label",
+            "count": "request_total",
+            "lastRequest": "last_seen_ms"
+          }
+        }
+      },
+      "rule": {
+        "window": 600,
+        "max": 100
+      },
+      "key": "192.0.2.10|/ordinary-counter",
+      "steps": [
+        {
+          "allowed": true,
+          "retryAfter": null,
+          "row": {
+            "key": "192.0.2.10|/ordinary-counter",
+            "count": 1,
+            "lastRequest": "<last-request>",
+            "id": "<counter-id>"
+          },
+          "rawCount": 1
+        },
+        {
+          "allowed": true,
+          "retryAfter": null,
+          "row": {
+            "key": "192.0.2.10|/ordinary-counter",
+            "count": 2,
+            "lastRequest": "<last-request>",
+            "id": "<counter-id>"
+          },
+          "rawCount": 2
+        }
+      ]
+    }
+  ]
+}

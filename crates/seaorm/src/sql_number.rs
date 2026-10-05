@@ -1,7 +1,7 @@
 //! JavaScript-number storage over SQL numeric column types.
 
 use sea_orm::sea_query::{ArrayType, ColumnType, Nullable, Value, ValueType, ValueTypeErr};
-use sea_orm::sqlx::{Row, TypeInfo, ValueRef};
+use sea_orm::sqlx::{MySql, Row, Type, TypeInfo, ValueRef};
 use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
 
 /// A floating-point application value stored in a SQL numeric column.
@@ -93,6 +93,21 @@ impl TryGetable for SqlNumber {
                         .map_err(query_error)?,
                 ),
                 _ => None,
+            }
+        } else if let Some(row) = result.try_as_mysql_row() {
+            let raw = row
+                .try_get_raw(index.as_sqlx_mysql_index())
+                .map_err(query_error)?;
+            if raw.is_null() {
+                return Err(TryGetError::Null(format!("{index:?}")));
+            }
+            if <i64 as Type<MySql>>::compatible(&raw.type_info()) {
+                Some(
+                    row.try_get::<i64, _>(index.as_sqlx_mysql_index())
+                        .map_err(query_error)?,
+                )
+            } else {
+                None
             }
         } else {
             None

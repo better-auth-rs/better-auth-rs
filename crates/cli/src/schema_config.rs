@@ -289,6 +289,8 @@ impl Entity {
                         | EntityRole::RateLimit
                         | EntityRole::Member
                         | EntityRole::OrganizationRole
+                        | EntityRole::Team
+                        | EntityRole::Invitation
                 )
             );
         let mut entity = Self {
@@ -315,11 +317,15 @@ impl Entity {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
                         ty: syn::parse_str(
-                            if database == Database::Sqlite
-                                && definition.role == Some(EntityRole::Invitation)
+                            if definition.role == Some(EntityRole::Invitation)
                                 && field.name == "role"
                             {
                                 "Option<String>"
+                            } else if database != Database::Sqlite
+                                && definition.role == Some(EntityRole::Team)
+                                && field.name == "member_count"
+                            {
+                                "i32"
                             } else if database != Database::Sqlite
                                 && definition.role == Some(EntityRole::OrganizationRole)
                                 && field.name == "permission"
@@ -480,8 +486,7 @@ impl Entity {
                 ));
             }
         }
-        if database == Database::Sqlite
-            && entity.role == Some(EntityRole::Team)
+        if entity.role == Some(EntityRole::Team)
             && let Some(position) = entity
                 .fields
                 .iter()
@@ -491,7 +496,7 @@ impl Entity {
             let member_count = entity.fields.remove(position);
             entity.fields.insert(2, member_count);
         }
-        if database == Database::Sqlite && entity.role == Some(EntityRole::Invitation) {
+        if entity.role == Some(EntityRole::Invitation) {
             // Builtin overrides use the registry order before physical field ordering.
             entity
                 .fields
