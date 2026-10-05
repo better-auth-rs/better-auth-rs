@@ -99,6 +99,10 @@ contract. For more detail, see
 
 During development, select the affected test targets or compatibility profiles. Reuse passing focused checks while the relevant source, fixtures, configuration, and dependencies remain unchanged. Use GitHub Actions for complete acceptance. Push a checkpoint commit to a `codex/` branch to start CI without opening a pull request. Require a successful CI run for the same commit before merging into `master`. CI saves dependency build caches after failed runs; the failed checks still require a successful rerun.
 
+Push and pull-request runs execute all check stages. For a manual CI run, select one stage through `workflow_dispatch`; the default is `all`. Focused runs have a `Focused check` run and job label. Only a successful `all` run for the integration commit qualifies for merging into `master`. A successful focused run does not establish complete acceptance.
+
+`scripts/check.sh` accepts one optional stage: `dependencies`, `format`, `lint-default`, `lint-features`, `workspace-tests`, `rustls`, `rustdoc`, `consumer`, `fullstack`, `quick-start`, or `alignment`. No argument, or `all`, runs every stage in order. CI displays each stage as a separate step and installs the locked compatibility dependencies before any selected stage. To invoke one stage, use `devenv shell -- ./scripts/check.sh lint-default`. A local stage invocation requires its dependencies to be installed first. The alignment stage lets Cargo build its selected test targets; the compatibility harness builds its server once. No separate workspace build or workspace-test run is required before a focused alignment stage.
+
 The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing PostgreSQL contracts and the MySQL schema preflight contract. The MySQL test creates and deletes an isolated database, so its CI account needs those permissions. These tests do not establish upstream database sampling. To run the same complete check locally when needed, use:
 
 ```bash

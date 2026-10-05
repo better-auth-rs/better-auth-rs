@@ -1,4 +1,5 @@
 name: CI
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0}', inputs.stage) || 'Full acceptance' }} - ${{ github.ref_name }}
 
 on:
   push:
@@ -6,6 +7,25 @@ on:
   pull_request:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      stage:
+        description: Check stage; only all qualifies for master integration
+        type: choice
+        default: all
+        required: true
+        options:
+          - all
+          - dependencies
+          - format
+          - lint-default
+          - lint-features
+          - workspace-tests
+          - rustls
+          - rustdoc
+          - consumer
+          - fullstack
+          - quick-start
+          - alignment
 
 permissions:
   contents: read
@@ -24,7 +44,7 @@ env:
 jobs:
   check:
     if: github.ref != 'refs/heads/codex/upstream-capture'
-    name: Format, lint, test, and compatibility
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0}', inputs.stage) || 'Full acceptance - all stages' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -53,6 +73,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      CHECK_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
       BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
       BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
@@ -84,5 +105,35 @@ jobs:
             .
             compat-tests/rust-server
             compat-tests/schema-consumer
-      - name: Run all checks in devenv
-        run: devenv shell -- ./scripts/check.sh
+      - name: Install locked compatibility dependencies
+        run: devenv shell -- ./scripts/check.sh dependencies
+      - name: Check formatting
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'format'
+        run: devenv shell -- ./scripts/check.sh format
+      - name: Lint default features
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'lint-default'
+        run: devenv shell -- ./scripts/check.sh lint-default
+      - name: Lint integration features
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'lint-features'
+        run: devenv shell -- ./scripts/check.sh lint-features
+      - name: Test workspace
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'workspace-tests'
+        run: devenv shell -- ./scripts/check.sh workspace-tests
+      - name: Check Rustls configuration
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'rustls'
+        run: devenv shell -- ./scripts/check.sh rustls
+      - name: Build Rustdoc
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'rustdoc'
+        run: devenv shell -- ./scripts/check.sh rustdoc
+      - name: Check generated consumer and databases
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'consumer'
+        run: devenv shell -- ./scripts/check.sh consumer
+      - name: Check fullstack example
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'fullstack'
+        run: devenv shell -- ./scripts/check.sh fullstack
+      - name: Check quick-start guide
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'quick-start'
+        run: devenv shell -- ./scripts/check.sh quick-start
+      - name: Check upstream alignment
+        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'alignment'
+        run: devenv shell -- ./scripts/check.sh alignment

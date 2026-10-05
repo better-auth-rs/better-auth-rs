@@ -15,15 +15,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - provider: twitch
-            sampler: twitch-provider-capture.mjs
-            fixture: social-twitch-1.7.6.json
-          - provider: apple
-            sampler: apple-capture.mjs
-            fixture: social-apple-1.7.6.json
-          - provider: microsoft
-            sampler: social-microsoft-capture.mjs
-            fixture: social-microsoft-1.7.6.json
+          - provider: google-client-ids
+            sampler: google-client-ids-capture.mjs
+            fixture: google-client-ids-1.7.6.json
+          - provider: oauth-profile-override
+            sampler: oauth-profile-override-capture.mjs
+            fixture: oauth-profile-override-1.7.6.json
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
