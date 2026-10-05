@@ -1,0 +1,35 @@
+{
+  "default": {},
+  "legacy": {
+    "deviceCode": {
+      "modelName": "device_code",
+      "fields": {
+        "deviceCode": "device_code",
+        "userCode": "user_code",
+        "userId": "user_id",
+        "expiresAt": "expires_at",
+        "status": "status",
+        "lastPolledAt": "last_polled_at",
+        "pollingInterval": "polling_interval",
+        "clientId": "client_id",
+        "scope": "scope"
+      }
+    }
+  },
+  "custom": {
+    "deviceCode": {
+      "modelName": "display_catalog_device_codes",
+      "fields": {
+        "deviceCode": "device_key",
+        "userCode": "display_code",
+        "userId": "person_link",
+        "expiresAt": "expires_on",
+        "status": "display_status",
+        "lastPolledAt": "polled_on",
+        "pollingInterval": "poll_seconds",
+        "clientId": "application_link",
+        "scope": "display_scope"
+      }
+    }
+  }
+}
