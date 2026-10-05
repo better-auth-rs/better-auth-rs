@@ -42,6 +42,21 @@ run_stage() {
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
         ./compat-tests/reference-server/contracts/device-issuance.test.ts
       ;;
+    provider-options)
+      cargo clippy --locked -p better-auth-api --features axum -- -D warnings
+      cargo test --locked -p better-auth-api --features axum --lib -- \
+        plugins::oauth::google_client_ids_tests:: \
+        plugins::oauth::microsoft_tests:: \
+        plugins::oauth::providers::twitch::tests:: \
+        plugins::oauth::signin::override_tests:: \
+        plugins::oauth::generic_profile::result_tests::
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/google-client-ids.test.ts \
+        ./compat-tests/reference-server/contracts/social-microsoft.test.ts \
+        ./compat-tests/reference-server/contracts/twitch-provider.test.ts \
+        ./compat-tests/reference-server/contracts/oauth-profile-override.test.ts \
+        ./compat-tests/reference-server/contracts/generic-profile-results.test.ts
+      ;;
     *) echo "Unknown check stage: $1" >&2; exit 1 ;;
   esac
 }
