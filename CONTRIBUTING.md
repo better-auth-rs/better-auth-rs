@@ -107,7 +107,7 @@ The additional `client-configuration` stage runs the existing configuration clie
 
 The additional `device-validation` stage checks formatting, core/API Clippy, asynchronous dispatch order, Device and Two Factor regressions, native endpoint projection, and paired Device request and issuance contracts. The workspace and alignment stages already cover these tests, so `all` does not repeat this focused stage.
 
-The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing PostgreSQL contracts and the MySQL schema preflight contract. The MySQL test creates and deletes an isolated database, so its CI account needs those permissions. These tests do not establish upstream database sampling. To run the same complete check locally when needed, use:
+The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing database contracts and compares freshly generated User and Account columns against pinned upstream catalogs. The upstream sampler also checks each catalog against the same fixture. MySQL tests create and delete isolated databases, so the CI account needs those permissions. These column checks do not establish index, foreign-key, or stored-value equivalence. To run the same complete check locally when needed, use:
 
 ```bash
 devenv test

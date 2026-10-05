@@ -519,16 +519,18 @@ fn gen_server_native_column(
     let required_email = (entity.role == Some(EntityRole::User) && definition.name == "email")
         .then(|| quote!(column.not_null();));
     let timestamp_default = if database == Database::Mysql {
-        "CURRENT_TIMESTAMP(3)"
+        quote!(sea_orm::sea_query::Expr::custom_keyword(
+            "CURRENT_TIMESTAMP(3)"
+        ))
     } else {
-        "CURRENT_TIMESTAMP"
+        quote!(sea_orm::sea_query::Expr::cust("CURRENT_TIMESTAMP"))
     };
     let default = matches!(
         (entity.role, definition.name),
         (Some(EntityRole::User | EntityRole::Account), "created_at")
             | (Some(EntityRole::User), "updated_at")
     )
-    .then(|| quote!(column.default(sea_orm::sea_query::Expr::cust(#timestamp_default));));
+    .then(|| quote!(column.default(#timestamp_default);));
     let name = &field.column;
     Some(quote! {
         if column.get_column_name().as_str() == #name {
