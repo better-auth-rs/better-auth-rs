@@ -97,7 +97,7 @@ contract. For more detail, see
 
 ## Required Checks
 
-During development, select the affected test targets or compatibility profiles. Reuse passing focused checks while the relevant source, fixtures, configuration, and dependencies remain unchanged. Use GitHub Actions for complete acceptance. Push a checkpoint commit to a `codex/` branch to start CI without opening a pull request. Require a successful CI run for the same commit before merging into `master`.
+During development, select the affected test targets or compatibility profiles. Reuse passing focused checks while the relevant source, fixtures, configuration, and dependencies remain unchanged. Use GitHub Actions for complete acceptance. Push a checkpoint commit to a `codex/` branch to start CI without opening a pull request. Require a successful CI run for the same commit before merging into `master`. CI saves dependency build caches after failed runs; the failed checks still require a successful rerun.
 
 The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing PostgreSQL contracts and the MySQL schema preflight contract. The MySQL test creates and deletes an isolated database, so its CI account needs those permissions. These tests do not establish upstream database sampling. To run the same complete check locally when needed, use:
 
