@@ -1,0 +1,48 @@
+name: Upstream fixture capture
+
+on:
+  push:
+    branches: [codex/upstream-capture]
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
+          nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
+      - name: Capture pinned upstream behavior
+        shell: devenv shell -- bash -e {0}
+        run: |
+          set -euo pipefail
+          capture_dir="$RUNNER_TEMP/upstream-fixtures"
+          mkdir -p "$capture_dir"
+          printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
+          bun install --cwd compat-tests/reference-server --frozen-lockfile
+          bun ./compat-tests/reference-server/contracts/tiktok-capture.mjs "$capture_dir/tiktok-1.7.6.json" 2>&1 | tee "$capture_dir/tiktok.log"
+          bun ./compat-tests/reference-server/contracts/twitch-provider-capture.mjs "$capture_dir/social-twitch-1.7.6.json" 2>&1 | tee "$capture_dir/twitch.log"
+          bun ./compat-tests/reference-server/contracts/apple-capture.mjs "$capture_dir/social-apple-1.7.6.json" 2>&1 | tee "$capture_dir/apple.log"
+          bun ./compat-tests/reference-server/contracts/social-microsoft-capture.mjs "$capture_dir/social-microsoft-1.7.6.json" 2>&1 | tee "$capture_dir/microsoft.log"
+          (
+            cd "$capture_dir"
+            sha256sum *.json > SHA256SUMS
+          )
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-fixtures-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/upstream-fixtures/
+          if-no-files-found: error
+          retention-days: 14

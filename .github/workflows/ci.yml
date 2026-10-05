@@ -23,6 +23,7 @@ env:
 
 jobs:
   check:
+    if: github.ref != 'refs/heads/codex/upstream-capture'
     name: Format, lint, test, and compatibility
     runs-on: ubuntu-latest
     services:
