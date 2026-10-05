@@ -109,7 +109,7 @@ The additional `device-validation` stage checks formatting, core/API Clippy, asy
 
 The additional `provider-options` stage checks API Clippy and the captured Google client-ID, GitLab issuer, Microsoft, Twitch, profile-override, and Generic profile-result contracts. The stage enables Axum for the real HTTP fixtures. The workspace and alignment stages cover the same contracts during complete acceptance.
 
-The CI job provides PostgreSQL and MySQL. The consumer stage checks CLI Clippy, executes the existing database contracts, and compares freshly generated User, Account, and Verification columns against pinned upstream catalogs. Verification covers default and explicit legacy mappings. The upstream sampler also checks each catalog against the same fixture. MySQL tests create and delete isolated databases, so the CI account needs those permissions. These column checks do not establish index, foreign-key, or stored-value equivalence. To run the same complete check locally when needed, use:
+The CI job provides PostgreSQL and MySQL. The consumer stage checks CLI Clippy, executes the existing database contracts, and compares freshly generated User, Account, Verification, and JWK columns against pinned upstream catalogs. Verification covers default and explicit legacy mappings; JWK covers default and custom mappings. The JWK upstream comparison uses a separate process for each backend because upstream modifies its shared schema when applying mappings. MySQL tests create and delete isolated databases, so the CI account needs those permissions. These column checks do not establish index, foreign-key, or stored-value equivalence. To run the same complete check locally when needed, use:
 
 ```bash
 devenv test
