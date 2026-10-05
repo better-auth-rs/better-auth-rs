@@ -274,9 +274,8 @@ impl Entity {
         database: Database,
         session_active_column: bool,
     ) -> Result<Self, String> {
-        let session_row_presence = database == Database::Sqlite
-            && definition.role == Some(EntityRole::Session)
-            && !session_active_column;
+        let session_row_presence =
+            definition.role == Some(EntityRole::Session) && !session_active_column;
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
             || matches!(

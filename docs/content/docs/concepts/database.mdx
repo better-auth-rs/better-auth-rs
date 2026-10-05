@@ -145,13 +145,13 @@ devenv shell -- cargo test --locked --features axum,seaorm2,redis-cache --test l
 
 The tests create and remove isolated schemas. They do not establish upstream driver parity or cover MySQL, native UUID column models, or additional reference columns outside the core account/session mappings.
 
-## Fresh SQLite Session representation
+## Fresh Session representation
 
-New SQLite generation emits `#[auth(role = "session", row_presence)]`. The model omits the Rust `active` extension, uses table `session` and native camelCase columns, and retains the typed Session API. Native strings use TEXT, dates use literal `date`, token uniqueness is inline, and the mapped userId index uses the shared upstream naming rule. The fresh catalog has no independent active column or expiresAt index. Core expiry, cache, and row-existence behavior remain unchanged.
+New generation emits `#[auth(role = "session", row_presence)]`. The model omits the Rust `active` extension, uses table `session` and native camelCase columns, and retains the typed Session API. SQLite native strings use TEXT and dates use literal `date`. PostgreSQL uses TEXT strings and TIMESTAMPTZ dates. MySQL uses VARCHAR(255) for token, TEXT for IP and user agent, and TIMESTAMP(3) dates. Server schemas give createdAt the native SQL timestamp default; updatedAt and expiresAt have no SQL default. Token uniqueness is inline, and the mapped userId index uses the shared upstream naming rule. The fresh catalog has no independent active column or expiresAt index. Core expiry, cache, and row-existence behavior remain unchanged.
 
-Use `--session-active-column` when application-owned regeneration must retain the Rust independent active state. This flag preserves the previous SQLite Session representation and physical defaults. PostgreSQL and MySQL generation remain active-backed. Existing generated source, handwritten models, bundled entities, and migration history do not change automatically. The flag is a Rust extension, not an upstream option.
+Use `--session-active-column` when application-owned regeneration must retain the Rust independent active state. This flag preserves the previous Session representation and physical defaults on all CLI backends. Existing generated source, handwritten models, bundled entities, and migration history do not change automatically. The flag is a Rust extension, not an upstream option.
 
-`SeaOrmSessionModel::active_column()` now returns `Option<Self::Column>`. Handwritten active-backed implementations must return `Some(the_existing_column)`. The explicit row-presence derive returns `None` and reports `AuthSession::active()` as true; existing expiry checks still apply. Unmarked derives still require the native `active` field. The marker rejects native `active` and any field exposing its logical or serialized alias. Configured logical `active`, including an alias to another model column, requires an active-column model. The adapter resolves the configured column first, so a missing mapping retains its original error. CLI Session additional-field generation remains unsupported.
+`SeaOrmSessionModel::active_column()` now returns `Option<Self::Column>`. Handwritten active-backed implementations must return `Some(the_existing_column)`. The explicit row-presence derive returns `None` and reports `AuthSession::active()` as true; existing expiry checks still apply. Unmarked derives still require the native `active` field. The marker rejects native `active` and any field exposing its logical or serialized alias. Configured logical `active`, including an alias to another model column, requires an active-column model. The adapter resolves the configured column first, so a missing mapping retains its original error. Generate declared Session application fields through `session.additionalFields`, then register the corresponding runtime policies.
 
 The generated `create_auth_tables` is an initial creation scaffold. Applications own versioned migrations and must preserve historical inactive state on its active-backed model until they explicitly adopt and validate a migration. The library does not infer historical meaning from arbitrary column names, validate handwritten getter semantics, or automatically reject rebinding to a historical table. Changing date affinity with unchanged Chrono bindings does not establish raw timestamp interchangeability.
 
@@ -168,7 +168,7 @@ The CLI and bundled entities currently have these default table-name differences
 | Model | Rust default | Upstream default |
 | --- | --- | --- |
 | User | CLI: `user`; bundled: `users` | `user` |
-| Session | CLI SQLite: `session`; active-column mode, bundled and other CLI backends: `sessions` | `session` |
+| Session | CLI: `session`; active-column mode and bundled: `sessions` | `session` |
 | Account | CLI: `account`; bundled: `accounts` | `account` |
 | Verification | CLI: `verification`; bundled: `verifications` | `verification` |
 | RateLimit | CLI: `rateLimit`; bundled: `rate_limit` | `rateLimit` |

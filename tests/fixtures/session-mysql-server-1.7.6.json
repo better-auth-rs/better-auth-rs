@@ -1,0 +1,367 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "input": {
+    "expiresIn": 3600,
+    "initial": {
+      "ipAddress": "192.0.2.10",
+      "userAgent": "catalog-session/1"
+    },
+    "update": {
+      "ipAddress": "192.0.2.20",
+      "userAgent": "catalog-session/2"
+    }
+  },
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "session",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "session",
+          "position": "2",
+          "name": "expiresAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "session",
+          "position": "3",
+          "name": "token",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "session",
+          "position": "4",
+          "name": "createdAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "session",
+          "position": "5",
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "session",
+          "position": "6",
+          "name": "ipAddress",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "session",
+          "position": "7",
+          "name": "userAgent",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "session",
+          "position": "8",
+          "name": "userId",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<initial-updated-at>",
+          "ipAddress": "192.0.2.10",
+          "userAgent": "catalog-session/1",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "read": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<initial-updated-at>",
+          "ipAddress": "192.0.2.10",
+          "userAgent": "catalog-session/1",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "updated": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "ipAddress": "192.0.2.20",
+          "userAgent": "catalog-session/2",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "reread": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "ipAddress": "192.0.2.20",
+          "userAgent": "catalog-session/2",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "storedCreated": [
+          {
+            "id": "<session-id>",
+            "expiresAt": "<expires-at>",
+            "token": "<session-token>",
+            "createdAt": "<created-at>",
+            "updatedAt": "<initial-updated-at>",
+            "ipAddress": "192.0.2.10",
+            "userAgent": "catalog-session/1",
+            "userId": "<owner-id>"
+          }
+        ],
+        "storedUpdated": [
+          {
+            "id": "<session-id>",
+            "expiresAt": "<expires-at>",
+            "token": "<session-token>",
+            "createdAt": "<created-at>",
+            "updatedAt": "<updated-at>",
+            "ipAddress": "192.0.2.20",
+            "userAgent": "catalog-session/2",
+            "userId": "<owner-id>"
+          }
+        ],
+        "deleted": null,
+        "storedDeleted": [],
+        "ownerRetained": true
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_session_catalog_users"
+        },
+        "session": {
+          "modelName": "display_catalog_sessions",
+          "fields": {
+            "expiresAt": "expires_on",
+            "token": "session_key",
+            "createdAt": "created_on",
+            "updatedAt": "updated_on",
+            "ipAddress": "client_address",
+            "userAgent": "client_agent",
+            "userId": "member_link"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_sessions",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "2",
+          "name": "expires_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "3",
+          "name": "session_key",
+          "type": "varchar",
+          "nativeType": "varchar(255)",
+          "maxLength": "255",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "4",
+          "name": "created_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": "CURRENT_TIMESTAMP(3)"
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "5",
+          "name": "updated_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "6",
+          "name": "client_address",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "7",
+          "name": "client_agent",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_sessions",
+          "position": "8",
+          "name": "member_link",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `display_session_catalog_users` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_catalog_sessions` (`id` varchar(36) not null primary key, `expires_on` timestamp(3) not null, `session_key` varchar(255) not null unique, `created_on` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updated_on` timestamp(3) not null, `client_address` text, `client_agent` text, `member_link` varchar(36) not null references `display_session_catalog_users` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `display_session_catalog_users` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate index `display_catalog_sessions_member_link_idx` on `display_catalog_sessions` (`member_link`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "created": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<initial-updated-at>",
+          "ipAddress": "192.0.2.10",
+          "userAgent": "catalog-session/1",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "read": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<initial-updated-at>",
+          "ipAddress": "192.0.2.10",
+          "userAgent": "catalog-session/1",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "updated": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "ipAddress": "192.0.2.20",
+          "userAgent": "catalog-session/2",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "reread": {
+          "expiresAt": "<expires-at>",
+          "token": "<session-token>",
+          "createdAt": "<created-at>",
+          "updatedAt": "<updated-at>",
+          "ipAddress": "192.0.2.20",
+          "userAgent": "catalog-session/2",
+          "userId": "<owner-id>",
+          "id": "<session-id>"
+        },
+        "storedCreated": [
+          {
+            "id": "<session-id>",
+            "expiresAt": "<expires-at>",
+            "token": "<session-token>",
+            "createdAt": "<created-at>",
+            "updatedAt": "<initial-updated-at>",
+            "ipAddress": "192.0.2.10",
+            "userAgent": "catalog-session/1",
+            "userId": "<owner-id>"
+          }
+        ],
+        "storedUpdated": [
+          {
+            "id": "<session-id>",
+            "expiresAt": "<expires-at>",
+            "token": "<session-token>",
+            "createdAt": "<created-at>",
+            "updatedAt": "<updated-at>",
+            "ipAddress": "192.0.2.20",
+            "userAgent": "catalog-session/2",
+            "userId": "<owner-id>"
+          }
+        ],
+        "deleted": null,
+        "storedDeleted": [],
+        "ownerRetained": true
+      }
+    }
+  ]
+}

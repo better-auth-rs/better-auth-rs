@@ -365,6 +365,8 @@ async fn check(database: &DatabaseConnection, backend: DbBackend, case: &Value) 
     }
     macro_rules! invitation {
         ($module:ident) => {{
+            let _schema = $module::AppAuthSchema;
+            let _organization = std::marker::PhantomData::<$module::AppOrganizationSchema>;
             $module::create_auth_tables(database).await?;
             assert!(case.get("observation").is_none());
             server_catalog::observe(

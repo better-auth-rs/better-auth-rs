@@ -23,6 +23,7 @@ mod tests {
     mod reference_fields;
     mod server_catalog;
     mod session_catalog;
+    mod session_server;
     mod sqlite_catalog;
     mod sqlite_json;
     mod team_catalog;

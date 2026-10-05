@@ -40,7 +40,7 @@ enum Command {
         #[arg(long)]
         rate_limit_database: bool,
 
-        /// Retain the Rust active-column Session representation when regenerating SQLite models.
+        /// Retain the Rust active-column Session representation when regenerating models.
         #[arg(long)]
         session_active_column: bool,
 

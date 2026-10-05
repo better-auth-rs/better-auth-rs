@@ -21,7 +21,7 @@ pub(crate) fn generate_schema(
     config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
     let mut session = registry::core_fields(EntityRole::Session).to_vec();
-    if database == Database::Sqlite && !session_active_column {
+    if !session_active_column {
         session.retain(|field| field.name != "active");
     }
     let mut extra_entities: Vec<&ExtraEntitySchema> = Vec::new();
@@ -419,7 +419,8 @@ fn gen_table(
             if let Some(column) = gen_server_native_column(entity, field, database) {
                 return Some(column);
             }
-            if (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
+            if database == Database::Sqlite
+                && (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
                 && field.attributes.is_none()
             {
                 let definition = core_field(entity.role, field.registry_column?)?;
@@ -493,20 +494,21 @@ fn gen_server_native_column(
     database: Database,
 ) -> Option<TokenStream> {
     if database == Database::Sqlite
-        || !matches!(
-            entity.role,
-            Some(
-                EntityRole::User
-                    | EntityRole::Account
-                    | EntityRole::Verification
-                    | EntityRole::Jwk
-                    | EntityRole::RateLimit
-                    | EntityRole::Member
-                    | EntityRole::OrganizationRole
-                    | EntityRole::Team
-                    | EntityRole::Invitation
-            )
-        )
+        || !(entity.session_row_presence
+            || matches!(
+                entity.role,
+                Some(
+                    EntityRole::User
+                        | EntityRole::Account
+                        | EntityRole::Verification
+                        | EntityRole::Jwk
+                        | EntityRole::RateLimit
+                        | EntityRole::Member
+                        | EntityRole::OrganizationRole
+                        | EntityRole::Team
+                        | EntityRole::Invitation
+                )
+            ))
         || field.attributes.is_some()
     {
         return None;
@@ -517,6 +519,7 @@ fn gen_server_native_column(
             if matches!(
                 (entity.role, definition.name),
                 (Some(EntityRole::User), "name" | "email")
+                    | (Some(EntityRole::Session), "token")
                     | (Some(EntityRole::Verification), "identifier")
                     | (Some(EntityRole::RateLimit), "key")
                     | (Some(EntityRole::Member), "role")
@@ -552,6 +555,8 @@ fn gen_server_native_column(
     };
     let required_email = (entity.role == Some(EntityRole::User) && definition.name == "email")
         .then(|| quote!(column.not_null();));
+    let unique =
+        inline_native_unique(entity, field, database).then(|| quote!(column.unique_key();));
     let timestamp_default = if database == Database::Mysql {
         quote!(sea_orm::sea_query::Expr::custom_keyword(
             "CURRENT_TIMESTAMP(3)"
@@ -564,6 +569,7 @@ fn gen_server_native_column(
         (
             Some(
                 EntityRole::User
+                    | EntityRole::Session
                     | EntityRole::Account
                     | EntityRole::Verification
                     | EntityRole::OrganizationRole
@@ -579,7 +585,7 @@ fn gen_server_native_column(
     let name = &field.column;
     Some(quote! {
         if column.get_column_name().as_str() == #name {
-            #data_type #required_email #default
+            #data_type #required_email #unique #default
         }
     })
 }
