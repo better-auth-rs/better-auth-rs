@@ -194,6 +194,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
 
     fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
         use better_auth_core::observability::telemetry::SocialProviderTelemetry;
+        if let Some(verification) = &self.email_verification {
+            <EmailVerificationPlugin as AuthPlugin<S>>::telemetry(verification, options);
+        }
         options
             .social_providers
             .extend(

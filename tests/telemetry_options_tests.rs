@@ -55,6 +55,9 @@ mod fields;
 #[path = "telemetry_options/durations.rs"]
 mod durations;
 
+#[path = "telemetry_options/private_verification.rs"]
+mod private_verification;
+
 #[derive(Default)]
 struct Reports(Mutex<Vec<Value>>);
 #[async_trait]

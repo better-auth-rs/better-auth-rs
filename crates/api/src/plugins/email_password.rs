@@ -520,6 +520,9 @@ impl Default for EmailPasswordConfig {
 #[async_trait]
 impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for EmailPasswordPlugin {
     fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
+        if let Some(verification) = &self.email_verification {
+            <EmailVerificationPlugin as AuthPlugin<S>>::telemetry(verification, options);
+        }
         let options = &mut options.email_and_password;
         options.enabled = true;
         options.disable_sign_up = !self.config.enable_signup;

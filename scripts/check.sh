@@ -68,7 +68,7 @@ run_stage() {
       cargo test --locked -p better-auth-api --features axum \
         --test account_oauth_tests --test oauth_session_revocation_tests
       cargo test --locked --test social_refresh_context_tests
-      cargo test --locked --test telemetry_options_tests social::
+      cargo test --locked --test telemetry_options_tests
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml
       bun --no-install test \
         ./compat-tests/reference-server/contracts/google-client-ids.test.ts \
@@ -78,6 +78,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/oauth-profile-override.test.ts \
         ./compat-tests/reference-server/contracts/social-refresh-context.test.ts \
         ./compat-tests/reference-server/contracts/social-verifier-context.test.ts \
+        ./compat-tests/reference-server/contracts/telemetry-options.test.ts \
         ./compat-tests/reference-server/contracts/generic-profile-results.test.ts
       ;;
     *) echo "Unknown check stage: $1" >&2; exit 1 ;;
