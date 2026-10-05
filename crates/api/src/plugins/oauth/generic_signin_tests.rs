@@ -56,10 +56,18 @@ async fn sign_in(
     plugin: &OAuthPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResponse {
+    sign_in_with_provider(plugin, ctx, "generic").await
+}
+
+async fn sign_in_with_provider(
+    plugin: &OAuthPlugin,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    provider: &str,
+) -> AuthResponse {
     let mut request = AuthRequest::new(HttpMethod::Post, "/sign-in/social");
     request.body = Some(
         serde_json::to_vec(&json!({
-            "provider": "generic",
+            "provider": provider,
             "callbackURL": "http://localhost:3000/welcome",
             "errorCallbackURL": "http://localhost:3000/error",
             "disableRedirect": true
@@ -78,7 +86,7 @@ async fn sign_in(
         .unwrap()
         .1
         .into_owned();
-    let mut callback = AuthRequest::new(HttpMethod::Get, "/callback/generic");
+    let mut callback = AuthRequest::new(HttpMethod::Get, format!("/callback/{provider}"));
     let _ = callback
         .query
         .get_or_insert_with(|| serde_json::json!({}))
@@ -406,7 +414,7 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
             &super::providers::OAuthUserInfo {
                 id: "stable-subject".into(),
                 email: Some("owner@example.test".into()).into(),
-                name: None,
+                name: Default::default(),
                 image: None,
                 email_verified: Some(true).into(),
                 additional_fields: Default::default(),
@@ -435,5 +443,92 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
             linked.access_token.typed().unwrap().as_deref(),
             Some("second-token")
         );
+    }
+}
+
+#[tokio::test]
+async fn social_verification_policy_uses_configured_profile_and_sender() {
+    for (required, verified, expected_location, expected_sessions, first_count, second_count) in [
+        (
+            Some(true),
+            false,
+            "http://localhost:3000/error?error=email_not_verified",
+            0,
+            1,
+            2,
+        ),
+        (Some(true), true, "http://localhost:3000/welcome", 2, 0, 0),
+        (Some(false), false, "http://localhost:3000/welcome", 2, 0, 0),
+        (None, false, "http://localhost:3000/welcome", 2, 0, 0),
+    ] {
+        let fixture = super::google_test_support::GoogleFixture::start(json!({
+            "sub": "ordinary-social-profile",
+            "email": "unverified@example.com",
+            "email_verified": verified,
+            "name": "Ordinary Social User",
+            "picture": "https://images.example.test/ordinary.png"
+        }))
+        .await;
+        let mut provider = fixture.provider();
+        provider.require_email_verification = required;
+        let mailbox = Arc::new(Mailbox::default());
+        let verification = EmailVerificationConfig {
+            send_on_sign_in: true,
+            send_verification_email: Some(mailbox.clone()),
+            ..Default::default()
+        };
+        let plugin = OAuthPlugin::new()
+            .with_email_verification(Arc::new(EmailVerificationPlugin::with_config(verification)))
+            .add_provider("google", provider);
+        let mut config = test_helpers::create_test_config().base_url("http://localhost:3000");
+        config.account.skip_state_cookie_check = true;
+        let ctx = test_helpers::create_test_context_with_config(config).await;
+
+        for count in [first_count, second_count] {
+            let response = sign_in_with_provider(&plugin, &ctx, "google").await;
+            assert_eq!(response.status, 302);
+            assert_eq!(
+                response.headers.get("Location").map(String::as_str),
+                Some(expected_location)
+            );
+            assert_eq!(mailbox.urls.lock().unwrap().len(), count);
+        }
+
+        let user = ctx
+            .database
+            .get_user_by_email("unverified@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(user.email_verified(), verified);
+        let user_view = serde_json::to_value(UserView::from(&user)).unwrap();
+        assert_eq!(user_view["name"], "Ordinary Social User");
+        assert_eq!(
+            user_view["image"],
+            "https://images.example.test/ordinary.png"
+        );
+        assert_eq!(
+            ctx.database
+                .get_user_accounts(user.id().typed().unwrap())
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            ctx.session_manager()
+                .list_user_sessions(user.id().typed().unwrap())
+                .await
+                .unwrap()
+                .len(),
+            expected_sessions
+        );
+        for sent_url in mailbox.urls.lock().unwrap().iter() {
+            let url = url::Url::parse(sent_url).unwrap();
+            assert!(
+                url.query_pairs().any(|(name, value)| name == "callbackURL"
+                    && value == "http://localhost:3000/welcome")
+            );
+        }
     }
 }

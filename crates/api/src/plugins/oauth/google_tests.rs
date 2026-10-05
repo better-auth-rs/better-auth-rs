@@ -37,7 +37,7 @@ impl OAuthProfileMapper for Mapper {
         assert_eq!(profile["sub"], "google-normal-subject");
         assert_eq!(profile["iss"], "https://accounts.google.com");
         Ok(OAuthProfile {
-            name: Some(Some("Mapped Google User".into())),
+            name: Some(Some("Mapped Google User".into()).into()),
             ..Default::default()
         })
     }
@@ -164,7 +164,7 @@ impl OAuthUserInfoHandler for ConfiguredUserInfo {
             user: OAuthUserInfo {
                 id: "google-normal-subject".into(),
                 email: Some("google-normal@example.test".into()).into(),
-                name: Some("Configured Google User".into()),
+                name: Some("Configured Google User".into()).into(),
                 image: None,
                 email_verified: Some(true).into(),
                 additional_fields: Default::default(),

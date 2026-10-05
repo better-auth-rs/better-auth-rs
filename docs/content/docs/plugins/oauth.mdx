@@ -43,8 +43,9 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | Spotify | `OAuthProvider::spotify(client_id, client_secret)` | `user-read-email` |
 | Hugging Face | `OAuthProvider::huggingface(client_id, client_secret)` | `openid`, `profile`, `email` |
 | Polar | `OAuthProvider::polar(client_id, client_secret)` | `openid`, `profile`, `email` |
+| Railway | `OAuthProvider::railway(client_id, client_secret)` | `openid`, `email`, `profile` |
+| Roblox | `OAuthProvider::roblox(client_id, client_secret)` | `openid`, `profile` |
 | Vercel | `OAuthProvider::vercel(client_id, client_secret)` | None |
-
 | Figma | `OAuthProvider::figma(client_id, client_secret)` | `current_user:read` |
 | Dropbox | `OAuthProvider::dropbox(client_id, client_secret)` | `account_info.read` |
 | Kick | `OAuthProvider::kick(client_id, client_secret)` | `user:read` |
@@ -52,6 +53,8 @@ Better Auth RS includes pre-configured providers with correct URLs and user info
 | LinkedIn | `OAuthProvider::linkedin(client_id, client_secret)` | `profile`, `email`, `openid` |
 | Slack | `OAuthProvider::slack(client_id, client_secret)` | `openid`, `profile`, `email` |
 | Naver | `OAuthProvider::naver(client_id, client_secret)` | `profile`, `email` |
+| Notion | `OAuthProvider::notion(client_id, client_secret)` | None; configured scopes precede request scopes |
+| LINE | `OAuthProvider::line(client_id, client_secret)` | `openid`, `profile`, `email` |
 | Linear | `OAuthProvider::linear(client_id, client_secret)` | `read` |
 | Atlassian | `OAuthProvider::atlassian(client_id, client_secret)` | `read:jira-user`, `offline_access` |
 | Reddit | `OAuthProvider::reddit(client_id, client_secret)` | `identity` |
@@ -82,9 +85,11 @@ Social `scopes`, `disable_implicit_sign_up`, and `disable_sign_up` retain omissi
 
 `OAuthConfig.providers` uses an insertion-ordered map. `add_provider` preserves registration order, and replacing a name keeps its position. A custom provider map can be built with `[(name, provider)].into_iter().collect()`.
 
+Set `require_email_verification` to `Some(true)` to require a verified user email before issuing a session. Omitted and false values disable this requirement. Social and Generic providers use the same verification policy and configured verification-email sender.
+
 Register social providers in one `OAuthPlugin` for the verified upstream configuration mapping. The same plugin may contain Generic OAuth providers. Multiple `OAuthPlugin` instances keep separate runtime configurations and have no unique upstream provider-map equivalent.
 
-Set `map_profile_to_user` to an `Arc<dyn OAuthProfileMapper>` to override local profile fields after built-in decoding. Omitted mapper fields preserve the provider value. `Some(None)` clears the name or image, and `additional_fields` adds configured application fields. The mapper cannot change the account subject. A custom `get_user_info` handler takes precedence and skips this mapper. Callback errors propagate through the existing OAuth error path. `map_user_info` remains the base JSON decoder for custom providers; it is distinct from the local-field mapper.
+Set `map_profile_to_user` to an `Arc<dyn OAuthProfileMapper>` to override local profile fields after built-in decoding. Omitted mapper fields preserve the provider value. `Some(None.into())` clears the name, `Some(None)` clears the image, and `additional_fields` adds configured application fields. The mapper cannot change the account subject. A custom `get_user_info` handler takes precedence and skips this mapper. Callback errors propagate through the existing OAuth error path. `map_user_info` remains the base JSON decoder for custom providers; it is distinct from the local-field mapper.
 
 `OAuthUserInfoHandler::get_user_info` returns `AuthResult<Option<OAuthUserInfoResponse>>`. Return `Ok(Some(profile))` for a profile or `Ok(None)` for a missing profile. Both results skip default HTTP lookup and the mapper. Missing profiles retain each endpoint’s existing redirect or `FAILED_TO_GET_USER_INFO` response. Return an application `AuthError` unchanged to preserve its HTTP status, error body, and headers through Social callback, OAuth Proxy, and account-info. Use `AuthError::internal(message)` for an ordinary implementation failure. Construct dynamic API errors with `AuthResponse::json(...)` and convert the response into `AuthError`.
 
@@ -96,7 +101,9 @@ Provider defaults remain separate from mapped values. Discord, Google, and Slack
 
 Discord prepares `image_url` before invoking the mapper. The default decoder reuses that value for PNG, animated GIF, and default avatars. Display names use `global_name`, then `username`, then an empty string.
 
-Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, Cognito, Paybin, PayPal, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Linear, Reddit, Salesforce, Kakao, Zoom, Twitter, VK, WeChat, and Facebook ignore this option. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
+Discord omits PKCE, the code verifier, standalone login hints and nonces, and callback device IDs. Code exchange and refresh use client-secret-post. Configure bot permissions with a decimal string in `authorization_params`, for example `("permissions".into(), "8".into())`. The configured entry is sent only when the combined default, request, and configured scopes contain `bot`. Request `additionalParams.permissions` overrides the configured value and remains effective without the bot scope. Request `additionalParams.login_hint` and `additionalParams.prompt` remain effective even though standalone login hints are omitted.
+
+Set `disable_id_token_sign_in = true` to reject direct ID-token sign-in and linking before invoking verification or user-info callbacks. Authorization-code flow remains available. Google, GitHub, Discord, Polar, Atlassian, Cognito, Paybin, PayPal, and custom providers forward the configured `prompt`. GitLab, Spotify, Hugging Face, Vercel, Figma, Dropbox, Kick, Cloudflare, LinkedIn, Slack, Naver, Notion, LINE, Linear, Reddit, Salesforce, Railway, Kakao, Zoom, Twitter, VK, WeChat, and Facebook ignore this option. Roblox forwards a nonempty prompt and otherwise uses `select_account consent`. Omitted or empty prompts retain Discord’s `none` default. Additional authorization parameters retain their existing precedence.
 
 Set `redirect_uri` when the provider callback URI differs from the route URI. Authorization and code exchange use the same configured value. Omitted or empty values use the route URI. Register the configured URI with the provider and route the callback to Better Auth; the option does not create another HTTP route.
 
@@ -106,7 +113,11 @@ For direct ID-token sign-in, a configured `verify_id_token` retains its applicat
 
 GitLab and Spotify use authorization-code exchange with PKCE and Bearer userinfo requests. GitLab accepts active, unlocked profiles and selects `name`, then `username`, then an empty name. Spotify selects the first image and defaults `emailVerified` to false. Both retain the shared async profile mapper and custom `get_user_info` precedence. Their constructors do not install an ID-token verifier. For a self-hosted GitLab instance, set the existing `auth_url`, `token_url`, and `user_info_url` fields to the instance endpoints.
 
-Hugging Face and Polar use the same code/PKCE, client-secret-post and Bearer userinfo flow. Hugging Face selects the first nonempty `name` or `preferred_username`; Polar selects the first nonempty `public_name` or `username`. Both use an empty name if neither exists, retain absent versus null images, and default an absent or null `email_verified` to false. Their profile mappers and custom user-info handlers follow the same precedence. Neither constructor installs an ID-token verifier. Railway remains a separate provider addition.
+Hugging Face and Polar use the same code/PKCE, client-secret-post and Bearer userinfo flow. Hugging Face selects the first nonempty `name` or `preferred_username`; Polar selects the first nonempty `public_name` or `username`. Both use an empty name if neither exists, retain absent versus null images, and default an absent or null `email_verified` to false. Their profile mappers and custom user-info handlers follow the same precedence. Neither constructor installs an ID-token verifier.
+
+Railway uses `openid email profile`, PKCE, HTTP Basic client authentication for code exchange and refresh, and GET/Bearer userinfo. The profile decoder reads `sub`, `name`, `email`, and `picture`, and sets `emailVerified` to false before applying the mapper. Configured and request scopes retain their order. The provider ignores standalone login hints, nonces, configured prompts, and callback device IDs. The common fields support custom endpoints and callback URIs. The upstream `clientKey` option remains unsupported by the Social provider configuration.
+
+Roblox uses `openid profile`, client-secret-post for code exchange and refresh, and GET/Bearer userinfo. The provider omits PKCE, standalone login hints, and callback device IDs. An omitted or empty prompt becomes `select_account consent`. The profile reads `sub`, selects the first nonempty `nickname` or `preferred_username`, and preserves absent versus null pictures. The default email is `<sub>@roblox.placeholder.invalid` with `emailVerified: false`. The async mapper receives the raw profile; its returned fields override those defaults. Custom user-info handlers retain precedence.
 
 Figma uses PKCE and HTTP Basic client authentication for code exchange and refresh. Both credentials must be nonempty when authorization starts. The default decoder maps `handle`, `email`, and `img_url`, preserves an omitted or null image, and sets `emailVerified` to false before applying the profile mapper. The shared refresh route retains the stored account scope even when the token endpoint returns a different scope. The constructor does not install an ID-token verifier.
 
@@ -253,6 +264,12 @@ Zoom uses client-secret-post for code exchange and refresh, and GET/Bearer useri
 Zoom ignores configured/request scopes, `disable_default_scope`, configured prompt, and standalone hints/nonces. Ordinary additional authorization parameters remain effective. The decoder reads `display_name`, `pic_url`, and email, and applies the shared truthiness rule to the documented numeric `verified` field. The async mapper receives the original profile; custom user-info handlers retain precedence. The ordinary contracts cover verified values 0/1, null pictures, mapper errors, HTTP 503, and both PKCE configurations through local HTTP and SQLite. Arbitrary JavaScript response shapes and provider-specific transport/error timing are outside this slice.
 
 
+### Profile helpers
+
+`GenericOAuthConfig::gumroad`, `::hubspot`, `::patreon`, `::slack`, and `::yandex` each accept a client ID and client secret. Register the returned configuration under the corresponding provider name. These constructors configure endpoints, default scopes, profile lookup, and the account subject. Customize the existing configuration fields before registration to change scopes, token authentication, redirects, logout, PKCE, and sign-up policy.
+
+The helpers map each provider response before calling the configured `map_profile_to_user`. Slack selects `sub` as its account subject; the other four helpers select `id`. HubSpot selects POST client authentication by default. Profile callbacks receive JSON values, so a JavaScript own property with `undefined` remains indistinguishable from a missing property. Complete helper-object semantics are not aligned by these constructors.
+
 ### Token endpoint authentication
 
 `token_endpoint_auth` applies to both authorization-code exchange and token refresh:
@@ -277,7 +294,9 @@ The runtime calls `GenericOAuthUserInfoHandler::get_user_info_with_context` with
 
 Set `OAuthProfile.additional_fields` to supply configured application user fields. Sign-up and profile updates apply the shared user schema, including input transforms, defaults, and protected-field filtering. OAuth Proxy preserves these mapped fields through its encrypted callback. Raw provider claims remain separate from mapped application fields.
 
-For `OAuthProfile.name` and `OAuthProfile.image`, `None` preserves the provider value, `Some(None)` clears the mapped provider value, and `Some(Some(value))` replaces it. Generic OAuth then normalizes a null image to omission, so an existing local image remains unchanged. Other optional mapper fields preserve the provider value when omitted. Set `override_user_info: true` to update an existing user's profile on sign-in.
+For `OAuthProfile.name`, `None` preserves the provider value, `Some(SchemaValue::Undefined)` omits the mapped name, `Some(None.into())` supplies null, and `Some(Some(value).into())` supplies a string. For `OAuthProfile.image`, `None` preserves the provider value, `Some(None)` clears the mapped provider value, and `Some(Some(value))` replaces it. Generic OAuth then normalizes a null image to omission, so an existing local image remains unchanged. Other optional mapper fields preserve the provider value when omitted. Set `override_user_info: true` to update an existing user's profile on sign-in.
+
+`OAuthUserInfo.name` uses `SchemaValue<Option<String>>`: `Undefined` omits the name, `Typed(None)` preserves null, and `Typed(Some(value))` preserves a string. Migrate `name: None` to `name: SchemaValue::Undefined` and `name: Some(value)` to `name: Some(value).into()`. Generic profiles and account-info preserve these states. Provider-specific name fallbacks remain in place. OAuth Proxy uses the upstream empty-string fallback for absent or null names. Sign-in still uses email for an absent or null new-user name, skips absent or null name updates, and omits these names from user admission; those sign-in differences remain outside this profile representation change.
 
 For a social provider's `OAuthUserInfo.image`, `None` omits the field, `Some(None)` supplies explicit null, and `Some(Some(url))` supplies a string. Profile updates preserve the local image when omitted and clear it for explicit null. New-user creation, user admission, `/account-info`, and OAuth Proxy retain this distinction. Raw JSON mappers must preserve key presence before decoding a nullable image.
 
@@ -361,7 +380,7 @@ For `POST /unlink-account`, send `{ "accountId": "local-account-id" }`. Access-t
 
 ### PKCE Flow
 
-Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for the fixed LinkedIn, Slack, Naver, Linear, Reddit, and Kakao protocols. Zoom enables authorization PKCE by default and exposes `zoom_without_pkce` for its provider option. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
+Social authorization-code flows use PKCE (Proof Key for Code Exchange), except for Facebook, Discord, LinkedIn, Slack, Naver, Linear, Reddit, Roblox, Notion, Kakao, and WeChat. Zoom enables authorization PKCE by default and exposes `zoom_without_pkce` for its provider option. Generic OAuth enables PKCE by default; set `GenericOAuthConfig.pkce: false` for a provider that does not support it. Direct ID-token sign-in does not perform a code exchange.
 
 1. A random `code_verifier` is generated
 2. A `code_challenge` is derived using SHA-256
@@ -393,6 +412,18 @@ An invalid state binding preserves the stored state and redirects to its configu
 
 With `allow_idp_initiated: true`, a callback without state starts a fresh authorization request. The new request establishes state and nonce binding before a session is issued.
 
+
+### Notion
+
+Use `OAuthProvider::notion(client_id, client_secret)` with `OAuthPlugin::add_provider("notion", provider)`. Notion has no default scopes; configured scopes precede request scopes. Authorization forwards login hints and fixes `owner=user` after additional parameters. The provider omits PKCE, the code verifier, standalone nonces, configured prompt, and callback device IDs. Code exchange uses HTTP Basic authentication; refresh uses client-secret-post. The shared configured callback URI remains effective.
+
+Userinfo sends a Bearer request with `Notion-Version: 2022-06-28`. The default profile is `bot.owner.user`; an absent owner user produces a missing profile. Its `id` supplies the account subject. Mapping uses the owner profile, defaults an absent or null name to an empty string, maps missing or empty `person.email` to null, preserves avatar presence, and defaults `emailVerified` to false. Custom user-info and refresh handlers retain precedence. The constructor does not install an ID-token verifier. Live-provider acceptance and complete error timing require separate validation.
+
+### LINE Social OAuth
+
+Use `OAuthProvider::line(client_id, client_secret)` with `OAuthPlugin::add_provider("line", provider)`. Social LINE uses PKCE, client-secret-post grants, and `openid profile email` before configured and request scopes. Login hints are forwarded; standalone nonces, configured prompt, and callback device IDs are omitted.
+
+Direct ID-token login uses LINE's verification endpoint through the existing verifier path. The default profile handler reads ID-token claims or uses GET/Bearer userinfo when claims are unavailable. The profile uses `sub`, defaults a missing or null name to an empty string, preserves email and picture presence, and sets `emailVerified` to false. The existing profile mapper and custom user-info handler retain their precedence. Social LINE is separate from the Generic helper below. Dedicated local contracts exercise ordinary configuration, profiles, direct/code sign-in, and code/refresh request and token fields. Live-provider acceptance and complete error timing require separate validation.
 
 ### LINE Generic OAuth
 

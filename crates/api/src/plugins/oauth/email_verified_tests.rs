@@ -39,7 +39,7 @@ fn default_email_verified_presence_matches_upstream() {
         let expected = &case["expected"]["user"];
         let output = serde_json::to_value(types::AccountInfoUser {
             id: None,
-            name: None,
+            name: Default::default(),
             email: Default::default(),
             image: None,
             email_verified: user.email_verified,

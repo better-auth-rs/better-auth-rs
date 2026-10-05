@@ -222,7 +222,7 @@ impl OAuthUserInfoHandler for CustomInfo {
         Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 id: "ordinary-paybin-owner".into(),
-                name: Some("Custom Owner".into()),
+                name: Some("Custom Owner".into()).into(),
                 email: Some("custom@example.com".into()).into(),
                 image: None,
                 email_verified: Some(false).into(),

@@ -402,7 +402,7 @@ impl OAuthUserInfoHandler for CompatGoogleUserInfoHandler {
                 additional_fields: Default::default(),
                 id: profile.sub.clone(),
                 email: Some(profile.email.clone()).into(),
-                name: Some(profile.name.clone()),
+                name: Some(profile.name.clone()).into(),
                 image: if self.preserve_image_null && profile.image_present {
                     Some(profile.image.clone())
                 } else {

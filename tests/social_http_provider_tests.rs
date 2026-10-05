@@ -261,6 +261,9 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             "twitter",
             "vk",
             "cognito",
+            "railway",
+            "roblox",
+            "notion",
         ]
         .into_iter()
         .map(|id| (id, None, true));
@@ -286,6 +289,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 json!({"data": {"viewer": case["profile"]}})
             } else if id == "cloudflare" {
                 json!({"success": true, "result": case["profile"]})
+            } else if id == "notion" {
+                json!({"bot": {"owner": {"user": case["profile"]}}})
             } else {
                 case["profile"].clone()
             };
@@ -346,6 +351,9 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 "cloudflare" => {
                     OAuthProvider::cloudflare("social-http-client", "ordinary-client-secret")
                 }
+                "railway" => OAuthProvider::railway("social-http-client", "ordinary-client-secret"),
+                "roblox" => OAuthProvider::roblox("social-http-client", "ordinary-client-secret"),
+                "notion" => OAuthProvider::notion("social-http-client", "ordinary-client-secret"),
                 _ => {
                     assert_eq!(id, "polar");
                     OAuthProvider::polar("social-http-client", "ordinary-client-secret")
@@ -410,6 +418,9 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "twitter"
                     | "vk"
                     | "cognito"
+                    | "railway"
+                    | "roblox"
+                    | "notion"
             ) {
                 sign_in["loginHint"] = json!("owner@example.test");
                 sign_in["additionalParams"] = json!({"request_marker":"request-value"});
@@ -434,12 +445,19 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
             if matches!(
                 id,
-                "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+                "linkedin"
+                    | "slack"
+                    | "naver"
+                    | "linear"
+                    | "reddit"
+                    | "kakao"
+                    | "roblox"
+                    | "notion"
             ) || (id == "zoom" && !pkce)
             {
                 assert!(!query.contains_key("code_challenge_method"));
                 assert!(!query.contains_key("code_challenge"));
-                if matches!(id, "linkedin" | "linear") {
+                if matches!(id, "linkedin" | "linear" | "notion") {
                     assert_eq!(query["login_hint"], "owner@example.test");
                 } else {
                     assert!(!query.contains_key("login_hint"));
@@ -454,6 +472,14 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 assert!(!query.contains_key("login_hint"));
                 assert_eq!(query["request_marker"], "request-value");
             }
+            if id == "notion" {
+                assert_eq!(query["owner"], "user");
+                assert!(!query.contains_key("prompt"));
+            }
+            if id == "roblox" {
+                assert_eq!(query["prompt"], case["scopeCases"][0]["prompt"]);
+                assert_eq!(query["scope"], case["scopeCases"][0]["scope"]);
+            }
             if id == "atlassian" {
                 assert!(!query.contains_key("login_hint"));
                 assert_eq!(query["request_marker"], "request-value");
@@ -465,7 +491,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 assert_eq!(query["client_id"], twitter["metadata"]["clientId"]);
                 assert_eq!(query["request_marker"], "request-value");
             }
-            if id == "salesforce" {
+            if matches!(id, "salesforce" | "railway") {
                 assert!(!query.contains_key("login_hint"));
                 assert_eq!(query["request_marker"], "request-value");
             }
@@ -560,6 +586,10 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             assert_eq!(account["accessToken"], "ordinary-access");
             assert_eq!(account["refreshToken"], "ordinary-refresh");
             assert_eq!(account["scope"], "ordinary-scope");
+            if id == "notion" {
+                let headers = server.state.profile_headers.lock().unwrap();
+                assert_eq!(headers.as_ref().unwrap()["notion-version"], "2022-06-28");
+            }
             assert_eq!(
                 *server.state.events.lock().unwrap(),
                 if id == "twitter" {
@@ -687,14 +717,21 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 let _ = expected_form.insert("redirect_uri".into(), expected_redirect.clone());
                 let _ = expected_form.insert("code_verifier".into(), form["code_verifier"].clone());
                 assert_eq!(*form, expected_form);
-            } else if matches!(id, "figma" | "reddit" | "twitter") {
+            } else if matches!(id, "figma" | "reddit" | "twitter" | "railway" | "notion") {
                 assert_eq!(
                     requests[0].headers["authorization"],
                     case["tokenContract"]["authorization"].as_str().unwrap()
                 );
                 assert!(!form.contains_key("client_id"));
                 assert!(!form.contains_key("client_secret"));
-                assert_eq!(form.len(), if id == "reddit" { 3 } else { 4 });
+                assert_eq!(
+                    form.len(),
+                    if matches!(id, "reddit" | "notion") {
+                        3
+                    } else {
+                        4
+                    }
+                );
             } else {
                 assert_eq!(
                     form["client_id"],
@@ -718,7 +755,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     assert!(!form.contains_key("device_id"));
                 } else if matches!(
                     id,
-                    "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+                    "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao" | "roblox"
                 ) {
                     assert!(requests[0].headers.get("authorization").is_none());
                     assert_eq!(form.len(), 5);
@@ -727,7 +764,14 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
             }
             if matches!(
                 id,
-                "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+                "linkedin"
+                    | "slack"
+                    | "naver"
+                    | "linear"
+                    | "reddit"
+                    | "kakao"
+                    | "roblox"
+                    | "notion"
             ) {
                 assert!(!form.contains_key("code_verifier"));
             } else {
@@ -767,6 +811,9 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     | "cognito"
                     | "cloudflare"
                     | "salesforce"
+                    | "railway"
+                    | "roblox"
+                    | "notion"
             ) {
                 let cookies = callback
                     .headers
@@ -820,7 +867,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                         expected["contentType"].as_str().unwrap()
                     );
                     expected_form = serde_json::from_value(expected["body"].clone()).unwrap();
-                } else if matches!(id, "figma" | "reddit" | "twitter") {
+                } else if matches!(id, "figma" | "reddit" | "twitter" | "railway") {
                     assert_eq!(
                         requests[1].headers["authorization"],
                         case["tokenContract"]["authorization"].as_str().unwrap()

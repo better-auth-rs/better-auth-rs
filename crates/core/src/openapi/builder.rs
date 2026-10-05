@@ -379,7 +379,7 @@ fn responses(explicit: &Map<String, Value>) -> Value {
         );
     }
     responses.extend(explicit.clone());
-    Value::Object(responses)
+    Value::Object(ordered_properties(responses))
 }
 
 impl OpenApiSpec {

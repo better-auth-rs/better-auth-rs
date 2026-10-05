@@ -99,7 +99,7 @@ impl OneTapPlugin {
                     || claim("email_verified").as_str() == Some("true"),
             )
             .into(),
-            name: Some(claim("name").as_str().unwrap_or_default().to_owned()),
+            name: Some(claim("name").as_str().unwrap_or_default().to_owned()).into(),
             image: claim("picture")
                 .as_str()
                 .map(|value| Some(value.to_owned())),

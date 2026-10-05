@@ -71,7 +71,12 @@ pub(super) fn decode_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .and_then(Value::as_str)
             .ok_or("missing id")?
             .into(),
-        name: serde_json::from_value(data.get("name").cloned().unwrap_or(Value::Null))
+        name: data
+            .get("name")
+            .cloned()
+            .map(serde_json::from_value::<Option<String>>)
+            .transpose()
+            .map(|value| value.map(Into::into).unwrap_or_default())
             .map_err(|error| format!("Invalid Twitter name: {error}"))?,
         email: super::defaults::profile_email(data)?,
         image: data

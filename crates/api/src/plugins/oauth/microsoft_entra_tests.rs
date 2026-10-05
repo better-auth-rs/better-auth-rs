@@ -174,10 +174,7 @@ impl OAuthProfileMapper for Mapper {
         }
         assert_eq!(data, self.expected);
         Ok(OAuthProfile {
-            name: Some(Some(format!(
-                "Mapped {}",
-                profile["name"].as_str().unwrap()
-            ))),
+            name: Some(Some(format!("Mapped {}", profile["name"].as_str().unwrap())).into()),
             ..Default::default()
         })
     }

@@ -57,6 +57,10 @@ pub(super) async fn verify(
         let claims = verifier.verify(token, nonce).await.map_err(|_| invalid())?;
         return Ok(Some(VerifiedIdToken::Generic(claims)));
     }
+    if let Some(endpoint) = provider.config.line_verify_url() {
+        super::providers::line::verify(endpoint, &provider.config.client_id, token, nonce).await?;
+        return Ok(None);
+    }
     if let Some(options) = provider.config.facebook_options() {
         if token.split('.').count() != 3 {
             // Opaque tokens supply no claims. The default profile must inspect its access token.

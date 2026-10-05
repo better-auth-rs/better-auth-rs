@@ -90,9 +90,11 @@ pub(super) async fn fetch_profile(
         Some(mapper) => mapper.map_profile(&raw).await?,
         None => Default::default(),
     };
-    let email = mapped
-        .email
-        .unwrap_or_else(|| Some(string(profile, "email").unwrap_or_default()).into());
+    let email = mapped.email.unwrap_or_else(|| match profile.get("email") {
+        None => better_auth_core::SchemaValue::Undefined,
+        Some(Value::Null) => better_auth_core::SchemaValue::Typed(None),
+        Some(value) => Some(value.as_str().unwrap_or_default().to_owned()).into(),
+    });
     let _ = super::providers::profile_email(&email)?;
     let email_verified = mapped.email_verified.unwrap_or_else(|| {
         better_auth_core::SchemaValue::from_json(profile.get("emailVerified").cloned())
@@ -103,7 +105,9 @@ pub(super) async fn fetch_profile(
             id: None,
             additional_fields: mapped.additional_fields,
             email,
-            name: mapped.name.unwrap_or_else(|| string(profile, "name")),
+            name: mapped
+                .name
+                .unwrap_or_else(|| super::providers::decode_profile_name(profile.get("name"))),
             image: mapped
                 .image
                 .unwrap_or_else(|| string(profile, "image"))
@@ -183,7 +187,7 @@ fn string(profile: &Map<String, Value>, field: &str) -> Option<String> {
 
 // Generic OAuth without discovery retains upstream's unverified JWT decoding path.
 // Providers that require signed ID tokens are rejected during initialization without JWKS.
-fn decode_claims(token: &str) -> Option<Value> {
+pub(super) fn decode_claims(token: &str) -> Option<Value> {
     let mut parts = token.split('.');
     let (Some(_), Some(payload), Some(_), None) =
         (parts.next(), parts.next(), parts.next(), parts.next())

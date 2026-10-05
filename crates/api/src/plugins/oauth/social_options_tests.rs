@@ -98,6 +98,99 @@ async fn social_authorization_scope_and_prompt_match_upstream() -> AuthResult<()
     Ok(())
 }
 
+#[tokio::test]
+async fn discord_authorization_omits_standalone_hints_and_gates_configured_permissions()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (
+        configured_bot,
+        requested_bot,
+        permission,
+        request_permission,
+        expected_permission,
+        request_hints,
+    ) in [
+        (false, false, None, None, None, false),
+        (false, false, Some("8"), None, None, false),
+        (true, false, Some("0"), None, Some("0"), false),
+        (false, true, Some("8"), None, Some("8"), false),
+        (true, false, Some("8"), Some("16"), Some("16"), false),
+        (false, false, Some("8"), Some("16"), Some("16"), false),
+        (true, false, None, None, None, false),
+        (false, false, None, None, None, true),
+    ] {
+        let mut discord = provider("discord")?;
+        if configured_bot {
+            discord.scopes = Some(vec!["bot".into()]);
+        }
+        if let Some(permission) = permission {
+            discord
+                .authorization_params
+                .push(("permissions".into(), permission.into()));
+        }
+        let request_scopes = requested_bot.then(|| vec!["bot".into()]);
+        let mut additional = indexmap::IndexMap::new();
+        if let Some(permission) = request_permission {
+            let _ = additional.insert("permissions".into(), permission.into());
+        }
+        if request_hints {
+            additional.extend([
+                ("login_hint".into(), "request@example.test".into()),
+                ("prompt".into(), "consent".into()),
+            ]);
+        }
+        let _ = additional.insert("request_marker".into(), "ordinary".into());
+        let resolved = resolve("discord", discord).await?;
+        let discord = resolved
+            .providers
+            .get("discord")
+            .ok_or_else(|| AuthError::internal("missing Discord provider"))?;
+        let url = authorization::build_authorization_url(
+            discord,
+            authorization::AuthorizationRequest {
+                callback_url: "https://app.example.test/callback/discord",
+                scopes: request_scopes.as_deref(),
+                state: "ordinary-state",
+                code_challenge: "ordinary-challenge",
+                login_hint: Some("reader@example.test"),
+                nonce: Some("ordinary-nonce"),
+                additional_params: Some(&additional),
+            },
+        )?;
+        let actual: HashMap<String, String> =
+            url::Url::parse(&url)?.query_pairs().into_owned().collect();
+        let mut expected: HashMap<String, String> = [
+            ("response_type", "code"),
+            ("client_id", "client"),
+            ("state", "ordinary-state"),
+            (
+                "scope",
+                if configured_bot || requested_bot {
+                    "identify email bot"
+                } else {
+                    "identify email"
+                },
+            ),
+            ("redirect_uri", "https://app.example.test/callback/discord"),
+            ("prompt", "none"),
+            ("request_marker", "ordinary"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+        if let Some(permission) = expected_permission {
+            let _ = expected.insert("permissions".into(), permission.into());
+        }
+        if request_hints {
+            expected.extend([
+                ("login_hint".into(), "request@example.test".into()),
+                ("prompt".into(), "consent".into()),
+            ]);
+        }
+        assert_eq!(actual, expected);
+    }
+    Ok(())
+}
+
 struct ProfileServer {
     url: String,
     task: tokio::task::JoinHandle<()>,
@@ -162,7 +255,7 @@ impl OAuthProfileMapper for Mapper {
             ..Default::default()
         };
         if !self.partial {
-            mapped.name = Some(Some("Mapped".into()));
+            mapped.name = Some(Some("Mapped".into()).into());
             mapped.image = Some(None);
             mapped.email = Some(Some("mapped@example.test".into()).into());
             mapped.email_verified = Some(Some(false).into());
@@ -185,7 +278,7 @@ impl OAuthUserInfoHandler for CustomProfile {
             user: OAuthUserInfo {
                 id: "custom-subject".into(),
                 email: Some("custom@example.test".into()).into(),
-                name: Some("Custom".into()),
+                name: Some("Custom".into()).into(),
                 image: Some(Some("https://images.test/custom.png".into())),
                 email_verified: Some(true).into(),
                 additional_fields: [("locale".into(), json!("en"))].into_iter().collect(),
@@ -292,7 +385,10 @@ async fn google_stored_account_profile_keeps_access_token_userinfo()
     )
     .await?
     .ok_or("provider returned no profile")?;
-    assert_eq!(response.user.name.as_deref(), Some("Owner"));
+    assert_eq!(
+        response.user.name.typed().unwrap().as_deref(),
+        Some("Owner")
+    );
     assert_eq!(
         response.user.email.typed()?.as_deref(),
         Some("owner@example.test")

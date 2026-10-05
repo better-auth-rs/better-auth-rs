@@ -129,7 +129,12 @@ pub(super) fn decode_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .or_else(|| profile.get("openid").and_then(Value::as_str))
             .ok_or("Missing WeChat profile identifier")?
             .into(),
-        name: serde_json::from_value(profile.get("nickname").cloned().unwrap_or(Value::Null))
+        name: profile
+            .get("nickname")
+            .cloned()
+            .map(serde_json::from_value::<Option<String>>)
+            .transpose()
+            .map(|value| value.map(Into::into).unwrap_or_default())
             .map_err(|error| format!("Invalid WeChat nickname: {error}"))?,
         email: super::defaults::profile_email(&profile)?,
         image: profile

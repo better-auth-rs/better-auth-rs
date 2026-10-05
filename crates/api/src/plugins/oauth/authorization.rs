@@ -30,20 +30,14 @@ pub(super) fn build_authorization_url(
     input: AuthorizationRequest<'_>,
 ) -> AuthResult<String> {
     let generic = provider.generic.as_ref();
-    let input = if generic.is_none() && provider.config.omits_request_hints() {
+    let input = if generic.is_none() && provider.config.omits_login_hint() {
         AuthorizationRequest {
             login_hint: None,
-            nonce: None,
             additional_params: if provider.config.is_cloudflare() {
                 None
             } else {
                 input.additional_params
             },
-            ..input
-        }
-    } else if generic.is_none() && provider.config.facebook_options().is_some() {
-        AuthorizationRequest {
-            nonce: None,
             ..input
         }
     } else {
@@ -176,7 +170,7 @@ pub(super) fn build_authorization_url(
             ("login_hint", input.login_hint),
             (
                 "nonce",
-                if generic.is_none() && provider.config.paybin_issuer().is_some() {
+                if generic.is_none() && provider.config.omits_request_nonce() {
                     None
                 } else {
                     input.nonce
@@ -207,10 +201,13 @@ pub(super) fn build_authorization_url(
             set("code_challenge", input.code_challenge);
         }
     }
+    let omit_configured_permissions =
+        generic.is_none() && provider.config.is_discord() && !scopes.contains(&"bot");
     for (key, value) in provider
         .config
         .authorization_params
         .iter()
+        .filter(|(key, _)| !omit_configured_permissions || key != "permissions")
         .map(|(key, value)| (key, value))
         .chain(input.additional_params.into_iter().flatten())
     {

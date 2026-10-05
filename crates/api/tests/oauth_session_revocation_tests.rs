@@ -122,7 +122,7 @@ impl OAuthUserInfoHandler for ProviderCalls {
                 additional_fields: Default::default(),
                 id: "provider-subject".to_string(),
                 email: Some("operator@example.com".to_string()).into(),
-                name: Some("Operator".to_string()),
+                name: Some("Operator".to_string()).into(),
                 image: None,
                 email_verified: Some(true).into(),
             },

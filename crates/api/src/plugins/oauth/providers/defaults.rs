@@ -24,12 +24,18 @@ pub(super) enum ProviderKind {
     Spotify,
     HuggingFace,
     Polar,
+    Railway,
+    Roblox,
+    Notion,
     Vercel,
 
     Figma,
     Dropbox,
     Kick,
     LinkedIn,
+    Line {
+        verify_url: String,
+    },
     Slack,
     Naver,
     Linear,
@@ -52,15 +58,17 @@ impl ProviderKind {
     pub(super) fn scopes(&self) -> &'static [&'static str] {
         match self {
             Self::Facebook(_) => &["email", "public_profile"],
-            Self::Custom | Self::Vercel | Self::Zoom { .. } | Self::PayPal => &[],
+            Self::Custom | Self::Vercel | Self::Zoom { .. } | Self::PayPal | Self::Notion => &[],
             Self::Google { .. } => &["email", "profile", "openid"],
             Self::GitHub { .. } => &["read:user", "user:email"],
             Self::Discord => &["identify", "email"],
             Self::GitLab => &["read_user"],
             Self::Spotify => &["user-read-email"],
-            Self::HuggingFace | Self::Polar | Self::Slack | Self::Cognito(_) => {
-                &["openid", "profile", "email"]
-            }
+            Self::HuggingFace
+            | Self::Polar
+            | Self::Slack
+            | Self::Cognito(_)
+            | Self::Line { .. } => &["openid", "profile", "email"],
             Self::Figma => &["current_user:read"],
             Self::Dropbox => &["account_info.read"],
             Self::Kick => &["user:read"],
@@ -71,7 +79,10 @@ impl ProviderKind {
             Self::Reddit => &["identity"],
             Self::Kakao => &["account_email", "profile_image", "profile_nickname"],
             Self::Cloudflare => &["user-details.read"],
-            Self::Salesforce | Self::Paybin { .. } => &["openid", "email", "profile"],
+            Self::Salesforce | Self::Paybin { .. } | Self::Railway => {
+                &["openid", "email", "profile"]
+            }
+            Self::Roblox => &["openid", "profile"],
             Self::Twitter => &["users.read", "tweet.read", "offline.access", "users.email"],
             Self::Vk => &["email", "phone"],
             Self::WeChat { .. } => &["snsapi_login"],
@@ -96,6 +107,10 @@ impl ProviderKind {
             Self::Spotify => spotify_profile,
             Self::HuggingFace => huggingface_profile,
             Self::Polar => polar_profile,
+            Self::Railway if !crate::plugins::json_body::is_truthy(&profile) => return Ok(None),
+            Self::Railway => railway_profile,
+            Self::Roblox => roblox_profile,
+            Self::Notion => notion_profile,
             Self::Vercel if profile.is_null() => return Ok(None),
             Self::Figma if profile.is_null() => return Ok(None),
             Self::Salesforce if profile.is_null() => return Ok(None),
@@ -104,6 +119,7 @@ impl ProviderKind {
             Self::Dropbox => dropbox_profile,
             Self::Kick => kick_profile,
             Self::LinkedIn => linkedin_profile,
+            Self::Line { .. } => line_profile,
             Self::Slack => slack_profile,
             Self::Naver if profile.get("resultcode").and_then(Value::as_str) != Some("00") => {
                 return Ok(None);
@@ -156,7 +172,7 @@ fn vk_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing user_id")?
             .into(),
         email: profile_email(user)?,
-        name: Some(format!("{first_name} {last_name}")),
+        name: Some(format!("{first_name} {last_name}")).into(),
         image: user
             .get("avatar")
             .cloned()
@@ -183,10 +199,7 @@ fn salesforce_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing user_id")?
             .into(),
         email: profile_email(&profile)?,
-        name: profile
-            .get("name")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
+        name: super::decode_profile_name(profile.get("name")),
         image: image
             .cloned()
             .map(serde_json::from_value)
@@ -208,6 +221,81 @@ fn google_profile(v: Value) -> Result<OAuthUserInfo, String> {
     openid_profile(v, "Google", verified)
 }
 
+fn notion_profile(profile: Value) -> Result<OAuthUserInfo, String> {
+    let email = profile
+        .pointer("/person/email")
+        .cloned()
+        .map(serde_json::from_value::<Option<String>>)
+        .transpose()
+        .map_err(|error| format!("Invalid Notion email: {error}"))?
+        .flatten()
+        .filter(|email| !email.is_empty());
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: profile
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or("missing Notion user id")?
+            .into(),
+        name: Some(
+            profile
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+        )
+        .into(),
+        email: email.into(),
+        image: profile
+            .get("avatar_url")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Notion avatar: {error}"))?,
+        email_verified: Some(false).into(),
+    })
+}
+
+fn roblox_profile(profile: Value) -> Result<OAuthUserInfo, String> {
+    Ok(OAuthUserInfo {
+        additional_fields: Default::default(),
+        id: profile
+            .get("sub")
+            .and_then(Value::as_str)
+            .ok_or("missing sub")?
+            .into(),
+        email: SchemaValue::Undefined,
+        name: Some(nonempty_profile_name(
+            &profile,
+            "nickname",
+            "preferred_username",
+        ))
+        .into(),
+        image: profile
+            .get("picture")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("Invalid Roblox picture: {error}"))?,
+        email_verified: Some(false).into(),
+    })
+}
+
+fn line_profile(profile: Value) -> Result<OAuthUserInfo, String> {
+    let name = profile
+        .get("name")
+        .filter(|value| crate::plugins::json_body::is_truthy(value))
+        .map(|value| super::decode_profile_name(Some(value)))
+        .unwrap_or_else(|| Some(String::new()).into());
+    let mut user = openid_profile(profile, "LINE", Some(false).into())?;
+    user.name = name;
+    Ok(user)
+}
+
+fn railway_profile(profile: Value) -> Result<OAuthUserInfo, String> {
+    openid_profile(profile, "Railway", Some(false).into())
+}
+
 fn atlassian_profile(v: Value) -> Result<OAuthUserInfo, String> {
     Ok(OAuthUserInfo {
         additional_fields: Default::default(),
@@ -217,7 +305,7 @@ fn atlassian_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing account_id")?
             .into(),
         email: profile_email(&v)?,
-        name: v.get("name").and_then(Value::as_str).map(str::to_owned),
+        name: super::decode_profile_name(v.get("name")),
         image: v
             .get("picture")
             .cloned()
@@ -252,7 +340,8 @@ fn slack_profile(v: Value) -> Result<OAuthUserInfo, String> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .into(),
-        ),
+        )
+        .into(),
         image: v
             .get("picture")
             .filter(|value| !value.is_null() && value.as_str() != Some(""))
@@ -275,7 +364,7 @@ fn naver_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: profile_email(response)?,
-        name: Some(nonempty_profile_name(response, "name", "nickname")),
+        name: Some(nonempty_profile_name(response, "name", "nickname")).into(),
         image: response
             .get("profile_image")
             .cloned()
@@ -295,7 +384,7 @@ fn linear_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: profile_email(&v)?,
-        name: v.get("name").and_then(Value::as_str).map(str::to_owned),
+        name: super::decode_profile_name(v.get("name")),
         image: v
             .get("avatarUrl")
             .cloned()
@@ -325,7 +414,8 @@ fn kakao_profile(v: Value) -> Result<OAuthUserInfo, String> {
                 .or_else(|| account.get("name").and_then(Value::as_str))
                 .unwrap_or_default()
                 .into(),
-        ),
+        )
+        .into(),
         image: profile
             .get("profile_image_url")
             .filter(|image| !image.is_null() && image.as_str() != Some(""))
@@ -353,7 +443,7 @@ fn reddit_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: SchemaValue::Undefined,
-        name: v.get("name").and_then(Value::as_str).map(str::to_owned),
+        name: super::decode_profile_name(v.get("name")),
         image: image.map(|image| {
             Some(
                 image
@@ -376,10 +466,7 @@ fn zoom_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: profile_email(&v)?,
-        name: v
-            .get("display_name")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
+        name: super::decode_profile_name(v.get("display_name")),
         image: v
             .get("pic_url")
             .cloned()
@@ -407,7 +494,7 @@ fn openid_profile(
             .ok_or("missing sub")?
             .to_string(),
         email: profile_email(&v)?,
-        name: v.get("name").and_then(|v| v.as_str()).map(String::from),
+        name: super::decode_profile_name(v.get("name")),
         image: v
             .get("picture")
             .cloned()
@@ -468,7 +555,7 @@ fn discord_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .to_string(),
         email: profile_email(&v)?,
-        name: Some(nonempty_profile_name(&v, "global_name", "username")),
+        name: Some(nonempty_profile_name(&v, "global_name", "username")).into(),
         image: v
             .get("image_url")
             .cloned()
@@ -498,7 +585,8 @@ fn gitlab_profile(v: Value) -> Result<OAuthUserInfo, String> {
                 .or_else(|| v.get("username").and_then(Value::as_str))
                 .unwrap_or_default()
                 .into(),
-        ),
+        )
+        .into(),
         image: v
             .get("avatar_url")
             .cloned()
@@ -523,10 +611,7 @@ fn spotify_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: profile_email(&v)?,
-        name: v
-            .get("display_name")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
+        name: super::decode_profile_name(v.get("display_name")),
         image: v
             .get("images")
             .and_then(Value::as_array)
@@ -549,7 +634,7 @@ fn huggingface_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing sub")?
             .into(),
         email: profile_email(&v)?,
-        name: Some(nonempty_profile_name(&v, "name", "preferred_username")),
+        name: Some(nonempty_profile_name(&v, "name", "preferred_username")).into(),
         image: v
             .get("picture")
             .cloned()
@@ -574,7 +659,7 @@ fn polar_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: profile_email(&v)?,
-        name: Some(nonempty_profile_name(&v, "public_name", "username")),
+        name: Some(nonempty_profile_name(&v, "public_name", "username")).into(),
         image: v
             .get("avatar_url")
             .cloned()
@@ -605,7 +690,8 @@ fn vercel_profile(v: Value) -> Result<OAuthUserInfo, String> {
                 .or_else(|| v.get("preferred_username").and_then(Value::as_str))
                 .unwrap_or_default()
                 .into(),
-        ),
+        )
+        .into(),
         image: v
             .get("picture")
             .cloned()
@@ -643,11 +729,7 @@ fn dropbox_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing account_id")?
             .into(),
         email: profile_email(&v)?,
-        name: v
-            .get("name")
-            .and_then(|name| name.get("display_name"))
-            .and_then(Value::as_str)
-            .map(str::to_owned),
+        name: super::decode_profile_name(v.get("name").and_then(|name| name.get("display_name"))),
         image: v
             .get("profile_photo_url")
             .cloned()
@@ -672,7 +754,7 @@ fn figma_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email: profile_email(&v)?,
-        name: v.get("handle").and_then(Value::as_str).map(str::to_owned),
+        name: super::decode_profile_name(v.get("handle")),
         image: v
             .get("img_url")
             .cloned()
@@ -698,11 +780,13 @@ fn cloudflare_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing id")?
             .into(),
         email,
-        name: if name.is_empty() {
+        name: (if name.is_empty() {
             v.get("email").and_then(Value::as_str).map(str::to_owned)
         } else {
             Some(name)
-        },
+        })
+        .map(|value| Some(value).into())
+        .unwrap_or_default(),
         image: None,
         email_verified: Some(false).into(),
         additional_fields: Default::default(),
@@ -718,7 +802,7 @@ fn kick_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing user_id")?
             .to_string(),
         email: profile_email(&v)?,
-        name: v.get("name").and_then(Value::as_str).map(str::to_owned),
+        name: super::decode_profile_name(v.get("name")),
         image: v
             .get("profile_picture")
             .cloned()
@@ -813,7 +897,9 @@ pub(in crate::plugins::oauth) async fn github_profile(
                 .get("name")
                 .and_then(Value::as_str)
                 .map(String::from)
-                .or(login),
+                .or(login)
+                .map(|value| Some(value).into())
+                .unwrap_or_default(),
             image: profile
                 .get("avatar_url")
                 .cloned()

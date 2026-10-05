@@ -49,7 +49,10 @@ impl OAuthUserInfoHandler for Provider {
             user: OAuthUserInfo {
                 id: data["id"].as_str().unwrap().into(),
                 email: Some(data["email"].as_str().unwrap().into()).into(),
-                name: data["name"].as_str().map(str::to_owned),
+                name: data["name"]
+                    .as_str()
+                    .map(|value| Some(value.to_owned()).into())
+                    .unwrap_or_default(),
                 image: None,
                 email_verified: Some(false).into(),
                 additional_fields: Default::default(),

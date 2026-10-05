@@ -360,7 +360,7 @@ impl OAuthUserInfoHandler for Custom {
             _ => Ok(Some(OAuthUserInfoResponse {
                 user: OAuthUserInfo {
                     id: "ordinary-unionid".into(),
-                    name: Some("Custom User".into()),
+                    name: Some("Custom User".into()).into(),
                     email: Some("custom@example.com".into()).into(),
                     email_verified: Some(false).into(),
                     image: None,

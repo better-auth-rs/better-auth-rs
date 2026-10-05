@@ -222,6 +222,8 @@ let store = SeaOrmStore::<auth_schema::AppAuthSchema>::new(config, database)
     .with_plugin_schema::<auth_schema::AppPluginSchema>();
 ```
 
+Use `user.additionalFields` and `session.additionalFields` in `--schema-config` to generate application columns for the core models. Each declaration uses the existing `type`, `required`, and `fieldName` options; `modelName` selects the physical table name. Register the corresponding runtime policies through `AuthConfig.user.fields_mut()` and `AuthConfig.session.fields_mut()`. Schema generation does not configure runtime defaults or transforms. Applications own migrations for existing databases.
+
 For existing entities, derive `AuthEntity` with role `api_key`, `device_code`, `passkey`, `two_factor`, `jwk`, `wallet_address`, or `rate_limit`. Keep the required Rust field names and types; use SeaORM `table_name` and `column_name` attributes for SQL names. Select models with `PluginModels<ApiKey, DeviceCode, Passkey, TwoFactor, Jwk, WalletAddress, RateLimit>`, or implement `SeaOrmPluginSchema`. Omitted `PluginModels` parameters use the bundled models. `with_plugin_schema` and `with_organization_schema` preserve each other's bindings.
 
 Use `jwks.additionalFields` to generate declared JWK application columns, then register matching `UserConfig` policies with `EntityRole::Jwk` during plugin initialization. The store extracts additional values from the selected typed model and retains its native key fields. Create, lookup, list, transaction, and Secondary paths share the registered policies. The bundled JWK table does not add application columns automatically; the consuming application owns migrations. Native logical names, Rust field names, and mapped native columns remain reserved.

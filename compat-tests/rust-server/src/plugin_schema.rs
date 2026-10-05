@@ -78,7 +78,11 @@ pub mod device_code {
         pub status: String,
         #[sea_orm(column_name = "stored_last_polled_at")]
         pub last_polled_at: Option<DateTimeUtc>,
-        #[sea_orm(column_name = "stored_polling_interval", column_type = "Integer", nullable)]
+        #[sea_orm(
+            column_name = "stored_polling_interval",
+            column_type = "Integer",
+            nullable
+        )]
         pub polling_interval: Option<better_auth::seaorm::SqlNumber>,
         #[sea_orm(column_name = "stored_client_id")]
         pub client_id: Option<String>,

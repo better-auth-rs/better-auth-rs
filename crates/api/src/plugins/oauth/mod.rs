@@ -23,6 +23,7 @@ mod facebook_contract_tests;
 #[cfg(test)]
 mod facebook_signed_tests;
 mod generic;
+mod generic_presets;
 mod generic_profile;
 pub(super) mod google;
 mod handlers;
@@ -50,7 +51,11 @@ mod resolved;
 #[cfg(test)]
 mod salesforce_tests;
 mod signin;
+#[cfg(test)]
+mod social_nonce_tests;
 mod social_profile;
+#[cfg(all(test, feature = "axum"))]
+mod social_token_wire_tests;
 mod state;
 mod state_json;
 mod token;

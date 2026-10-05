@@ -48,10 +48,11 @@ pub(super) fn decode_profile(profile: Value) -> Result<OAuthUserInfo, String> {
         name: profile
             .get("name")
             .cloned()
-            .map(serde_json::from_value)
+            .map(serde_json::from_value::<Option<String>>)
             .transpose()
             .map_err(|error| format!("Invalid PayPal name: {error}"))?
-            .flatten(),
+            .map(Into::into)
+            .unwrap_or_default(),
         email: super::defaults::profile_email(&profile)?,
         image: profile
             .get("picture")

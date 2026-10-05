@@ -179,7 +179,10 @@ impl OAuthUserInfoHandler for CustomProfile {
             user: OAuthUserInfo {
                 id: subject,
                 email: Some(user["email"].as_str().unwrap().into()).into(),
-                name: user["name"].as_str().map(str::to_owned),
+                name: user["name"]
+                    .as_str()
+                    .map(|value| Some(value.to_owned()).into())
+                    .unwrap_or_default(),
                 image: user
                     .get("image")
                     .cloned()

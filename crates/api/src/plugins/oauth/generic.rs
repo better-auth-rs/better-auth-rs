@@ -111,8 +111,8 @@ pub struct OAuthProfile {
     pub additional_fields: serde_json::Map<String, Value>,
     /// Leave the email unchanged with `None`, or override its string/null/undefined value.
     pub email: Option<better_auth_core::SchemaValue<Option<String>>>,
-    /// Override the display name; `Some(None)` clears the provider value.
-    pub name: Option<Option<String>>,
+    /// Leave the name unchanged with `None`, or override its string/null/undefined value.
+    pub name: Option<better_auth_core::SchemaValue<Option<String>>>,
     /// Override the profile image; `Some(None)` clears the provider value.
     pub image: Option<Option<String>>,
     /// Leave verification unchanged with `None`, or override its boolean/null/undefined value.

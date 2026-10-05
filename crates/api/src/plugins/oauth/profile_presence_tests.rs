@@ -222,7 +222,11 @@ mod discord {
             .await?
             .ok_or("Discord returned no profile")?;
             server.await??;
-            assert_eq!(response.user.name.as_deref(), Some(name), "{label}");
+            assert_eq!(
+                response.user.name.typed().unwrap().as_deref(),
+                Some(name),
+                "{label}"
+            );
             assert_eq!(
                 response.user.image.as_ref().and_then(Option::as_deref),
                 Some(image),

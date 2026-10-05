@@ -143,7 +143,10 @@ async fn github_provider_get_user_info_uses_email_fallback_and_login_name() {
         response.user.email.typed().unwrap().as_deref(),
         Some("octocat@example.com")
     );
-    assert_eq!(response.user.name.as_deref(), Some("octocat"));
+    assert_eq!(
+        response.user.name.typed().unwrap().as_deref(),
+        Some("octocat")
+    );
     assert_eq!(
         response.user.image.as_ref().and_then(Option::as_deref),
         Some("https://avatars.githubusercontent.com/u/42?v=4")
@@ -218,7 +221,10 @@ async fn github_provider_get_user_info_keeps_inline_email() {
         response.user.email.typed().unwrap().as_deref(),
         Some("public@example.com")
     );
-    assert_eq!(response.user.name.as_deref(), Some("Octo Cat"));
+    assert_eq!(
+        response.user.name.typed().unwrap().as_deref(),
+        Some("Octo Cat")
+    );
     assert!(matches!(response.user.email_verified(), Ok(false)));
 }
 #[tokio::test]

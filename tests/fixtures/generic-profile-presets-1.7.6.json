@@ -1,0 +1,1437 @@
+{
+  "version": "1.7.6",
+  "credentials": {
+    "clientId": "preset-client",
+    "clientSecret": "preset-secret"
+  },
+  "tokens": {
+    "accessToken": "ordinary-profile-token"
+  },
+  "authorization": {
+    "state": "preset-state",
+    "codeVerifier": "ordinary-preset-verifier",
+    "redirectURI": "https://app.example.test/api/auth/oauth2/callback/preset",
+    "scopes": [
+      "request-scope"
+    ],
+    "loginHint": "reader@example.test",
+    "additionalParams": {
+      "display": "popup"
+    }
+  },
+  "configs": [
+    {
+      "provider": "gumroad",
+      "name": "default",
+      "options": {},
+      "expected": {
+        "config": {
+          "providerId": "gumroad",
+          "authorizationUrl": "https://gumroad.com/oauth/authorize",
+          "tokenUrl": "https://api.gumroad.com/oauth/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": [
+            "view_profile"
+          ]
+        },
+        "authorizationURL": "https://gumroad.com/oauth/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+view_profile&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "gumroad",
+      "name": "empty-scopes",
+      "options": {
+        "scopes": []
+      },
+      "expected": {
+        "config": {
+          "providerId": "gumroad",
+          "authorizationUrl": "https://gumroad.com/oauth/authorize",
+          "tokenUrl": "https://api.gumroad.com/oauth/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": []
+        },
+        "authorizationURL": "https://gumroad.com/oauth/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "gumroad",
+      "name": "configured",
+      "options": {
+        "scopes": [
+          "custom-scope",
+          "custom-scope"
+        ],
+        "tokenEndpointAuth": {
+          "method": "client_secret_basic"
+        },
+        "redirectURI": "https://app.example.test/configured-callback",
+        "endSessionEndpoint": "https://identity.example.test/logout",
+        "postLogoutRedirectURI": "https://app.example.test/signed-out",
+        "disableProviderLogout": true,
+        "pkce": false,
+        "disableImplicitSignUp": true,
+        "disableSignUp": true,
+        "overrideUserInfo": true
+      },
+      "expected": {
+        "config": {
+          "providerId": "gumroad",
+          "authorizationUrl": "https://gumroad.com/oauth/authorize",
+          "tokenUrl": "https://api.gumroad.com/oauth/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "tokenEndpointAuth": {
+            "method": "client_secret_basic"
+          },
+          "scopes": [
+            "custom-scope",
+            "custom-scope"
+          ],
+          "redirectURI": "https://app.example.test/configured-callback",
+          "endSessionEndpoint": "https://identity.example.test/logout",
+          "postLogoutRedirectURI": "https://app.example.test/signed-out",
+          "disableProviderLogout": true,
+          "pkce": false,
+          "disableImplicitSignUp": true,
+          "disableSignUp": true,
+          "overrideUserInfo": true
+        },
+        "authorizationURL": "https://gumroad.com/oauth/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+custom-scope+custom-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&login_hint=reader%40example.test&display=popup"
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "default",
+      "options": {},
+      "expected": {
+        "config": {
+          "providerId": "hubspot",
+          "authorizationUrl": "https://app.hubspot.com/oauth/authorize",
+          "tokenUrl": "https://api.hubapi.com/oauth/v1/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": [
+            "oauth"
+          ],
+          "authentication": "post"
+        },
+        "authorizationURL": "https://app.hubspot.com/oauth/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+oauth&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "empty-scopes",
+      "options": {
+        "scopes": []
+      },
+      "expected": {
+        "config": {
+          "providerId": "hubspot",
+          "authorizationUrl": "https://app.hubspot.com/oauth/authorize",
+          "tokenUrl": "https://api.hubapi.com/oauth/v1/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": [],
+          "authentication": "post"
+        },
+        "authorizationURL": "https://app.hubspot.com/oauth/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "configured",
+      "options": {
+        "scopes": [
+          "custom-scope",
+          "custom-scope"
+        ],
+        "tokenEndpointAuth": {
+          "method": "client_secret_basic"
+        },
+        "redirectURI": "https://app.example.test/configured-callback",
+        "endSessionEndpoint": "https://identity.example.test/logout",
+        "postLogoutRedirectURI": "https://app.example.test/signed-out",
+        "disableProviderLogout": true,
+        "pkce": false,
+        "disableImplicitSignUp": true,
+        "disableSignUp": true,
+        "overrideUserInfo": true
+      },
+      "expected": {
+        "config": {
+          "providerId": "hubspot",
+          "authorizationUrl": "https://app.hubspot.com/oauth/authorize",
+          "tokenUrl": "https://api.hubapi.com/oauth/v1/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "tokenEndpointAuth": {
+            "method": "client_secret_basic"
+          },
+          "scopes": [
+            "custom-scope",
+            "custom-scope"
+          ],
+          "redirectURI": "https://app.example.test/configured-callback",
+          "endSessionEndpoint": "https://identity.example.test/logout",
+          "postLogoutRedirectURI": "https://app.example.test/signed-out",
+          "disableProviderLogout": true,
+          "authentication": "post",
+          "pkce": false,
+          "disableImplicitSignUp": true,
+          "disableSignUp": true,
+          "overrideUserInfo": true
+        },
+        "authorizationURL": "https://app.hubspot.com/oauth/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+custom-scope+custom-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&login_hint=reader%40example.test&display=popup"
+      }
+    },
+    {
+      "provider": "patreon",
+      "name": "default",
+      "options": {},
+      "expected": {
+        "config": {
+          "providerId": "patreon",
+          "authorizationUrl": "https://www.patreon.com/oauth2/authorize",
+          "tokenUrl": "https://www.patreon.com/api/oauth2/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": [
+            "identity[email]"
+          ]
+        },
+        "authorizationURL": "https://www.patreon.com/oauth2/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+identity%5Bemail%5D&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "patreon",
+      "name": "empty-scopes",
+      "options": {
+        "scopes": []
+      },
+      "expected": {
+        "config": {
+          "providerId": "patreon",
+          "authorizationUrl": "https://www.patreon.com/oauth2/authorize",
+          "tokenUrl": "https://www.patreon.com/api/oauth2/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": []
+        },
+        "authorizationURL": "https://www.patreon.com/oauth2/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "patreon",
+      "name": "configured",
+      "options": {
+        "scopes": [
+          "custom-scope",
+          "custom-scope"
+        ],
+        "tokenEndpointAuth": {
+          "method": "client_secret_basic"
+        },
+        "redirectURI": "https://app.example.test/configured-callback",
+        "endSessionEndpoint": "https://identity.example.test/logout",
+        "postLogoutRedirectURI": "https://app.example.test/signed-out",
+        "disableProviderLogout": true,
+        "pkce": false,
+        "disableImplicitSignUp": true,
+        "disableSignUp": true,
+        "overrideUserInfo": true
+      },
+      "expected": {
+        "config": {
+          "providerId": "patreon",
+          "authorizationUrl": "https://www.patreon.com/oauth2/authorize",
+          "tokenUrl": "https://www.patreon.com/api/oauth2/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "tokenEndpointAuth": {
+            "method": "client_secret_basic"
+          },
+          "scopes": [
+            "custom-scope",
+            "custom-scope"
+          ],
+          "redirectURI": "https://app.example.test/configured-callback",
+          "endSessionEndpoint": "https://identity.example.test/logout",
+          "postLogoutRedirectURI": "https://app.example.test/signed-out",
+          "disableProviderLogout": true,
+          "pkce": false,
+          "disableImplicitSignUp": true,
+          "disableSignUp": true,
+          "overrideUserInfo": true
+        },
+        "authorizationURL": "https://www.patreon.com/oauth2/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+custom-scope+custom-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&login_hint=reader%40example.test&display=popup"
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "default",
+      "options": {},
+      "expected": {
+        "config": {
+          "providerId": "slack",
+          "authorizationUrl": "https://slack.com/openid/connect/authorize",
+          "tokenUrl": "https://slack.com/api/openid.connect.token",
+          "userInfoUrl": "https://slack.com/api/openid.connect.userInfo",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": [
+            "openid",
+            "profile",
+            "email"
+          ]
+        },
+        "authorizationURL": "https://slack.com/openid/connect/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+openid+profile+email&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "empty-scopes",
+      "options": {
+        "scopes": []
+      },
+      "expected": {
+        "config": {
+          "providerId": "slack",
+          "authorizationUrl": "https://slack.com/openid/connect/authorize",
+          "tokenUrl": "https://slack.com/api/openid.connect.token",
+          "userInfoUrl": "https://slack.com/api/openid.connect.userInfo",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": []
+        },
+        "authorizationURL": "https://slack.com/openid/connect/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "configured",
+      "options": {
+        "scopes": [
+          "custom-scope",
+          "custom-scope"
+        ],
+        "tokenEndpointAuth": {
+          "method": "client_secret_basic"
+        },
+        "redirectURI": "https://app.example.test/configured-callback",
+        "endSessionEndpoint": "https://identity.example.test/logout",
+        "postLogoutRedirectURI": "https://app.example.test/signed-out",
+        "disableProviderLogout": true,
+        "pkce": false,
+        "disableImplicitSignUp": true,
+        "disableSignUp": true,
+        "overrideUserInfo": true
+      },
+      "expected": {
+        "config": {
+          "providerId": "slack",
+          "authorizationUrl": "https://slack.com/openid/connect/authorize",
+          "tokenUrl": "https://slack.com/api/openid.connect.token",
+          "userInfoUrl": "https://slack.com/api/openid.connect.userInfo",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "tokenEndpointAuth": {
+            "method": "client_secret_basic"
+          },
+          "scopes": [
+            "custom-scope",
+            "custom-scope"
+          ],
+          "redirectURI": "https://app.example.test/configured-callback",
+          "endSessionEndpoint": "https://identity.example.test/logout",
+          "postLogoutRedirectURI": "https://app.example.test/signed-out",
+          "disableProviderLogout": true,
+          "pkce": false,
+          "disableImplicitSignUp": true,
+          "disableSignUp": true,
+          "overrideUserInfo": true
+        },
+        "authorizationURL": "https://slack.com/openid/connect/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+custom-scope+custom-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&login_hint=reader%40example.test&display=popup"
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "default",
+      "options": {},
+      "expected": {
+        "config": {
+          "providerId": "yandex",
+          "authorizationUrl": "https://oauth.yandex.com/authorize",
+          "tokenUrl": "https://oauth.yandex.com/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": [
+            "login:info",
+            "login:email",
+            "login:avatar"
+          ]
+        },
+        "authorizationURL": "https://oauth.yandex.com/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+login%3Ainfo+login%3Aemail+login%3Aavatar&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "empty-scopes",
+      "options": {
+        "scopes": []
+      },
+      "expected": {
+        "config": {
+          "providerId": "yandex",
+          "authorizationUrl": "https://oauth.yandex.com/authorize",
+          "tokenUrl": "https://oauth.yandex.com/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "scopes": []
+        },
+        "authorizationURL": "https://oauth.yandex.com/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Foauth2%2Fcallback%2Fpreset&login_hint=reader%40example.test&code_challenge_method=S256&code_challenge=wKb7RKNRihA8AVn8WGnOBSWS0k-K0eY26eA-UIxh1Bc&display=popup"
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "configured",
+      "options": {
+        "scopes": [
+          "custom-scope",
+          "custom-scope"
+        ],
+        "tokenEndpointAuth": {
+          "method": "client_secret_basic"
+        },
+        "redirectURI": "https://app.example.test/configured-callback",
+        "endSessionEndpoint": "https://identity.example.test/logout",
+        "postLogoutRedirectURI": "https://app.example.test/signed-out",
+        "disableProviderLogout": true,
+        "pkce": false,
+        "disableImplicitSignUp": true,
+        "disableSignUp": true,
+        "overrideUserInfo": true
+      },
+      "expected": {
+        "config": {
+          "providerId": "yandex",
+          "authorizationUrl": "https://oauth.yandex.com/authorize",
+          "tokenUrl": "https://oauth.yandex.com/token",
+          "clientId": "preset-client",
+          "clientSecret": "preset-secret",
+          "tokenEndpointAuth": {
+            "method": "client_secret_basic"
+          },
+          "scopes": [
+            "custom-scope",
+            "custom-scope"
+          ],
+          "redirectURI": "https://app.example.test/configured-callback",
+          "endSessionEndpoint": "https://identity.example.test/logout",
+          "postLogoutRedirectURI": "https://app.example.test/signed-out",
+          "disableProviderLogout": true,
+          "pkce": false,
+          "disableImplicitSignUp": true,
+          "disableSignUp": true,
+          "overrideUserInfo": true
+        },
+        "authorizationURL": "https://oauth.yandex.com/authorize?response_type=code&client_id=preset-client&state=preset-state&scope=request-scope+custom-scope+custom-scope&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&login_hint=reader%40example.test&display=popup"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "provider": "gumroad",
+      "name": "user",
+      "response": {
+        "success": true,
+        "user": {
+          "user_id": "gumroad-reader",
+          "name": "Gumroad Reader",
+          "email": "gumroad@example.test",
+          "profile_url": "https://images.example.test/gumroad.png"
+        }
+      },
+      "expected": {
+        "profile": {
+          "id": "gumroad-reader",
+          "name": "Gumroad Reader",
+          "email": "gumroad@example.test",
+          "image": "https://images.example.test/gumroad.png",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://api.gumroad.com/v2/user",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://api.gumroad.com/v2/user",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "gumroad-reader",
+        "accountId": "gumroad-reader",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/gumroad.png",
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": "gumroad-reader",
+            "name": "Gumroad Reader",
+            "email": "gumroad@example.test",
+            "image": "https://images.example.test/gumroad.png",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": "gumroad-reader",
+            "name": "Gumroad Reader",
+            "email": "gumroad@example.test",
+            "image": "https://images.example.test/gumroad.png",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "gumroad",
+      "name": "no-user",
+      "response": {
+        "success": true
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://api.gumroad.com/v2/user",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "gumroad",
+      "name": "unsuccessful",
+      "response": {
+        "success": false,
+        "user": {
+          "user_id": "unused"
+        }
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://api.gumroad.com/v2/user",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "numeric-id",
+      "response": {
+        "user_id": 1729,
+        "user": "hubspot@example.test"
+      },
+      "expected": {
+        "profile": {
+          "id": 1729,
+          "name": "hubspot@example.test",
+          "email": "hubspot@example.test",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://api.hubapi.com/oauth/v1/access-tokens/ordinary-profile-token",
+            "method": "GET",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://api.hubapi.com/oauth/v1/access-tokens/ordinary-profile-token",
+            "method": "GET",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": 1729,
+        "accountId": "1729",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": 1729,
+            "name": "hubspot@example.test",
+            "email": "hubspot@example.test",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": 1729,
+            "name": "hubspot@example.test",
+            "email": "hubspot@example.test",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "signed-id",
+      "response": {
+        "user_id": null,
+        "signed_access_token": {
+          "userId": 2048
+        },
+        "user": "signed@example.test"
+      },
+      "expected": {
+        "profile": {
+          "id": 2048,
+          "name": "signed@example.test",
+          "email": "signed@example.test",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://api.hubapi.com/oauth/v1/access-tokens/ordinary-profile-token",
+            "method": "GET",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://api.hubapi.com/oauth/v1/access-tokens/ordinary-profile-token",
+            "method": "GET",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": 2048,
+        "accountId": "2048",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": 2048,
+            "name": "signed@example.test",
+            "email": "signed@example.test",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": 2048,
+            "name": "signed@example.test",
+            "email": "signed@example.test",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "zero-id",
+      "response": {
+        "user_id": 0,
+        "signed_access_token": {
+          "userId": 2048
+        },
+        "user": "unused@example.test"
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://api.hubapi.com/oauth/v1/access-tokens/ordinary-profile-token",
+            "method": "GET",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "patreon",
+      "name": "attributes",
+      "response": {
+        "data": {
+          "id": "patreon-reader",
+          "attributes": {
+            "full_name": "Patreon Reader",
+            "email": "patreon@example.test",
+            "image_url": "https://images.example.test/patreon.png",
+            "is_email_verified": true
+          }
+        }
+      },
+      "expected": {
+        "profile": {
+          "id": "patreon-reader",
+          "name": "Patreon Reader",
+          "email": "patreon@example.test",
+          "image": "https://images.example.test/patreon.png",
+          "emailVerified": true
+        },
+        "requests": [
+          {
+            "url": "https://www.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email%2Cfull_name%2Cimage_url%2Cis_email_verified",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://www.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email%2Cfull_name%2Cimage_url%2Cis_email_verified",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "patreon-reader",
+        "accountId": "patreon-reader",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/patreon.png",
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": "patreon-reader",
+            "name": "Patreon Reader",
+            "email": "patreon@example.test",
+            "image": "https://images.example.test/patreon.png",
+            "emailVerified": true
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": "patreon-reader",
+            "name": "Patreon Reader",
+            "email": "patreon@example.test",
+            "image": "https://images.example.test/patreon.png",
+            "emailVerified": true
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "patreon",
+      "name": "null-image",
+      "response": {
+        "data": {
+          "id": "patreon-second",
+          "attributes": {
+            "full_name": "Second Reader",
+            "email": "second@example.test",
+            "image_url": null,
+            "is_email_verified": false
+          }
+        }
+      },
+      "expected": {
+        "profile": {
+          "id": "patreon-second",
+          "name": "Second Reader",
+          "email": "second@example.test",
+          "image": null,
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://www.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email%2Cfull_name%2Cimage_url%2Cis_email_verified",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://www.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email%2Cfull_name%2Cimage_url%2Cis_email_verified",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "patreon-second",
+        "accountId": "patreon-second",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": "patreon-second",
+            "name": "Second Reader",
+            "email": "second@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": "patreon-second",
+            "name": "Second Reader",
+            "email": "second@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "picture",
+      "response": {
+        "sub": "slack-reader",
+        "name": "Slack Reader",
+        "email": "slack@example.test",
+        "picture": "https://images.example.test/slack.png",
+        "email_verified": true
+      },
+      "expected": {
+        "profile": {
+          "sub": "slack-reader",
+          "name": "Slack Reader",
+          "email": "slack@example.test",
+          "image": "https://images.example.test/slack.png",
+          "emailVerified": true
+        },
+        "requests": [
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "slack-reader",
+        "accountId": "slack-reader",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/slack.png",
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "sub": "slack-reader",
+            "name": "Slack Reader",
+            "email": "slack@example.test",
+            "image": "https://images.example.test/slack.png",
+            "emailVerified": true
+          }
+        },
+        "mapperInputs": [
+          {
+            "sub": "slack-reader",
+            "name": "Slack Reader",
+            "email": "slack@example.test",
+            "image": "https://images.example.test/slack.png",
+            "emailVerified": true
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "fallback-picture",
+      "response": {
+        "sub": "slack-second",
+        "name": "Second Reader",
+        "email": "second@example.test",
+        "picture": null,
+        "https://slack.com/user_image_512": "https://images.example.test/slack-fallback.png",
+        "email_verified": null
+      },
+      "expected": {
+        "profile": {
+          "sub": "slack-second",
+          "name": "Second Reader",
+          "email": "second@example.test",
+          "image": "https://images.example.test/slack-fallback.png",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "slack-second",
+        "accountId": "slack-second",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/slack-fallback.png",
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "sub": "slack-second",
+            "name": "Second Reader",
+            "email": "second@example.test",
+            "image": "https://images.example.test/slack-fallback.png",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "sub": "slack-second",
+            "name": "Second Reader",
+            "email": "second@example.test",
+            "image": "https://images.example.test/slack-fallback.png",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "empty-picture",
+      "response": {
+        "sub": "slack-third",
+        "name": "Third Reader",
+        "email": "third@example.test",
+        "picture": "",
+        "https://slack.com/user_image_512": "https://images.example.test/unused.png"
+      },
+      "expected": {
+        "profile": {
+          "sub": "slack-third",
+          "name": "Third Reader",
+          "email": "third@example.test",
+          "image": "",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "slack-third",
+        "accountId": "slack-third",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "image": "",
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "sub": "slack-third",
+            "name": "Third Reader",
+            "email": "third@example.test",
+            "image": "",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "sub": "slack-third",
+            "name": "Third Reader",
+            "email": "third@example.test",
+            "image": "",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "avatar",
+      "response": {
+        "id": "yandex-reader",
+        "default_email": "yandex@example.test",
+        "display_name": "Yandex Reader",
+        "is_avatar_empty": false,
+        "default_avatar_id": "avatar-123"
+      },
+      "expected": {
+        "profile": {
+          "id": "yandex-reader",
+          "name": "Yandex Reader",
+          "email": "yandex@example.test",
+          "emailVerified": false,
+          "image": "https://avatars.yandex.net/get-yapic/avatar-123/islands-200"
+        },
+        "requests": [
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "yandex-reader",
+        "accountId": "yandex-reader",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "image": "https://avatars.yandex.net/get-yapic/avatar-123/islands-200",
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": "yandex-reader",
+            "name": "Yandex Reader",
+            "email": "yandex@example.test",
+            "emailVerified": false,
+            "image": "https://avatars.yandex.net/get-yapic/avatar-123/islands-200"
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": "yandex-reader",
+            "name": "Yandex Reader",
+            "email": "yandex@example.test",
+            "emailVerified": false,
+            "image": "https://avatars.yandex.net/get-yapic/avatar-123/islands-200"
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "email-and-name-fallback",
+      "response": {
+        "id": "yandex-second",
+        "default_email": null,
+        "emails": [
+          "second@example.test"
+        ],
+        "display_name": null,
+        "real_name": "Second Reader",
+        "is_avatar_empty": true,
+        "default_avatar_id": "unused"
+      },
+      "expected": {
+        "profile": {
+          "id": "yandex-second",
+          "name": "Second Reader",
+          "email": "second@example.test",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "yandex-second",
+        "accountId": "yandex-second",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": "yandex-second",
+            "name": "Second Reader",
+            "email": "second@example.test",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": "yandex-second",
+            "name": "Second Reader",
+            "email": "second@example.test",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "login-name",
+      "response": {
+        "id": "yandex-third",
+        "emails": [
+          "third@example.test"
+        ],
+        "display_name": null,
+        "real_name": null,
+        "first_name": null,
+        "login": "reader-login"
+      },
+      "expected": {
+        "profile": {
+          "id": "yandex-third",
+          "name": "reader-login",
+          "email": "third@example.test",
+          "emailVerified": false
+        },
+        "requests": [
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          },
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "rawSubject": "yandex-third",
+        "accountId": "yandex-third",
+        "mapped": {
+          "user": {
+            "email": "mapped@example.test",
+            "emailVerified": true,
+            "name": "Mapped Reader",
+            "favoriteColor": "blue"
+          },
+          "data": {
+            "id": "yandex-third",
+            "name": "reader-login",
+            "email": "third@example.test",
+            "emailVerified": false
+          }
+        },
+        "mapperInputs": [
+          {
+            "id": "yandex-third",
+            "name": "reader-login",
+            "email": "third@example.test",
+            "emailVerified": false
+          }
+        ],
+        "events": [
+          "http",
+          "http",
+          "map"
+        ]
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "empty-email",
+      "response": {
+        "id": "unused",
+        "default_email": "",
+        "emails": [
+          "unused@example.test"
+        ]
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "gumroad",
+      "name": "http-error",
+      "status": 503,
+      "response": {
+        "message": "Profile service unavailable"
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://api.gumroad.com/v2/user",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "hubspot",
+      "name": "http-error",
+      "status": 503,
+      "response": {
+        "message": "Profile service unavailable"
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://api.hubapi.com/oauth/v1/access-tokens/ordinary-profile-token",
+            "method": "GET",
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "patreon",
+      "name": "http-error",
+      "status": 503,
+      "response": {
+        "message": "Profile service unavailable"
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://www.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email%2Cfull_name%2Cimage_url%2Cis_email_verified",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "slack",
+      "name": "http-error",
+      "status": 503,
+      "response": {
+        "message": "Profile service unavailable"
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://slack.com/api/openid.connect.userInfo",
+            "method": "GET",
+            "headers": {
+              "authorization": "Bearer ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    },
+    {
+      "provider": "yandex",
+      "name": "http-error",
+      "status": 503,
+      "response": {
+        "message": "Profile service unavailable"
+      },
+      "expected": {
+        "profile": null,
+        "requests": [
+          {
+            "url": "https://login.yandex.ru/info?format=json",
+            "method": "GET",
+            "headers": {
+              "authorization": "OAuth ordinary-profile-token"
+            },
+            "body": ""
+          }
+        ],
+        "events": [
+          "http"
+        ]
+      }
+    }
+  ]
+}

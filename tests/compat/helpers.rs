@@ -232,7 +232,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                     additional_fields: Default::default(),
                     id: "mock-account-id".to_string(),
                     email: Some("mock@example.com".to_string()).into(),
-                    name: Some("Mock OAuth User".to_string()),
+                    name: Some("Mock OAuth User".to_string()).into(),
                     image: None,
                     email_verified: Some(true).into(),
                 },
@@ -265,7 +265,7 @@ fn mock_oauth_plugin() -> OAuthPlugin {
                 additional_fields: Default::default(),
                 id: "mock-account-id".to_string(),
                 email: Some("mock@example.com".to_string()).into(),
-                name: Some("Mock OAuth User".to_string()),
+                name: Some("Mock OAuth User".to_string()).into(),
                 image: None,
                 email_verified: Some(true).into(),
             })

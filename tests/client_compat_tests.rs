@@ -202,7 +202,7 @@ fn run_bun_phase_suite(
         .arg("test")
         // A timed-out scenario can still write to the shared fixture database.
         .arg("--bail")
-        .args(paths)
+        .args(paths.iter().map(|path| Path::new(".").join(path)))
         .env("COMPAT_PROFILE", profile)
         .env(
             "COMPAT_DYNAMIC_CASE",

@@ -402,7 +402,7 @@ impl OAuthProfileMapper for Mapper {
         resume.notified().await;
         self.events.lock().unwrap().push("map:end");
         Ok(OAuthProfile {
-            name: Some(Some("Mapped Salesforce Owner".into())),
+            name: Some(Some("Mapped Salesforce Owner".into()).into()),
             email: Some(None.into()),
             image: Some(None),
             email_verified: Some(Some(false).into()),

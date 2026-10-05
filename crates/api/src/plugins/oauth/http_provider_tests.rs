@@ -39,6 +39,9 @@ fn provider(id: &str) -> OAuthProvider {
         "reddit" => OAuthProvider::reddit("social-http-client", "secret"),
         "zoom" => OAuthProvider::zoom("social-http-client", "secret"),
         "cloudflare" => OAuthProvider::cloudflare("social-http-client", "secret"),
+        "railway" => OAuthProvider::railway("social-http-client", "secret"),
+        "roblox" => OAuthProvider::roblox("social-http-client", "secret"),
+        "notion" => OAuthProvider::notion("social-http-client", "secret"),
         _ => {
             assert_eq!(id, "polar");
             OAuthProvider::polar("social-http-client", "secret")
@@ -79,6 +82,9 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
         "kakao",
         "zoom",
         "cloudflare",
+        "railway",
+        "roblox",
+        "notion",
     ] {
         let expected = &fixture["providers"][id];
         for case in expected["scopeCases"].as_array().unwrap() {
@@ -121,7 +127,7 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
                     state: fixture["state"].as_str().unwrap(),
                     code_challenge: fixture["codeChallenge"].as_str().unwrap(),
                     login_hint: case["loginHint"].as_str(),
-                    nonce: None,
+                    nonce: case["idTokenNonce"].as_str(),
                     additional_params: additional_params.as_ref(),
                 },
             )
@@ -132,10 +138,21 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
                 .into_owned()
                 .collect();
             assert_eq!(json!(query.get("scope")), case["scope"]);
-            assert_eq!(json!(query.get("prompt")), case["options"]["prompt"]);
+            if matches!(id, "roblox" | "notion") {
+                assert_eq!(json!(query.get("prompt")), case["prompt"]);
+            } else {
+                assert_eq!(json!(query.get("prompt")), case["options"]["prompt"]);
+            }
             if matches!(
                 id,
-                "linkedin" | "slack" | "naver" | "linear" | "reddit" | "kakao"
+                "linkedin"
+                    | "slack"
+                    | "naver"
+                    | "linear"
+                    | "reddit"
+                    | "kakao"
+                    | "roblox"
+                    | "notion"
             ) || (id == "zoom" && case["options"]["pkce"] == false)
             {
                 assert!(!query.contains_key("code_challenge_method"));
@@ -146,7 +163,14 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
             }
             if matches!(
                 id,
-                "slack" | "naver" | "atlassian" | "reddit" | "kakao" | "zoom"
+                "slack"
+                    | "naver"
+                    | "atlassian"
+                    | "reddit"
+                    | "kakao"
+                    | "zoom"
+                    | "railway"
+                    | "roblox"
             ) {
                 assert!(!query.contains_key("login_hint"));
             } else {
@@ -156,6 +180,10 @@ async fn authorization_preserves_provider_defaults_append_order_and_pkce() {
                 json!(query.get("request_marker")),
                 case["additionalParams"]["request_marker"]
             );
+            if id == "notion" {
+                assert_eq!(query["owner"], "user");
+                assert!(!query.contains_key("nonce"));
+            }
             if id == "atlassian" {
                 assert_eq!(query["audience"], "api.atlassian.com");
             }
@@ -419,6 +447,7 @@ fn profile_response(id: &str, profile: &Value) -> Value {
         "kick" => json!({"data": [profile]}),
         "linear" => json!({"data": {"viewer": profile}}),
         "cloudflare" => json!({"success": true, "result": profile}),
+        "notion" => json!({"bot": {"owner": {"user": profile}}}),
         _ => profile.clone(),
     }
 }
@@ -444,6 +473,9 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
         "kakao",
         "zoom",
         "cloudflare",
+        "railway",
+        "roblox",
+        "notion",
     ] {
         let case = &fixture["providers"][id];
         let profile_fields = if id == "naver" {
@@ -514,6 +546,15 @@ async fn normal_profiles_and_mapper_precedence_match_pinned_provider_results() {
                         .lock()
                         .unwrap()
                         .contains("user-agent: better-auth")
+                );
+            }
+            if id == "notion" && mode != "custom" {
+                assert!(
+                    server
+                        .headers
+                        .lock()
+                        .unwrap()
+                        .contains("notion-version: 2022-06-28")
                 );
             }
             if mode != "custom" {

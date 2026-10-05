@@ -176,7 +176,12 @@ fn decode_profile(profile: &Value, limited: bool) -> Result<OAuthUserInfo, Strin
             .and_then(Value::as_str)
             .ok_or("missing Facebook subject")?
             .into(),
-        name: serde_json::from_value(profile.get("name").cloned().unwrap_or(Value::Null))
+        name: profile
+            .get("name")
+            .cloned()
+            .map(serde_json::from_value::<Option<String>>)
+            .transpose()
+            .map(|value| value.map(Into::into).unwrap_or_default())
             .map_err(|error| format!("Invalid Facebook name: {error}"))?,
         email: super::defaults::profile_email(profile)?,
         image: (if limited {

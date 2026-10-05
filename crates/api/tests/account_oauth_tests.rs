@@ -369,7 +369,10 @@ fn make_test_provider(mock_url: &str) -> OAuthProvider {
                     .to_string(),
             )
             .into(),
-            name: v["name"].as_str().map(String::from),
+            name: v["name"]
+                .as_str()
+                .map(|value| Some(value.to_owned()).into())
+                .unwrap_or_default(),
             image: None,
             email_verified: Some(true).into(),
         })

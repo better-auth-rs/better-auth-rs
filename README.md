@@ -29,7 +29,7 @@ Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display val
 
 API Key expiration configuration accepts fractional seconds for its default and fractional days for its bounds; see [API Key configuration](docs/content/docs/plugins/api-key.mdx#expiration-configuration) for units and the floating-point field migration.
 
-Configure LINE code login with `GenericOAuthConfig::line` and read resolved provider inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Social profile fields preserve omitted and null email/verification values; callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
+Configure Social LINE with `OAuthProvider::line`, or Generic LINE with `GenericOAuthConfig::line` and resolved inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Social profile fields preserve omitted and null email/verification values; callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
 
 Use [OAuth Popup](docs/content/docs/plugins/oauth-popup.mdx) to return OAuth sign-in results to a trusted popup opener. Enable [OpenAPI](docs/content/docs/reference/openapi.mdx) for the configured runtime schema and Scalar reference page, including custom JWT discovery paths, registered model presence and declaration order, JavaScript model and field-key enumeration, and storage-dependent Verification components.
 
@@ -44,6 +44,8 @@ Use [CAPTCHA](docs/content/docs/plugins/captcha.mdx) for request verification an
 For integration tests, enable `TestUtilsPlugin` and use `auth.test()` for seeded users, authenticated cookies, and OTP capture. See the [test utilities guide](docs/content/docs/plugins/test-utils.mdx).
 
 Cookie lifetime configuration and HTTP cookie helper parameters accept fractional seconds. Explicit `CookieAttributes.expires` uses `chrono::DateTime<Utc>`. HTTP issuance and clearing return `AuthResult` and enforce the 400-day limits before formatting; see [cookie configuration](docs/content/docs/concepts/cookies.mdx) for numeric types and override precedence. The two [Two Factor cookie lifetimes](docs/content/docs/plugins/two-factor.mdx#configuration) use `f64` seconds and preserve explicit zero. The TOTP period and account lockout duration also accept fractional seconds; see the same guide for their numeric and timing boundaries. Direct `TwoFactorStore::record_two_factor_failure` callers provide a borrowed deadline closure, evaluated after the counter reaches the threshold. [OAuth Proxy](docs/content/docs/plugins/oauth-proxy.mdx) accepts finite `f64` seconds for its maximum profile age.
+
+Use `user.additionalFields` and `session.additionalFields` in the CLI schema configuration to generate application columns. Register matching runtime field policies through `AuthConfig.user` and `AuthConfig.session`; see [schema mapping](docs/content/docs/concepts/database.mdx#map-plugin-tables-and-columns).
 
 ## Quick start
 
@@ -113,7 +115,7 @@ The [quick-start guide](docs/content/docs/quick-start.mdx) includes sign-up and 
 
 Plugins include email/password, username, sessions, password management, email verification, email OTP, phone numbers, anonymous accounts, SIWE, Magic Link, one-time tokens, multiple sessions, last login method, JWT, OAuth, One Tap, OAuth Proxy, organizations, two-factor authentication, passkeys, API keys, and admin. Use `UsernamePlugin` for username options or `EmailPasswordPlugin::username(true)` for defaults. Generate fields and tables for each selected plugin; startup rejects missing entity fields. Bind generated custom plugin tables with `with_plugin_schema::<AppPluginSchema>()`. See [database integration](docs/content/docs/concepts/database.mdx).
 
-Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`, including constructors for Auth0, Keycloak, Okta, and Microsoft Entra ID. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
+Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `GenericOAuthConfig`, including constructors for Auth0, Keycloak, Okta, Microsoft Entra ID, Gumroad, HubSpot, Patreon, Slack, and Yandex. OIDC discovery supplies endpoints and JWKS; set `require_id_token_verification: true` to require verification capability. The [OAuth guide](docs/content/docs/plugins/oauth.mdx) covers client authentication, profile mapping, sign-up restrictions, and email verification. Signature verification requires OpenSSL 3.0 or newer; the complete ML-DSA algorithm set requires OpenSSL 3.5 or newer.
 
 The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements. Use `auth.organization()?.add_member(Some(body)).await` for server-only member creation through the native hook pipeline.
 
@@ -145,7 +147,7 @@ Built-in provider constructors supply provider defaults and profile mapping. See
 
 Set `OAuthProvider::redirect_uri` to use a configured provider callback URI for both authorization and code exchange.
 
-Custom `OAuthUserInfoHandler` implementations return `AuthResult<Option<OAuthUserInfoResponse>>` to distinguish a missing profile from an application error. Profile email and mapper overrides preserve missing, null, and string values, including GitHub email-list fallback; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx).
+Custom `OAuthUserInfoHandler` implementations return `AuthResult<Option<OAuthUserInfoResponse>>` to distinguish a missing profile from an application error. Profile names, emails, and mapper overrides preserve missing, null, and string values, including GitHub email-list fallback; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx).
 
 ## Documentation and development
 

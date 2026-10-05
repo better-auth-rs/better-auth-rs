@@ -246,6 +246,7 @@ async fn resolve_generic(
         .collect();
     provider.disable_implicit_sign_up = Some(config.disable_implicit_sign_up);
     provider.disable_sign_up = Some(config.disable_sign_up);
+    provider.require_email_verification = Some(config.require_email_verification);
     provider.override_user_info_on_sign_in = config.override_user_info;
 
     Ok(Some(ResolvedProvider {

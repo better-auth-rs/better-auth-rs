@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import fixture from "../../../tests/fixtures/social-http-providers-1.7.6.json";
 
 const baseURL = "http://oauth-profile-presence.example.test";
@@ -240,3 +241,108 @@ for (const sampleCase of discordCases) {
     } finally { await sample.close(); }
   });
 }
+
+test("generic profile preserves email presence without normalization", async () => {
+  const metadata = await Bun.file(new URL("../node_modules/better-auth/package.json", import.meta.url)).json();
+  expect(metadata.version).toBe("1.7.6");
+  const display = {
+    name: "Profile Reader",
+    image: "https://images.example.test/profile.png",
+    emailVerified: false,
+  };
+  const cases: { name: string; patch: EmailPatch }[] = [
+    { name: "absent", patch: {} },
+    { name: "null", patch: { email: null } },
+    { name: "empty", patch: { email: "" } },
+    { name: "ordinary", patch: { email: "reader@example.test" } },
+  ];
+  for (const { name, patch } of cases) {
+    const profile = { sub: "ordinary-profile", ...display, ...patch };
+    let calls = 0;
+    const auth = betterAuth({
+      secret: "generic-profile-presence-contract-secret-at-least-32-characters",
+      baseURL,
+      logger: { disabled: true },
+      telemetry: { enabled: false },
+      plugins: [genericOAuth({ config: [{
+        providerId: "profile-presence",
+        clientId: "ordinary-profile-client",
+        getUserInfo: async () => {
+          calls += 1;
+          return profile;
+        },
+      }] })],
+    });
+    const configured = (await auth.$context).socialProviders.find(value => value.id === "profile-presence");
+    if (!configured) throw new Error(`Missing generic profile provider for ${name}`);
+    const result = await configured.getUserInfo({});
+    const serialized = JSON.parse(JSON.stringify(result));
+    expect(Object.hasOwn(serialized.user, "email")).toBe(Object.hasOwn(patch, "email"));
+    expect(serialized.user.email).toBe(patch.email);
+    expect(serialized.user).toStrictEqual({ ...display, ...patch });
+    expect(result?.data).toStrictEqual(profile);
+    expect(serialized.data).toStrictEqual(profile);
+    expect(calls).toBe(1);
+  }
+});
+
+test("generic profile preserves name presence and mapper overrides", async () => {
+  const metadata = await Bun.file(new URL("../node_modules/better-auth/package.json", import.meta.url)).json();
+  expect(metadata.version).toBe("1.7.6");
+  const display = {
+    email: "reader@example.test",
+    image: "https://images.example.test/profile.png",
+    emailVerified: false,
+  };
+  const rawCases: { label: string; patch: Record<string, unknown> }[] = [
+    { label: "absent", patch: {} },
+    { label: "null", patch: { name: null } },
+    { label: "empty", patch: { name: "" } },
+    { label: "ordinary", patch: { name: "Profile Reader" } },
+  ];
+  const mappedCases: { label: string; patch: Record<string, unknown> }[] = [
+    { label: "unchanged", patch: {} },
+    { label: "undefined", patch: { name: undefined } },
+    { label: "null", patch: { name: null } },
+    { label: "empty", patch: { name: "" } },
+    { label: "ordinary", patch: { name: "Mapped Reader" } },
+  ];
+  for (const rawCase of rawCases) {
+    for (const mappedCase of mappedCases) {
+      const profile = { sub: "ordinary-profile", ...display, ...rawCase.patch };
+      let handlerCalls = 0;
+      let mapperCalls = 0;
+      const auth = betterAuth({
+        secret: "generic-profile-presence-contract-secret-at-least-32-characters",
+        baseURL,
+        logger: { disabled: true },
+        telemetry: { enabled: false },
+        plugins: [genericOAuth({ config: [{
+          providerId: "name-presence",
+          clientId: "ordinary-profile-client",
+          getUserInfo: async () => {
+            handlerCalls += 1;
+            return profile;
+          },
+          mapProfileToUser: async (raw) => {
+            mapperCalls += 1;
+            expect(raw).toStrictEqual(profile);
+            return mappedCase.patch;
+          },
+        }] })],
+      });
+      const configured = (await auth.$context).socialProviders.find(value => value.id === "name-presence");
+      if (!configured) throw new Error(`Missing generic profile provider for ${rawCase.label}/${mappedCase.label}`);
+      const result = await configured.getUserInfo({});
+      const serialized = JSON.parse(JSON.stringify(result));
+      const expectedUser: Record<string, unknown> = { ...display, ...rawCase.patch, ...mappedCase.patch };
+      expect(Object.hasOwn(serialized.user, "name")).toBe(expectedUser.name !== undefined);
+      expect(serialized.user.name).toBe(expectedUser.name);
+      expect(serialized.user).toStrictEqual(JSON.parse(JSON.stringify(expectedUser)));
+      expect(result?.data).toStrictEqual(profile);
+      expect(serialized.data).toStrictEqual(profile);
+      expect(handlerCalls).toBe(1);
+      expect(mapperCalls).toBe(1);
+    }
+  }
+});

@@ -171,7 +171,7 @@ fn authentication(
             |generic| generic.token_endpoint_auth.as_ref(),
         ),
         authentication: generic.map_or_else(
-            || provider.config.token_authentication(),
+            || provider.config.token_authentication(grant_type),
             |generic| generic.authentication,
         ),
     }

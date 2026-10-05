@@ -216,7 +216,9 @@ impl SchemaConfig {
             }
             if !matches!(
                 name.as_str(),
-                "account"
+                "user"
+                    | "session"
+                    | "account"
                     | "verification"
                     | "deviceCode"
                     | "jwks"

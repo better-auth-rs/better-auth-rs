@@ -554,6 +554,7 @@ impl OAuthProxyPlugin {
             return Ok(Some(redirect_error(error_url, "email_not_found", None)?));
         };
         let email = email.to_owned();
+        let name = info.user.name()?.unwrap_or_default().to_owned();
         let mut callback = parse_url(&state.callback_url)?;
         let final_url = callback
             .query_pairs()
@@ -566,7 +567,7 @@ impl OAuthProxyPlugin {
                 additional_fields: info.user.additional_fields,
                 id: info.user.id.clone(),
                 email,
-                name: info.user.name.unwrap_or_default(),
+                name,
                 image: info.user.image,
                 email_verified: info.user.email_verified,
             },
@@ -693,7 +694,7 @@ impl OAuthProxyPlugin {
             additional_fields: profile.user_info.additional_fields,
             id: profile.account.account_id,
             email: Some(profile.user_info.email.to_lowercase()).into(),
-            name: Some(profile.user_info.name),
+            name: Some(profile.user_info.name).into(),
             image: profile.user_info.image,
             email_verified: profile.user_info.email_verified,
         };

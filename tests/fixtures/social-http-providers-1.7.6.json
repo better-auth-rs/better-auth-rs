@@ -3166,6 +3166,727 @@
           "scope": "user:read"
         }
       }
+    },
+    "railway": {
+      "authorizationEndpoint": "https://backboard.railway.com/oauth/auth",
+      "tokenEndpoint": "https://backboard.railway.com/oauth/token",
+      "userinfoEndpoint": "https://backboard.railway.com/oauth/me",
+      "subjectField": "sub",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "openid email profile"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "extra",
+              "openid"
+            ]
+          },
+          "requestScopes": [
+            "request",
+            "extra"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "ordinary"
+          },
+          "scope": "openid email profile extra openid request extra"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "extra"
+            ]
+          },
+          "requestScopes": [
+            "request"
+          ],
+          "scope": "extra request"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null
+        }
+      ],
+      "profile": {
+        "sub": "railway-owner",
+        "name": "Railway Owner",
+        "email": "railway-owner@example.test",
+        "picture": "https://images.example.test/railway.png",
+        "email_verified": true
+      },
+      "defaultUser": {
+        "name": "Railway Owner",
+        "email": "railway-owner@example.test",
+        "image": "https://images.example.test/railway.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Railway Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Railway Owner",
+        "email": "railway-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Railway Owner",
+        "email": "railway-owner@example.test",
+        "image": "https://images.example.test/custom-railway.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty name and omitted picture retain their values",
+          "profile": {
+            "sub": "railway-owner",
+            "name": "",
+            "email": "railway-owner@example.test",
+            "email_verified": false
+          },
+          "user": {
+            "name": "",
+            "email": "railway-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "null picture and upstream verification keep an unverified user",
+          "profile": {
+            "sub": "railway-owner",
+            "name": "Railway Owner",
+            "email": "railway-owner@example.test",
+            "picture": null,
+            "email_verified": true
+          },
+          "user": {
+            "name": "Railway Owner",
+            "email": "railway-owner@example.test",
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/railway"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "railway-access-token",
+          "refresh_token": "railway-refresh-token",
+          "token_type": "Bearer",
+          "scope": "openid railway:read"
+        }
+      },
+      "observations": {
+        "authorizationURLs": [
+          "https://backboard.railway.com/oauth/auth?response_type=code&client_id=social-http-client&state=ordinary-state&scope=openid+email+profile&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Frailway&code_challenge_method=S256&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+          "https://backboard.railway.com/oauth/auth?response_type=code&client_id=social-http-client&state=ordinary-state&scope=openid+email+profile+extra+openid+request+extra&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Frailway&code_challenge_method=S256&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&request_marker=ordinary",
+          "https://backboard.railway.com/oauth/auth?response_type=code&client_id=social-http-client&state=ordinary-state&scope=extra+request&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Frailway&code_challenge_method=S256&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+          "https://backboard.railway.com/oauth/auth?response_type=code&client_id=social-http-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Frailway&code_challenge_method=S256&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        ],
+        "requests": [
+          {
+            "url": "https://backboard.railway.com/oauth/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://backboard.railway.com/oauth/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://backboard.railway.com/oauth/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://backboard.railway.com/oauth/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://backboard.railway.com/oauth/token",
+            "method": "POST",
+            "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Frailway"
+          },
+          {
+            "url": "https://backboard.railway.com/oauth/token",
+            "method": "POST",
+            "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "grant_type=refresh_token&refresh_token=ordinary-refresh"
+          }
+        ],
+        "mapperInputs": [
+          {
+            "sub": "railway-owner",
+            "name": "Railway Owner",
+            "email": "railway-owner@example.test",
+            "picture": "https://images.example.test/railway.png",
+            "email_verified": true
+          }
+        ],
+        "grantTokens": [
+          {
+            "tokenType": "Bearer",
+            "accessToken": "railway-access-token",
+            "refreshToken": "railway-refresh-token",
+            "scopes": [
+              "openid",
+              "railway:read"
+            ],
+            "raw": {
+              "access_token": "railway-access-token",
+              "refresh_token": "railway-refresh-token",
+              "token_type": "Bearer",
+              "scope": "openid railway:read"
+            }
+          },
+          {
+            "accessToken": "railway-access-token",
+            "refreshToken": "railway-refresh-token",
+            "tokenType": "Bearer",
+            "scopes": [
+              "openid",
+              "railway:read"
+            ]
+          }
+        ]
+      }
+    },
+    "roblox": {
+      "authorizationEndpoint": "https://apis.roblox.com/oauth/v1/authorize",
+      "tokenEndpoint": "https://apis.roblox.com/oauth/v1/token",
+      "userinfoEndpoint": "https://apis.roblox.com/oauth/v1/userinfo",
+      "subjectField": "sub",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": "openid profile",
+          "prompt": "select_account consent"
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "extra",
+              "openid"
+            ]
+          },
+          "requestScopes": [
+            "request",
+            "extra"
+          ],
+          "loginHint": "owner@example.test",
+          "additionalParams": {
+            "request_marker": "ordinary"
+          },
+          "scope": "openid profile extra openid request extra",
+          "prompt": "select_account consent"
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "extra"
+            ]
+          },
+          "requestScopes": [
+            "request"
+          ],
+          "scope": "extra request",
+          "prompt": "select_account consent"
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null,
+          "prompt": "select_account consent"
+        },
+        {
+          "name": "configuredPrompt",
+          "options": {
+            "prompt": "consent"
+          },
+          "scope": "openid profile",
+          "prompt": "consent"
+        },
+        {
+          "name": "emptyPrompt",
+          "options": {
+            "prompt": ""
+          },
+          "scope": "openid profile",
+          "prompt": "select_account consent"
+        }
+      ],
+      "profile": {
+        "sub": "1234567890",
+        "nickname": "Roblox Owner",
+        "preferred_username": "roblox-owner",
+        "picture": "https://images.example.test/roblox.png"
+      },
+      "defaultUser": {
+        "name": "Roblox Owner",
+        "image": "https://images.example.test/roblox.png",
+        "email": "1234567890@roblox.placeholder.invalid",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Roblox Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Roblox Owner",
+        "image": null,
+        "email": "1234567890@roblox.placeholder.invalid",
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Roblox Owner",
+        "email": "custom-roblox@example.test",
+        "image": "https://images.example.test/custom-roblox.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty nickname uses preferred username and omits absent picture",
+          "profile": {
+            "sub": "1234567890",
+            "nickname": "",
+            "preferred_username": "roblox-reader"
+          },
+          "user": {
+            "name": "roblox-reader",
+            "email": "1234567890@roblox.placeholder.invalid",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "empty display names remain empty and preserve null picture",
+          "profile": {
+            "sub": "1234567890",
+            "nickname": "",
+            "preferred_username": "",
+            "picture": null
+          },
+          "user": {
+            "name": "",
+            "image": null,
+            "email": "1234567890@roblox.placeholder.invalid",
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/roblox"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "roblox-access-token",
+          "refresh_token": "roblox-refresh-token",
+          "token_type": "Bearer",
+          "scope": "openid profile"
+        }
+      },
+      "observations": {
+        "authorizationURLs": [
+          "https://apis.roblox.com/oauth/v1/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=openid+profile&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&prompt=select_account+consent",
+          "https://apis.roblox.com/oauth/v1/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=openid+profile+extra+openid+request+extra&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&prompt=select_account+consent&request_marker=ordinary",
+          "https://apis.roblox.com/oauth/v1/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=extra+request&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&prompt=select_account+consent",
+          "https://apis.roblox.com/oauth/v1/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&prompt=select_account+consent",
+          "https://apis.roblox.com/oauth/v1/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=openid+profile&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&prompt=consent",
+          "https://apis.roblox.com/oauth/v1/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=openid+profile&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&prompt=select_account+consent"
+        ],
+        "requests": [
+          {
+            "url": "https://apis.roblox.com/oauth/v1/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://apis.roblox.com/oauth/v1/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://apis.roblox.com/oauth/v1/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://apis.roblox.com/oauth/v1/userinfo",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "body": ""
+          },
+          {
+            "url": "https://apis.roblox.com/oauth/v1/token",
+            "method": "POST",
+            "authorization": null,
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "grant_type=authorization_code&code=ordinary-code&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Froblox&client_id=social-http-client&client_secret=ordinary-client-secret"
+          },
+          {
+            "url": "https://apis.roblox.com/oauth/v1/token",
+            "method": "POST",
+            "authorization": null,
+            "contentType": "application/x-www-form-urlencoded",
+            "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=social-http-client&client_secret=ordinary-client-secret"
+          }
+        ],
+        "mapperInputs": [
+          {
+            "sub": "1234567890",
+            "nickname": "Roblox Owner",
+            "preferred_username": "roblox-owner",
+            "picture": "https://images.example.test/roblox.png"
+          }
+        ],
+        "grantTokens": [
+          {
+            "tokenType": "Bearer",
+            "accessToken": "roblox-access-token",
+            "refreshToken": "roblox-refresh-token",
+            "scopes": [
+              "openid",
+              "profile"
+            ],
+            "raw": {
+              "access_token": "roblox-access-token",
+              "refresh_token": "roblox-refresh-token",
+              "token_type": "Bearer",
+              "scope": "openid profile"
+            }
+          },
+          {
+            "accessToken": "roblox-access-token",
+            "refreshToken": "roblox-refresh-token",
+            "tokenType": "Bearer",
+            "scopes": [
+              "openid",
+              "profile"
+            ]
+          }
+        ]
+      }
+    },
+    "notion": {
+      "authorizationEndpoint": "https://api.notion.com/v1/oauth/authorize",
+      "tokenEndpoint": "https://api.notion.com/v1/oauth/token",
+      "userinfoEndpoint": "https://api.notion.com/v1/users/me",
+      "subjectField": "id",
+      "scopeCases": [
+        {
+          "name": "defaults",
+          "options": {},
+          "scope": null,
+          "prompt": null
+        },
+        {
+          "name": "appended",
+          "options": {
+            "scope": [
+              "extra",
+              "openid"
+            ]
+          },
+          "requestScopes": [
+            "request",
+            "extra"
+          ],
+          "loginHint": "owner@example.test",
+          "idTokenNonce": "ordinary-notion-nonce",
+          "additionalParams": {
+            "request_marker": "ordinary"
+          },
+          "scope": "extra openid request extra",
+          "prompt": null
+        },
+        {
+          "name": "disabled",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": [
+              "extra"
+            ]
+          },
+          "requestScopes": [
+            "request"
+          ],
+          "scope": "extra request",
+          "prompt": null
+        },
+        {
+          "name": "noScopes",
+          "options": {
+            "disableDefaultScope": true,
+            "scope": []
+          },
+          "requestScopes": [],
+          "scope": null,
+          "prompt": null
+        },
+        {
+          "name": "configuredPrompt",
+          "options": {
+            "prompt": "consent"
+          },
+          "scope": null,
+          "prompt": null
+        },
+        {
+          "name": "emptyPrompt",
+          "options": {
+            "prompt": ""
+          },
+          "scope": null,
+          "prompt": null
+        }
+      ],
+      "profile": {
+        "object": "user",
+        "id": "9c23e19c-1eb9-4304-804e-19fdf3d14b83",
+        "type": "person",
+        "name": "Notion Owner",
+        "avatar_url": "https://images.example.test/notion.png",
+        "person": {
+          "email": "notion-owner@example.test"
+        }
+      },
+      "defaultUser": {
+        "name": "Notion Owner",
+        "email": "notion-owner@example.test",
+        "image": "https://images.example.test/notion.png",
+        "emailVerified": false
+      },
+      "mapperPatch": {
+        "name": "Mapped Notion Owner",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "mappedUser": {
+        "name": "Mapped Notion Owner",
+        "email": "notion-owner@example.test",
+        "image": null,
+        "emailVerified": true,
+        "locale": "zh-TW"
+      },
+      "customUser": {
+        "name": "Custom Notion Owner",
+        "email": "custom-notion@example.test",
+        "image": "https://images.example.test/custom-notion.png",
+        "emailVerified": true
+      },
+      "normalProfileCases": [
+        {
+          "name": "empty name retains its value and omits absent avatar",
+          "profile": {
+            "object": "user",
+            "id": "9c23e19c-1eb9-4304-804e-19fdf3d14b83",
+            "type": "person",
+            "name": "",
+            "person": {
+              "email": "notion-owner@example.test"
+            }
+          },
+          "user": {
+            "name": "",
+            "email": "notion-owner@example.test",
+            "emailVerified": false
+          }
+        },
+        {
+          "name": "missing person email becomes null and preserves null avatar",
+          "profile": {
+            "object": "user",
+            "id": "9c23e19c-1eb9-4304-804e-19fdf3d14b83",
+            "type": "person",
+            "name": "Notion Owner",
+            "avatar_url": null,
+            "person": {}
+          },
+          "user": {
+            "name": "Notion Owner",
+            "email": null,
+            "image": null,
+            "emailVerified": false
+          }
+        }
+      ],
+      "tokenContract": {
+        "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+        "refreshAuthorization": null,
+        "code": {
+          "code": "ordinary-code",
+          "codeVerifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+          "redirectURI": "http://app.example.test/api/auth/callback/notion"
+        },
+        "refresh": {
+          "refreshToken": "ordinary-refresh"
+        },
+        "response": {
+          "access_token": "notion-access-token",
+          "refresh_token": "notion-refresh-token",
+          "token_type": "Bearer",
+          "scope": "openid profile"
+        }
+      },
+      "observations": {
+        "authorizationURLs": [
+          "https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion&owner=user",
+          "https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=extra+openid+request+extra&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion&login_hint=owner%40example.test&request_marker=ordinary&owner=user",
+          "https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&scope=extra+request&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion&owner=user",
+          "https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion&owner=user",
+          "https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion&owner=user",
+          "https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=social-http-client&state=ordinary-state&redirect_uri=http%3A%2F%2Fsocial-http.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion&owner=user"
+        ],
+        "requests": [
+          {
+            "url": "https://api.notion.com/v1/users/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "notionVersion": "2022-06-28",
+            "body": ""
+          },
+          {
+            "url": "https://api.notion.com/v1/users/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "notionVersion": "2022-06-28",
+            "body": ""
+          },
+          {
+            "url": "https://api.notion.com/v1/users/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "notionVersion": "2022-06-28",
+            "body": ""
+          },
+          {
+            "url": "https://api.notion.com/v1/users/me",
+            "method": "GET",
+            "authorization": "Bearer ordinary-local-profile-token",
+            "contentType": null,
+            "notionVersion": "2022-06-28",
+            "body": ""
+          },
+          {
+            "url": "https://api.notion.com/v1/oauth/token",
+            "method": "POST",
+            "authorization": "Basic c29jaWFsLWh0dHAtY2xpZW50Om9yZGluYXJ5LWNsaWVudC1zZWNyZXQ=",
+            "contentType": "application/x-www-form-urlencoded",
+            "notionVersion": null,
+            "body": "grant_type=authorization_code&code=ordinary-code&redirect_uri=http%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fnotion"
+          },
+          {
+            "url": "https://api.notion.com/v1/oauth/token",
+            "method": "POST",
+            "authorization": null,
+            "contentType": "application/x-www-form-urlencoded",
+            "notionVersion": null,
+            "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=social-http-client&client_secret=ordinary-client-secret"
+          }
+        ],
+        "mapperInputs": [
+          {
+            "object": "user",
+            "id": "9c23e19c-1eb9-4304-804e-19fdf3d14b83",
+            "type": "person",
+            "name": "Notion Owner",
+            "avatar_url": "https://images.example.test/notion.png",
+            "person": {
+              "email": "notion-owner@example.test"
+            }
+          }
+        ],
+        "grantTokens": [
+          {
+            "tokenType": "Bearer",
+            "accessToken": "notion-access-token",
+            "refreshToken": "notion-refresh-token",
+            "scopes": [
+              "openid",
+              "profile"
+            ],
+            "raw": {
+              "access_token": "notion-access-token",
+              "refresh_token": "notion-refresh-token",
+              "token_type": "Bearer",
+              "scope": "openid profile"
+            }
+          },
+          {
+            "accessToken": "notion-access-token",
+            "refreshToken": "notion-refresh-token",
+            "tokenType": "Bearer",
+            "scopes": [
+              "openid",
+              "profile"
+            ]
+          }
+        ]
+      }
     }
   },
   "promptCases": [

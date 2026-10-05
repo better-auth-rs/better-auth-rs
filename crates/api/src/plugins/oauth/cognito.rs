@@ -87,7 +87,7 @@ pub(super) fn decode_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .ok_or("missing sub")?
             .into(),
         email: super::providers::defaults::profile_email(&profile)?,
-        name: Some(profile_name(&profile)),
+        name: Some(profile_name(&profile)).into(),
         image: profile
             .get("picture")
             .cloned()

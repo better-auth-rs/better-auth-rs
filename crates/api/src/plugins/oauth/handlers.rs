@@ -627,9 +627,8 @@ async fn apply_link_user_info(
                         .user
                         .parse_provider_input(&user_info.additional_fields, false)?,
                     name: user_info
-                        .name
-                        .clone()
-                        .map(|value| Some(value).into())
+                        .name()?
+                        .map(|value| Some(value.to_owned()).into())
                         .unwrap_or_default(),
                     image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                     ..Default::default()

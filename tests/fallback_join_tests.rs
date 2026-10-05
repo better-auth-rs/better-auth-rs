@@ -343,7 +343,7 @@ impl better_auth::plugins::oauth::OAuthUserInfoHandler for Provider {
             user: better_auth::plugins::oauth::OAuthUserInfo {
                 id: "alice-google".into(),
                 email: Some("alice@example.test".into()).into(),
-                name: Some("Alice".into()),
+                name: Some("Alice".into()).into(),
                 email_verified: Some(true).into(),
                 image: None,
                 additional_fields: Default::default(),

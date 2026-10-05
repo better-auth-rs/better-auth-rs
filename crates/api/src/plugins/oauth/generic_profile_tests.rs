@@ -39,7 +39,7 @@ impl OAuthProfileMapper for MapProfile {
         assert_eq!(profile["email"], "original@example.com");
         Ok(OAuthProfile {
             email: Some(Some("mapped@example.com".to_string()).into()),
-            name: Some(Some("Mapped name".to_string())),
+            name: Some(Some("Mapped name".to_string()).into()),
             email_verified: Some(Some(true).into()),
             ..Default::default()
         })
@@ -75,7 +75,10 @@ async fn id_token_profile_is_preferred_and_mapping_cannot_change_account_subject
         response.user.email.typed().unwrap().as_deref(),
         Some("mapped@example.com")
     );
-    assert_eq!(response.user.name.as_deref(), Some("Mapped name"));
+    assert_eq!(
+        response.user.name.typed().unwrap().as_deref(),
+        Some("Mapped name")
+    );
     assert!(matches!(response.user.email_verified(), Ok(true)));
     assert_eq!(
         response.user.image.as_ref().and_then(Option::as_deref),
@@ -97,7 +100,7 @@ struct ClearProfileFields;
 impl OAuthProfileMapper for ClearProfileFields {
     async fn map_profile(&self, _profile: &Value) -> AuthResult<OAuthProfile> {
         Ok(OAuthProfile {
-            name: Some(None),
+            name: Some(None.into()),
             image: Some(None),
             ..Default::default()
         })
@@ -137,6 +140,143 @@ impl GenericOAuthUserInfoHandler for RawProfile {
     async fn get_user_info(&self, _tokens: &OAuthUserInfoRequest) -> AuthResult<Value> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self.profile.clone())
+    }
+}
+
+#[tokio::test]
+async fn generic_profile_preserves_email_presence_without_normalization() {
+    for (label, email) in [
+        ("absent", None),
+        ("null", Some(Value::Null)),
+        ("empty", Some(json!(""))),
+        ("ordinary", Some(json!("reader@example.test"))),
+    ] {
+        let mut profile = json!({
+            "sub": "ordinary-profile",
+            "name": "Profile Reader",
+            "image": "https://images.example.test/profile.png",
+            "emailVerified": false,
+        });
+        let mut expected_user = json!({
+            "name": "Profile Reader",
+            "image": "https://images.example.test/profile.png",
+            "emailVerified": false,
+        });
+        if let Some(email) = &email {
+            profile["email"] = email.clone();
+            expected_user["email"] = email.clone();
+        }
+        let raw = Arc::new(RawProfile {
+            profile,
+            calls: AtomicUsize::new(0),
+        });
+        let provider = provider(
+            GenericOAuthConfig {
+                get_user_info: Some(raw.clone()),
+                ..Default::default()
+            },
+            false,
+        );
+        let response = fetch_profile(&provider, &OAuthUserInfoRequest::default(), None, None)
+            .await
+            .unwrap();
+        let user = serde_json::to_value(response.user).unwrap();
+        assert_eq!(user.get("email"), email.as_ref(), "{label}");
+        assert_eq!(user, expected_user, "{label}");
+        assert_eq!(response.data, raw.profile, "{label}");
+        assert_eq!(raw.calls.load(Ordering::SeqCst), 1, "{label}");
+    }
+}
+
+struct NameMapper {
+    profile: Value,
+    name: Option<better_auth_core::SchemaValue<Option<String>>>,
+    calls: AtomicUsize,
+}
+
+#[async_trait]
+impl OAuthProfileMapper for NameMapper {
+    async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
+        assert_eq!(profile, &self.profile);
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(OAuthProfile {
+            name: self.name.clone(),
+            ..Default::default()
+        })
+    }
+}
+
+#[tokio::test]
+async fn generic_profile_preserves_name_presence_and_mapper_overrides() {
+    use better_auth_core::SchemaValue;
+
+    for (raw_label, raw_name) in [
+        ("absent", None),
+        ("null", Some(Value::Null)),
+        ("empty", Some(json!(""))),
+        ("ordinary", Some(json!("Profile Reader"))),
+    ] {
+        for (mapped_label, mapped_name, mapped_json) in [
+            ("unchanged", None, None),
+            ("undefined", Some(SchemaValue::Undefined), None),
+            ("null", Some(None.into()), Some(Value::Null)),
+            ("empty", Some(Some(String::new()).into()), Some(json!(""))),
+            (
+                "ordinary",
+                Some(Some("Mapped Reader".to_owned()).into()),
+                Some(json!("Mapped Reader")),
+            ),
+        ] {
+            let mut profile = json!({
+                "sub": "ordinary-profile",
+                "email": "reader@example.test",
+                "image": "https://images.example.test/profile.png",
+                "emailVerified": false,
+            });
+            if let Some(name) = &raw_name {
+                profile["name"] = name.clone();
+            }
+            let expected_name = if mapped_name.is_some() {
+                mapped_json
+            } else {
+                raw_name.clone()
+            };
+            let mut expected_user = json!({
+                "email": "reader@example.test",
+                "image": "https://images.example.test/profile.png",
+                "emailVerified": false,
+            });
+            if let Some(name) = &expected_name {
+                expected_user["name"] = name.clone();
+            }
+            let mapper = Arc::new(NameMapper {
+                profile: profile.clone(),
+                name: mapped_name,
+                calls: AtomicUsize::new(0),
+            });
+            let raw = Arc::new(RawProfile {
+                profile,
+                calls: AtomicUsize::new(0),
+            });
+            let provider = provider(
+                GenericOAuthConfig {
+                    get_user_info: Some(raw.clone()),
+                    map_profile_to_user: Some(mapper.clone()),
+                    ..Default::default()
+                },
+                false,
+            );
+            let response = fetch_profile(&provider, &OAuthUserInfoRequest::default(), None, None)
+                .await
+                .unwrap();
+            let user = serde_json::to_value(response.user).unwrap();
+            let case = format!("{raw_label}/{mapped_label}");
+            assert_eq!(user.get("name"), expected_name.as_ref(), "{case}");
+            assert_eq!(user, expected_user, "{case}");
+            assert_eq!(response.data, raw.profile, "{case}");
+            assert_eq!(raw.calls.load(Ordering::SeqCst), 1, "{case}");
+            assert_eq!(mapper.calls.load(Ordering::SeqCst), 1, "{case}");
+        }
     }
 }
 

@@ -79,6 +79,16 @@ impl Server {
                 }
                 let path = headers.split_whitespace().nth(1).unwrap();
                 let body = match path {
+                    "/token" => {
+                        assert!(headers.starts_with("POST /token "));
+                        logged.lock().unwrap().push(json!({"path":path}));
+                        json!({
+                            "id_token": token(&input["claims"], None),
+                            "access_token": "ordinary-access",
+                            "refresh_token": "ordinary-refresh",
+                            "token_type": "Bearer"
+                        })
+                    }
                     "/verify" => {
                         assert!(headers.starts_with("POST /verify "));
                         assert!(
@@ -194,10 +204,13 @@ impl OAuthProfileMapper for Mapper {
         self.calls.lock().unwrap().push("map");
         assert_eq!(*profile, self.expected);
         Ok(OAuthProfile {
-            name: Some(Some(format!(
-                "Mapped {}",
-                profile["name"].as_str().unwrap_or("User")
-            ))),
+            name: Some(
+                Some(format!(
+                    "Mapped {}",
+                    profile["name"].as_str().unwrap_or("User")
+                ))
+                .into(),
+            ),
             email: self.email.clone().map(|email| Some(email).into()),
             ..Default::default()
         })
@@ -307,5 +320,241 @@ async fn line_profile_context_forwards_the_expected_nonce_with_form_encoding() {
     assert_eq!(
         json!(*server.requests.lock().unwrap()),
         json!([{"path":"/verify","clientId":CLIENT_ID,"nonce":nonce}])
+    );
+}
+
+fn social_fixture() -> Value {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/social-line-1.7.6.json"
+    );
+    serde_json::from_str(
+        &std::fs::read_to_string(path)
+            .expect("Capture the pinned Social LINE fixture before running its contract tests"),
+    )
+    .unwrap()
+}
+
+async fn social_provider(server: &Server) -> super::super::resolved::ResolvedOAuthConfig {
+    let mut provider = OAuthProvider::line(CLIENT_ID, std::str::from_utf8(SECRET).unwrap());
+    provider.token_url = format!("{}/token", server.url);
+    provider.user_info_url = Some(format!("{}/userinfo", server.url));
+    provider.set_line_verify_url(format!("{}/verify", server.url));
+    super::super::resolved::ResolvedOAuthConfig::new(
+        &OAuthConfig {
+            providers: [("line".into(), provider)].into_iter().collect(),
+        },
+        &HashMap::new(),
+        None,
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn social_line_configuration_and_profiles_match_pinned_capture() {
+    let expected = social_fixture();
+    for case in expected["authorization"].as_array().unwrap() {
+        let mut config = OAuthProvider::line(CLIENT_ID, std::str::from_utf8(SECRET).unwrap());
+        config.scopes = case["options"]
+            .get("scope")
+            .map(|value| serde_json::from_value(value.clone()).unwrap());
+        config.disable_default_scope = case["options"]["disableDefaultScope"]
+            .as_bool()
+            .unwrap_or(false);
+        config.prompt = case["options"]
+            .get("prompt")
+            .map(|value| value.as_str().unwrap().into());
+        let request_scopes: Option<Vec<String>> = case
+            .get("requestScopes")
+            .map(|value| serde_json::from_value(value.clone()).unwrap());
+        let resolved = super::super::resolved::ResolvedOAuthConfig::new(
+            &OAuthConfig {
+                providers: [("line".into(), config)].into_iter().collect(),
+            },
+            &HashMap::new(),
+            None,
+        )
+        .await
+        .unwrap();
+        let actual = super::super::authorization::build_authorization_url(
+            &resolved.providers["line"],
+            super::super::authorization::AuthorizationRequest {
+                callback_url: expected["callbackURL"].as_str().unwrap(),
+                scopes: request_scopes.as_deref(),
+                state: "ordinary-state",
+                code_challenge: expected["codeChallenge"].as_str().unwrap(),
+                login_hint: case.get("loginHint").and_then(Value::as_str),
+                nonce: Some("ordinary-nonce"),
+                additional_params: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(actual, case["url"].as_str().unwrap());
+    }
+    for case in expected["profiles"].as_array().unwrap() {
+        let profile = &case["profile"];
+        let server = Server::start(&json!({"userinfo":profile})).await;
+        let resolved = social_provider(&server).await;
+        let tokens = OAuthUserInfoRequest {
+            id_token: (case["source"] == "token").then(|| {
+                jsonwebtoken::encode(
+                    &Header::new(Algorithm::HS256),
+                    profile,
+                    &EncodingKey::from_secret(SECRET),
+                )
+                .unwrap()
+            }),
+            access_token: Some("ordinary-access".into()),
+            ..Default::default()
+        };
+        let response = super::super::handlers::fetch_user_info_from_provider(
+            &resolved.providers["line"],
+            tokens,
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let user = response.user;
+        let view = super::super::types::AccountInfoUser {
+            id: None,
+            name: user.name,
+            email: user.email,
+            image: user.image,
+            email_verified: user.email_verified,
+            additional_fields: user.additional_fields,
+        };
+        assert_eq!(serde_json::to_value(view).unwrap(), case["result"]["user"]);
+        assert_eq!(response.data, case["result"]["data"]);
+        assert_eq!(
+            json!(*server.requests.lock().unwrap()),
+            if case["source"] == "token" {
+                json!([])
+            } else {
+                json!([{"path":"/userinfo"}])
+            }
+        );
+    }
+}
+
+#[tokio::test]
+async fn social_line_ordinary_direct_and_code_login_persist_the_profile() {
+    let expected = social_fixture();
+    let claims = expected["profiles"][0]["profile"].clone();
+    for direct in [true, false] {
+        let server = Server::start(&json!({"claims":claims,"userinfo":claims})).await;
+        let mut resolved = social_provider(&server).await;
+        let provider = resolved.providers.remove("line").unwrap().config;
+        let plugin = OAuthPlugin::new().add_provider("line", provider);
+        let mut config = test_helpers::create_test_config();
+        config.account.skip_state_cookie_check = true;
+        let ctx = test_helpers::create_test_context_with_config(config).await;
+        let mut start = AuthRequest::new(HttpMethod::Post, "/sign-in/social");
+        let mut body = json!({"provider":"line","callbackURL":"http://localhost:3000/welcome","disableRedirect":true});
+        if direct {
+            body["idToken"] =
+                json!({"token":token(&claims, Some("ordinary-nonce")),"nonce":"ordinary-nonce"});
+        }
+        start.body = Some(serde_json::to_vec(&body).unwrap());
+        let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
+        assert_eq!(response.status, 200);
+        if !direct {
+            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
+            let params: HashMap<_, _> = url.query_pairs().into_owned().collect();
+            let mut callback = AuthRequest::new(HttpMethod::Get, "/callback/line");
+            callback.query = Some(json!({"code":"ordinary-code","state":params["state"]}));
+            let response = plugin.on_request(&callback, &ctx).await.unwrap().unwrap();
+            assert_eq!(response.status, 302);
+            assert_eq!(
+                response.headers.get("Location").map(String::as_str),
+                Some("http://localhost:3000/welcome")
+            );
+        }
+        assert_eq!(
+            json!(*server.requests.lock().unwrap()),
+            if direct {
+                json!([{"path":"/verify","clientId":CLIENT_ID,"nonce":"ordinary-nonce"}])
+            } else {
+                json!([{"path":"/token"}])
+            }
+        );
+        let user = ctx
+            .database
+            .get_user_by_email(claims["email"].as_str().unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+        let user_id = user.id().display_string().unwrap();
+        let accounts = ctx.database.get_user_accounts(&user_id).await.unwrap();
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(json!(accounts[0].account_id), claims["sub"]);
+        assert_eq!(
+            ctx.session_manager()
+                .list_user_sessions(&user_id)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        let view = serde_json::to_value(UserView::from(&user)).unwrap();
+        assert_eq!(view["name"], claims["name"]);
+        assert_eq!(view["image"], claims["picture"]);
+        assert_eq!(view["emailVerified"], false);
+    }
+}
+
+struct SocialMapper(Arc<Mutex<Vec<Value>>>);
+
+#[async_trait]
+impl OAuthProfileMapper for SocialMapper {
+    async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
+        self.0.lock().unwrap().push(profile.clone());
+        Ok(OAuthProfile {
+            name: Some(Some("Mapped LINE Reader".into()).into()),
+            image: Some(None),
+            email_verified: Some(Some(true).into()),
+            ..Default::default()
+        })
+    }
+}
+
+#[tokio::test]
+async fn social_line_mapper_matches_pinned_input_and_result() {
+    let expected = social_fixture();
+    let server = Server::start(&json!({"userinfo": expected["profiles"][0]["profile"]})).await;
+    let inputs = Arc::new(Mutex::new(Vec::new()));
+    let mut resolved = social_provider(&server).await;
+    resolved
+        .providers
+        .get_mut("line")
+        .unwrap()
+        .config
+        .map_profile_to_user = Some(Arc::new(SocialMapper(inputs.clone())));
+    let response = super::super::handlers::fetch_user_info_from_provider(
+        &resolved.providers["line"],
+        OAuthUserInfoRequest {
+            access_token: Some("ordinary-access".into()),
+            ..Default::default()
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let user = response.user;
+    let view = super::super::types::AccountInfoUser {
+        id: None,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        email_verified: user.email_verified,
+        additional_fields: user.additional_fields,
+    };
+    assert_eq!(json!(*inputs.lock().unwrap()), expected["mapperInputs"]);
+    assert_eq!(
+        json!({"user": view, "data": response.data}),
+        expected["mappedResult"]
     );
 }

@@ -32,7 +32,7 @@ impl OAuthProfileMapper for MappedIdentity {
             additional_fields: serde_json::from_value(
                 serde_json::json!({"department": "identity", "alias": if profile.get("picture").is_some() { "picture" } else { "plain" }, "internalCode": "untrusted", "secretNote": "provider-private" }),
             )?,
-            name: Some(Some("Mapped OIDC User".to_owned())),
+            name: Some(Some("Mapped OIDC User".to_owned()).into()),
             image: Some(None),
             email_verified: Some(Some(false).into()),
             ..Default::default()

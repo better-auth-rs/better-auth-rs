@@ -13,4 +13,4 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features a
 ./scripts/consumer-check.sh
 cargo check --locked --manifest-path examples/fullstack/backend/Cargo.toml
 bun scripts/quick-start-check.ts
-./scripts/alignment-check.sh
+./scripts/alignment-check.sh --skip-build

@@ -29,10 +29,7 @@ impl OAuthSignInOptions<'_> {
         is_register: bool,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> Result<(), OAuthSignInError> {
-        let required = provider
-            .generic
-            .as_ref()
-            .is_some_and(|generic| generic.config.require_email_verification);
+        let required = provider.config.require_email_verification.unwrap_or(false);
         if let Some(plugin) = self.email_verification {
             plugin
                 .send_verification_on_oauth_sign_in(
@@ -289,9 +286,8 @@ pub(super) async fn process_oauth_sign_in(
                             .parse_provider_input(&user_info.additional_fields, false)
                             .map_err(|error| error.to_string())?,
                         name: user_info
-                            .name
-                            .clone()
-                            .map(|value| Some(value).into())
+                            .name()?
+                            .map(|value| Some(value.to_owned()).into())
                             .unwrap_or_default(),
                         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                         email: Some(provider_email.to_lowercase()),
@@ -475,9 +471,8 @@ pub(super) async fn process_oauth_sign_in(
                             .parse_provider_input(&user_info.additional_fields, false)
                             .map_err(|error| error.to_string())?,
                         name: user_info
-                            .name
-                            .clone()
-                            .map(|value| Some(value).into())
+                            .name()?
+                            .map(|value| Some(value.to_owned()).into())
                             .unwrap_or_default(),
                         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
                         email: Some(provider_email.to_lowercase()),
@@ -539,7 +534,7 @@ pub(super) async fn process_oauth_sign_in(
 
         let mut create_user = CreateUser::new()
             .with_email(provider_email.to_lowercase())
-            .with_name(user_info.name.as_deref().unwrap_or(provider_email))
+            .with_name(user_info.name()?.unwrap_or(provider_email))
             .with_email_verified(email_verified);
         create_user.image = user_info.image.clone().map(Into::into).unwrap_or_default();
         create_user.additional_fields = ctx
@@ -733,8 +728,8 @@ pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
     } else {
         let _ = fields.remove("emailVerified");
     }
-    if let Some(name) = &user.name {
-        let _ = fields.insert("name".into(), name.clone().into());
+    if let Some(name) = user.name()? {
+        let _ = fields.insert("name".into(), name.into());
     }
     if let Some(image) = &user.image {
         let _ = fields.insert(

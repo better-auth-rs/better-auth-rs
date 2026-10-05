@@ -250,6 +250,8 @@ async fn fetch_default_user_info(
     }
     let placeholder_namespace = if provider.config.is_twitter() {
         Some("twitter")
+    } else if provider.config.is_roblox() {
+        Some("roblox")
     } else if provider.config.wechat_refresh_url().is_some() {
         Some("wechat")
     } else {
@@ -320,6 +322,14 @@ async fn fetch_social_user_info(
         }
         Some(VerifiedIdToken::Paybin(claims)) => claims,
         Some(_) => return Err(AuthError::internal("Unexpected verified Social profile")),
+        None if provider.config.line_verify_url().is_some() => {
+            let Some(profile) =
+                super::providers::line::fetch_profile(&provider.config, &request).await?
+            else {
+                return Ok(None);
+            };
+            profile
+        }
         None => {
             let user_info_url = provider
                 .config

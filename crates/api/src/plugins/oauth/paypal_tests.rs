@@ -497,7 +497,7 @@ impl OAuthUserInfoHandler for Custom {
         Ok(Some(OAuthUserInfoResponse {
             user: OAuthUserInfo {
                 id: "paypal-owner".into(),
-                name: Some("Custom Owner".into()),
+                name: Some("Custom Owner".into()).into(),
                 email: Some("custom-paypal@example.test".into()).into(),
                 image: None,
                 email_verified: Default::default(),

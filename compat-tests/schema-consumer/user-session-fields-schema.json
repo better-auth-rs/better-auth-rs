@@ -1,0 +1,16 @@
+{
+  "user": {
+    "additionalFields": {
+      "label": { "type": "string", "required": false, "fieldName": "stored_user_label" }
+    }
+  },
+  "session": {
+    "modelName": "display_sessions",
+    "additionalFields": {
+      "label": { "type": "string", "required": false, "fieldName": "stored_label" },
+      "rating": { "type": "number", "required": false, "fieldName": "stored_rating" },
+      "details": { "type": "json", "required": false, "fieldName": "stored_details" },
+      "pinned": { "type": "boolean", "required": false }
+    }
+  }
+}

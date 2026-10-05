@@ -1,0 +1,264 @@
+{
+  "version": "1.7.6",
+  "clientId": "1234567891",
+  "clientSecret": "ordinary-line-fixture-secret-012345",
+  "callbackURL": "https://social-line.example.test/api/auth/callback/line",
+  "endpoints": {
+    "authorization": "https://access.line.me/oauth2/v2.1/authorize",
+    "token": "https://api.line.me/oauth2/v2.1/token",
+    "userinfo": "https://api.line.me/oauth2/v2.1/userinfo",
+    "verify": "https://api.line.me/oauth2/v2.1/verify"
+  },
+  "codeChallenge": "d9bfQ3pYJegUk_-fsvmP-wcck_hoq7QBZHiOYHHGDM4",
+  "authorization": [
+    {
+      "name": "defaults",
+      "options": {},
+      "url": "https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=1234567891&state=ordinary-state&scope=openid+profile+email&redirect_uri=https%3A%2F%2Fsocial-line.example.test%2Fapi%2Fauth%2Fcallback%2Fline&code_challenge_method=S256&code_challenge=d9bfQ3pYJegUk_-fsvmP-wcck_hoq7QBZHiOYHHGDM4"
+    },
+    {
+      "name": "appended",
+      "options": {
+        "scope": [
+          "extra",
+          "openid"
+        ]
+      },
+      "requestScopes": [
+        "request",
+        "extra"
+      ],
+      "loginHint": "line@example.test",
+      "url": "https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=1234567891&state=ordinary-state&scope=openid+profile+email+extra+openid+request+extra&redirect_uri=https%3A%2F%2Fsocial-line.example.test%2Fapi%2Fauth%2Fcallback%2Fline&login_hint=line%40example.test&code_challenge_method=S256&code_challenge=d9bfQ3pYJegUk_-fsvmP-wcck_hoq7QBZHiOYHHGDM4"
+    },
+    {
+      "name": "disabled",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": [
+          "extra"
+        ]
+      },
+      "requestScopes": [
+        "request"
+      ],
+      "url": "https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=1234567891&state=ordinary-state&scope=extra+request&redirect_uri=https%3A%2F%2Fsocial-line.example.test%2Fapi%2Fauth%2Fcallback%2Fline&code_challenge_method=S256&code_challenge=d9bfQ3pYJegUk_-fsvmP-wcck_hoq7QBZHiOYHHGDM4"
+    },
+    {
+      "name": "empty",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": []
+      },
+      "requestScopes": [],
+      "url": "https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=1234567891&state=ordinary-state&redirect_uri=https%3A%2F%2Fsocial-line.example.test%2Fapi%2Fauth%2Fcallback%2Fline&code_challenge_method=S256&code_challenge=d9bfQ3pYJegUk_-fsvmP-wcck_hoq7QBZHiOYHHGDM4"
+    },
+    {
+      "name": "configured prompt",
+      "options": {
+        "prompt": "consent"
+      },
+      "url": "https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=1234567891&state=ordinary-state&scope=openid+profile+email&redirect_uri=https%3A%2F%2Fsocial-line.example.test%2Fapi%2Fauth%2Fcallback%2Fline&code_challenge_method=S256&code_challenge=d9bfQ3pYJegUk_-fsvmP-wcck_hoq7QBZHiOYHHGDM4"
+    }
+  ],
+  "profiles": [
+    {
+      "source": "token",
+      "profile": {
+        "sub": "ordinary-line-user",
+        "name": "LINE Reader",
+        "email": "line@example.test",
+        "picture": "https://images.example.test/line.png",
+        "email_verified": true,
+        "locale": "ja-JP"
+      },
+      "result": {
+        "user": {
+          "name": "LINE Reader",
+          "email": "line@example.test",
+          "image": "https://images.example.test/line.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-line-user",
+          "name": "LINE Reader",
+          "email": "line@example.test",
+          "picture": "https://images.example.test/line.png",
+          "email_verified": true,
+          "locale": "ja-JP"
+        }
+      }
+    },
+    {
+      "source": "token",
+      "profile": {
+        "sub": "ordinary-line-user",
+        "name": null,
+        "email": "line@example.test",
+        "picture": null,
+        "email_verified": true,
+        "locale": "ja-JP"
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "email": "line@example.test",
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-line-user",
+          "name": null,
+          "email": "line@example.test",
+          "picture": null,
+          "email_verified": true,
+          "locale": "ja-JP"
+        }
+      }
+    },
+    {
+      "source": "token",
+      "profile": {
+        "sub": "ordinary-line-user",
+        "email": "line@example.test"
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "email": "line@example.test",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-line-user",
+          "email": "line@example.test"
+        }
+      }
+    },
+    {
+      "source": "userinfo",
+      "profile": {
+        "sub": "ordinary-line-user",
+        "name": "LINE Reader",
+        "email": "line@example.test",
+        "picture": "https://images.example.test/line.png",
+        "email_verified": true,
+        "locale": "ja-JP"
+      },
+      "result": {
+        "user": {
+          "name": "LINE Reader",
+          "email": "line@example.test",
+          "image": "https://images.example.test/line.png",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-line-user",
+          "name": "LINE Reader",
+          "email": "line@example.test",
+          "picture": "https://images.example.test/line.png",
+          "email_verified": true,
+          "locale": "ja-JP"
+        }
+      }
+    }
+  ],
+  "mappedResult": {
+    "user": {
+      "name": "Mapped LINE Reader",
+      "email": "line@example.test",
+      "image": null,
+      "emailVerified": true
+    },
+    "data": {
+      "sub": "ordinary-line-user",
+      "name": "LINE Reader",
+      "email": "line@example.test",
+      "picture": "https://images.example.test/line.png",
+      "email_verified": true,
+      "locale": "ja-JP"
+    }
+  },
+  "mapperInputs": [
+    {
+      "sub": "ordinary-line-user",
+      "name": "LINE Reader",
+      "email": "line@example.test",
+      "picture": "https://images.example.test/line.png",
+      "email_verified": true,
+      "locale": "ja-JP"
+    }
+  ],
+  "verified": true,
+  "requests": [
+    {
+      "url": "https://api.line.me/oauth2/v2.1/userinfo",
+      "method": "GET",
+      "headers": {
+        "authorization": "Bearer ordinary-access"
+      },
+      "body": ""
+    },
+    {
+      "url": "https://api.line.me/oauth2/v2.1/userinfo",
+      "method": "GET",
+      "headers": {
+        "authorization": "Bearer ordinary-access"
+      },
+      "body": ""
+    },
+    {
+      "url": "https://api.line.me/oauth2/v2.1/verify",
+      "method": "POST",
+      "headers": {
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "id_token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJvcmRpbmFyeS1saW5lLXVzZXIiLCJuYW1lIjoiTElORSBSZWFkZXIiLCJlbWFpbCI6ImxpbmVAZXhhbXBsZS50ZXN0IiwicGljdHVyZSI6Imh0dHBzOi8vaW1hZ2VzLmV4YW1wbGUudGVzdC9saW5lLnBuZyIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJsb2NhbGUiOiJqYS1KUCIsImF1ZCI6IjEyMzQ1Njc4OTEiLCJub25jZSI6Im9yZGluYXJ5LW5vbmNlIn0.2UdmHI9CaEtqe_j9O90FjV3ux53wMKdPR24QrLzStYk&client_id=1234567891&nonce=ordinary-nonce"
+    },
+    {
+      "url": "https://api.line.me/oauth2/v2.1/token",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "grant_type=authorization_code&code=ordinary-code&code_verifier=ordinary-line-code-verifier-012345678901234567890123456789&redirect_uri=https%3A%2F%2Fsocial-line.example.test%2Fapi%2Fauth%2Fcallback%2Fline&client_id=1234567891&client_secret=ordinary-line-fixture-secret-012345"
+    },
+    {
+      "url": "https://api.line.me/oauth2/v2.1/token",
+      "method": "POST",
+      "headers": {
+        "accept": "application/json",
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      "body": "grant_type=refresh_token&refresh_token=ordinary-refresh&client_id=1234567891&client_secret=ordinary-line-fixture-secret-012345"
+    }
+  ],
+  "grantTokens": [
+    {
+      "tokenType": "Bearer",
+      "accessToken": "ordinary-access",
+      "refreshToken": "ordinary-refresh",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "raw": {
+        "access_token": "ordinary-access",
+        "refresh_token": "ordinary-refresh",
+        "token_type": "Bearer",
+        "scope": "openid profile email"
+      }
+    },
+    {
+      "accessToken": "ordinary-access",
+      "refreshToken": "ordinary-refresh",
+      "tokenType": "Bearer",
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  ]
+}
