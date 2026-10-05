@@ -5,6 +5,8 @@ description: Intercept SeaORM-backed auth operations with lifecycle hooks.
 
 SeaORM hooks let you run custom logic before and after auth writes. Use them for validation, auditing, provisioning, or rejecting operations while keeping the public auth runtime separate from your persistence integration.
 
+The Diesel integration has the same lifecycle methods on `DieselHooks`; see [Diesel hooks](/docs/integrations/diesel#hooks).
+
 ## Setup
 
 These examples assume you've already defined `AppAuthSchema` and a `database: DatabaseConnection`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).

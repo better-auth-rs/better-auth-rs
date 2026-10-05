@@ -1,5 +1,18 @@
 use crate::types::{AuthRequest, HttpMethod, RequestMeta};
 
+/// Control flow returned by database `before_*` hooks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookControl {
+    Continue,
+    Cancel,
+}
+
+impl HookControl {
+    pub fn is_cancelled(self) -> bool {
+        matches!(self, Self::Cancel)
+    }
+}
+
 /// Request-derived data available to middleware, stores, and other hooks during request handling.
 #[derive(Debug, Clone)]
 pub struct RequestHookContext {

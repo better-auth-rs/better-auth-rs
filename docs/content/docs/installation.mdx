@@ -28,6 +28,8 @@ Builds require OpenSSL 3.0 or newer, including its development headers. OIDC ML-
 | `rustls` | Alternative TLS backend; use `default-features = false` |
 | `axum` | Route mounting and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
+| `diesel-postgres` | [Diesel](/docs/integrations/diesel) store on PostgreSQL |
+| `diesel-sqlite` | [Diesel](/docs/integrations/diesel) store on SQLite, with SQLite bundled |
 | `redis-cache` | Standalone asynchronous Redis cache adapter |
 
 Select exactly one TLS backend. For Rustls:
@@ -40,4 +42,4 @@ The cache adapters are standalone utilities. Enabling `redis-cache` does not cha
 
 ## Rust toolchain
 
-The project uses Rust 2024. The committed `devenv.lock` pins the toolchain used for local checks. The project does not currently declare a tested minimum Rust version.
+The project uses Rust 2024 and requires Rust 1.88 or later; CI checks the workspace with 1.88. The committed `devenv.lock` pins the toolchain used for local checks.

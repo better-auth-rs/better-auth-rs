@@ -41,6 +41,8 @@ mod core;
 mod handlers;
 
 pub mod config;
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
+pub mod diesel;
 pub mod email;
 pub mod error;
 pub mod hooks;

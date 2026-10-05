@@ -92,6 +92,11 @@ There are three layers:
    `better-auth/client` SDK:
    `cargo test --test client_compat_tests phase0_client_compat -- --ignored --nocapture`
 
+The Diesel store has its own conformance suite. It runs on SQLite by
+default; set `BETTER_AUTH_DIESEL_POSTGRES_URL` to also run it on
+PostgreSQL:
+`BETTER_AUTH_DIESEL_POSTGRES_URL=postgres://postgres@localhost/postgres cargo test -p better-auth-diesel`
+
 The client-compat layer is the hard gate and the primary compatibility
 contract. For more detail, see
 [compat-tests/README.md](compat-tests/README.md).

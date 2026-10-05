@@ -3,6 +3,8 @@ use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
 
+#[doc(hidden)]
+pub mod adapter;
 pub mod cache;
 
 use crate::error::{AuthError, AuthResult};

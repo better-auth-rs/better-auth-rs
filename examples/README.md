@@ -8,6 +8,7 @@ These live in the workspace and are run via `cargo run --example`.
 |---------|---------|-------------|
 | `axum_server` | `cargo run --example axum_server --features axum` | Full Axum server using app-owned auth entities and an explicit `AppAuthSchema`. |
 | `postgres_usage` | `cargo run --example postgres_usage` | PostgreSQL example for an existing app-owned schema with numeric user IDs and seeded legacy users. Requires `DATABASE_URL`. |
+| `diesel_usage` | `cargo run --example diesel_usage --features diesel-sqlite` | Diesel store on SQLite: embedded migrations, sign-up, and session lookup. |
 
 ## Standalone projects
 

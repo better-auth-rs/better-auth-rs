@@ -10,7 +10,7 @@ use better_auth_core::store::UserStore;
 use crate::error::{AuthError, AuthResult};
 use crate::schema::{AuthSchema, SeaOrmUserModel};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
-use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
+use better_auth_core::store::adapter::{normalize_email, normalize_optional_email};
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
 
@@ -28,7 +28,7 @@ where
     where
         C: ConnectionTrait,
     {
-        create_user.email = normalize_optional_user_email(create_user.email);
+        create_user.email = normalize_optional_email(create_user.email);
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
             if hook
@@ -105,7 +105,7 @@ where
     }
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
-        let email = normalize_user_email(email);
+        let email = normalize_email(email);
         <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::email_column().eq(email))
             .one(self.connection())
@@ -125,7 +125,7 @@ where
     }
 
     async fn update_user(&self, id: &str, mut update: UpdateUser) -> AuthResult<S::User> {
-        update.email = normalize_optional_user_email(update.email);
+        update.email = normalize_optional_email(update.email);
         let user_id = S::User::parse_id(id)?;
         let hook_context = self.hook_context(None);
         for hook in self.hooks() {
