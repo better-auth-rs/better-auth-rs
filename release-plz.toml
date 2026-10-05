@@ -85,6 +85,7 @@ changelog_include = [
   "better-auth-macros",
   "better-auth-seaorm",
   "better-auth-seaorm-macros",
+  "better-auth-diesel",
 ]
 git_tag_name = "v{{ version }}"
 git_tag_enable = true
@@ -115,4 +116,8 @@ version_group = "workspace"
 
 [[package]]
 name = "better-auth-seaorm-macros"
+version_group = "workspace"
+
+[[package]]
+name = "better-auth-diesel"
 version_group = "workspace"
