@@ -27,6 +27,7 @@ on:
           - quick-start
           - alignment
           - client-configuration
+          - device-validation
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string
@@ -152,3 +153,6 @@ jobs:
             export COMPAT_TEST_PROFILE="$CHECK_COMPAT_PROFILE"
           fi
           devenv shell -- ./scripts/check.sh client-configuration
+      - name: Check Device request validation
+        if: env.CHECK_STAGE == 'device-validation'
+        run: devenv shell -- ./scripts/check.sh device-validation

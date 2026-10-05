@@ -189,12 +189,12 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
                 ..Default::default()
             },
             async {
-                let input = (|| -> AuthResult<_> {
+                let input = async {
                     let body = match route
                         .as_ref()
                         .and_then(|route| route.body_validator.as_ref())
                     {
-                        Some(validate) => validate(&internal_req)?,
+                        Some(validate) => validate.validate(&internal_req).await?,
                         None => crate::endpoint_input::ValidatedBody::unvalidated(
                             internal_req.input_body()?,
                         ),
@@ -216,7 +216,8 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
                     request.set_endpoint_body(body);
                     request.query = query;
                     Ok(request)
-                })();
+                }
+                .await;
                 match input {
                     Ok(mut request) => {
                         if request.is_server_only() {

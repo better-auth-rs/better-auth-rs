@@ -3,6 +3,9 @@
 use crate::{AuthRequest, AuthResult, RuntimeExtensions};
 use serde_json::Value;
 
+mod body_validator;
+pub use body_validator::BodyValidator;
+
 /// One schema result, retaining its typed input and exact callback projection.
 #[derive(Clone)]
 pub struct ValidatedBody {

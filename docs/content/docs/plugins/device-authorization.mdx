@@ -33,6 +33,14 @@ All four POST routes validate their bodies before authentication and endpoint mi
 SeaORM models use `Option<better_auth::seaorm::SqlNumber>` with `#[sea_orm(column_type = "Integer", nullable)]`. The generated and bundled initial schemas declare nullable INTEGER, matching the pinned schema. Existing SQLite BIGINT columns can retain integer and fractional values through `SqlNumber`; this change does not automatically narrow existing database columns. PostgreSQL and MySQL parameter behavior for fractional values in integer columns remains unverified. MySQL also requires its driver feature and a numeric decode path before that backend can claim support.
 
 
+## Request field validation
+
+Configure `DeviceAuthorizationPlugin::request_fields` with `DeviceRequestFields` to validate additional `/device/code` fields. Add fields in order with `DeviceRequestField::new` or `new_async`. A callback receives `Option<serde_json::Value>` and returns `DeviceFieldValidation::Value` or `Issues` through `AuthResult`. `None` preserves omission; `Some(Value::Null)` preserves explicit null. Unknown fields are removed from the validated projection. The original HTTP body remains available to request hooks.
+
+`DeviceRequestIssue` preserves the message, relative path, and validator-specific details. `on_validation_error` receives all issues before the default OAuth `invalid_request` error. An application error propagates unchanged. Native client, user, and scope fields cannot be redefined. Request fields do not authorize the request or become stored fields; use the adapter policies below for persistence. This request-validation interface does not implement full grant authorization, optional client binding, redemption policy, or verification context.
+
+Route authors can install an async body validator with `AuthRoute::body_validator_async`. Existing `.body_validator(callback)` calls remain unchanged. `better_auth::plugin::BodyValidator` is now a wrapper: replace direct `Arc::new(callback)` construction with `BodyValidator::new(callback)`, and call `validate(&request).await`. Validation runs once before query validation, required headers, and endpoint middleware. Rust does not emulate JavaScript's async-detection probe, repeated callbacks, or task scheduling.
+
 ## Adapter field policies
 
 Custom plugins can register declared additional fields through `AuthInitContext::register_model_fields(EntityRole::DeviceCode, UserConfig)`. `DeviceCode`, `CreateDeviceCode`, and `UpdateDeviceCode` expose an `additional_fields` map keyed by logical field names. Add `additional_fields: Default::default()` to existing struct literals. `DeviceCode` serializes returned additional fields at the top level. Memory and SeaORM apply defaults, `on_update`, and synchronous or asynchronous input/output transforms through the shared adapter rules.
@@ -57,7 +65,7 @@ The helper authorizes the issuer, enforces the polling interval, updates `lastPo
 
 Set `EndpointContext.transaction` when the caller runs inside an active transaction. The helper uses that transaction for every store operation, including user lookup. `AuthTransaction` exposes the DeviceCode store operations. The default `/device/token` route uses the same helper and creates its session after consumption, using the consumed row's bound user ID.
 
-The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates, grant request fields, and grant verification callbacks remain outside this API slice.
+The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates and full grant authorization or verification callbacks remain outside this API slice.
 
 ## Atomic consumption and transactions
 

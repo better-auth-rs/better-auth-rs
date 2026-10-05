@@ -1,0 +1,316 @@
+{
+  "version": "1.7.6",
+  "syncCases": [
+    {
+      "input": {
+        "name": "trim-and-strip",
+        "encoding": "json",
+        "translateError": false,
+        "requestBody": "{\"client_id\":\"ordinary-client\",\"scope\":\"read\",\"label\":\" Desk \",\"note\":\"Notes\",\"ignored\":\"drop\"}"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-request-device",
+        "user_code": "ABCD2345",
+        "verification_uri": "http://device-request-fields.test/device",
+        "verification_uri_complete": "http://device-request-fields.test/device?user_code=ABCD2345",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "requests": [
+        {
+          "client_id": "ordinary-client",
+          "scope": "read",
+          "label": "Desk",
+          "note": "Notes"
+        }
+      ],
+      "originalBodies": [
+        "{\"client_id\":\"ordinary-client\",\"scope\":\"read\",\"label\":\" Desk \",\"note\":\"Notes\",\"ignored\":\"drop\"}"
+      ],
+      "issues": [],
+      "transforms": [
+        "label"
+      ],
+      "hookInputs": [
+        {
+          "clientId": "ordinary-client",
+          "scope": "read"
+        }
+      ],
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000,
+        "label": "Stored display"
+      }
+    },
+    {
+      "input": {
+        "name": "optional-omitted",
+        "encoding": "json",
+        "translateError": false,
+        "requestBody": "{\"client_id\":\"ordinary-client\",\"scope\":\"read\",\"label\":\" Desk \"}"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-request-device",
+        "user_code": "ABCD2345",
+        "verification_uri": "http://device-request-fields.test/device",
+        "verification_uri_complete": "http://device-request-fields.test/device?user_code=ABCD2345",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "requests": [
+        {
+          "client_id": "ordinary-client",
+          "scope": "read",
+          "label": "Desk"
+        }
+      ],
+      "originalBodies": [
+        "{\"client_id\":\"ordinary-client\",\"scope\":\"read\",\"label\":\" Desk \"}"
+      ],
+      "issues": [],
+      "transforms": [
+        "label"
+      ],
+      "hookInputs": [
+        {
+          "clientId": "ordinary-client",
+          "scope": "read"
+        }
+      ],
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000,
+        "label": "Stored display"
+      }
+    },
+    {
+      "input": {
+        "name": "display-issues",
+        "encoding": "json",
+        "translateError": false,
+        "requestBody": "{\"client_id\":\"ordinary-client\",\"scope\":\"read\",\"label\":7,\"note\":true}"
+      },
+      "status": 400,
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ]
+      ],
+      "body": {
+        "error": "invalid_request",
+        "error_description": "[body.label] Invalid input: expected string, received number; [body.note] Invalid input: expected string, received boolean"
+      },
+      "requests": [],
+      "originalBodies": [],
+      "issues": [
+        [
+          {
+            "expected": "string",
+            "code": "invalid_type",
+            "path": [
+              "label"
+            ],
+            "message": "Invalid input: expected string, received number"
+          },
+          {
+            "expected": "string",
+            "code": "invalid_type",
+            "path": [
+              "note"
+            ],
+            "message": "Invalid input: expected string, received boolean"
+          }
+        ]
+      ],
+      "transforms": [],
+      "hookInputs": [],
+      "stored": null
+    },
+    {
+      "input": {
+        "name": "translated-display-issues",
+        "encoding": "json",
+        "translateError": true,
+        "requestBody": "{\"client_id\":\"ordinary-client\",\"scope\":\"read\",\"label\":7,\"note\":true}"
+      },
+      "status": 400,
+      "headers": [
+        [
+          "content-type",
+          "application/json"
+        ]
+      ],
+      "body": {
+        "error": "invalid_request",
+        "error_description": "Display fields need review"
+      },
+      "requests": [],
+      "originalBodies": [],
+      "issues": [
+        [
+          {
+            "expected": "string",
+            "code": "invalid_type",
+            "path": [
+              "label"
+            ],
+            "message": "Invalid input: expected string, received number"
+          },
+          {
+            "expected": "string",
+            "code": "invalid_type",
+            "path": [
+              "note"
+            ],
+            "message": "Invalid input: expected string, received boolean"
+          }
+        ]
+      ],
+      "transforms": [],
+      "hookInputs": [],
+      "stored": null
+    },
+    {
+      "input": {
+        "name": "form-display-fields",
+        "encoding": "form",
+        "translateError": false,
+        "requestBody": "client_id=ordinary-client&scope=read&label=+Desk+&note=Notes&ignored=drop"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "cache-control",
+          "no-store"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "pragma",
+          "no-cache"
+        ]
+      ],
+      "body": {
+        "device_code": "ordinary-request-device",
+        "user_code": "ABCD2345",
+        "verification_uri": "http://device-request-fields.test/device",
+        "verification_uri_complete": "http://device-request-fields.test/device?user_code=ABCD2345",
+        "expires_in": 1800,
+        "interval": 5
+      },
+      "requests": [
+        {
+          "client_id": "ordinary-client",
+          "scope": "read",
+          "label": "Desk",
+          "note": "Notes"
+        }
+      ],
+      "originalBodies": [
+        "client_id=ordinary-client&scope=read&label=+Desk+&note=Notes&ignored=drop"
+      ],
+      "issues": [],
+      "transforms": [
+        "label"
+      ],
+      "hookInputs": [
+        {
+          "clientId": "ordinary-client",
+          "scope": "read"
+        }
+      ],
+      "stored": {
+        "clientId": "ordinary-client",
+        "scope": "read",
+        "status": "pending",
+        "pollingInterval": 5000,
+        "label": "Stored display"
+      }
+    }
+  ],
+  "asyncCases": [
+    {
+      "name": "async-display-transform",
+      "input": {
+        "client_id": "ordinary-client",
+        "scope": "read",
+        "label": " Desk ",
+        "note": "Notes",
+        "ignored": "drop"
+      },
+      "callbacks": [
+        "label:start",
+        "label:resolved"
+      ],
+      "result": {
+        "value": {
+          "client_id": "ordinary-client",
+          "scope": "read",
+          "note": "Notes",
+          "label": "Desk"
+        }
+      }
+    },
+    {
+      "name": "async-display-issue",
+      "input": {
+        "client_id": "ordinary-client",
+        "scope": "read",
+        "label": "   "
+      },
+      "callbacks": [
+        "label:start",
+        "label:resolved"
+      ],
+      "result": {
+        "issues": [
+          {
+            "code": "custom",
+            "message": "Display label is required",
+            "path": [
+              "label"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

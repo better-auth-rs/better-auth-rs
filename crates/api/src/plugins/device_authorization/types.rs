@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct DeviceCodeRequest {
+    #[serde(default, flatten)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub client_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,

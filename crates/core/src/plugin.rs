@@ -211,9 +211,7 @@ macro_rules! impl_auth_plugin {
 /// Validate a raw endpoint query without changing the original request.
 pub type QueryValidator = fn(Option<serde_json::Value>) -> AuthResult<Option<serde_json::Value>>;
 
-/// Validate a decoded body once and retain its typed handler input.
-pub type BodyValidator =
-    Arc<dyn Fn(&AuthRequest) -> AuthResult<crate::endpoint_input::ValidatedBody> + Send + Sync>;
+pub use crate::endpoint_input::BodyValidator;
 
 /// Route definition for plugins
 #[derive(Clone)]
@@ -347,7 +345,19 @@ impl AuthRoute {
         + Sync
         + 'static,
     ) -> Self {
-        self.body_validator = Some(Arc::new(validator));
+        self.body_validator = Some(BodyValidator::new(validator));
+        self
+    }
+
+    /// Install an asynchronous body validator at the same phase as synchronous validation.
+    pub fn body_validator_async<F, Fut>(mut self, validator: F) -> Self
+    where
+        F: Fn(AuthRequest) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = AuthResult<crate::endpoint_input::ValidatedBody>>
+            + Send
+            + 'static,
+    {
+        self.body_validator = Some(BodyValidator::new_async(validator));
         self
     }
 
@@ -717,6 +727,8 @@ impl<S: AuthSchema> AuthContext<S> {
 
 #[cfg(test)]
 mod tests {
+    mod async_body_dispatch;
+
     use super::*;
     use crate::entity::AuthUser;
     use crate::test_store::test_database;

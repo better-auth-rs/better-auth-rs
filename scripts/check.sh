@@ -29,6 +29,19 @@ run_stage() {
       cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 configuration_client_compat
       ;;
+    device-validation)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-core -p better-auth-api -- -D warnings
+      cargo test --locked -p better-auth-core -p better-auth-api --lib -- \
+        plugin::tests::async_body_dispatch:: \
+        plugins::device_authorization::tests:: \
+        plugins::two_factor::tests::
+      cargo test --locked --test device_request_validation_tests \
+        --test device_issuance_tests --test native_endpoint_tests
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
+        ./compat-tests/reference-server/contracts/device-issuance.test.ts
+      ;;
     *) echo "Unknown check stage: $1" >&2; exit 1 ;;
   esac
 }

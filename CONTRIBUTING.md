@@ -105,6 +105,8 @@ Push and pull-request runs execute all check stages. For a manual CI run, select
 
 The additional `client-configuration` stage runs the existing configuration client compatibility test. Set the optional CI `profile` input to select one existing configuration, such as `oauth-proxy`. An empty input runs all configuration profiles. The harness rejects unknown names. The `profile` input applies only to this focused stage; complete acceptance remains unfiltered. The `alignment` stage already includes this test, so `all` does not execute the additional stage again.
 
+The additional `device-validation` stage checks formatting, core/API Clippy, asynchronous dispatch order, Device and Two Factor regressions, native endpoint projection, and paired Device request and issuance contracts. The workspace and alignment stages already cover these tests, so `all` does not repeat this focused stage.
+
 The CI job provides PostgreSQL and MySQL. The consumer runner executes the existing PostgreSQL contracts and the MySQL schema preflight contract. The MySQL test creates and deletes an isolated database, so its CI account needs those permissions. These tests do not establish upstream database sampling. To run the same complete check locally when needed, use:
 
 ```bash

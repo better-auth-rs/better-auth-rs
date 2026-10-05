@@ -1,5 +1,6 @@
 mod redemption;
 mod request;
+mod request_fields;
 pub use better_auth_core::DeviceCodeOwnership;
 use chrono::{Duration, Utc};
 use rand::{
@@ -9,6 +10,9 @@ use rand::{
 pub use redemption::{
     DeviceCodeRedemptionAuthorization, DeviceCodeRedemptionResult, DeviceRedemptionFuture,
     redeem_device_code,
+};
+pub use request_fields::{
+    DeviceFieldValidation, DeviceRequestField, DeviceRequestFields, DeviceRequestIssue,
 };
 use std::fmt;
 use std::future::Future;
@@ -74,6 +78,7 @@ struct DeviceAuthorizationConfig {
     validate_client: Option<Arc<ValidateClientCallback>>,
     on_device_auth_request: Option<Arc<DeviceAuthRequestCallback>>,
     verification_uri: Option<String>,
+    request_fields: Option<DeviceRequestFields>,
 }
 
 impl Default for DeviceAuthorizationConfig {
@@ -88,6 +93,7 @@ impl Default for DeviceAuthorizationConfig {
             validate_client: None,
             on_device_auth_request: None,
             verification_uri: None,
+            request_fields: None,
         }
     }
 }
@@ -116,6 +122,10 @@ impl fmt::Debug for DeviceAuthorizationConfig {
                 &self.on_device_auth_request.as_ref().map(|_| "custom"),
             )
             .field("verification_uri", &self.verification_uri)
+            .field(
+                "request_fields",
+                &self.request_fields.as_ref().map(|_| "configured"),
+            )
             .finish()
     }
 }
@@ -159,6 +169,12 @@ impl DeviceAuthorizationPlugin {
         Self {
             config: DeviceAuthorizationConfig::default(),
         }
+    }
+
+    /// Validate additional request fields without changing client authorization or storing those fields.
+    pub fn request_fields(mut self, fields: DeviceRequestFields) -> Self {
+        self.config.request_fields = Some(fields);
+        self
     }
 
     /// Override the device-code expiration window.
@@ -239,7 +255,10 @@ impl DeviceAuthorizationPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let body = request::normalize_code(req, request::read(req, request::code)?)?;
+        let body = request::normalize_code(
+            req,
+            request::read_code(req, self.config.request_fields.as_ref()).await?,
+        )?;
 
         if !self.validate_client_id(&body.client_id).await? {
             return device_error_response(400, "invalid_client", INVALID_CLIENT_ID);
@@ -567,32 +586,82 @@ fn validate_generated_code(code: String, label: &str) -> AuthResult<String> {
     Ok(code)
 }
 
-better_auth_core::impl_auth_plugin! {
-    DeviceAuthorizationPlugin, "device-authorization";
-    routes {
-        post "/device/code" => handle_device_code, "deviceCode", allowed_media_types = ["application/json", "application/x-www-form-urlencoded"], body = request::code;
-        post "/device/token" => handle_device_token, "deviceToken", body = request::token;
-        get "/device" => handle_device_verify, "deviceVerify", query = crate::plugins::query_input::device;
-        post "/device/approve" => handle_device_approve, "deviceApprove", body = request::action, require_headers = true;
-        post "/device/deny" => handle_device_deny, "deviceDeny", body = request::action, require_headers = true;
+#[async_trait::async_trait]
+impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
+    for DeviceAuthorizationPlugin
+{
+    fn name(&self) -> &'static str {
+        "device-authorization"
     }
-    extra {
-        async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
-            for (name, length) in [("deviceCodeLength", self.config.device_code_length), ("userCodeLength", self.config.user_code_length)] {
-                if !(1..=191).contains(&length) {
-                    return Err(AuthError::config(format!("{name} must be between 1 and 191")));
-                }
+
+    fn routes(&self) -> Vec<better_auth_core::AuthRoute> {
+        use better_auth_core::AuthRoute;
+        let code = AuthRoute::post("/device/code", "deviceCode")
+            .allowed_media_types(&["application/json", "application/x-www-form-urlencoded"]);
+        let code = match &self.config.request_fields {
+            Some(fields) => {
+                let fields = fields.clone();
+                code.body_validator_async(move |request| {
+                    let fields = fields.clone();
+                    async move { request::code_with_fields(&request, &fields).await }
+                })
             }
-            Ok(())
+            None => code.body_validator(request::code),
+        };
+        vec![
+            code,
+            AuthRoute::post("/device/token", "deviceToken").body_validator(request::token),
+            AuthRoute::get("/device", "deviceVerify")
+                .query_validator(crate::plugins::query_input::device),
+            AuthRoute::post("/device/approve", "deviceApprove")
+                .body_validator(request::action)
+                .require_headers(true),
+            AuthRoute::post("/device/deny", "deviceDeny")
+                .body_validator(request::action)
+                .require_headers(true),
+        ]
+    }
+
+    async fn on_request(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        use better_auth_core::HttpMethod;
+        let response = match (req.method(), req.path()) {
+            (HttpMethod::Post, "/device/code") => self.handle_device_code(req, ctx).await?,
+            (HttpMethod::Post, "/device/token") => self.handle_device_token(req, ctx).await?,
+            (HttpMethod::Get, "/device") => self.handle_device_verify(req, ctx).await?,
+            (HttpMethod::Post, "/device/approve") => self.handle_device_approve(req, ctx).await?,
+            (HttpMethod::Post, "/device/deny") => self.handle_device_deny(req, ctx).await?,
+            _ => return Ok(None),
+        };
+        Ok(Some(response))
+    }
+
+    async fn on_init(&self, _: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        for (name, length) in [
+            ("deviceCodeLength", self.config.device_code_length),
+            ("userCodeLength", self.config.user_code_length),
+        ] {
+            if !(1..=191).contains(&length) {
+                return Err(AuthError::config(format!(
+                    "{name} must be between 1 and 191"
+                )));
+            }
         }
-        fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
-            let window = self.config.expires_in.num_seconds() as f64
-                + f64::from(self.config.expires_in.subsec_nanos()) / 1_000_000_000.0;
-            Ok(vec![better_auth_core::middleware::PluginRateLimit::exact("/device", better_auth_core::middleware::EndpointRateLimit {
+        Ok(())
+    }
+    fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
+        let window = self.config.expires_in.num_seconds() as f64
+            + f64::from(self.config.expires_in.subsec_nanos()) / 1_000_000_000.0;
+        Ok(vec![better_auth_core::middleware::PluginRateLimit::exact(
+            "/device",
+            better_auth_core::middleware::EndpointRateLimit {
                 window,
                 max_requests: 5.0,
-            })])
-        }
+            },
+        )])
     }
 }
 

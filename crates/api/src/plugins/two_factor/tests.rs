@@ -346,8 +346,8 @@ fn test_routes_do_not_expose_view_backup_codes() {
     );
 }
 
-#[test]
-fn body_schemas_keep_each_instances_global_and_nested_password_policy() {
+#[tokio::test]
+async fn body_schemas_keep_each_instances_global_and_nested_password_policy() {
     let strict = TwoFactorPlugin::new().totp_allow_passwordless(true);
     let optional = TwoFactorPlugin::new()
         .allow_passwordless(true)
@@ -364,7 +364,12 @@ fn body_schemas_keep_each_instances_global_and_nested_password_policy() {
             let route = routes.iter().find(|route| route.path == path).unwrap();
             let mut request = AuthRequest::new(better_auth_core::HttpMethod::Post, path);
             request.body = Some(br#"{"unknown":"raw"}"#.to_vec());
-            let result = route.body_validator.as_ref().unwrap()(&request);
+            let result = route
+                .body_validator
+                .as_ref()
+                .unwrap()
+                .validate(&request)
+                .await;
             if required {
                 let response = result.unwrap_err().to_auth_response();
                 let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();

@@ -1,5 +1,5 @@
 use super::{
-    DEVICE_GRANT_TYPE,
+    DEVICE_GRANT_TYPE, DeviceFieldValidation, DeviceRequestFields, DeviceRequestIssue,
     types::{DeviceActionRequest, DeviceCodeRequest, DeviceTokenRequest},
 };
 use crate::plugins::json_body;
@@ -7,33 +7,33 @@ use better_auth_core::{AuthError, AuthRequest, AuthResult, endpoint_input::Valid
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
-fn parse<T: DeserializeOwned + Serialize + Send + Sync + 'static>(
-    req: &AuthRequest,
-    fields: &[(&str, bool)],
-    code: bool,
+fn fields(
+    body: Option<&Value>,
+    names: &[(&str, bool)],
     token: bool,
-) -> AuthResult<ValidatedBody> {
-    let body = req.input_body()?;
-    let mut errors = Vec::new();
+) -> (Map<String, Value>, Vec<DeviceRequestIssue>) {
+    let mut issues = Vec::new();
     let mut output = Map::new();
-    if let Some(object) = body.as_ref().and_then(Value::as_object) {
-        for &(name, required) in fields {
+    if let Some(object) = body.and_then(Value::as_object) {
+        for &(name, required) in names {
             let value = object.get(name);
             if token
                 && name == "grant_type"
                 && value.and_then(Value::as_str) != Some(DEVICE_GRANT_TYPE)
             {
-                errors.push(format!(
-                    "[body.grant_type] Invalid input: expected \"{DEVICE_GRANT_TYPE}\""
-                ));
+                issues.push(DeviceRequestIssue {
+                    message: format!("Invalid input: expected \"{DEVICE_GRANT_TYPE}\""),
+                    path: vec![Value::String(name.to_owned())],
+                    details: Map::new(),
+                });
             } else {
                 match value {
                     Some(value @ Value::String(_)) => {
                         let _ = output.insert(name.to_owned(), value.clone());
                     }
                     None if !required => {}
-                    value => errors.push(json_body::invalid_type(
-                        &format!("body.{name}"),
+                    value => issues.push(DeviceRequestIssue::invalid_type(
+                        Some(name),
                         "string",
                         value,
                     )),
@@ -41,10 +41,22 @@ fn parse<T: DeserializeOwned + Serialize + Send + Sync + 'static>(
             }
         }
     } else {
-        errors.push(json_body::invalid_type("body", "object", body.as_ref()));
+        issues.push(DeviceRequestIssue::invalid_type(None, "object", body));
     }
-    if !errors.is_empty() {
-        let message = errors.join("; ");
+    (output, issues)
+}
+
+fn finish<T: DeserializeOwned + Serialize + Send + Sync + 'static>(
+    output: Map<String, Value>,
+    issues: Option<Vec<DeviceRequestIssue>>,
+    code: bool,
+) -> AuthResult<ValidatedBody> {
+    if let Some(issues) = issues {
+        let message = issues
+            .iter()
+            .map(DeviceRequestIssue::message)
+            .collect::<Vec<_>>()
+            .join("; ");
         return Err(if code {
             super::device_error_response(400, "invalid_request", &message)?.into()
         } else {
@@ -55,6 +67,68 @@ fn parse<T: DeserializeOwned + Serialize + Send + Sync + 'static>(
     let typed: T = serde_json::from_value(projection.clone())?;
     Ok(ValidatedBody::new(Some(projection), typed))
 }
+
+fn parse<T: DeserializeOwned + Serialize + Send + Sync + 'static>(
+    req: &AuthRequest,
+    names: &[(&str, bool)],
+    code: bool,
+    token: bool,
+) -> AuthResult<ValidatedBody> {
+    let body = req.input_body()?;
+    let (output, issues) = fields(body.as_ref(), names, token);
+    finish::<T>(output, (!issues.is_empty()).then_some(issues), code)
+}
+
+pub(super) async fn code_with_fields(
+    req: &AuthRequest,
+    schema: &DeviceRequestFields,
+) -> AuthResult<ValidatedBody> {
+    let body = req.input_body()?;
+    let (mut output, issues) = fields(
+        body.as_ref(),
+        &[("client_id", true), ("user_id", false), ("scope", false)],
+        false,
+    );
+    let mut issues = (!issues.is_empty()).then_some(issues);
+    if let Some(object) = body.as_ref().and_then(Value::as_object) {
+        for (name, validator) in &schema.fields {
+            match validator.validate(object.get(name).cloned()).await? {
+                DeviceFieldValidation::Value(Some(value)) => {
+                    let _ = output.insert(name.clone(), value);
+                }
+                DeviceFieldValidation::Value(None) => {}
+                DeviceFieldValidation::Issues(mut field_issues) => {
+                    for issue in &mut field_issues {
+                        issue.path.insert(0, Value::String(name.clone()));
+                    }
+                    issues.get_or_insert_with(Vec::new).extend(field_issues);
+                }
+            }
+        }
+    }
+    if let Some(issues) = &issues {
+        schema.report(issues)?;
+    }
+    finish::<DeviceCodeRequest>(output, issues, true)
+}
+
+pub(super) async fn read_code(
+    req: &AuthRequest,
+    schema: Option<&DeviceRequestFields>,
+) -> AuthResult<DeviceCodeRequest> {
+    if let Some(body) = req.validated_body::<DeviceCodeRequest>() {
+        return Ok(body.clone());
+    }
+    let validated = match schema {
+        Some(schema) => code_with_fields(req, schema).await?,
+        None => code(req)?,
+    };
+    validated
+        .get::<DeviceCodeRequest>()
+        .cloned()
+        .ok_or_else(|| AuthError::internal("Device validator returned a different body type"))
+}
+
 pub(super) fn code(req: &AuthRequest) -> AuthResult<ValidatedBody> {
     parse::<DeviceCodeRequest>(
         req,
