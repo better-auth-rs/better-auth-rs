@@ -14,6 +14,7 @@ on:
       - compat-tests/schema-consumer/member-organization-role-catalog-config.json
       - compat-tests/schema-consumer/team-catalog-config.json
       - compat-tests/schema-consumer/invitation-catalog-config.json
+      - compat-tests/schema-consumer/session-catalog-config.json
 
 permissions:
   contents: read
@@ -64,7 +65,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Capture pinned Team, Invitation, and RateLimit storage
+      - name: Capture pinned Session storage
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -73,8 +74,7 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
           for backend in postgres mysql; do
-            bun --no-install ./compat-tests/reference-server/contracts/team-invitation-server-capture.mjs "$backend" "$capture_dir/team-invitation-$backend-server-1.7.6.json" 2>&1 | tee "$capture_dir/team-invitation-$backend-server.log"
-            bun --no-install ./compat-tests/reference-server/contracts/rate-limit-server-runtime-capture.mjs "$backend" "$capture_dir/rate-limit-$backend-runtime-1.7.6.json" 2>&1 | tee "$capture_dir/rate-limit-$backend-runtime.log"
+            bun --no-install ./compat-tests/reference-server/contracts/session-server-capture.mjs "$backend" "$capture_dir/session-$backend-server-1.7.6.json" 2>&1 | tee "$capture_dir/session-$backend-server.log"
           done
           (
             cd "$capture_dir"
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-team-rate-limit-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-session-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
