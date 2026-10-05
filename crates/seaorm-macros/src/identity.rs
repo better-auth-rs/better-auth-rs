@@ -25,7 +25,7 @@ pub(super) fn string_view(ty: &syn::Type, name: &str) -> TokenStream {
 }
 
 pub(super) fn is_reference(role: EntityRole, field: &syn::Field) -> syn::Result<bool> {
-    let mut configured = false;
+    let mut configured = None;
     for attr in field
         .attrs
         .iter()
@@ -35,7 +35,11 @@ pub(super) fn is_reference(role: EntityRole, field: &syn::Field) -> syn::Result<
             if !meta.path.is_ident("reference") {
                 return Err(meta.error("expected `reference`"));
             }
-            configured = true;
+            configured = Some(if meta.input.peek(syn::Token![=]) {
+                meta.value()?.parse::<syn::LitBool>()?.value
+            } else {
+                true
+            });
             Ok(())
         })?;
     }
@@ -48,10 +52,11 @@ pub(super) fn is_reference(role: EntityRole, field: &syn::Field) -> syn::Result<
             .find(|entity| entity.role == Some(role))
             .map_or("", |entity| entity.table_name),
     };
-    Ok(configured
-        || registry::entity_foreign_keys(table)
+    Ok(configured.unwrap_or_else(|| {
+        registry::entity_foreign_keys(table)
             .iter()
-            .any(|(column, _)| field.ident.as_ref().is_some_and(|ident| ident == column)))
+            .any(|(column, _)| field.ident.as_ref().is_some_and(|ident| ident == column))
+    }))
 }
 
 pub(super) fn decode(field: &syn::Field, core: &TokenStream) -> TokenStream {
@@ -89,5 +94,38 @@ pub(super) fn optional_inner(ty: &syn::Type) -> Option<&syn::Type> {
     match arguments.args.first()? {
         syn::GenericArgument::Type(ty) => Some(ty),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse::Parser;
+
+    #[test]
+    fn explicit_reference_policy_overrides_registry() -> syn::Result<()> {
+        for (tokens, expected) in [
+            (quote!(user_id: Option<String>), true),
+            (quote!(#[auth(reference)] user_id: Option<String>), true),
+            (
+                quote!(#[auth(reference = true)] user_id: Option<String>),
+                true,
+            ),
+            (
+                quote!(#[auth(reference = false)] user_id: Option<String>),
+                false,
+            ),
+            (quote!(scope: Option<String>), false),
+            (quote!(#[auth(reference)] scope: Option<String>), true),
+        ] {
+            let field = syn::Field::parse_named.parse2(tokens)?;
+            if is_reference(EntityRole::DeviceCode, &field)? != expected {
+                return Err(syn::Error::new_spanned(
+                    field,
+                    "explicit reference policy did not preserve its precedence over the registry",
+                ));
+            }
+        }
+        Ok(())
     }
 }

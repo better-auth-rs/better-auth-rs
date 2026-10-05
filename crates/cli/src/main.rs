@@ -44,6 +44,10 @@ enum Command {
         #[arg(long)]
         session_active_column: bool,
 
+        /// Retain the previous DeviceCode names, types, references, and indexes.
+        #[arg(long)]
+        device_code_legacy_schema: bool,
+
         /// Match advanced.database.generate_id in the application's AuthConfig.
         #[arg(long, value_enum, default_value_t = schema_config::IdGeneration::Random)]
         generate_id: schema_config::IdGeneration,
@@ -76,6 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 schema_config,
                 rate_limit_database,
                 session_active_column,
+                device_code_legacy_schema,
                 generate_id,
                 database,
             },
@@ -111,6 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         generate_id,
         database,
         session_active_column,
+        device_code_legacy_schema,
     )?;
     if let Some(path) = output {
         if let Some(parent) = path.parent()

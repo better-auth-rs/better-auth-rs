@@ -17,6 +17,7 @@ use syn::{DeriveInput, parse_macro_input};
 /// Table and column mappings use SeaORM's `table_name` and `column_name` attributes.
 /// IDs use the declared field types. Absent IDs remain unset for database defaults.
 /// Mark additional fields that reference an ID with `#[auth(reference)]` to parse string identifiers into integer or UUID storage.
+/// Use `#[auth(reference = false)]` to keep a native field independent of the registry's ID-reference conversion.
 ///
 /// ```ignore
 /// #[derive(DeriveEntityModel, AuthEntity)]

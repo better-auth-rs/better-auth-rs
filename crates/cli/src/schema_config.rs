@@ -175,6 +175,7 @@ pub(crate) struct Entity {
     pub role: Option<EntityRole>,
     pub fields: Vec<Field>,
     pub session_row_presence: bool,
+    pub device_code_native_schema: bool,
 }
 
 pub(crate) struct Field {
@@ -185,6 +186,7 @@ pub(crate) struct Field {
     pub registry_column: Option<&'static str>,
     pub serialized: Option<String>,
     pub primary_key: bool,
+    pub reference_override: Option<bool>,
     pub unique: Option<bool>,
     pub attributes: Option<AdditionalField>,
 }
@@ -273,11 +275,15 @@ impl Entity {
         config: Option<&ModelConfig>,
         database: Database,
         session_active_column: bool,
+        device_code_legacy_schema: bool,
     ) -> Result<Self, String> {
         let session_row_presence =
             definition.role == Some(EntityRole::Session) && !session_active_column;
+        let device_code_native_schema =
+            definition.role == Some(EntityRole::DeviceCode) && !device_code_legacy_schema;
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
+            || device_code_native_schema
             || matches!(
                 definition.role,
                 Some(
@@ -304,6 +310,7 @@ impl Entity {
             },
             role: definition.role,
             session_row_presence,
+            device_code_native_schema,
             fields: fields
                 .iter()
                 .map(|field| {
@@ -352,6 +359,8 @@ impl Entity {
                             ))
                         .then(|| field.name.to_lower_camel_case()),
                         primary_key: field.is_primary_key,
+                        reference_override: (device_code_native_schema && field.name == "user_id")
+                            .then_some(false),
                         unique: None,
                         attributes: None,
                     })
@@ -461,6 +470,7 @@ impl Entity {
                     registry_column: None,
                     serialized: Some(column),
                     primary_key: false,
+                    reference_override: None,
                     unique: Some(field.unique),
                     attributes: Some(field.clone()),
                 });
@@ -524,9 +534,11 @@ impl Field {
     pub(crate) fn references_id(&self, table: &str) -> bool {
         self.attributes.as_ref().map_or_else(
             || {
-                better_auth_schema_registry::entity_foreign_keys(table)
-                    .iter()
-                    .any(|(column, _)| self.registry_column == Some(*column))
+                self.reference_override.unwrap_or_else(|| {
+                    better_auth_schema_registry::entity_foreign_keys(table)
+                        .iter()
+                        .any(|(column, _)| self.registry_column == Some(*column))
+                })
             },
             |attributes| {
                 attributes

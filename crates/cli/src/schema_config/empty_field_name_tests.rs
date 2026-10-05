@@ -33,6 +33,7 @@ fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
             config.0.get("deviceCode"),
             Database::Sqlite,
             false,
+            false,
         )
         .expect("ordinary CLI display column resolves");
         let column = &entity
@@ -60,6 +61,7 @@ fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
             false,
             IdGeneration::Random,
             Database::Sqlite,
+            false,
             false,
         )
         .expect("ordinary CLI display schema generates");

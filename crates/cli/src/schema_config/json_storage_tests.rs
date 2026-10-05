@@ -63,6 +63,7 @@ fn sqlite_json_storage_changes_only_fresh_nonreference_application_fields() {
             IdGeneration::Random,
             database,
             false,
+            false,
         )
         .expect("backend-specific schema generates");
         let organization = model_fields(&source, "organization");

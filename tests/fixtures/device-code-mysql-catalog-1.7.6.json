@@ -1,0 +1,313 @@
+{
+  "version": "1.7.6",
+  "database": "mysql",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "deviceCode",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "2",
+          "name": "deviceCode",
+          "type": "varchar",
+          "nativeType": "varchar(191)",
+          "maxLength": "191",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "3",
+          "name": "userCode",
+          "type": "varchar",
+          "nativeType": "varchar(191)",
+          "maxLength": "191",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "4",
+          "name": "userId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "5",
+          "name": "expiresAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "6",
+          "name": "status",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "7",
+          "name": "lastPolledAt",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "8",
+          "name": "pollingInterval",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "9",
+          "name": "clientId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "deviceCode",
+          "position": "10",
+          "name": "scope",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `deviceCode` (`id` varchar(36) not null primary key, `deviceCode` varchar(191) not null, `userCode` varchar(191) not null, `userId` text, `expiresAt` timestamp(3) not null, `status` text not null, `lastPolledAt` timestamp(3), `pollingInterval` integer, `clientId` text, `scope` text);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate unique index `deviceCode_deviceCode_uidx` on `deviceCode` (`deviceCode`);\n\ncreate unique index `deviceCode_userCode_uidx` on `deviceCode` (`userCode`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "deviceCode",
+            "name": "deviceCode_deviceCode_uidx",
+            "unique": "YES",
+            "position": "1",
+            "column": "deviceCode"
+          },
+          {
+            "table": "deviceCode",
+            "name": "deviceCode_userCode_uidx",
+            "unique": "YES",
+            "position": "1",
+            "column": "userCode"
+          },
+          {
+            "table": "deviceCode",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "deviceCode": {
+          "modelName": "display_catalog_device_codes",
+          "fields": {
+            "deviceCode": "device_key",
+            "userCode": "display_code",
+            "userId": "person_link",
+            "expiresAt": "expires_on",
+            "status": "display_status",
+            "lastPolledAt": "polled_on",
+            "pollingInterval": "poll_seconds",
+            "clientId": "application_link",
+            "scope": "display_scope"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_device_codes",
+          "position": "1",
+          "name": "id",
+          "type": "varchar",
+          "nativeType": "varchar(36)",
+          "maxLength": "36",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "2",
+          "name": "device_key",
+          "type": "varchar",
+          "nativeType": "varchar(191)",
+          "maxLength": "191",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "3",
+          "name": "display_code",
+          "type": "varchar",
+          "nativeType": "varchar(191)",
+          "maxLength": "191",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "4",
+          "name": "person_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "5",
+          "name": "expires_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "6",
+          "name": "display_status",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "7",
+          "name": "polled_on",
+          "type": "timestamp",
+          "nativeType": "timestamp(3)",
+          "maxLength": null,
+          "datetimePrecision": "3",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "8",
+          "name": "poll_seconds",
+          "type": "int",
+          "nativeType": "int",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "9",
+          "name": "application_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_catalog_device_codes",
+          "position": "10",
+          "name": "display_scope",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": "65535",
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table `user` (`id` varchar(36) not null primary key, `name` varchar(255) not null, `email` varchar(255) not null unique, `emailVerified` boolean not null, `image` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `session` (`id` varchar(36) not null primary key, `expiresAt` timestamp(3) not null, `token` varchar(255) not null unique, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null, `ipAddress` text, `userAgent` text, `userId` varchar(36) not null references `user` (`id`) on delete cascade);\n\ncreate table `account` (`id` varchar(36) not null primary key, `accountId` text not null, `providerId` text not null, `userId` varchar(36) not null references `user` (`id`) on delete cascade, `accessToken` text, `refreshToken` text, `idToken` text, `accessTokenExpiresAt` timestamp(3), `refreshTokenExpiresAt` timestamp(3), `scope` text, `password` text, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) not null);\n\ncreate table `verification` (`id` varchar(36) not null primary key, `identifier` varchar(255) not null, `value` text not null, `expiresAt` timestamp(3) not null, `createdAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null, `updatedAt` timestamp(3) default CURRENT_TIMESTAMP(3) not null);\n\ncreate table `display_catalog_device_codes` (`id` varchar(36) not null primary key, `device_key` varchar(191) not null, `display_code` varchar(191) not null, `person_link` text, `expires_on` timestamp(3) not null, `display_status` text not null, `polled_on` timestamp(3), `poll_seconds` integer, `application_link` text, `display_scope` text);\n\ncreate index `session_userId_idx` on `session` (`userId`);\n\ncreate index `account_userId_idx` on `account` (`userId`);\n\ncreate index `verification_identifier_idx` on `verification` (`identifier`);\n\ncreate unique index `display_catalog_device_codes_device_key_uidx` on `display_catalog_device_codes` (`device_key`);\n\ncreate unique index `display_catalog_device_codes_display_code_uidx` on `display_catalog_device_codes` (`display_code`);",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "display_catalog_device_codes",
+            "name": "display_catalog_device_codes_device_key_uidx",
+            "unique": "YES",
+            "position": "1",
+            "column": "device_key"
+          },
+          {
+            "table": "display_catalog_device_codes",
+            "name": "display_catalog_device_codes_display_code_uidx",
+            "unique": "YES",
+            "position": "1",
+            "column": "display_code"
+          },
+          {
+            "table": "display_catalog_device_codes",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,720 @@
+{
+  "version": "1.7.6",
+  "database": "sqlite",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "catalog": {
+        "table": {
+          "type": "table",
+          "name": "deviceCode",
+          "tbl_name": "deviceCode"
+        },
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "deviceCode",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "userCode",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "userId",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "expiresAt",
+            "type": "date",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "lastPolledAt",
+            "type": "date",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "pollingInterval",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "clientId",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "scope",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "deviceCode_userCode_uidx",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 2,
+                "name": "userCode"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 2,
+                "name": "userCode",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "deviceCode_deviceCode_uidx",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "deviceCode"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "deviceCode",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 2,
+              "name": "sqlite_autoindex_deviceCode_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": []
+      },
+      "ddl": [
+        {
+          "type": "index",
+          "name": "deviceCode_deviceCode_uidx",
+          "tbl_name": "deviceCode",
+          "sql": "CREATE UNIQUE INDEX \"deviceCode_deviceCode_uidx\" on \"deviceCode\" (\"deviceCode\")"
+        },
+        {
+          "type": "index",
+          "name": "deviceCode_userCode_uidx",
+          "tbl_name": "deviceCode",
+          "sql": "CREATE UNIQUE INDEX \"deviceCode_userCode_uidx\" on \"deviceCode\" (\"userCode\")"
+        },
+        {
+          "type": "index",
+          "name": "sqlite_autoindex_deviceCode_1",
+          "tbl_name": "deviceCode",
+          "sql": null
+        },
+        {
+          "type": "table",
+          "name": "deviceCode",
+          "tbl_name": "deviceCode",
+          "sql": "CREATE TABLE \"deviceCode\" (\"id\" text not null primary key, \"deviceCode\" text not null, \"userCode\" text not null, \"userId\" text, \"expiresAt\" date not null, \"status\" text not null, \"lastPolledAt\" date, \"pollingInterval\" integer, \"clientId\" text, \"scope\" text)"
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"deviceCode\" (\"id\" text not null primary key, \"deviceCode\" text not null, \"userCode\" text not null, \"userId\" text, \"expiresAt\" date not null, \"status\" text not null, \"lastPolledAt\" date, \"pollingInterval\" integer, \"clientId\" text, \"scope\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate unique index \"deviceCode_deviceCode_uidx\" on \"deviceCode\" (\"deviceCode\");\n\ncreate unique index \"deviceCode_userCode_uidx\" on \"deviceCode\" (\"userCode\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "name": "legacy",
+      "configuration": {
+        "deviceCode": {
+          "modelName": "device_code",
+          "fields": {
+            "deviceCode": "device_code",
+            "userCode": "user_code",
+            "userId": "user_id",
+            "expiresAt": "expires_at",
+            "status": "status",
+            "lastPolledAt": "last_polled_at",
+            "pollingInterval": "polling_interval",
+            "clientId": "client_id",
+            "scope": "scope"
+          }
+        }
+      },
+      "catalog": {
+        "table": {
+          "type": "table",
+          "name": "device_code",
+          "tbl_name": "device_code"
+        },
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "device_code",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "user_code",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "user_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "expires_at",
+            "type": "date",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "status",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "last_polled_at",
+            "type": "date",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "polling_interval",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "client_id",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "scope",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "device_code_user_code_uidx",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 2,
+                "name": "user_code"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 2,
+                "name": "user_code",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "device_code_device_code_uidx",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "device_code"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "device_code",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 2,
+              "name": "sqlite_autoindex_device_code_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": []
+      },
+      "ddl": [
+        {
+          "type": "index",
+          "name": "device_code_device_code_uidx",
+          "tbl_name": "device_code",
+          "sql": "CREATE UNIQUE INDEX \"device_code_device_code_uidx\" on \"device_code\" (\"device_code\")"
+        },
+        {
+          "type": "index",
+          "name": "device_code_user_code_uidx",
+          "tbl_name": "device_code",
+          "sql": "CREATE UNIQUE INDEX \"device_code_user_code_uidx\" on \"device_code\" (\"user_code\")"
+        },
+        {
+          "type": "index",
+          "name": "sqlite_autoindex_device_code_1",
+          "tbl_name": "device_code",
+          "sql": null
+        },
+        {
+          "type": "table",
+          "name": "device_code",
+          "tbl_name": "device_code",
+          "sql": "CREATE TABLE \"device_code\" (\"id\" text not null primary key, \"device_code\" text not null, \"user_code\" text not null, \"user_id\" text, \"expires_at\" date not null, \"status\" text not null, \"last_polled_at\" date, \"polling_interval\" integer, \"client_id\" text, \"scope\" text)"
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"device_code\" (\"id\" text not null primary key, \"device_code\" text not null, \"user_code\" text not null, \"user_id\" text, \"expires_at\" date not null, \"status\" text not null, \"last_polled_at\" date, \"polling_interval\" integer, \"client_id\" text, \"scope\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate unique index \"device_code_device_code_uidx\" on \"device_code\" (\"device_code\");\n\ncreate unique index \"device_code_user_code_uidx\" on \"device_code\" (\"user_code\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "deviceCode": {
+          "modelName": "display_catalog_device_codes",
+          "fields": {
+            "deviceCode": "device_key",
+            "userCode": "display_code",
+            "userId": "person_link",
+            "expiresAt": "expires_on",
+            "status": "display_status",
+            "lastPolledAt": "polled_on",
+            "pollingInterval": "poll_seconds",
+            "clientId": "application_link",
+            "scope": "display_scope"
+          }
+        }
+      },
+      "catalog": {
+        "table": {
+          "type": "table",
+          "name": "display_catalog_device_codes",
+          "tbl_name": "display_catalog_device_codes"
+        },
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "device_key",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "display_code",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "person_link",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "expires_on",
+            "type": "date",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "display_status",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 6,
+            "name": "polled_on",
+            "type": "date",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 7,
+            "name": "poll_seconds",
+            "type": "INTEGER",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 8,
+            "name": "application_link",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 9,
+            "name": "display_scope",
+            "type": "TEXT",
+            "notnull": 0,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "display_catalog_device_codes_display_code_uidx",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 2,
+                "name": "display_code"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 2,
+                "name": "display_code",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "display_catalog_device_codes_device_key_uidx",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "device_key"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "device_key",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 2,
+              "name": "sqlite_autoindex_display_catalog_device_codes_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": []
+      },
+      "ddl": [
+        {
+          "type": "index",
+          "name": "display_catalog_device_codes_device_key_uidx",
+          "tbl_name": "display_catalog_device_codes",
+          "sql": "CREATE UNIQUE INDEX \"display_catalog_device_codes_device_key_uidx\" on \"display_catalog_device_codes\" (\"device_key\")"
+        },
+        {
+          "type": "index",
+          "name": "display_catalog_device_codes_display_code_uidx",
+          "tbl_name": "display_catalog_device_codes",
+          "sql": "CREATE UNIQUE INDEX \"display_catalog_device_codes_display_code_uidx\" on \"display_catalog_device_codes\" (\"display_code\")"
+        },
+        {
+          "type": "index",
+          "name": "sqlite_autoindex_display_catalog_device_codes_1",
+          "tbl_name": "display_catalog_device_codes",
+          "sql": null
+        },
+        {
+          "type": "table",
+          "name": "display_catalog_device_codes",
+          "tbl_name": "display_catalog_device_codes",
+          "sql": "CREATE TABLE \"display_catalog_device_codes\" (\"id\" text not null primary key, \"device_key\" text not null, \"display_code\" text not null, \"person_link\" text, \"expires_on\" date not null, \"display_status\" text not null, \"polled_on\" date, \"poll_seconds\" integer, \"application_link\" text, \"display_scope\" text)"
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"display_catalog_device_codes\" (\"id\" text not null primary key, \"device_key\" text not null, \"display_code\" text not null, \"person_link\" text, \"expires_on\" date not null, \"display_status\" text not null, \"polled_on\" date, \"poll_seconds\" integer, \"application_link\" text, \"display_scope\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate unique index \"display_catalog_device_codes_device_key_uidx\" on \"display_catalog_device_codes\" (\"device_key\");\n\ncreate unique index \"display_catalog_device_codes_display_code_uidx\" on \"display_catalog_device_codes\" (\"display_code\");",
+        "repeatedSql": ";"
+      }
+    }
+  ]
+}

@@ -17,6 +17,7 @@ pub(crate) fn generate_schema(
     generation: IdGeneration,
     database: Database,
     session_active_column: bool,
+    device_code_legacy_schema: bool,
 ) -> Result<String, String> {
     config.validate()?;
     let mut user = registry::core_fields(EntityRole::User).to_vec();
@@ -73,8 +74,14 @@ pub(crate) fn generate_schema(
             None => entity.fields,
         };
         let configured = config.0.get(&model_name(entity.mod_name));
-        let mut entity =
-            Entity::resolve(entity, fields, configured, database, session_active_column)?;
+        let mut entity = Entity::resolve(
+            entity,
+            fields,
+            configured,
+            database,
+            session_active_column,
+            device_code_legacy_schema,
+        )?;
         entity.resolve_ids(generation, database)?;
         definitions.push(entity);
     }
@@ -258,10 +265,15 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
         } else {
             None
         };
-        let reference = (entity.role.is_some()
-            && field.attributes.is_some()
-            && field.references_id(entity.registry_table))
-        .then(|| quote!(#[auth(reference)]));
+        let reference = if entity.role.is_some() && field.reference_override.is_some() {
+            let reference = field.references_id(entity.registry_table);
+            Some(quote!(#[auth(reference = #reference)]))
+        } else {
+            (entity.role.is_some()
+                && field.attributes.is_some()
+                && field.references_id(entity.registry_table))
+            .then(|| quote!(#[auth(reference)]))
+        };
         quote! {
             #column_attr
             #serialized
@@ -318,7 +330,9 @@ fn gen_table(
                 .fields
                 .iter()
                 .find(|field| field.registry_column == Some(entry.0))
-                .is_none_or(|field| field.attributes.is_none())
+                .is_none_or(|field| {
+                    field.attributes.is_none() && field.references_id(entity.registry_table)
+                })
         })
         .map(|(column, target)| {
             let column = entity
@@ -420,7 +434,9 @@ fn gen_table(
                 return Some(column);
             }
             if database == Database::Sqlite
-                && (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
+                && (sqlite_native_catalog(database, entity.role)
+                    || entity.session_row_presence
+                    || entity.device_code_native_schema)
                 && field.attributes.is_none()
             {
                 let definition = core_field(entity.role, field.registry_column?)?;
@@ -495,6 +511,7 @@ fn gen_server_native_column(
 ) -> Option<TokenStream> {
     if database == Database::Sqlite
         || !(entity.session_row_presence
+            || entity.device_code_native_schema
             || (database == Database::Mysql
                 && entity.role == Some(EntityRole::TeamMember)
                 && field.registry_column == Some("created_at"))
@@ -518,6 +535,12 @@ fn gen_server_native_column(
     }
     let definition = core_field(entity.role, field.registry_column?)?;
     let data_type = match (database, definition.ty) {
+        (Database::Mysql, "String")
+            if entity.device_code_native_schema
+                && matches!(definition.name, "device_code" | "user_code") =>
+        {
+            quote!(column.string_len(191);)
+        }
         (Database::Mysql, "String" | "Option<String>")
             if matches!(
                 (entity.role, definition.name),
@@ -667,6 +690,10 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
         .iter()
         .filter(|index| !(entity.session_row_presence && index.columns == ["expires_at"]))
         .filter(|index| {
+            !(entity.device_code_native_schema
+                && matches!(index.columns, ["user_id"] | ["expires_at"]))
+        })
+        .filter(|index| {
             !(database == Database::Sqlite
                 && entity.role == Some(EntityRole::Invitation)
                 && index.columns == ["status"])
@@ -712,8 +739,14 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
                 && field.attributes.is_none()
                 && !unique && columns.as_slice() == [field.column.as_str()]
         });
-        let name = if let Some(field) = native_index {
-            sqlite_field_index_name(table, &field.column)
+        let device_index = entity.device_code_native_schema && unique && entity.fields.iter().any(|field| {
+            matches!(field.registry_column, Some("device_code" | "user_code"))
+                && columns.as_slice() == [field.column.as_str()]
+        });
+        let name = if device_index {
+            native_field_index_name(table, &columns.join("_"), true)
+        } else if let Some(field) = native_index {
+            native_field_index_name(table, &field.column, false)
         } else {
             format!("idx_{table}_{}", columns.join("_"))
         };
@@ -723,9 +756,10 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     }).collect()
 }
 
-fn sqlite_field_index_name(table: &str, column: &str) -> String {
+fn native_field_index_name(table: &str, column: &str, unique: bool) -> String {
     let prefix = format!("{table}_{column}");
-    let name = format!("{prefix}_idx");
+    let ending = if unique { "uidx" } else { "idx" };
+    let name = format!("{prefix}_{ending}");
     if name.len() <= 63 {
         return name;
     }
@@ -733,7 +767,7 @@ fn sqlite_field_index_name(table: &str, column: &str) -> String {
     let hash = name.encode_utf16().fold(2_166_136_261_u32, |hash, unit| {
         (hash ^ u32::from(unit)).wrapping_mul(16_777_619)
     });
-    let suffix = format!("_{hash:08x}_idx");
+    let suffix = format!("_{hash:08x}_{ending}");
     let mut bytes = 0;
     let prefix: String = prefix
         .chars()

@@ -234,6 +234,7 @@ fn native_field_mappings_match_upstream_and_preserve_raw_declarations() {
                 IdGeneration::Random,
                 Database::Sqlite,
                 false,
+                false,
             )
             .expect("ordinary native schema generates");
             let file = syn::parse_file(&source).expect("generated source parses");
@@ -287,6 +288,7 @@ fn empty_display_username_mapping_preserves_distinct_physical_and_serialized_def
             false,
             IdGeneration::Random,
             Database::Sqlite,
+            false,
             false,
         )
         .expect("username schema generates");
