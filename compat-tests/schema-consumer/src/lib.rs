@@ -23,6 +23,7 @@ mod tests {
     mod team_catalog;
     mod user_account_catalog;
     mod verification_catalog;
+    mod verification_server_catalog;
     mod wallet_additional_fields;
 
     use std::sync::Arc;

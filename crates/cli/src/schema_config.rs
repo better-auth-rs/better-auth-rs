@@ -281,7 +281,7 @@ impl Entity {
             || session_row_presence
             || matches!(
                 definition.role,
-                Some(EntityRole::User | EntityRole::Account)
+                Some(EntityRole::User | EntityRole::Account | EntityRole::Verification)
             );
         let mut entity = Self {
             module: syn::parse_str(definition.mod_name)

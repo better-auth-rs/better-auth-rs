@@ -3,42 +3,54 @@ use better_auth::seaorm::{
     sea_orm::{ConnectOptions, ConnectionTrait, DbBackend, EntityName, Statement},
 };
 use serde_json::{Value, json};
+use std::future::Future;
 
-type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub(super) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-mod postgres {
+pub(super) mod postgres {
     include!(env!("BETTER_AUTH_SERVER_POSTGRES_CATALOG_SCHEMA"));
 }
 
-mod mysql {
+pub(super) mod mysql {
     include!(env!("BETTER_AUTH_SERVER_MYSQL_CATALOG_SCHEMA"));
 }
 
-async fn observe(
+pub(super) async fn observe<const N: usize>(
     database: &DatabaseConnection,
     backend: DbBackend,
-    table_names: [String; 2],
+    table_names: [String; N],
 ) -> TestResult<Value> {
+    let parameters = (1..=N)
+        .map(|index| match backend {
+            DbBackend::Postgres => format!("${index}"),
+            _ => "?".to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
     let sql = match backend {
         DbBackend::Postgres => {
-            r#"SELECT table_name AS "table", CAST(ordinal_position AS text) AS "position",
+            format!(
+                r#"SELECT table_name AS "table", CAST(ordinal_position AS text) AS "position",
             column_name AS "name", data_type AS "type", udt_name AS "nativeType",
             CAST(character_maximum_length AS text) AS "maxLength",
             CAST(datetime_precision AS text) AS "datetimePrecision",
             is_nullable AS "nullable", column_default AS "default"
             FROM information_schema.columns
-            WHERE table_schema = current_schema() AND table_name IN ($1, $2)
+            WHERE table_schema = current_schema() AND table_name IN ({parameters})
             ORDER BY table_name, ordinal_position"#
+            )
         }
         DbBackend::MySql => {
-            r"SELECT TABLE_NAME AS `table`, CAST(ORDINAL_POSITION AS CHAR) AS `position`,
+            format!(
+                r"SELECT TABLE_NAME AS `table`, CAST(ORDINAL_POSITION AS CHAR) AS `position`,
             COLUMN_NAME AS `name`, DATA_TYPE AS `type`, COLUMN_TYPE AS `nativeType`,
             CAST(CHARACTER_MAXIMUM_LENGTH AS CHAR) AS `maxLength`,
             CAST(DATETIME_PRECISION AS CHAR) AS `datetimePrecision`,
             IS_NULLABLE AS `nullable`, COLUMN_DEFAULT AS `default`
             FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?)
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ({parameters})
             ORDER BY TABLE_NAME, ORDINAL_POSITION"
+            )
         }
         _ => {
             return Err("The server catalog test requires PostgreSQL or MySQL".into());
@@ -116,6 +128,14 @@ async fn check(database: &DatabaseConnection, backend: DbBackend) -> TestResult 
 #[tokio::test]
 #[ignore = "Requires BETTER_AUTH_TEST_POSTGRES_URL and the CI upstream catalog fixture"]
 async fn live_postgres_user_account_catalog_matches_upstream() -> TestResult {
+    in_postgres_catalog(|database| async move { check(&database, DbBackend::Postgres).await }).await
+}
+
+pub(super) async fn in_postgres_catalog<F, Fut>(check: F) -> TestResult
+where
+    F: FnOnce(DatabaseConnection) -> Fut + Send + 'static,
+    Fut: Future<Output = TestResult> + Send + 'static,
+{
     let mut options = ConnectOptions::new(std::env::var("BETTER_AUTH_TEST_POSTGRES_URL")?);
     let _ = options.max_connections(1).sqlx_logging(false);
     let database = Database::connect(options).await?;
@@ -131,7 +151,7 @@ async fn live_postgres_user_account_catalog_matches_upstream() -> TestResult {
             .execute_unprepared(&format!("SET search_path TO {schema}"))
             .await?;
         let worker = database.clone();
-        tokio::spawn(async move { check(&worker, DbBackend::Postgres).await }).await??;
+        tokio::spawn(async move { check(worker).await }).await??;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     }
     .await;
@@ -147,6 +167,14 @@ async fn live_postgres_user_account_catalog_matches_upstream() -> TestResult {
 #[tokio::test]
 #[ignore = "Requires BETTER_AUTH_TEST_MYSQL_URL and the CI upstream catalog fixture"]
 async fn live_mysql_user_account_catalog_matches_upstream() -> TestResult {
+    in_mysql_catalog(|database| async move { check(&database, DbBackend::MySql).await }).await
+}
+
+pub(super) async fn in_mysql_catalog<F, Fut>(check: F) -> TestResult
+where
+    F: FnOnce(DatabaseConnection) -> Fut + Send + 'static,
+    Fut: Future<Output = TestResult> + Send + 'static,
+{
     let mut options = ConnectOptions::new(std::env::var("BETTER_AUTH_TEST_MYSQL_URL")?);
     let _ = options.max_connections(1).sqlx_logging(false);
     let database = Database::connect(options).await?;
@@ -162,7 +190,7 @@ async fn live_mysql_user_account_catalog_matches_upstream() -> TestResult {
             .execute_unprepared(&format!("USE `{name}`"))
             .await?;
         let worker = database.clone();
-        tokio::spawn(async move { check(&worker, DbBackend::MySql).await }).await??;
+        tokio::spawn(async move { check(worker).await }).await??;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
     }
     .await;

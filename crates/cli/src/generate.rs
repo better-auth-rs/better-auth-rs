@@ -493,7 +493,10 @@ fn gen_server_native_column(
     database: Database,
 ) -> Option<TokenStream> {
     if database == Database::Sqlite
-        || !matches!(entity.role, Some(EntityRole::User | EntityRole::Account))
+        || !matches!(
+            entity.role,
+            Some(EntityRole::User | EntityRole::Account | EntityRole::Verification)
+        )
         || field.attributes.is_some()
     {
         return None;
@@ -501,8 +504,11 @@ fn gen_server_native_column(
     let definition = core_field(entity.role, field.registry_column?)?;
     let data_type = match (database, definition.ty) {
         (Database::Mysql, "String" | "Option<String>")
-            if entity.role == Some(EntityRole::User)
-                && matches!(definition.name, "name" | "email") =>
+            if matches!(
+                (entity.role, definition.name),
+                (Some(EntityRole::User), "name" | "email")
+                    | (Some(EntityRole::Verification), "identifier")
+            ) =>
         {
             quote!(column.string_len(255);)
         }
@@ -527,8 +533,13 @@ fn gen_server_native_column(
     };
     let default = matches!(
         (entity.role, definition.name),
-        (Some(EntityRole::User | EntityRole::Account), "created_at")
-            | (Some(EntityRole::User), "updated_at")
+        (
+            Some(EntityRole::User | EntityRole::Account | EntityRole::Verification),
+            "created_at"
+        ) | (
+            Some(EntityRole::User | EntityRole::Verification),
+            "updated_at"
+        )
     )
     .then(|| quote!(column.default(#timestamp_default);));
     let name = &field.column;
