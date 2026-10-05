@@ -2,6 +2,7 @@
 
 mod builder;
 mod catalog;
+mod device_authorization;
 mod field_schema;
 mod metadata;
 mod organization;

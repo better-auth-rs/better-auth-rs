@@ -55,7 +55,17 @@ The required session policy runs in `/device/token` after ordinary client valida
 
 `DeviceGrant::verification_context` accepts a synchronous callback returning `AuthResult<Option<Map<String, Value>>>`. The callback runs only after the existing session claim and owner check succeeds. It receives the projected stored row, including the bound user and declared fields. The response merges the additional display fields before its native fields. Native fields retain precedence even when their values are omitted. No callback or a `None` result adds no fields.
 
-These contracts follow pinned 1.7.6 `plugins/device-authorization/routes.mjs:199–244` for issuance, `:436–451` for session policy, and `:528–560` for verification context. `index.mjs:42–64` defines additional-field restrictions and stored schema composition. CI must validate the paired ordinary-flow contracts before runtime parity is claimed. Grant request error metadata, custom OpenAPI responses, verification OpenAPI properties, arbitrary JavaScript values, and async callback scheduling remain outside this implementation.
+These contracts follow pinned 1.7.6 `plugins/device-authorization/routes.mjs:199–244` for issuance, `:436–451` for session policy, and `:528–560` for verification context. `index.mjs:42–64` defines additional-field restrictions and stored schema composition. CI must validate the paired ordinary-flow contracts before runtime parity is claimed. Arbitrary JavaScript values and async callback scheduling remain outside this implementation.
+
+## Grant metadata
+
+Configure grant documentation before calling `DeviceAuthorizationPlugin::grant`. `DeviceGrant::request_error_codes(Vec<String>)` appends codes to the documented `/device/code` `400` error enum, preserving order and duplicate values. The fixed `500` response continues to document only `server_error`.
+
+`DeviceGrant::request_openapi_responses(Map<String, Value>)` supplies additional response objects. The Device plugin's fixed `200`, `400`, and `500` responses replace declarations with those status keys. Other declarations override the OpenAPI generator's default responses for the same status. Response status keys retain JavaScript property ordering.
+
+`DeviceGrant::verification_openapi_properties(Map<String, Value>)` adds documented `/device` verification properties after the native properties. Initialization rejects declarations named `user_code`, `status`, `client_id`, or `scope`. Numeric property names follow JavaScript enumeration order. This metadata does not register stored fields or produce verification values; configure `stored_fields` and `verification_context` for those behaviors.
+
+Schema generation does not execute grant callbacks. The standalone Device document remains unchanged. A configured grant documents `client_id` as optional even when all metadata maps are empty. OpenAPI schemas for arbitrary `DeviceRequestField` validation callbacks remain unsupported; metadata does not infer their additional request fields, transformations, or required values. CI must validate the new metadata contract against pinned 1.7.6 before document parity is claimed.
 
 ## Adapter field policies
 

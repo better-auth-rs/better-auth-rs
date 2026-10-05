@@ -83,6 +83,7 @@ struct DeviceAuthorizationConfig {
     verification_uri: Option<String>,
     request_fields: Option<DeviceRequestFields>,
     grant_fields: Option<better_auth_core::user_fields::UserConfig>,
+    grant_metadata: grant::GrantMetadata,
 }
 
 impl Default for DeviceAuthorizationConfig {
@@ -99,6 +100,7 @@ impl Default for DeviceAuthorizationConfig {
             verification_uri: None,
             request_fields: None,
             grant_fields: None,
+            grant_metadata: grant::GrantMetadata::default(),
         }
     }
 }
@@ -635,6 +637,21 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
 {
     fn name(&self) -> &'static str {
         "device-authorization"
+    }
+
+    fn openapi(&self) -> AuthResult<better_auth_core::openapi::OpenApiPluginMetadata> {
+        let metadata = better_auth_core::openapi::OpenApiPluginMetadata::from_routes(
+            "device-authorization",
+            <Self as better_auth_core::AuthPlugin<S>>::routes(self),
+        )?;
+        if self.config.grant_fields.is_none() {
+            return Ok(metadata);
+        }
+        metadata.device_authorization_grant(
+            &self.config.grant_metadata.request_error_codes,
+            &self.config.grant_metadata.request_responses,
+            &self.config.grant_metadata.verification_properties,
+        )
     }
 
     fn routes(&self) -> Vec<better_auth_core::AuthRoute> {

@@ -24,6 +24,13 @@ type SessionPolicy<S> = dyn for<'a> Fn(&'a DeviceCode, &'a EndpointContext<'_, S
 type VerificationContext =
     dyn Fn(&DeviceCode) -> AuthResult<Option<Map<String, Value>>> + Send + Sync;
 
+#[derive(Clone, Default)]
+pub(super) struct GrantMetadata {
+    pub(super) request_error_codes: Vec<String>,
+    pub(super) request_responses: Map<String, Value>,
+    pub(super) verification_properties: Map<String, Value>,
+}
+
 /// The client binding and declared fields produced by grant request authorization.
 pub struct DeviceGrantAuthorization {
     /// Client identifier that owns the issued code.
@@ -35,6 +42,7 @@ pub struct DeviceGrantAuthorization {
 /// Request authorization and session redemption policy for one Device plugin.
 pub struct DeviceGrant<S: AuthSchema> {
     stored_fields: UserConfig,
+    metadata: GrantMetadata,
     authorize: Arc<Authorize<S>>,
     session_policy: Arc<SessionPolicy<S>>,
     verification: Option<Arc<VerificationContext>>,
@@ -61,6 +69,7 @@ impl<S: AuthSchema> DeviceGrant<S> {
     {
         Self {
             stored_fields: UserConfig::default(),
+            metadata: GrantMetadata::default(),
             authorize: Arc::new(authorize_request),
             session_policy: Arc::new(assert_session_redemption),
             verification: None,
@@ -70,6 +79,24 @@ impl<S: AuthSchema> DeviceGrant<S> {
     /// Register declared grant fields through the existing adapter field policies.
     pub fn stored_fields(mut self, fields: UserConfig) -> Self {
         self.stored_fields = fields;
+        self
+    }
+
+    /// Append documented request error codes in order, retaining duplicate values.
+    pub fn request_error_codes(mut self, codes: Vec<String>) -> Self {
+        self.metadata.request_error_codes = codes;
+        self
+    }
+
+    /// Document additional request responses. The fixed 200, 400, and 500 responses take precedence.
+    pub fn request_openapi_responses(mut self, responses: Map<String, Value>) -> Self {
+        self.metadata.request_responses = responses;
+        self
+    }
+
+    /// Document verification display properties. Initialization rejects native property names.
+    pub fn verification_openapi_properties(mut self, properties: Map<String, Value>) -> Self {
+        self.metadata.verification_properties = properties;
         self
     }
 
@@ -111,6 +138,7 @@ impl DeviceAuthorizationPlugin {
     /// Attach a grant after configuring ordinary plugin options and request fields.
     pub fn grant<S: AuthSchema>(mut self, grant: DeviceGrant<S>) -> impl AuthPlugin<S> {
         self.config.grant_fields = Some(grant.stored_fields.clone());
+        self.config.grant_metadata = grant.metadata.clone();
         WithCallbacks {
             plugin: self,
             callbacks: Arc::new(grant),

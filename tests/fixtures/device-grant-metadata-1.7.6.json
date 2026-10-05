@@ -1,0 +1,3537 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "no-grant",
+      "grant": null,
+      "operations": [
+        {
+          "path": "/device/code",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Request a device and user code\n\nFollow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "client_id": {
+                        "type": "string",
+                        "description": "The client ID of the application"
+                      },
+                      "user_id": {
+                        "type": "string",
+                        "description": "The user ID to which the device code should be pre-bound."
+                      },
+                      "scope": {
+                        "type": "string",
+                        "description": "Space-separated list of scopes"
+                      }
+                    },
+                    "required": [
+                      "client_id"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "device_code": {
+                          "type": "string",
+                          "description": "The device verification code"
+                        },
+                        "user_code": {
+                          "type": "string",
+                          "description": "The user code to display"
+                        },
+                        "verification_uri": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The URL for user verification. Defaults to /device if not configured."
+                        },
+                        "verification_uri_complete": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The complete URL with user code as query parameter."
+                        },
+                        "expires_in": {
+                          "type": "number",
+                          "description": "Lifetime in seconds of the device code"
+                        },
+                        "interval": {
+                          "type": "number",
+                          "description": "Minimum polling interval in seconds"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "description": "Error response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "invalid_request",
+                            "invalid_client",
+                            "unauthorized_client",
+                            "invalid_scope"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "description": "Server error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "server_error"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "client_id",
+            "user_id",
+            "scope"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "device_code",
+                "user_code",
+                "verification_uri",
+                "verification_uri_complete",
+                "expires_in",
+                "interval"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/token",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Exchange device code for access token\n\nFollow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#section-3.4)",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "grant_type": {
+                        "enum": [
+                          "urn:ietf:params:oauth:grant-type:device_code"
+                        ],
+                        "description": "The grant type for device flow"
+                      },
+                      "device_code": {
+                        "type": "string",
+                        "description": "The device verification code"
+                      },
+                      "client_id": {
+                        "type": "string",
+                        "description": "The client ID of the application"
+                      }
+                    },
+                    "required": [
+                      "grant_type",
+                      "device_code",
+                      "client_id"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "session": {
+                          "$ref": "#/components/schemas/Session"
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "description": "Error response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "authorization_pending",
+                            "slow_down",
+                            "expired_token",
+                            "access_denied",
+                            "invalid_request",
+                            "invalid_grant"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "grant_type",
+            "device_code",
+            "client_id"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device",
+          "method": "get",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Verify user code and get device authorization status",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [
+              {
+                "name": "user_code",
+                "in": "query",
+                "schema": {
+                  "type": "string",
+                  "description": "The user code to verify"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Device authorization status",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "user_code": {
+                          "type": "string",
+                          "description": "The user code to verify"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "approved",
+                            "denied"
+                          ],
+                          "description": "Current status of the device authorization"
+                        },
+                        "client_id": {
+                          "type": "string",
+                          "description": "The client requesting authorization, returned only to the authenticated user who owns this request"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "description": "The requested scopes, returned only to the authenticated user who owns this request"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": null,
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "user_code",
+                "status",
+                "client_id",
+                "scope"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/approve",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Approve device authorization",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "userCode": {
+                        "type": "string",
+                        "description": "The user code to approve"
+                      }
+                    },
+                    "required": [
+                      "userCode"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "userCode"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "success"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/deny",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Deny device authorization",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "userCode": {
+                        "type": "string",
+                        "description": "The user code to deny"
+                      }
+                    },
+                    "required": [
+                      "userCode"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "userCode"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "success"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        }
+      ],
+      "callbackCalls": 0
+    },
+    {
+      "name": "empty-grant",
+      "grant": {},
+      "operations": [
+        {
+          "path": "/device/code",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Request a device and user code\n\nFollow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "client_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string",
+                        "description": "The user ID to which the device code should be pre-bound."
+                      },
+                      "scope": {
+                        "type": "string",
+                        "description": "Space-separated list of scopes"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "device_code": {
+                          "type": "string",
+                          "description": "The device verification code"
+                        },
+                        "user_code": {
+                          "type": "string",
+                          "description": "The user code to display"
+                        },
+                        "verification_uri": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The URL for user verification. Defaults to /device if not configured."
+                        },
+                        "verification_uri_complete": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The complete URL with user code as query parameter."
+                        },
+                        "expires_in": {
+                          "type": "number",
+                          "description": "Lifetime in seconds of the device code"
+                        },
+                        "interval": {
+                          "type": "number",
+                          "description": "Minimum polling interval in seconds"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "description": "Error response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "invalid_request",
+                            "invalid_client",
+                            "unauthorized_client",
+                            "invalid_scope"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "description": "Server error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "server_error"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "client_id",
+            "user_id",
+            "scope"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "device_code",
+                "user_code",
+                "verification_uri",
+                "verification_uri_complete",
+                "expires_in",
+                "interval"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/token",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Exchange device code for access token\n\nFollow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#section-3.4)",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "grant_type": {
+                        "enum": [
+                          "urn:ietf:params:oauth:grant-type:device_code"
+                        ],
+                        "description": "The grant type for device flow"
+                      },
+                      "device_code": {
+                        "type": "string",
+                        "description": "The device verification code"
+                      },
+                      "client_id": {
+                        "type": "string",
+                        "description": "The client ID of the application"
+                      }
+                    },
+                    "required": [
+                      "grant_type",
+                      "device_code",
+                      "client_id"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "session": {
+                          "$ref": "#/components/schemas/Session"
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "description": "Error response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "authorization_pending",
+                            "slow_down",
+                            "expired_token",
+                            "access_denied",
+                            "invalid_request",
+                            "invalid_grant"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "grant_type",
+            "device_code",
+            "client_id"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device",
+          "method": "get",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Verify user code and get device authorization status",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [
+              {
+                "name": "user_code",
+                "in": "query",
+                "schema": {
+                  "type": "string",
+                  "description": "The user code to verify"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Device authorization status",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "user_code": {
+                          "type": "string",
+                          "description": "The user code to verify"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "approved",
+                            "denied"
+                          ],
+                          "description": "Current status of the device authorization"
+                        },
+                        "client_id": {
+                          "type": "string",
+                          "description": "The client requesting authorization, returned only to the authenticated user who owns this request"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "description": "The requested scopes, returned only to the authenticated user who owns this request"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": null,
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "user_code",
+                "status",
+                "client_id",
+                "scope"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/approve",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Approve device authorization",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "userCode": {
+                        "type": "string",
+                        "description": "The user code to approve"
+                      }
+                    },
+                    "required": [
+                      "userCode"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "userCode"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "success"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/deny",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Deny device authorization",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "userCode": {
+                        "type": "string",
+                        "description": "The user code to deny"
+                      }
+                    },
+                    "required": [
+                      "userCode"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "userCode"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "success"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        }
+      ],
+      "callbackCalls": 0
+    },
+    {
+      "name": "custom-metadata",
+      "grant": {
+        "requestErrorCodes": [
+          "display_unavailable",
+          "invalid_scope",
+          "display_unavailable"
+        ],
+        "requestOpenAPIResponses": {
+          "200": {
+            "description": "Configured success response"
+          },
+          "400": {
+            "description": "Configured request response"
+          },
+          "401": {
+            "description": "Configured client response"
+          },
+          "418": {
+            "description": "Ordinary display response"
+          },
+          "425": {
+            "description": "Display is being prepared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "retry_hint": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Configured server response"
+          },
+          "default": {
+            "description": "Ordinary default display response"
+          },
+          "2XX": {
+            "description": "Ordinary successful display response"
+          }
+        },
+        "verificationOpenAPIProperties": {
+          "2": {
+            "type": "string",
+            "description": "Display two"
+          },
+          "10": {
+            "type": "string",
+            "description": "Display ten"
+          },
+          "tail": {
+            "type": "string",
+            "description": "Display label"
+          },
+          "01": {
+            "type": "string",
+            "description": "Display leading zero"
+          }
+        }
+      },
+      "operations": [
+        {
+          "path": "/device/code",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Request a device and user code\n\nFollow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "client_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string",
+                        "description": "The user ID to which the device code should be pre-bound."
+                      },
+                      "scope": {
+                        "type": "string",
+                        "description": "Space-separated list of scopes"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "device_code": {
+                          "type": "string",
+                          "description": "The device verification code"
+                        },
+                        "user_code": {
+                          "type": "string",
+                          "description": "The user code to display"
+                        },
+                        "verification_uri": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The URL for user verification. Defaults to /device if not configured."
+                        },
+                        "verification_uri_complete": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The complete URL with user code as query parameter."
+                        },
+                        "expires_in": {
+                          "type": "number",
+                          "description": "Lifetime in seconds of the device code"
+                        },
+                        "interval": {
+                          "type": "number",
+                          "description": "Minimum polling interval in seconds"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "description": "Error response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "invalid_request",
+                            "invalid_client",
+                            "unauthorized_client",
+                            "invalid_scope",
+                            "display_unavailable",
+                            "invalid_scope",
+                            "display_unavailable"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                "description": "Configured client response"
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "418": {
+                "description": "Ordinary display response"
+              },
+              "425": {
+                "description": "Display is being prepared",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "retry_hint": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "description": "Server error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "server_error"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "default": {
+                "description": "Ordinary default display response"
+              },
+              "2XX": {
+                "description": "Ordinary successful display response"
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "418",
+            "425",
+            "429",
+            "500",
+            "default",
+            "2XX"
+          ],
+          "requestPropertyKeys": [
+            "client_id",
+            "user_id",
+            "scope"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "device_code",
+                "user_code",
+                "verification_uri",
+                "verification_uri_complete",
+                "expires_in",
+                "interval"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": null
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "418",
+              "keys": null
+            },
+            {
+              "status": "425",
+              "keys": [
+                "detail",
+                "retry_hint"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "default",
+              "keys": null
+            },
+            {
+              "status": "2XX",
+              "keys": null
+            }
+          ]
+        },
+        {
+          "path": "/device/token",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Exchange device code for access token\n\nFollow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#section-3.4)",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "grant_type": {
+                        "enum": [
+                          "urn:ietf:params:oauth:grant-type:device_code"
+                        ],
+                        "description": "The grant type for device flow"
+                      },
+                      "device_code": {
+                        "type": "string",
+                        "description": "The device verification code"
+                      },
+                      "client_id": {
+                        "type": "string",
+                        "description": "The client ID of the application"
+                      }
+                    },
+                    "required": [
+                      "grant_type",
+                      "device_code",
+                      "client_id"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "session": {
+                          "$ref": "#/components/schemas/Session"
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "description": "Error response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "enum": [
+                            "authorization_pending",
+                            "slow_down",
+                            "expired_token",
+                            "access_denied",
+                            "invalid_request",
+                            "invalid_grant"
+                          ]
+                        },
+                        "error_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "grant_type",
+            "device_code",
+            "client_id"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "error",
+                "error_description"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device",
+          "method": "get",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Verify user code and get device authorization status",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [
+              {
+                "name": "user_code",
+                "in": "query",
+                "schema": {
+                  "type": "string",
+                  "description": "The user code to verify"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Device authorization status",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "2": {
+                          "type": "string",
+                          "description": "Display two"
+                        },
+                        "10": {
+                          "type": "string",
+                          "description": "Display ten"
+                        },
+                        "user_code": {
+                          "type": "string",
+                          "description": "The user code to verify"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "approved",
+                            "denied"
+                          ],
+                          "description": "Current status of the device authorization"
+                        },
+                        "client_id": {
+                          "type": "string",
+                          "description": "The client requesting authorization, returned only to the authenticated user who owns this request"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "description": "The requested scopes, returned only to the authenticated user who owns this request"
+                        },
+                        "tail": {
+                          "type": "string",
+                          "description": "Display label"
+                        },
+                        "01": {
+                          "type": "string",
+                          "description": "Display leading zero"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": null,
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "2",
+                "10",
+                "user_code",
+                "status",
+                "client_id",
+                "scope",
+                "tail",
+                "01"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/approve",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Approve device authorization",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "userCode": {
+                        "type": "string",
+                        "description": "The user code to approve"
+                      }
+                    },
+                    "required": [
+                      "userCode"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "userCode"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "success"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        },
+        {
+          "path": "/device/deny",
+          "method": "post",
+          "operation": {
+            "tags": [
+              "Device-authorization"
+            ],
+            "description": "Deny device authorization",
+            "security": [
+              {
+                "bearerAuth": []
+              }
+            ],
+            "parameters": [],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "userCode": {
+                        "type": "string",
+                        "description": "The user code to deny"
+                      }
+                    },
+                    "required": [
+                      "userCode"
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Success",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "400": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Bad Request. Usually due to missing parameters, or invalid parameters."
+              },
+              "401": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  }
+                },
+                "description": "Unauthorized. Due to missing or invalid authentication."
+              },
+              "403": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Forbidden. You do not have permission to access this resource or to perform this action."
+              },
+              "404": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Not Found. The requested resource was not found."
+              },
+              "429": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Too Many Requests. You have exceeded the rate limit. Try again later."
+              },
+              "500": {
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Internal Server Error. This is a problem with the server that you cannot fix."
+              }
+            }
+          },
+          "responseKeys": [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "429",
+            "500"
+          ],
+          "requestPropertyKeys": [
+            "userCode"
+          ],
+          "responsePropertyKeys": [
+            {
+              "status": "200",
+              "keys": [
+                "success"
+              ]
+            },
+            {
+              "status": "400",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "401",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "403",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "404",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "429",
+              "keys": [
+                "message"
+              ]
+            },
+            {
+              "status": "500",
+              "keys": [
+                "message"
+              ]
+            }
+          ]
+        }
+      ],
+      "callbackCalls": 0
+    }
+  ],
+  "configurationErrors": [
+    {
+      "name": "reserved-user-code",
+      "grant": {
+        "verificationOpenAPIProperties": {
+          "user_code": {
+            "type": "string"
+          }
+        }
+      },
+      "error": "Device authorization grant verification fields must be additional and cannot redefine response fields: user_code",
+      "callbackCalls": 0
+    },
+    {
+      "name": "reserved-status",
+      "grant": {
+        "verificationOpenAPIProperties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "error": "Device authorization grant verification fields must be additional and cannot redefine response fields: status",
+      "callbackCalls": 0
+    },
+    {
+      "name": "reserved-client-id",
+      "grant": {
+        "verificationOpenAPIProperties": {
+          "client_id": {
+            "type": "string"
+          }
+        }
+      },
+      "error": "Device authorization grant verification fields must be additional and cannot redefine response fields: client_id",
+      "callbackCalls": 0
+    },
+    {
+      "name": "reserved-scope",
+      "grant": {
+        "verificationOpenAPIProperties": {
+          "scope": {
+            "type": "string"
+          }
+        }
+      },
+      "error": "Device authorization grant verification fields must be additional and cannot redefine response fields: scope",
+      "callbackCalls": 0
+    },
+    {
+      "name": "reserved-declaration-order",
+      "grant": {
+        "verificationOpenAPIProperties": {
+          "scope": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "user_code": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "error": "Device authorization grant verification fields must be additional and cannot redefine response fields: scope, user_code, client_id, status",
+      "callbackCalls": 0
+    }
+  ]
+}
