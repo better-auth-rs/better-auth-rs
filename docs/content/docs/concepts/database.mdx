@@ -171,7 +171,7 @@ The CLI and bundled entities currently have these default table-name differences
 | Session | CLI SQLite: `session`; active-column mode, bundled and other CLI backends: `sessions` | `session` |
 | Account | CLI: `account`; bundled: `accounts` | `account` |
 | Verification | CLI: `verification`; bundled: `verifications` | `verification` |
-| RateLimit | CLI SQLite: `rateLimit`; bundled and other CLI backends: `rate_limit` | `rateLimit` |
+| RateLimit | CLI: `rateLimit`; bundled: `rate_limit` | `rateLimit` |
 | WalletAddress | `wallet_address` | `walletAddress` |
 | TwoFactor | `two_factor` | `twoFactor` |
 | DeviceCode | `device_code` | `deviceCode` |
@@ -190,7 +190,9 @@ Fresh PostgreSQL and MySQL User/Account generation uses native camelCase columns
 
 Fresh PostgreSQL and MySQL Verification generation selects `verification` and native camelCase date columns. PostgreSQL uses TEXT for identifier/value and TIMESTAMPTZ dates. MySQL uses VARCHAR(255) for identifier, TEXT for value, and TIMESTAMP(3) dates. The createdAt and updatedAt columns receive the database timestamp default; expiresAt has no SQL default. Explicit mappings and field policies retain precedence. Focused CI run 37319372206 passed both upstream and generated Rust column comparisons for default and legacy mappings. This change does not alter primary-ID policies, SQLite generation, bundled entities, or Session representation. Applications own migrations for regenerated schemas.
 
-Fresh PostgreSQL and MySQL JWK generation selects native camelCase columns. Its non-ID strings use TEXT; dates use TIMESTAMPTZ on PostgreSQL and TIMESTAMP(3) on MySQL. With the default ID mode, no JWK column has a SQL default, including createdAt. Default and custom-mapped catalog contracts compare all seven columns and require CI acceptance. The generator retains explicit field policies, primary-ID modes, and SQLite behavior. The column contract does not exercise key creation, signing, rotation, or expiration.
+Fresh PostgreSQL and MySQL JWK generation selects native camelCase columns. Its non-ID strings use TEXT; dates use TIMESTAMPTZ on PostgreSQL and TIMESTAMP(3) on MySQL. With the default ID mode, no JWK column has a SQL default, including createdAt. Focused CI run 37321889678 passed all seven columns for default and custom mappings on both backends. The generator retains explicit field policies, primary-ID modes, and SQLite behavior. The column contract does not exercise key creation, signing, rotation, or expiration.
+
+Fresh PostgreSQL and MySQL RateLimit generation selects `rateLimit` and `lastRequest`. The key column uses TEXT on PostgreSQL and VARCHAR(255) on MySQL. The count column uses INTEGER and lastRequest uses BIGINT. With the default ID mode, all four columns are nonnullable and have no SQL default. Explicit mappings, field policies, ID modes, SQLite generation, and runtime counter behavior retain their existing rules. The default/custom column contracts require CI acceptance; these contracts do not establish numeric value interchangeability or index naming.
 
 Fresh SQLite Member and OrganizationRole generation uses native camelCase columns, TEXT strings, and literal `date` columns with existing nullability and no SQL defaults. Member retains `member`; OrganizationRole selects `organizationRole`. Each model's two native nonunique indexes use the resolved table and column names through the existing shortening rule. Foreign keys retain the resolved User and Organization targets. Native OrganizationRole permission uses TEXT DDL while its Rust model remains `Json`; the generator does not change permission encoding or runtime policies. Explicit field policies keep their existing type and index rules.
 

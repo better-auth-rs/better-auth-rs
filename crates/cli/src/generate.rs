@@ -496,7 +496,11 @@ fn gen_server_native_column(
         || !matches!(
             entity.role,
             Some(
-                EntityRole::User | EntityRole::Account | EntityRole::Verification | EntityRole::Jwk
+                EntityRole::User
+                    | EntityRole::Account
+                    | EntityRole::Verification
+                    | EntityRole::Jwk
+                    | EntityRole::RateLimit
             )
         )
         || field.attributes.is_some()
@@ -510,6 +514,7 @@ fn gen_server_native_column(
                 (entity.role, definition.name),
                 (Some(EntityRole::User), "name" | "email")
                     | (Some(EntityRole::Verification), "identifier")
+                    | (Some(EntityRole::RateLimit), "key")
             ) =>
         {
             quote!(column.string_len(255);)

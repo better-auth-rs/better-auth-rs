@@ -194,11 +194,13 @@ impl OpenApiRegistry {
                 .iter()
                 .filter(|model| model.placement.as_deref() == Some("after-plugin-models"))
             {
-                models.entry(model.key.clone()).or_default().extend(
+                let _ = models.insert(
+                    model.key.clone(),
                     model
                         .fields
                         .iter()
-                        .map(|field| (field.key.clone(), field.clone())),
+                        .map(|field| (field.key.clone(), field.clone()))
+                        .collect(),
                 );
             }
         }

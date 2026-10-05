@@ -1,0 +1,529 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "storage": "database",
+      "components": {
+        "schemas": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "image": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "emailVerified",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          "Session": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ipAddress": {
+                "type": "string"
+              },
+              "userAgent": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "expiresAt",
+              "token",
+              "createdAt",
+              "updatedAt",
+              "userId"
+            ]
+          },
+          "Account": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "idToken": {
+                "type": "string"
+              },
+              "accessTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "accountId",
+              "providerId",
+              "userId",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          "Verification": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "value",
+              "expiresAt",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          "BeforeRateLimit": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          },
+          "RateLimit": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "key": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              },
+              "lastRequest": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "count",
+              "lastRequest"
+            ]
+          },
+          "AfterRateLimit": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          }
+        },
+        "securitySchemes": {
+          "apiKeyCookie": {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": "apiKeyCookie",
+            "description": "API Key authentication via cookie"
+          },
+          "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "Bearer token authentication"
+          }
+        }
+      },
+      "modelKeys": [
+        "User",
+        "Session",
+        "Account",
+        "Verification",
+        "BeforeRateLimit",
+        "RateLimit",
+        "AfterRateLimit"
+      ],
+      "rateLimitPropertyKeys": [
+        "id",
+        "key",
+        "count",
+        "lastRequest"
+      ],
+      "callbackCalls": 0
+    },
+    {
+      "storage": "memory",
+      "components": {
+        "schemas": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean",
+                "default": false,
+                "readOnly": true
+              },
+              "image": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "emailVerified",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          "Session": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ipAddress": {
+                "type": "string"
+              },
+              "userAgent": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "expiresAt",
+              "token",
+              "createdAt",
+              "updatedAt",
+              "userId"
+            ]
+          },
+          "Account": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "accountId": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "accessToken": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "idToken": {
+                "type": "string"
+              },
+              "accessTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "accountId",
+              "providerId",
+              "userId",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          "Verification": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "identifier": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "identifier",
+              "value",
+              "expiresAt",
+              "createdAt",
+              "updatedAt"
+            ]
+          },
+          "BeforeRateLimit": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          },
+          "RateLimit": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "count": {
+                "type": "string",
+                "default": "plugin-count"
+              },
+              "label": {
+                "type": "string",
+                "readOnly": true
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          },
+          "AfterRateLimit": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "readOnly": true
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          }
+        },
+        "securitySchemes": {
+          "apiKeyCookie": {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": "apiKeyCookie",
+            "description": "API Key authentication via cookie"
+          },
+          "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "Bearer token authentication"
+          }
+        }
+      },
+      "modelKeys": [
+        "User",
+        "Session",
+        "Account",
+        "Verification",
+        "BeforeRateLimit",
+        "RateLimit",
+        "AfterRateLimit"
+      ],
+      "rateLimitPropertyKeys": [
+        "id",
+        "count",
+        "label"
+      ],
+      "callbackCalls": 0
+    }
+  ]
+}

@@ -286,6 +286,7 @@ impl Entity {
                         | EntityRole::Account
                         | EntityRole::Verification
                         | EntityRole::Jwk
+                        | EntityRole::RateLimit
                 )
             );
         let mut entity = Self {

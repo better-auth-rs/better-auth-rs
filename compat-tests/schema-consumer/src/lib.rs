@@ -15,6 +15,7 @@ mod tests {
     mod organization;
     mod plugins;
     mod rate_limit_declarations;
+    mod rate_limit_server_catalog;
     mod rate_limits;
     mod reference_fields;
     mod server_catalog;

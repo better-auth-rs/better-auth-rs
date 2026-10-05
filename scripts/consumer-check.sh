@@ -71,6 +71,8 @@ for name in ("default", "custom"):
     configuration = jwk_rate_limit_catalog[name]
     jwks = {"jwks": configuration["jwks"]} if "jwks" in configuration else {}
     (pathlib.Path(sys.argv[1]) / f"jwk_server_{name}.json").write_text(json.dumps(jwks))
+    rate_limit = {"rateLimit": configuration["rateLimit"]} if "rateLimit" in configuration else {}
+    (pathlib.Path(sys.argv[1]) / f"rate_limit_server_{name}.json").write_text(json.dumps(rate_limit))
 user_account_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/user-account-catalog-config.json").read_text())
 for name, configuration in user_account_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"user_account_catalog_{name}.json").write_text(json.dumps(configuration))
@@ -173,6 +175,16 @@ export BETTER_AUTH_JWK_SERVER_POSTGRES_CUSTOM_SCHEMA="$schema_dir/jwk_server_pos
 export BETTER_AUTH_JWK_SERVER_MYSQL_DEFAULT_SCHEMA="$schema_dir/jwk_server_mysql_default_schema.rs"
 export BETTER_AUTH_JWK_SERVER_MYSQL_CUSTOM_SCHEMA="$schema_dir/jwk_server_mysql_custom_schema.rs"
 
+for backend in postgres mysql; do
+  for case in default custom; do
+    "$consumer_cli" generate --rate-limit-database --database "$backend" --schema-config "$schema_dir/rate_limit_server_${case}.json" --output "$schema_dir/rate_limit_server_${backend}_${case}_schema.rs"
+  done
+done
+export BETTER_AUTH_RATE_LIMIT_SERVER_POSTGRES_DEFAULT_SCHEMA="$schema_dir/rate_limit_server_postgres_default_schema.rs"
+export BETTER_AUTH_RATE_LIMIT_SERVER_POSTGRES_CUSTOM_SCHEMA="$schema_dir/rate_limit_server_postgres_custom_schema.rs"
+export BETTER_AUTH_RATE_LIMIT_SERVER_MYSQL_DEFAULT_SCHEMA="$schema_dir/rate_limit_server_mysql_default_schema.rs"
+export BETTER_AUTH_RATE_LIMIT_SERVER_MYSQL_CUSTOM_SCHEMA="$schema_dir/rate_limit_server_mysql_custom_schema.rs"
+
 # Stable include paths preserve Cargo fingerprints when generated contents are unchanged.
 generated_dir="$PWD/compat-tests/schema-consumer/target/generated-schemas"
 mkdir -p "$generated_dir"
@@ -209,12 +221,12 @@ if [[ $# -eq 0 ]]; then
   BETTER_AUTH_TIMESTAMP_ARTIFACTS="$schema_dir/user_timestamp_artifacts.jsonl" bun --no-install test ./compat-tests/reference-server/consumer-contracts/user-timestamp-interchange.test.ts
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
-  bun --no-install test ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/verification-server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/jwk-server-catalog.test.ts --test-name-pattern postgres
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream
+  bun --no-install test ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/verification-server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/jwk-server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/rate-limit-server-catalog.test.ts --test-name-pattern postgres
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_catalog_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests live_postgres -- --ignored
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_MYSQL_URL:-}" ]]; then
-  bun --no-install test ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/verification-server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/jwk-server-catalog.test.ts --test-name-pattern mysql
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream
+  bun --no-install test ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/verification-server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/jwk-server-catalog.test.ts ./compat-tests/reference-server/consumer-contracts/rate-limit-server-catalog.test.ts --test-name-pattern mysql
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_catalog_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test schema_preflight_tests mysql::live_mysql_preflight_tracks_migrations_defaults_and_auto_increment -- --ignored --exact
 fi

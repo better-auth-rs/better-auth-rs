@@ -43,6 +43,7 @@ run_stage() {
       cargo test --locked --test device_request_validation_tests --test device_grant_tests \
         --test device_grant_metadata_tests --test device_request_schema_tests \
         --test openapi_property_order_tests --test openapi_endpoint_key_order_tests \
+        --test openapi_rate_limit_model_tests \
         --test device_issuance_tests --test native_endpoint_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
@@ -51,6 +52,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/device-request-schema.test.ts \
         ./compat-tests/reference-server/contracts/openapi-property-order.test.ts \
         ./compat-tests/reference-server/contracts/openapi-endpoint-key-order.test.ts \
+        ./compat-tests/reference-server/contracts/openapi-rate-limit-model.test.ts \
         ./compat-tests/reference-server/contracts/device-issuance.test.ts
       ;;
     provider-options)

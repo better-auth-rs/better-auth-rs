@@ -50,6 +50,7 @@ Use `call_endpoint` with `EndpointInput.request` to resolve a dynamic base URL f
 - `JwtPlugin::jwks_path` changes the documented JWKS path and preserves the complete operation metadata. Add the configured path to `disabled_paths` to omit the operation.
 - Physical table and column mappings do not rename logical model or field keys.
 - With secondary storage, the Verification component is omitted unless `verification.store_in_database` is true. Plugin metadata and application fields do not override this final model-presence rule. The generated document retains the Session component independently of session persistence.
+- With database rate-limit storage, the native RateLimit fields replace a plugin's entire same-name model declaration. The component keeps its first model position. Memory storage retains the plugin declaration.
 - Additional field policies control documented properties, required fields, and read-only flags. Schema generation does not call default factories, transforms, or validators.
 - User input properties are merged into the signup and update-user request bodies. The model projection and input projection retain their separate policy precedence.
 
