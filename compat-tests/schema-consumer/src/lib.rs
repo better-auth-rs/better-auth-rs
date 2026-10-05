@@ -9,6 +9,7 @@ mod tests {
     mod invitation_catalog;
     mod jwk_additional_fields;
     mod jwk_rate_limit_catalog;
+    mod jwk_server_catalog;
     mod member_organization_role_catalog;
     mod model_declarations;
     mod organization;

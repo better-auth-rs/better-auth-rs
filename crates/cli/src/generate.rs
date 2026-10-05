@@ -495,7 +495,9 @@ fn gen_server_native_column(
     if database == Database::Sqlite
         || !matches!(
             entity.role,
-            Some(EntityRole::User | EntityRole::Account | EntityRole::Verification)
+            Some(
+                EntityRole::User | EntityRole::Account | EntityRole::Verification | EntityRole::Jwk
+            )
         )
         || field.attributes.is_some()
     {

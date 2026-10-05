@@ -1,0 +1,192 @@
+{
+  "version": "1.7.6",
+  "database": "postgres",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "jwks",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "jwks",
+          "position": "2",
+          "name": "publicKey",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "jwks",
+          "position": "3",
+          "name": "privateKey",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "jwks",
+          "position": "4",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "jwks",
+          "position": "5",
+          "name": "expiresAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "jwks",
+          "position": "6",
+          "name": "alg",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "jwks",
+          "position": "7",
+          "name": "crv",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"jwks\" (\"id\" text not null primary key, \"publicKey\" text not null, \"privateKey\" text not null, \"createdAt\" timestamptz not null, \"expiresAt\" timestamptz, \"alg\" text, \"crv\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "jwks": {
+          "modelName": "display_jwk_catalog",
+          "fields": {
+            "publicKey": "stored_public_key",
+            "privateKey": "stored_private_key",
+            "createdAt": "created_on",
+            "expiresAt": "expires_on",
+            "alg": "algorithm_label",
+            "crv": "curve_label"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_jwk_catalog",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_jwk_catalog",
+          "position": "2",
+          "name": "stored_public_key",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_jwk_catalog",
+          "position": "3",
+          "name": "stored_private_key",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_jwk_catalog",
+          "position": "4",
+          "name": "created_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_jwk_catalog",
+          "position": "5",
+          "name": "expires_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_jwk_catalog",
+          "position": "6",
+          "name": "algorithm_label",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "display_jwk_catalog",
+          "position": "7",
+          "name": "curve_label",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"display_jwk_catalog\" (\"id\" text not null primary key, \"stored_public_key\" text not null, \"stored_private_key\" text not null, \"created_on\" timestamptz not null, \"expires_on\" timestamptz, \"algorithm_label\" text, \"curve_label\" text);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");",
+        "repeatedSql": ";"
+      }
+    }
+  ]
+}
