@@ -79,7 +79,8 @@ impl MicrosoftOptions {
 
     pub(in crate::plugins::oauth) fn photo_endpoint(&self) -> String {
         let size = self.profile_photo_size.pixels();
-        format!("https://graph.microsoft.com/v1.0/me/photos/{size}x{size}/$value")
+        // BetterFetch percent-encodes the literal `$value` path segment.
+        format!("https://graph.microsoft.com/v1.0/me/photos/{size}x{size}/%24value")
     }
 
     pub(in crate::plugins::oauth) async fn verify(
