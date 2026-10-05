@@ -178,14 +178,42 @@ impl OAuthProvider {
 
     /// Configure GitLab with its built-in endpoints and active-user profile decoder.
     pub fn gitlab(client_id: &str, client_secret: &str) -> Self {
+        Self::gitlab_with_issuer(client_id, client_secret, "")
+    }
+
+    /// Configure GitLab endpoints from an issuer, preserving its path prefix.
+    /// An empty issuer selects gitlab.com. Repeated path slashes are collapsed.
+    pub fn gitlab_with_issuer(client_id: &str, client_secret: &str, issuer: &str) -> Self {
+        let issuer = if issuer.is_empty() {
+            "https://gitlab.com"
+        } else {
+            issuer
+        };
+        let endpoint = |path| {
+            format!("{issuer}/{path}")
+                .split("://")
+                .map(|segment| {
+                    let mut previous_slash = false;
+                    segment
+                        .chars()
+                        .filter(|&character| {
+                            let repeated = previous_slash && character == '/';
+                            previous_slash = character == '/';
+                            !repeated
+                        })
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("://")
+        };
         Self {
             kind: ProviderKind::GitLab,
-            user_info_url: Some("https://gitlab.com/api/v4/user".into()),
+            user_info_url: Some(endpoint("api/v4/user")),
             ..Self::custom(
                 client_id,
                 client_secret,
-                "https://gitlab.com/oauth/authorize",
-                "https://gitlab.com/oauth/token",
+                &endpoint("oauth/authorize"),
+                &endpoint("oauth/token"),
             )
         }
     }

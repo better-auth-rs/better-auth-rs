@@ -30,6 +30,8 @@ mod facebook_signed_tests;
 mod generic;
 mod generic_presets;
 mod generic_profile;
+#[cfg(all(test, feature = "axum"))]
+mod gitlab_issuer_tests;
 pub(super) mod google;
 pub use google::GoogleOptions;
 #[cfg(all(test, feature = "axum"))]

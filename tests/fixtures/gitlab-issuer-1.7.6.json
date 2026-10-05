@@ -1,0 +1,434 @@
+{
+  "version": "1.7.6",
+  "clientId": "ordinary-gitlab-client",
+  "clientSecret": "ordinary-gitlab-secret",
+  "callbackURL": "https://app.example.test/api/auth/callback/gitlab",
+  "codeVerifier": "ordinary-gitlab-code-verifier-at-least-forty-three-characters",
+  "state": "ordinary-gitlab-state",
+  "profile": {
+    "id": 12345,
+    "username": "gitlab-reader",
+    "name": "GitLab Reader",
+    "email": "gitlab-reader@example.test",
+    "avatar_url": "https://images.example.test/gitlab-reader.png",
+    "email_verified": true,
+    "state": "active",
+    "locked": false
+  },
+  "tokenResponse": {
+    "access_token": "ordinary-access",
+    "refresh_token": "ordinary-refresh",
+    "token_type": "Bearer",
+    "scope": "read_user"
+  },
+  "cases": [
+    {
+      "name": "omitted",
+      "options": {},
+      "authorizationURL": "https://gitlab.com/oauth/authorize?response_type=code&client_id=ordinary-gitlab-client&state=ordinary-gitlab-state&scope=read_user&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fgitlab&code_challenge_method=S256&code_challenge=awS8dVb9Y3jyZ6gov6qDdZM1eIQ0Ou0uy4br_l0pTiQ",
+      "requests": [
+        {
+          "url": "https://gitlab.com/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-gitlab-code-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/api/auth/callback/gitlab",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.com/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.com/api/v4/user",
+          "method": "GET",
+          "contentType": null,
+          "authorization": "Bearer ordinary-access",
+          "body": null
+        }
+      ],
+      "codeTokens": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "read_user"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "read_user"
+        }
+      },
+      "refreshTokens": {
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "read_user"
+        ]
+      },
+      "userInfo": {
+        "user": {
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "image": "https://images.example.test/gitlab-reader.png",
+          "emailVerified": true
+        },
+        "data": {
+          "id": 12345,
+          "username": "gitlab-reader",
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "avatar_url": "https://images.example.test/gitlab-reader.png",
+          "email_verified": true,
+          "state": "active",
+          "locked": false
+        }
+      }
+    },
+    {
+      "name": "empty",
+      "options": {
+        "issuer": ""
+      },
+      "authorizationURL": "https://gitlab.com/oauth/authorize?response_type=code&client_id=ordinary-gitlab-client&state=ordinary-gitlab-state&scope=read_user&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fgitlab&code_challenge_method=S256&code_challenge=awS8dVb9Y3jyZ6gov6qDdZM1eIQ0Ou0uy4br_l0pTiQ",
+      "requests": [
+        {
+          "url": "https://gitlab.com/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-gitlab-code-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/api/auth/callback/gitlab",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.com/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.com/api/v4/user",
+          "method": "GET",
+          "contentType": null,
+          "authorization": "Bearer ordinary-access",
+          "body": null
+        }
+      ],
+      "codeTokens": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "read_user"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "read_user"
+        }
+      },
+      "refreshTokens": {
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "read_user"
+        ]
+      },
+      "userInfo": {
+        "user": {
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "image": "https://images.example.test/gitlab-reader.png",
+          "emailVerified": true
+        },
+        "data": {
+          "id": 12345,
+          "username": "gitlab-reader",
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "avatar_url": "https://images.example.test/gitlab-reader.png",
+          "email_verified": true,
+          "state": "active",
+          "locked": false
+        }
+      }
+    },
+    {
+      "name": "self-hosted",
+      "options": {
+        "issuer": "https://gitlab.example.test"
+      },
+      "authorizationURL": "https://gitlab.example.test/oauth/authorize?response_type=code&client_id=ordinary-gitlab-client&state=ordinary-gitlab-state&scope=read_user&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fgitlab&code_challenge_method=S256&code_challenge=awS8dVb9Y3jyZ6gov6qDdZM1eIQ0Ou0uy4br_l0pTiQ",
+      "requests": [
+        {
+          "url": "https://gitlab.example.test/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-gitlab-code-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/api/auth/callback/gitlab",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.example.test/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.example.test/api/v4/user",
+          "method": "GET",
+          "contentType": null,
+          "authorization": "Bearer ordinary-access",
+          "body": null
+        }
+      ],
+      "codeTokens": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "read_user"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "read_user"
+        }
+      },
+      "refreshTokens": {
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "read_user"
+        ]
+      },
+      "userInfo": {
+        "user": {
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "image": "https://images.example.test/gitlab-reader.png",
+          "emailVerified": true
+        },
+        "data": {
+          "id": 12345,
+          "username": "gitlab-reader",
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "avatar_url": "https://images.example.test/gitlab-reader.png",
+          "email_verified": true,
+          "state": "active",
+          "locked": false
+        }
+      }
+    },
+    {
+      "name": "trailing-slash",
+      "options": {
+        "issuer": "https://gitlab.example.test/"
+      },
+      "authorizationURL": "https://gitlab.example.test/oauth/authorize?response_type=code&client_id=ordinary-gitlab-client&state=ordinary-gitlab-state&scope=read_user&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fgitlab&code_challenge_method=S256&code_challenge=awS8dVb9Y3jyZ6gov6qDdZM1eIQ0Ou0uy4br_l0pTiQ",
+      "requests": [
+        {
+          "url": "https://gitlab.example.test/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-gitlab-code-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/api/auth/callback/gitlab",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.example.test/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.example.test/api/v4/user",
+          "method": "GET",
+          "contentType": null,
+          "authorization": "Bearer ordinary-access",
+          "body": null
+        }
+      ],
+      "codeTokens": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "read_user"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "read_user"
+        }
+      },
+      "refreshTokens": {
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "read_user"
+        ]
+      },
+      "userInfo": {
+        "user": {
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "image": "https://images.example.test/gitlab-reader.png",
+          "emailVerified": true
+        },
+        "data": {
+          "id": 12345,
+          "username": "gitlab-reader",
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "avatar_url": "https://images.example.test/gitlab-reader.png",
+          "email_verified": true,
+          "state": "active",
+          "locked": false
+        }
+      }
+    },
+    {
+      "name": "subpath",
+      "options": {
+        "issuer": "https://gitlab.example.test///forge//"
+      },
+      "authorizationURL": "https://gitlab.example.test/forge/oauth/authorize?response_type=code&client_id=ordinary-gitlab-client&state=ordinary-gitlab-state&scope=read_user&redirect_uri=https%3A%2F%2Fapp.example.test%2Fapi%2Fauth%2Fcallback%2Fgitlab&code_challenge_method=S256&code_challenge=awS8dVb9Y3jyZ6gov6qDdZM1eIQ0Ou0uy4br_l0pTiQ",
+      "requests": [
+        {
+          "url": "https://gitlab.example.test/forge/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-gitlab-code-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/api/auth/callback/gitlab",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.example.test/forge/oauth/token",
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-gitlab-client",
+            "client_secret": "ordinary-gitlab-secret"
+          }
+        },
+        {
+          "url": "https://gitlab.example.test/forge/api/v4/user",
+          "method": "GET",
+          "contentType": null,
+          "authorization": "Bearer ordinary-access",
+          "body": null
+        }
+      ],
+      "codeTokens": {
+        "tokenType": "Bearer",
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "scopes": [
+          "read_user"
+        ],
+        "raw": {
+          "access_token": "ordinary-access",
+          "refresh_token": "ordinary-refresh",
+          "token_type": "Bearer",
+          "scope": "read_user"
+        }
+      },
+      "refreshTokens": {
+        "accessToken": "ordinary-access",
+        "refreshToken": "ordinary-refresh",
+        "tokenType": "Bearer",
+        "scopes": [
+          "read_user"
+        ]
+      },
+      "userInfo": {
+        "user": {
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "image": "https://images.example.test/gitlab-reader.png",
+          "emailVerified": true
+        },
+        "data": {
+          "id": 12345,
+          "username": "gitlab-reader",
+          "name": "GitLab Reader",
+          "email": "gitlab-reader@example.test",
+          "avatar_url": "https://images.example.test/gitlab-reader.png",
+          "email_verified": true,
+          "state": "active",
+          "locked": false
+        }
+      }
+    }
+  ]
+}
