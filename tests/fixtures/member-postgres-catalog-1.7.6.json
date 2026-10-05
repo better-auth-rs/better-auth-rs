@@ -1,0 +1,152 @@
+{
+  "version": "1.7.6",
+  "database": "postgres",
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "member",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "member",
+          "position": "2",
+          "name": "organizationId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "member",
+          "position": "3",
+          "name": "userId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "member",
+          "position": "4",
+          "name": "role",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "member",
+          "position": "5",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"activeOrganizationId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"organization\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "display_member_catalog_users"
+        },
+        "organization": {
+          "modelName": "display_member_catalog_organizations"
+        },
+        "member": {
+          "modelName": "display_catalog_members",
+          "fields": {
+            "organizationId": "workspace_link",
+            "userId": "person_link",
+            "role": "display_role",
+            "createdAt": "created_on"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_members",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_members",
+          "position": "2",
+          "name": "workspace_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_members",
+          "position": "3",
+          "name": "person_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_members",
+          "position": "4",
+          "name": "display_role",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_members",
+          "position": "5",
+          "name": "created_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"display_member_catalog_users\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"display_member_catalog_users\" (\"id\") on delete cascade, \"activeOrganizationId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"display_member_catalog_users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"display_member_catalog_organizations\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"display_catalog_members\" (\"id\" text not null primary key, \"workspace_link\" text not null references \"display_member_catalog_organizations\" (\"id\") on delete cascade, \"person_link\" text not null references \"display_member_catalog_users\" (\"id\") on delete cascade, \"display_role\" text not null, \"created_on\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"display_member_catalog_organizations\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"display_member_catalog_users\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_members_workspace_link_idx\" on \"display_catalog_members\" (\"workspace_link\");\n\ncreate index \"display_catalog_members_person_link_idx\" on \"display_catalog_members\" (\"person_link\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      }
+    }
+  ]
+}

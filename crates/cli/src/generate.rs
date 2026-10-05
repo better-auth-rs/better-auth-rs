@@ -501,6 +501,7 @@ fn gen_server_native_column(
                     | EntityRole::Verification
                     | EntityRole::Jwk
                     | EntityRole::RateLimit
+                    | EntityRole::Member
             )
         )
         || field.attributes.is_some()
@@ -515,6 +516,7 @@ fn gen_server_native_column(
                 (Some(EntityRole::User), "name" | "email")
                     | (Some(EntityRole::Verification), "identifier")
                     | (Some(EntityRole::RateLimit), "key")
+                    | (Some(EntityRole::Member), "role")
             ) =>
         {
             quote!(column.string_len(255);)

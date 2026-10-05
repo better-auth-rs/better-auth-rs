@@ -11,6 +11,7 @@ mod tests {
     mod jwk_rate_limit_catalog;
     mod jwk_server_catalog;
     mod member_organization_role_catalog;
+    mod member_server_catalog;
     mod model_declarations;
     mod organization;
     mod plugins;
