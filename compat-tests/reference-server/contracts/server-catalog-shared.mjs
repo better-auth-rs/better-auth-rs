@@ -23,7 +23,7 @@ function columnQuery(backend, count) {
     ORDER BY TABLE_NAME, ORDINAL_POSITION`;
 }
 
-async function observe(database, query, backend, tableNames, configuration) {
+async function observe(database, query, backend, tableNames, configuration, observeRows) {
   const options = {
     database, baseURL: "http://catalog.example.test",
     secret: "ordinary-server-catalog-secret-at-least-32-characters",
@@ -40,13 +40,15 @@ async function observe(database, query, backend, tableNames, configuration) {
   assert.equal(repeated.toBeAdded.length, 0);
   assert.equal(repeated.toBeAddedIndexes.length, 0);
   assert.equal(repeated.schemaProblems.length, 0);
+  const observation = observeRows ? await observeRows({ options, query, backend }) : undefined;
   return {
     columns,
     migration: { initialSql, repeatedSql: await repeated.compileMigrations() },
+    ...(observeRows ? { observation } : {}),
   };
 }
 
-async function postgres(tableNames, configuration) {
+async function postgres(tableNames, configuration, observeRows) {
   const { Pool } = await import("pg");
   const connectionString = process.env.BETTER_AUTH_TEST_POSTGRES_URL;
   assert.ok(connectionString, "CI must supply BETTER_AUTH_TEST_POSTGRES_URL");
@@ -56,7 +58,7 @@ async function postgres(tableNames, configuration) {
     await pool.query(`CREATE SCHEMA "${schema}"`);
     try {
       await pool.query(`SET search_path TO "${schema}"`);
-      return await observe(pool, async (sql, values) => (await pool.query(sql, values)).rows, "postgres", tableNames, configuration);
+      return await observe(pool, async (sql, values) => (await pool.query(sql, values)).rows, "postgres", tableNames, configuration, observeRows);
     } finally {
       await pool.query("RESET search_path");
       await pool.query(`DROP SCHEMA "${schema}" CASCADE`);
@@ -66,7 +68,7 @@ async function postgres(tableNames, configuration) {
   }
 }
 
-async function mysql(tableNames, configuration) {
+async function mysql(tableNames, configuration, observeRows) {
   const { createPool } = await import("mysql2/promise");
   const connectionString = process.env.BETTER_AUTH_TEST_MYSQL_URL;
   assert.ok(connectionString, "CI must supply BETTER_AUTH_TEST_MYSQL_URL");
@@ -79,7 +81,7 @@ async function mysql(tableNames, configuration) {
       url.pathname = `/${name}`;
       const pool = createPool(url.href);
       try {
-        return await observe(pool, async (sql, values) => (await pool.query(sql, values))[0], "mysql", tableNames, configuration);
+        return await observe(pool, async (sql, values) => (await pool.query(sql, values))[0], "mysql", tableNames, configuration, observeRows);
       } finally {
         await pool.end();
       }
@@ -91,7 +93,7 @@ async function mysql(tableNames, configuration) {
   }
 }
 
-export async function captureFreshServerCatalog(backend, tableNames, configuration = {}) {
+export async function captureFreshServerCatalog(backend, tableNames, configuration = {}, observeRows) {
   assert.ok(backend === "postgres" || backend === "mysql", "Select postgres or mysql");
-  return backend === "postgres" ? postgres(tableNames, configuration) : mysql(tableNames, configuration);
+  return backend === "postgres" ? postgres(tableNames, configuration, observeRows) : mysql(tableNames, configuration, observeRows);
 }
