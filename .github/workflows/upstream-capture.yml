@@ -11,6 +11,7 @@ on:
       - compat-tests/reference-server/contracts/server-catalog-shared.mjs
       - compat-tests/schema-consumer/verification-catalog-config.json
       - compat-tests/schema-consumer/jwk-rate-limit-catalog-config.json
+      - compat-tests/schema-consumer/member-organization-role-catalog-config.json
 
 permissions:
   contents: read
@@ -61,7 +62,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Capture pinned RateLimit metadata and columns
+      - name: Capture pinned verifier context and Member columns
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -69,9 +70,9 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun --no-install ./compat-tests/reference-server/contracts/openapi-rate-limit-model-capture.mjs "$capture_dir/openapi-rate-limit-model-1.7.6.json" 2>&1 | tee "$capture_dir/openapi-rate-limit-model.log"
-          bun --no-install ./compat-tests/reference-server/contracts/rate-limit-server-catalog-capture.mjs postgres "$capture_dir/rate-limit-postgres-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/rate-limit-postgres-catalog.log"
-          bun --no-install ./compat-tests/reference-server/contracts/rate-limit-server-catalog-capture.mjs mysql "$capture_dir/rate-limit-mysql-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/rate-limit-mysql-catalog.log"
+          bun --no-install ./compat-tests/reference-server/contracts/social-verifier-context-capture.mjs "$capture_dir/social-verifier-context-1.7.6.json" 2>&1 | tee "$capture_dir/social-verifier-context.log"
+          bun --no-install ./compat-tests/reference-server/contracts/member-server-catalog-capture.mjs postgres "$capture_dir/member-postgres-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/member-postgres-catalog.log"
+          bun --no-install ./compat-tests/reference-server/contracts/member-server-catalog-capture.mjs mysql "$capture_dir/member-mysql-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/member-mysql-catalog.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -79,7 +80,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-rate-limit-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-member-verifier-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
