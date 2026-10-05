@@ -122,7 +122,11 @@ async fn exchange_code(
         } else {
             None
         },
-        client_key: None,
+        client_key: if generic.is_none() {
+            provider.config.code_client_key()
+        } else {
+            None
+        },
         device_id: if generic.is_some() || provider.config.omits_device_id() {
             None
         } else {

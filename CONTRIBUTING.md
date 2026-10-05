@@ -105,7 +105,7 @@ The CI job provides PostgreSQL and MySQL. The consumer runner executes the exist
 devenv test
 ```
 
-Local checks and CI use `scripts/check.sh`. The script installs locked compatibility dependencies, checks formatting and Clippy, runs workspace tests with Axum, SeaORM, and Redis features, checks the alternative Rustls configuration, builds Rustdoc, and tests a freshly generated schema in an independent consumer. The dual-server suite compares all supported phases against the pinned TypeScript runtime.
+Local checks and CI use `scripts/check.sh` inside the locked devenv environment. CI also installs the devenv CLI from the locked nixpkgs revision. This keeps Rust, Bun, and native libraries consistent; the runner's system OpenSSL does not provide every supported signature algorithm. The script installs locked compatibility dependencies, checks formatting and Clippy, runs workspace tests with Axum, SeaORM, and Redis features, checks the alternative Rustls configuration, builds Rustdoc, and tests a freshly generated schema in an independent consumer. The dual-server suite compares all supported phases against the pinned TypeScript runtime.
 
 Choose the affected package, target, or profile for a focused check. Run the selected command through `devenv shell --`, for example:
 

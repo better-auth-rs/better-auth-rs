@@ -170,6 +170,8 @@ pub struct OAuthProvider {
     kind: ProviderKind,
     pub client_id: String,
     pub client_secret: String,
+    /// Additional key for built-in authorization-code exchanges that accept this option.
+    pub client_key: Option<String>,
     pub auth_url: String,
     pub token_url: String,
     /// Cloudflare token endpoint authentication override for code exchange and refresh.
@@ -384,6 +386,16 @@ impl OAuthProvider {
                 | ProviderKind::WeChat { .. }
                 | ProviderKind::Vk
         )
+    }
+
+    pub(super) fn code_client_key(&self) -> Option<&str> {
+        match self.kind {
+            ProviderKind::Custom
+            | ProviderKind::PayPal
+            | ProviderKind::Reddit
+            | ProviderKind::WeChat { .. } => None,
+            _ => self.client_key.as_deref(),
+        }
     }
 
     pub(super) fn omits_device_id(&self) -> bool {

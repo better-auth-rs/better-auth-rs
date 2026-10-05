@@ -145,9 +145,9 @@ Google sign-in maps verified ID-token claims through the shared Google verifier 
 
 Built-in provider constructors supply provider defaults and profile mapping. See [built-in providers](docs/content/docs/plugins/oauth.mdx#built-in-providers) for supported constructors and configuration.
 
-Set `OAuthProvider::redirect_uri` to use a configured provider callback URI for both authorization and code exchange.
+Set `OAuthProvider::redirect_uri` to use a configured provider callback URI for both authorization and code exchange. The optional `client_key` follows each Social provider’s code-exchange options; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx#social-provider-inputs) for exceptions.
 
-Custom `OAuthUserInfoHandler` implementations return `AuthResult<Option<OAuthUserInfoResponse>>` to distinguish a missing profile from an application error. Profile names, emails, and mapper overrides preserve missing, null, and string values, including GitHub email-list fallback; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx).
+Custom `OAuthUserInfoHandler` implementations return `AuthResult<Option<OAuthUserInfoResponse>>` to distinguish a missing profile from an application error. Profile names, emails, and mapper overrides preserve missing, null, and string values, including GitHub email-list fallback. Sign-in normalizes omitted and null names to an empty string for storage and admission; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx).
 
 ## Documentation and development
 

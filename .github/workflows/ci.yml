@@ -56,14 +56,31 @@ jobs:
       BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: cachix/install-nix-action@v31
         with:
-          components: rustfmt, clippy
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
+          nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
+      - name: Expose the devenv Rust toolchain to the cache action
+        run: |
+          cat > "$RUNNER_TEMP/devenv-rust-path.sh" <<'SH'
+          set -euo pipefail
+          dirname "$(command -v rustc)" >> "$GITHUB_PATH"
+          dirname "$(command -v cargo)" >> "$GITHUB_PATH"
+          SH
+          devenv shell -- bash "$RUNNER_TEMP/devenv-rust-path.sh"
       - uses: Swatinem/rust-cache@v2
         with:
+          key: devenv-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}
           workspaces: |
             .
             compat-tests/rust-server
             compat-tests/schema-consumer
-      - uses: oven-sh/setup-bun@v2
-      - run: ./scripts/check.sh
+      - name: Run all checks in devenv
+        run: devenv shell -- ./scripts/check.sh

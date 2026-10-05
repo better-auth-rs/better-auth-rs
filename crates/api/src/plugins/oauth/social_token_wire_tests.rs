@@ -210,3 +210,143 @@ async fn social_line_code_and_refresh_match_the_captured_requests_and_tokens() -
     assert_eq!(tokens, fixture["grantTokens"]);
     Ok(())
 }
+
+fn client_key_requests(
+    client_key: Option<&str>,
+    basic: bool,
+    code_verifier: bool,
+    code_accept: &str,
+) -> Vec<Value> {
+    let mut code = json!({
+        "grant_type": "authorization_code",
+        "code": "ordinary-code",
+        "redirect_uri": "https://app.example.test/callback/provider",
+    });
+    if let Some(key) = client_key {
+        code["client_key"] = json!(key);
+    }
+    if code_verifier {
+        code["code_verifier"] = json!("ordinary-code-verifier");
+    }
+    let mut refresh = json!({
+        "grant_type": "refresh_token",
+        "refresh_token": "ordinary-refresh",
+    });
+    if !basic {
+        for body in [&mut code, &mut refresh] {
+            body["client_id"] = json!("client");
+            body["client_secret"] = json!("secret");
+        }
+    }
+    let authorization = basic.then_some("Basic Y2xpZW50OnNlY3JldA==");
+    [(code, code_accept), (refresh, "application/json")]
+        .into_iter()
+        .map(|(body, accept)| {
+            json!({
+                "method": "POST",
+                "contentType": "application/x-www-form-urlencoded",
+                "accept": accept,
+                "authorization": authorization,
+                "body": body,
+            })
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn social_client_key_matches_pinned_code_and_refresh_option_paths() -> TestResult<()> {
+    let key = Some("ordinary-client-key");
+    for (name, mut config, configured_key, sent_key, basic, verifier, accept) in [
+        (
+            "discord",
+            OAuthProvider::discord("client", "secret"),
+            key,
+            key,
+            false,
+            false,
+            "application/json",
+        ),
+        (
+            "railway",
+            OAuthProvider::railway("client", "secret"),
+            key,
+            key,
+            true,
+            true,
+            "application/json",
+        ),
+        (
+            "line",
+            OAuthProvider::line("client", "secret"),
+            key,
+            key,
+            false,
+            true,
+            "application/json",
+        ),
+        (
+            "paypal",
+            OAuthProvider::paypal("client", "secret"),
+            key,
+            None,
+            true,
+            true,
+            "application/json",
+        ),
+        (
+            "reddit",
+            OAuthProvider::reddit("client", "secret"),
+            key,
+            None,
+            true,
+            false,
+            "text/plain",
+        ),
+        (
+            "discord omitted",
+            OAuthProvider::discord("client", "secret"),
+            None,
+            None,
+            false,
+            false,
+            "application/json",
+        ),
+        (
+            "discord empty",
+            OAuthProvider::discord("client", "secret"),
+            Some(""),
+            None,
+            false,
+            false,
+            "application/json",
+        ),
+    ] {
+        config.client_key = configured_key.map(str::to_owned);
+        let response = json!({
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+        });
+        let (requests, tokens) = grants(
+            config,
+            "https://app.example.test/callback/provider",
+            "ordinary-code-verifier",
+            response.clone(),
+        )
+        .await?;
+        assert_eq!(
+            requests,
+            client_key_requests(sent_key, basic, verifier, accept),
+            "{name}",
+        );
+        assert_eq!(
+            tokens,
+            json!([
+                {"tokenType":"Bearer", "accessToken":"ordinary-access", "refreshToken":"ordinary-refresh", "scopes":[], "raw":response},
+                {"tokenType":"Bearer", "accessToken":"ordinary-access", "refreshToken":"ordinary-refresh", "scopes":[]},
+            ]),
+            "{name}",
+        );
+    }
+    Ok(())
+}

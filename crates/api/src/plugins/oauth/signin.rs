@@ -169,6 +169,12 @@ pub(super) async fn process_oauth_sign_in(
         return Err(OAuthSignInError::Generic("email not found".to_string()));
     };
 
+    let user_info = OAuthUserInfo {
+        name: Some(user_info.name()?.unwrap_or_default().to_owned()).into(),
+        ..user_info.clone()
+    };
+    let user_info = &user_info;
+
     let account_owner = ctx
         .database
         .get_account_owner(provider_name, &user_info.id)
@@ -534,7 +540,7 @@ pub(super) async fn process_oauth_sign_in(
 
         let mut create_user = CreateUser::new()
             .with_email(provider_email.to_lowercase())
-            .with_name(user_info.name()?.unwrap_or(provider_email))
+            .with_name(user_info.name()?.unwrap_or_default())
             .with_email_verified(email_verified);
         create_user.image = user_info.image.clone().map(Into::into).unwrap_or_default();
         create_user.additional_fields = ctx

@@ -45,6 +45,7 @@ impl OAuthProvider {
             kind: ProviderKind::Custom,
             client_id: client_id.into(),
             client_secret: client_secret.into(),
+            client_key: None,
             auth_url: auth_url.into(),
             token_url: token_url.into(),
             token_endpoint_auth: None,
