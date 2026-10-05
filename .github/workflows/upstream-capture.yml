@@ -8,6 +8,8 @@ on:
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
       - compat-tests/reference-server/contracts/*-capture.mjs
+      - compat-tests/reference-server/contracts/server-catalog-shared.mjs
+      - compat-tests/schema-consumer/verification-catalog-config.json
 
 permissions:
   contents: read
@@ -16,6 +18,35 @@ jobs:
   capture:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: better_auth
+          POSTGRES_PASSWORD: better_auth_ci
+          POSTGRES_DB: better_auth_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U better_auth -d better_auth_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: better_auth_ci
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbetter_auth_ci --silent"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
+      BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
@@ -29,7 +60,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Capture pinned Device grant metadata
+      - name: Capture pinned provider, Device, and Verification contracts
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -37,15 +68,19 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun ./compat-tests/reference-server/contracts/device-grant-metadata-capture.mjs "$capture_dir/device-grant-metadata-1.7.6.json" 2>&1 | tee "$capture_dir/device-grant-metadata.log"
+          bun --no-install ./compat-tests/reference-server/contracts/gitlab-issuer-capture.mjs "$capture_dir/gitlab-issuer-1.7.6.json" 2>&1 | tee "$capture_dir/gitlab-issuer.log"
+          bun --no-install ./compat-tests/reference-server/contracts/device-request-schema-capture.mjs "$capture_dir/device-request-schema-1.7.6.json" 2>&1 | tee "$capture_dir/device-request-schema.log"
+          bun --no-install ./compat-tests/reference-server/contracts/verification-server-catalog-capture.mjs postgres "$capture_dir/verification-postgres-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/verification-postgres-catalog.log"
+          bun --no-install ./compat-tests/reference-server/contracts/verification-server-catalog-capture.mjs mysql "$capture_dir/verification-mysql-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/verification-mysql-catalog.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
           )
+          bun --no-install test ./compat-tests/reference-server/contracts/device-grant-metadata.test.ts ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts 2>&1 | tee "$capture_dir/existing-contracts.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-device-grant-metadata-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-options-schema-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
