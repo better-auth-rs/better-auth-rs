@@ -16,35 +16,6 @@ jobs:
   capture:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    services:
-      postgres:
-        image: postgres:18.6
-        env:
-          POSTGRES_USER: better_auth
-          POSTGRES_PASSWORD: better_auth_ci
-          POSTGRES_DB: better_auth_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U better_auth -d better_auth_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-      mysql:
-        image: mysql:8.4.11
-        env:
-          MYSQL_ROOT_PASSWORD: better_auth_ci
-          MYSQL_ROOT_HOST: "%"
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbetter_auth_ci --silent"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
-      BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
@@ -58,8 +29,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Install locked database capture dependencies
-        id: drivers
+      - name: Capture pinned Device request validation
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -67,33 +37,15 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
+          bun ./compat-tests/reference-server/contracts/device-request-validation-capture.mjs "$capture_dir/device-request-validation-1.7.6.json" 2>&1 | tee "$capture_dir/device-request-validation.log"
           (
-            cd compat-tests/reference-server
-            cp package.json bun.lock "$capture_dir/"
-          ) 2>&1 | tee "$capture_dir/dependencies.log"
-      - name: Capture PostgreSQL schema
-        if: ${{ !cancelled() && steps.drivers.outcome == 'success' }}
-        shell: devenv shell -- bash -e {0}
-        run: |
-          set -euo pipefail
-          capture_dir="$RUNNER_TEMP/upstream-fixtures"
-          bun ./compat-tests/reference-server/contracts/server-catalog-capture.mjs postgres "$capture_dir/user-account-postgres-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/postgres.log"
-      - name: Capture MySQL schema
-        if: ${{ !cancelled() && steps.drivers.outcome == 'success' }}
-        shell: devenv shell -- bash -e {0}
-        run: |
-          set -euo pipefail
-          capture_dir="$RUNNER_TEMP/upstream-fixtures"
-          bun ./compat-tests/reference-server/contracts/server-catalog-capture.mjs mysql "$capture_dir/user-account-mysql-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/mysql.log"
-      - name: Record artifact checksums
-        if: ${{ !cancelled() && steps.drivers.outcome == 'success' }}
-        run: |
-          cd "$RUNNER_TEMP/upstream-fixtures"
-          sha256sum *.json bun.lock > SHA256SUMS
+            cd "$capture_dir"
+            sha256sum *.json > SHA256SUMS
+          )
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-server-catalog-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-device-validation-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
