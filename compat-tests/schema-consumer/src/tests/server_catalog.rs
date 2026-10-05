@@ -40,7 +40,7 @@ async fn observe(
             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?)
             ORDER BY TABLE_NAME, ORDINAL_POSITION"
         }
-        DbBackend::Sqlite => {
+        _ => {
             return Err("The server catalog test requires PostgreSQL or MySQL".into());
         }
     };
@@ -92,7 +92,7 @@ async fn check(database: &DatabaseConnection, backend: DbBackend) -> TestResult 
                 ],
             )
         }
-        DbBackend::Sqlite => {
+        _ => {
             return Err("The server catalog test requires PostgreSQL or MySQL".into());
         }
     };
