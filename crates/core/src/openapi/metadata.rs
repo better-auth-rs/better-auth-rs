@@ -136,6 +136,8 @@ impl OpenApiPluginMetadata {
                 endpoints.push(endpoint);
             }
         }
+        // Upstream enumerates endpoint object keys before assigning operation IDs.
+        endpoints.sort_by_key(|endpoint| property_key_order(&endpoint.key));
         let enabled = |condition: Option<&str>| match condition {
             Some("organization-teams") => teams,
             Some("organization-roles") => roles,
