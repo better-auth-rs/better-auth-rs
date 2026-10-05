@@ -16,6 +16,7 @@ mod tests {
     mod rate_limit_declarations;
     mod rate_limits;
     mod reference_fields;
+    mod server_catalog;
     mod session_catalog;
     mod sqlite_catalog;
     mod sqlite_json;

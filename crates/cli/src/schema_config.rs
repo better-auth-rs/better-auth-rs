@@ -277,14 +277,18 @@ impl Entity {
         let session_row_presence = database == Database::Sqlite
             && definition.role == Some(EntityRole::Session)
             && !session_active_column;
-        let sqlite_catalog =
-            sqlite_native_catalog(database, definition.role) || session_row_presence;
+        let native_catalog = sqlite_native_catalog(database, definition.role)
+            || session_row_presence
+            || matches!(
+                definition.role,
+                Some(EntityRole::User | EntityRole::Account)
+            );
         let mut entity = Self {
             module: syn::parse_str(definition.mod_name)
                 .map_err(|error| format!("invalid model name: {error}"))?,
             name: definition.mod_name,
             registry_table: definition.table_name,
-            table: if sqlite_catalog {
+            table: if native_catalog {
                 model_name(definition.mod_name)
             } else {
                 definition.table_name.to_owned()
@@ -313,7 +317,7 @@ impl Entity {
                             },
                         )
                         .map_err(|error| format!("invalid field type: {error}"))?,
-                        column: if sqlite_catalog
+                        column: if native_catalog
                             && core_field(definition.role, field.column_name.unwrap_or(field.name))
                                 .is_some()
                         {

@@ -1,5 +1,5 @@
 name: CI
-run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0}', inputs.stage) || 'Full acceptance' }} - ${{ github.ref_name }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0} {1}', inputs.stage, inputs.profile) || 'Full acceptance' }} - ${{ github.ref_name }}
 
 on:
   push:
@@ -27,12 +27,17 @@ on:
           - quick-start
           - alignment
           - client-configuration
+      profile:
+        description: Optional existing profile for the client-configuration stage
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}-${{ inputs.profile || 'all' }}
   cancel-in-progress: true
 
 env:
@@ -140,4 +145,10 @@ jobs:
         run: devenv shell -- ./scripts/check.sh alignment
       - name: Check client configuration compatibility
         if: env.CHECK_STAGE == 'client-configuration'
-        run: devenv shell -- ./scripts/check.sh client-configuration
+        env:
+          CHECK_COMPAT_PROFILE: ${{ inputs.profile }}
+        run: |
+          if [[ -n "$CHECK_COMPAT_PROFILE" ]]; then
+            export COMPAT_TEST_PROFILE="$CHECK_COMPAT_PROFILE"
+          fi
+          devenv shell -- ./scripts/check.sh client-configuration

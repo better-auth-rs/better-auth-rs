@@ -15,6 +15,8 @@
     "better-auth": "1.7.6"
   },
   "devDependencies": {
-    "@opentelemetry/api": "^1.9.1"
+    "@opentelemetry/api": "^1.9.1",
+    "mysql2": "3.24.5",
+    "pg": "8.23.1"
   }
 }

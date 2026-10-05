@@ -416,6 +416,9 @@ fn gen_table(
                     }
                 });
             }
+            if let Some(column) = gen_server_native_column(entity, field, database) {
+                return Some(column);
+            }
             if (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
                 && field.attributes.is_none()
             {
@@ -482,6 +485,56 @@ fn gen_table(
         #configure_columns
         table #(#foreign_keys)* .to_owned()
     }})
+}
+
+fn gen_server_native_column(
+    entity: &Entity,
+    field: &Field,
+    database: Database,
+) -> Option<TokenStream> {
+    if database == Database::Sqlite
+        || !matches!(entity.role, Some(EntityRole::User | EntityRole::Account))
+        || field.attributes.is_some()
+    {
+        return None;
+    }
+    let definition = core_field(entity.role, field.registry_column?)?;
+    let data_type = match (database, definition.ty) {
+        (Database::Mysql, "String" | "Option<String>")
+            if entity.role == Some(EntityRole::User)
+                && matches!(definition.name, "name" | "email") =>
+        {
+            quote!(column.string_len(255);)
+        }
+        (_, "String" | "Option<String>") => quote!(column.text();),
+        (_, "bool") => quote!(column.boolean();),
+        (Database::Postgres, "DateTimeUtc" | "Option<DateTimeUtc>") => {
+            quote!(column.timestamp_with_time_zone();)
+        }
+        (Database::Mysql, "DateTimeUtc" | "Option<DateTimeUtc>") => {
+            quote!(column.custom(Alias::new("timestamp(3)"));)
+        }
+        _ => return None,
+    };
+    let required_email = (entity.role == Some(EntityRole::User) && definition.name == "email")
+        .then(|| quote!(column.not_null();));
+    let timestamp_default = if database == Database::Mysql {
+        "CURRENT_TIMESTAMP(3)"
+    } else {
+        "CURRENT_TIMESTAMP"
+    };
+    let default = matches!(
+        (entity.role, definition.name),
+        (Some(EntityRole::User | EntityRole::Account), "created_at")
+            | (Some(EntityRole::User), "updated_at")
+    )
+    .then(|| quote!(column.default(sea_orm::sea_query::Expr::cust(#timestamp_default));));
+    let name = &field.column;
+    Some(quote! {
+        if column.get_column_name().as_str() == #name {
+            #data_type #required_email #default
+        }
+    })
 }
 
 fn gen_column_type(field: &AdditionalField) -> TokenStream {

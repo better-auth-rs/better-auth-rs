@@ -89,10 +89,16 @@ async function mysql() {
   }
 }
 
-const [backend, output] = process.argv.slice(2);
-assert.ok(backend === "postgres" || backend === "mysql", "Pass postgres or mysql as the first argument");
-assert.ok(output, "Pass the fixture output path as the second argument");
-const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
-assert.equal(version, "1.7.6");
-const observation = await (backend === "postgres" ? postgres() : mysql());
-writeFileSync(output, JSON.stringify({ version, database: backend, ...observation }, null, 2) + "\n");
+export async function captureServerCatalog(backend) {
+  assert.ok(backend === "postgres" || backend === "mysql", "Select postgres or mysql");
+  const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
+  assert.equal(version, "1.7.6");
+  const observation = await (backend === "postgres" ? postgres() : mysql());
+  return { version, database: backend, ...observation };
+}
+
+if (import.meta.main) {
+  const [backend, output] = process.argv.slice(2);
+  assert.ok(output, "Pass the fixture output path as the second argument");
+  writeFileSync(output, JSON.stringify(await captureServerCatalog(backend), null, 2) + "\n");
+}

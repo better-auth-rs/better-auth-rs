@@ -150,6 +150,12 @@ export BETTER_AUTH_POSTGRES_UUID_SCHEMA="$schema_dir/postgres_uuid_schema.rs"
 "$consumer_cli" generate --plugins all --generate-id serial --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_serial_schema.rs"
 export BETTER_AUTH_POSTGRES_SERIAL_SCHEMA="$schema_dir/postgres_serial_schema.rs"
 
+for backend in postgres mysql; do
+  "$consumer_cli" generate --database "$backend" --output "$schema_dir/server_${backend}_catalog_schema.rs"
+done
+export BETTER_AUTH_SERVER_POSTGRES_CATALOG_SCHEMA="$schema_dir/server_postgres_catalog_schema.rs"
+export BETTER_AUTH_SERVER_MYSQL_CATALOG_SCHEMA="$schema_dir/server_mysql_catalog_schema.rs"
+
 # Stable include paths preserve Cargo fingerprints when generated contents are unchanged.
 generated_dir="$PWD/compat-tests/schema-consumer/target/generated-schemas"
 mkdir -p "$generated_dir"
@@ -186,9 +192,12 @@ if [[ $# -eq 0 ]]; then
   BETTER_AUTH_TIMESTAMP_ARTIFACTS="$schema_dir/user_timestamp_artifacts.jsonl" bun --no-install test ./compat-tests/reference-server/consumer-contracts/user-timestamp-interchange.test.ts
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml tests::ids::live_postgres_generated_ids -- --ignored --exact
+  bun --no-install test ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts --test-name-pattern postgres
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests live_postgres -- --ignored
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_MYSQL_URL:-}" ]]; then
+  bun --no-install test ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts --test-name-pattern mysql
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml tests::server_catalog::live_mysql_user_account_catalog_matches_upstream -- --ignored --exact
   cargo test --locked --features axum,seaorm2,redis-cache --test schema_preflight_tests mysql::live_mysql_preflight_tracks_migrations_defaults_and_auto_increment -- --ignored --exact
 fi
