@@ -428,7 +428,12 @@ struct CompatGoogleIdTokenVerifier {
 
 #[async_trait::async_trait]
 impl OAuthIdTokenVerifier for CompatGoogleIdTokenVerifier {
-    async fn verify_id_token(&self, _token: &str, _nonce: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        _token: &str,
+        _nonce: Option<&str>,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         Ok(*self.valid.lock().await)
     }
 }

@@ -412,6 +412,7 @@ async fn microsoft_signed_ordinary_tenants_use_the_shared_oidc_boundary() -> Tes
         let verified = id_token::verify(
             &provider,
             &serde_json::from_value(json!({"token":server.token, "nonce":"ordinary-nonce"}))?,
+            None,
         )
         .await?;
         assert_eq!(json!(verified.is_some()), sample["verified"]);

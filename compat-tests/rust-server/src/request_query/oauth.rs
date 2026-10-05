@@ -21,7 +21,12 @@ pub(super) fn plugin(profile: &str, trace: BodyTrace) -> OAuthPlugin {
 
 #[async_trait::async_trait]
 impl OAuthIdTokenVerifier for BodyTrace {
-    async fn verify_id_token(&self, token: &str, _: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        token: &str,
+        _: Option<&str>,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         self.current("oauth.verify", None);
         Ok(token != "rejected-token")
     }

@@ -372,7 +372,7 @@ async fn apple_valid_signed_tokens_use_audience_precedence_and_both_nonce_forms(
             refresh_token: None,
             user: None,
         };
-        let verified = id_token::verify(&provider, &request).await?;
+        let verified = id_token::verify(&provider, &request, None).await?;
         assert_eq!(
             json!(verified.is_some()),
             *sample.get("accepted").ok_or("Missing acceptance")?

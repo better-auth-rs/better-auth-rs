@@ -108,7 +108,7 @@ pub(in crate::plugins::oauth) async fn fetch_user_info(
                             "PayPal ID token requires an explicit application verifier",
                         )
                     })?;
-                    AcceptedIdToken::verify(verifier, token, expected_nonce)
+                    AcceptedIdToken::verify(verifier, token, expected_nonce, None)
                         .await
                         .ok_or_else(crate::plugins::oauth::id_token::invalid)?
                         .value()?

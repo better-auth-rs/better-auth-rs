@@ -289,7 +289,12 @@ struct ApplicationVerifier {
 }
 #[async_trait]
 impl OAuthIdTokenVerifier for ApplicationVerifier {
-    async fn verify_id_token(&self, token: &str, nonce: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        token: &str,
+        nonce: Option<&str>,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         providers::paybin::verify(&self.issuer, "ordinary-client", token, nonce)
             .await
             .map(|_| true)
@@ -314,6 +319,7 @@ async fn application_verified_paybin_profile_uses_the_completed_signature_check(
             refresh_token: None,
             user: None,
         },
+        None,
     )
     .await
     .unwrap();

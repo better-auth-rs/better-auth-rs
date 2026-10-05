@@ -87,6 +87,8 @@ mod wechat_tests;
 mod google_test_support;
 #[cfg(test)]
 mod google_tests;
+#[cfg(test)]
+mod verifier_context_tests;
 
 pub use better_auth_core::NativeRequest;
 pub use generic::{

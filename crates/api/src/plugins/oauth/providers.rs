@@ -170,7 +170,13 @@ pub trait OAuthRefreshTokenHandler: Send + Sync {
 
 #[async_trait]
 pub trait OAuthIdTokenVerifier: Send + Sync {
-    async fn verify_id_token(&self, token: &str, nonce: Option<&str>) -> Result<bool, String>;
+    /// Request metadata is supplied by direct sign-in and linking; standalone calls may omit it.
+    async fn verify_id_token(
+        &self,
+        token: &str,
+        nonce: Option<&str>,
+        context: Option<NativeRequest<'_>>,
+    ) -> Result<bool, String>;
 }
 
 /// Input options for a social OAuth provider. Constructors retain omitted options.

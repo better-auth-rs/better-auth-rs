@@ -131,7 +131,7 @@ async fn signed_claims_match_pinned_profiles_on_code_direct_and_account_reads() 
                     refresh_token: None,
                     user: None,
                 };
-                let verified = id_token::verify(&resolved, &token).await.unwrap();
+                let verified = id_token::verify(&resolved, &token, None).await.unwrap();
                 social_profile::fetch_user_info_with_claims(&resolved, request, None, verified)
                     .await
                     .unwrap()
@@ -273,7 +273,12 @@ struct ApplicationVerifier(CognitoOptions);
 
 #[async_trait]
 impl OAuthIdTokenVerifier for ApplicationVerifier {
-    async fn verify_id_token(&self, token: &str, nonce: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        token: &str,
+        nonce: Option<&str>,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         self.0
             .verify("ordinary-client", token, nonce)
             .await
@@ -302,7 +307,7 @@ async fn application_verified_signed_claims_are_not_verified_a_second_time() {
         refresh_token: None,
         user: None,
     };
-    let verified = id_token::verify(&resolved, &token).await.unwrap();
+    let verified = id_token::verify(&resolved, &token, None).await.unwrap();
     let response = social_profile::fetch_user_info_with_claims(
         &resolved,
         OAuthUserInfoRequest {

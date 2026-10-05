@@ -376,7 +376,15 @@ async fn sign_in_with_id_token_core(
     meta: &better_auth_core::RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let claims = super::id_token::verify(provider, id_token).await?;
+    let claims = super::id_token::verify(
+        provider,
+        id_token,
+        Some(super::NativeRequest {
+            request: req.original_request(),
+            headers: req.endpoint_headers(),
+        }),
+    )
+    .await?;
 
     let user_info = super::social_profile::fetch_user_info_with_claims(
         provider,
@@ -443,13 +451,22 @@ async fn sign_in_with_id_token_core(
 }
 
 async fn link_with_id_token_core(
+    req: &AuthRequest,
     body: &LinkSocialRequest,
     id_token: &OAuthIdTokenRequest,
     provider: &ResolvedProvider,
     current_user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
-    let claims = super::id_token::verify(provider, id_token).await?;
+    let claims = super::id_token::verify(
+        provider,
+        id_token,
+        Some(super::NativeRequest {
+            request: req.original_request(),
+            headers: req.endpoint_headers(),
+        }),
+    )
+    .await?;
 
     let response = super::social_profile::fetch_user_info_with_claims(
         provider,
@@ -918,7 +935,7 @@ pub(crate) async fn handle_link_social(
                 code: "PROVIDER_NOT_FOUND",
                 message: "Provider not found",
             })?;
-        let response = link_with_id_token_core(&body, id_token, provider, &user, ctx).await?;
+        let response = link_with_id_token_core(req, &body, id_token, provider, &user, ctx).await?;
         return AuthResponse::json(200, &response).map_err(AuthError::from);
     }
 

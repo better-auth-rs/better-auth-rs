@@ -143,7 +143,12 @@ struct ConfiguredVerifier {
 }
 #[async_trait]
 impl OAuthIdTokenVerifier for ConfiguredVerifier {
-    async fn verify_id_token(&self, token: &str, nonce: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        token: &str,
+        nonce: Option<&str>,
+        _: Option<NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         self.calls.lock().unwrap().push("verify");
         Ok(
             google::verify(token, &["client".into()], nonce, &self.endpoint)

@@ -32,7 +32,12 @@ impl OAuthUserInfoHandler for UnusedCallbacks {
 }
 #[async_trait]
 impl OAuthIdTokenVerifier for UnusedCallbacks {
-    async fn verify_id_token(&self, _: &str, _: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        _: &str,
+        _: Option<&str>,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         Err(self.called())
     }
 }

@@ -1,4 +1,4 @@
-use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthError, AuthResult, NativeRequest};
 
 use super::google::{self, AcceptedIdToken, VerifiedGoogleClaims};
 use super::resolved::ResolvedProvider;
@@ -18,6 +18,7 @@ pub(super) enum VerifiedIdToken {
 pub(super) async fn verify(
     provider: &ResolvedProvider,
     request: &OAuthIdTokenRequest,
+    context: Option<NativeRequest<'_>>,
 ) -> AuthResult<Option<VerifiedIdToken>> {
     if provider.config.disable_id_token_sign_in {
         return Err(unsupported());
@@ -25,7 +26,7 @@ pub(super) async fn verify(
     let token = &request.token;
     let nonce = request.nonce.as_deref();
     if let Some(verifier) = &provider.config.verify_id_token {
-        let accepted = AcceptedIdToken::verify(verifier.as_ref(), token, nonce)
+        let accepted = AcceptedIdToken::verify(verifier.as_ref(), token, nonce, context)
             .await
             .ok_or_else(invalid)?;
         return if provider.config.google_jwks_url().is_some()

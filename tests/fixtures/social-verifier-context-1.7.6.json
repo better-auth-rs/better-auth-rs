@@ -1,0 +1,408 @@
+{
+  "version": "1.7.6",
+  "profile": {
+    "sub": "ordinary-verifier-subject",
+    "name": "Verifier Owner",
+    "email": "verifier-owner@example.test",
+    "email_verified": true,
+    "picture": "https://images.example.test/verifier.png"
+  },
+  "nonce": "ordinary-verifier-nonce",
+  "cases": [
+    {
+      "operation": "sign-in",
+      "transport": "http",
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": true,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://social-verifier-context.test"
+            ],
+            [
+              "x-verifier-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": {
+            "url": "http://social-verifier-context.test/api/auth/sign-in/social?label=ordinary",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "origin",
+                "http://social-verifier-context.test"
+              ],
+              [
+                "x-verifier-label",
+                "endpoint-label"
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "status": 200,
+        "body": {
+          "redirect": false,
+          "token": {
+            "nonempty": true,
+            "storedForUser": true
+          },
+          "user": {
+            "name": "Verifier Owner",
+            "email": "verifier-owner@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/verifier.png",
+            "createdAt": "<stored-createdAt>",
+            "updatedAt": "<stored-updatedAt>",
+            "id": "<stored-user-id>"
+          }
+        }
+      },
+      "stored": {
+        "user": {
+          "name": "Verifier Owner",
+          "email": "verifier-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/verifier.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-verifier-subject",
+          "belongsToUser": true,
+          "idTokenMatchesIssued": true
+        },
+        "sessions": 1
+      }
+    },
+    {
+      "operation": "sign-in",
+      "transport": "native-headers",
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": true,
+          "headers": [
+            [
+              "x-verifier-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": null
+        }
+      ],
+      "result": {
+        "status": 200,
+        "body": {
+          "redirect": false,
+          "token": {
+            "nonempty": true,
+            "storedForUser": true
+          },
+          "user": {
+            "name": "Verifier Owner",
+            "email": "verifier-owner@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/verifier.png",
+            "createdAt": "<stored-createdAt>",
+            "updatedAt": "<stored-updatedAt>",
+            "id": "<stored-user-id>"
+          }
+        }
+      },
+      "stored": {
+        "user": {
+          "name": "Verifier Owner",
+          "email": "verifier-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/verifier.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-verifier-subject",
+          "belongsToUser": true,
+          "idTokenMatchesIssued": true
+        },
+        "sessions": 1
+      }
+    },
+    {
+      "operation": "sign-in",
+      "transport": "native-request",
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": true,
+          "headers": [
+            [
+              "x-verifier-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": {
+            "url": "http://social-verifier-context.test/original-source?label=ordinary",
+            "method": "GET",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "x-verifier-label",
+                "original-label"
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "status": 200,
+        "body": {
+          "redirect": false,
+          "token": {
+            "nonempty": true,
+            "storedForUser": true
+          },
+          "user": {
+            "name": "Verifier Owner",
+            "email": "verifier-owner@example.test",
+            "emailVerified": true,
+            "image": "https://images.example.test/verifier.png",
+            "createdAt": "<stored-createdAt>",
+            "updatedAt": "<stored-updatedAt>",
+            "id": "<stored-user-id>"
+          }
+        }
+      },
+      "stored": {
+        "user": {
+          "name": "Verifier Owner",
+          "email": "verifier-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/verifier.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-verifier-subject",
+          "belongsToUser": true,
+          "idTokenMatchesIssued": true
+        },
+        "sessions": 1
+      }
+    },
+    {
+      "operation": "link",
+      "transport": "http",
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": true,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "<owner-session-cookie>"
+            ],
+            [
+              "origin",
+              "http://social-verifier-context.test"
+            ],
+            [
+              "x-verifier-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": {
+            "url": "http://social-verifier-context.test/api/auth/link-social?label=ordinary",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "<owner-session-cookie>"
+              ],
+              [
+                "origin",
+                "http://social-verifier-context.test"
+              ],
+              [
+                "x-verifier-label",
+                "endpoint-label"
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "status": 200,
+        "body": {
+          "url": "",
+          "status": true,
+          "redirect": false
+        }
+      },
+      "stored": {
+        "user": {
+          "name": "Verifier Owner",
+          "email": "verifier-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/verifier.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-verifier-subject",
+          "belongsToUser": true,
+          "idTokenMatchesIssued": true
+        },
+        "sessions": 1
+      }
+    },
+    {
+      "operation": "link",
+      "transport": "native-headers",
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": true,
+          "headers": [
+            [
+              "cookie",
+              "<owner-session-cookie>"
+            ],
+            [
+              "x-verifier-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": null
+        }
+      ],
+      "result": {
+        "status": 200,
+        "body": {
+          "url": "",
+          "status": true,
+          "redirect": false
+        }
+      },
+      "stored": {
+        "user": {
+          "name": "Verifier Owner",
+          "email": "verifier-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/verifier.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-verifier-subject",
+          "belongsToUser": true,
+          "idTokenMatchesIssued": true
+        },
+        "sessions": 1
+      }
+    },
+    {
+      "operation": "link",
+      "transport": "native-request",
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": true,
+          "headers": [
+            [
+              "cookie",
+              "<owner-session-cookie>"
+            ],
+            [
+              "x-verifier-label",
+              "endpoint-label"
+            ]
+          ],
+          "request": {
+            "url": "http://social-verifier-context.test/original-source?label=ordinary",
+            "method": "GET",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "x-verifier-label",
+                "original-label"
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "status": 200,
+        "body": {
+          "url": "",
+          "status": true,
+          "redirect": false
+        }
+      },
+      "stored": {
+        "user": {
+          "name": "Verifier Owner",
+          "email": "verifier-owner@example.test",
+          "emailVerified": true,
+          "image": "https://images.example.test/verifier.png"
+        },
+        "account": {
+          "providerId": "google",
+          "accountId": "ordinary-verifier-subject",
+          "belongsToUser": true,
+          "idTokenMatchesIssued": true
+        },
+        "sessions": 1
+      }
+    },
+    {
+      "operation": "standalone",
+      "transport": null,
+      "events": [
+        {
+          "tokenMatchesIssued": true,
+          "nonce": "ordinary-verifier-nonce",
+          "accepted": true,
+          "hasContext": false,
+          "headers": null,
+          "request": null
+        }
+      ],
+      "result": {
+        "accepted": true
+      },
+      "stored": null
+    }
+  ]
+}

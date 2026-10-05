@@ -312,7 +312,12 @@ struct Verifier {
 }
 #[async_trait]
 impl OAuthIdTokenVerifier for Verifier {
-    async fn verify_id_token(&self, token: &str, nonce: Option<&str>) -> Result<bool, String> {
+    async fn verify_id_token(
+        &self,
+        token: &str,
+        nonce: Option<&str>,
+        _: Option<better_auth_core::NativeRequest<'_>>,
+    ) -> Result<bool, String> {
         self.events.lock().unwrap().push("verify".into());
         self.verifier
             .verify(token, nonce)
@@ -429,6 +434,7 @@ async fn paypal_explicit_verifier_runs_once_for_direct_and_stored_profile_reads(
                     refresh_token: None,
                     user: None,
                 },
+                None,
             )
             .await
             .unwrap();

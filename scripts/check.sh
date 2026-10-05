@@ -59,6 +59,7 @@ run_stage() {
       cargo clippy --locked -p better-auth-api --features axum -- -D warnings
       cargo test --locked -p better-auth-api --features axum --lib -- \
         plugins::oauth::google_client_ids_tests:: \
+        plugins::oauth::verifier_context_tests:: \
         plugins::oauth::gitlab_issuer_tests:: \
         plugins::oauth::microsoft_tests:: \
         plugins::oauth::providers::twitch::tests:: \
@@ -76,6 +77,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/twitch-provider.test.ts \
         ./compat-tests/reference-server/contracts/oauth-profile-override.test.ts \
         ./compat-tests/reference-server/contracts/social-refresh-context.test.ts \
+        ./compat-tests/reference-server/contracts/social-verifier-context.test.ts \
         ./compat-tests/reference-server/contracts/generic-profile-results.test.ts
       ;;
     *) echo "Unknown check stage: $1" >&2; exit 1 ;;

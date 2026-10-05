@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthError, AuthResult, NativeRequest};
 use jsonwebtoken::{Algorithm, DecodingKey, crypto};
 use serde_json::Value;
 
@@ -34,10 +34,11 @@ impl AcceptedIdToken {
         verifier: &dyn OAuthIdTokenVerifier,
         token: &str,
         nonce: Option<&str>,
+        context: Option<NativeRequest<'_>>,
     ) -> Option<Self> {
         // The configured verifier owns this application's token trust policy.
         verifier
-            .verify_id_token(token, nonce)
+            .verify_id_token(token, nonce, context)
             .await
             .unwrap_or(false)
             .then(|| Self(token.to_owned()))
