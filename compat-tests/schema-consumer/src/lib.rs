@@ -23,6 +23,7 @@ mod tests {
     mod rate_limits;
     mod reference_fields;
     mod server_catalog;
+    mod server_catalog_indexes;
     mod session_catalog;
     mod session_server;
     mod sqlite_catalog;
@@ -33,6 +34,8 @@ mod tests {
     mod verification_catalog;
     mod verification_server_catalog;
     mod wallet_additional_fields;
+    mod wallet_catalog;
+    mod wallet_catalog_storage;
 
     use std::sync::Arc;
 

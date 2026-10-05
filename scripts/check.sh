@@ -22,10 +22,10 @@ run_stage() {
     rustls) cargo check -p better-auth --locked --no-default-features --features rustls,axum,seaorm2,redis-cache ;;
     rustdoc) RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features axum,seaorm2,redis-cache ;;
     consumer)
-      cargo clippy --locked -p better-auth-core -p better-auth-cli -p better-auth-seaorm-macros -- -D warnings
+      cargo clippy --locked -p better-auth-core -p better-auth-cli -p better-auth-seaorm-macros -p better-auth-seaorm -- -D warnings
       cargo test --locked -p better-auth-core optional_runtime_fields_preserve_absence_then_explicit_null
       cargo test --locked -p better-auth-cli -p better-auth-seaorm-macros
-      cargo test --locked --features axum,seaorm2,redis-cache --test session_additional_fields_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test session_additional_fields_tests --test wallet_additional_fields_tests
       ./scripts/consumer-check.sh
       ;;
     fullstack) cargo check --locked --manifest-path examples/fullstack/backend/Cargo.toml ;;

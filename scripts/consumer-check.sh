@@ -68,6 +68,9 @@ for name, configuration in verification_catalog.items():
 device_code_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/device-code-catalog-config.json").read_text())
 for name, configuration in device_code_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"device_code_catalog_{name}.json").write_text(json.dumps(configuration))
+wallet_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/wallet-address-catalog-config.json").read_text())
+for name, configuration in wallet_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"wallet_catalog_{name}.json").write_text(json.dumps(configuration))
 jwk_rate_limit_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/jwk-rate-limit-catalog-config.json").read_text())
 for name, configuration in jwk_rate_limit_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"jwk_rate_limit_catalog_{name}.json").write_text(json.dumps(configuration))
@@ -127,6 +130,21 @@ export BETTER_AUTH_DEVICE_CODE_POSTGRES_DEFAULT_SCHEMA="$schema_dir/device_code_
 export BETTER_AUTH_DEVICE_CODE_POSTGRES_CUSTOM_SCHEMA="$schema_dir/device_code_postgres_custom.rs"
 export BETTER_AUTH_DEVICE_CODE_MYSQL_DEFAULT_SCHEMA="$schema_dir/device_code_mysql_default.rs"
 export BETTER_AUTH_DEVICE_CODE_MYSQL_CUSTOM_SCHEMA="$schema_dir/device_code_mysql_custom.rs"
+for case in default legacy custom; do
+  "$consumer_cli" generate --plugins siwe --database sqlite --schema-config "$schema_dir/wallet_catalog_${case}.json" --output "$schema_dir/wallet_sqlite_${case}.rs"
+done
+export BETTER_AUTH_WALLET_SQLITE_DEFAULT_SCHEMA="$schema_dir/wallet_sqlite_default.rs"
+export BETTER_AUTH_WALLET_SQLITE_LEGACY_SCHEMA="$schema_dir/wallet_sqlite_legacy.rs"
+export BETTER_AUTH_WALLET_SQLITE_CUSTOM_SCHEMA="$schema_dir/wallet_sqlite_custom.rs"
+for backend in postgres mysql; do
+  for case in default custom; do
+    "$consumer_cli" generate --plugins siwe --database "$backend" --schema-config "$schema_dir/wallet_catalog_${case}.json" --output "$schema_dir/wallet_${backend}_${case}.rs"
+  done
+done
+export BETTER_AUTH_WALLET_POSTGRES_DEFAULT_SCHEMA="$schema_dir/wallet_postgres_default.rs"
+export BETTER_AUTH_WALLET_POSTGRES_CUSTOM_SCHEMA="$schema_dir/wallet_postgres_custom.rs"
+export BETTER_AUTH_WALLET_MYSQL_DEFAULT_SCHEMA="$schema_dir/wallet_mysql_default.rs"
+export BETTER_AUTH_WALLET_MYSQL_CUSTOM_SCHEMA="$schema_dir/wallet_mysql_custom.rs"
 for case in default legacy custom; do
   "$consumer_cli" generate --plugins jwt --rate-limit-database --database sqlite --schema-config "$schema_dir/jwk_rate_limit_catalog_${case}.json" --output "$schema_dir/jwk_rate_limit_catalog_${case}.rs"
 done
@@ -274,9 +292,11 @@ if [[ $# -eq 0 ]]; then
   cargo build --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --example user_timestamp_interchange --message-format=json > "$schema_dir/user_timestamp_artifacts.jsonl"
   BETTER_AUTH_TIMESTAMP_ARTIFACTS="$schema_dir/user_timestamp_artifacts.jsonl" bun --no-install test ./compat-tests/reference-server/consumer-contracts/user-timestamp-interchange.test.ts
   bun --no-install test ./compat-tests/reference-server/consumer-contracts/device-code-catalog.test.ts --test-name-pattern sqlite
+  bun --no-install test ./compat-tests/reference-server/consumer-contracts/wallet-address-catalog.test.ts --test-name-pattern sqlite
 fi
 server_catalog_tests=(
   ./compat-tests/reference-server/consumer-contracts/device-code-catalog.test.ts
+  ./compat-tests/reference-server/consumer-contracts/wallet-address-catalog.test.ts
   ./compat-tests/reference-server/consumer-contracts/server-catalog.test.ts
   ./compat-tests/reference-server/consumer-contracts/session-server.test.ts
   ./compat-tests/reference-server/consumer-contracts/verification-server-catalog.test.ts
@@ -289,11 +309,11 @@ server_catalog_tests=(
 )
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
   bun --no-install test "${server_catalog_tests[@]}" --test-name-pattern postgres
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::device_code_catalog::live_postgres_device_code_catalog_matches_upstream tests::session_server::live_postgres_session_storage_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_counter_matches_upstream tests::member_server_catalog::live_postgres_member_catalog_matches_upstream tests::organization_role_server::live_postgres_organization_role_storage_matches_upstream tests::team_invitation_server::live_postgres_team_invitation_storage_matches_upstream
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::device_code_catalog::live_postgres_device_code_catalog_matches_upstream tests::wallet_catalog::live_postgres_wallet_catalog_and_storage_match_upstream tests::session_server::live_postgres_session_storage_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_counter_matches_upstream tests::member_server_catalog::live_postgres_member_catalog_matches_upstream tests::organization_role_server::live_postgres_organization_role_storage_matches_upstream tests::team_invitation_server::live_postgres_team_invitation_storage_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests live_postgres -- --ignored
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_MYSQL_URL:-}" ]]; then
   bun --no-install test "${server_catalog_tests[@]}" --test-name-pattern mysql
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::device_code_catalog::live_mysql_device_code_catalog_matches_upstream tests::session_server::live_mysql_session_storage_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_counter_matches_upstream tests::member_server_catalog::live_mysql_member_catalog_matches_upstream tests::organization_role_server::live_mysql_organization_role_storage_matches_upstream tests::team_invitation_server::live_mysql_team_invitation_storage_matches_upstream
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::device_code_catalog::live_mysql_device_code_catalog_matches_upstream tests::wallet_catalog::live_mysql_wallet_catalog_and_storage_match_upstream tests::session_server::live_mysql_session_storage_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_counter_matches_upstream tests::member_server_catalog::live_mysql_member_catalog_matches_upstream tests::organization_role_server::live_mysql_organization_role_storage_matches_upstream tests::team_invitation_server::live_mysql_team_invitation_storage_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test schema_preflight_tests mysql::live_mysql_preflight_tracks_migrations_defaults_and_auto_increment -- --ignored --exact
 fi

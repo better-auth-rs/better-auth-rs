@@ -326,6 +326,11 @@ fn gen_table(
     let mut foreign_keys = registry::entity_foreign_keys(entity.registry_table)
         .iter()
         .filter(|entry| {
+            !(database == Database::Mysql
+                && entity.role == Some(EntityRole::WalletAddress)
+                && entry.0 == "user_id")
+        })
+        .filter(|entry| {
             entity
                 .fields
                 .iter()
@@ -344,9 +349,12 @@ fn gen_table(
                 .map(|entity| entity.table.as_str())
                 .ok_or_else(|| format!("foreign key target `{target}` is missing"))?;
             let name = format!("fk_{table}_{column}");
+            let name = (!(database == Database::Postgres
+                && entity.role == Some(EntityRole::WalletAddress)))
+            .then(|| quote!(.name(#name)));
             Ok(quote! {
                 .foreign_key(ForeignKey::create()
-                    .name(#name)
+                    #name
                     .from(Alias::new(#table), Alias::new(#column))
                     .to(Alias::new(#target), Alias::new("id"))
                     .on_delete(ForeignKeyAction::Cascade))
@@ -446,8 +454,11 @@ fn gen_table(
                     "DateTimeUtc" | "Option<DateTimeUtc>" => {
                         quote!(column.custom(Alias::new("date"));)
                     }
-                    "i64" if entity.role == Some(EntityRole::Team)
-                        && definition.name == "member_count" => quote!(column.integer();),
+                    "i64" if matches!(
+                        (entity.role, definition.name),
+                        (Some(EntityRole::Team), "member_count")
+                            | (Some(EntityRole::WalletAddress), "chain_id")
+                    ) => quote!(column.integer();),
                     "i64" => quote!(column.custom(Alias::new("bigint"));),
                     "Json" if entity.role == Some(EntityRole::OrganizationRole)
                         && definition.name == "permission" => quote!(column.text();),
@@ -527,6 +538,7 @@ fn gen_server_native_column(
                         | EntityRole::OrganizationRole
                         | EntityRole::Team
                         | EntityRole::Invitation
+                        | EntityRole::WalletAddress
                 )
             ))
         || field.attributes.is_some()
@@ -560,7 +572,11 @@ fn gen_server_native_column(
         }
         (_, "String" | "Option<String>") => quote!(column.text();),
         (_, "i64")
-            if entity.role == Some(EntityRole::Team) && definition.name == "member_count" =>
+            if matches!(
+                (entity.role, definition.name),
+                (Some(EntityRole::Team), "member_count")
+                    | (Some(EntityRole::WalletAddress), "chain_id")
+            ) =>
         {
             quote!(column.integer();)
         }
@@ -726,7 +742,9 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     }
     indexes.into_iter().map(|(columns, unique)| {
         let native_index = entity.fields.iter().find(|field| {
-            matches!(database, Database::Sqlite)
+            ((entity.role == Some(EntityRole::WalletAddress)
+                && field.registry_column == Some("user_id"))
+                || (matches!(database, Database::Sqlite)
                 && (matches!(
                     (entity.role, field.registry_column),
                     (Some(EntityRole::Verification), Some("identifier"))
@@ -735,7 +753,7 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
                         | (Some(EntityRole::OrganizationRole), Some("organization_id" | "role"))
                         | (Some(EntityRole::Team), Some("organization_id"))
                         | (Some(EntityRole::Invitation), Some("organization_id" | "email"))
-                ) || (entity.session_row_presence && field.registry_column == Some("user_id")))
+                ) || (entity.session_row_presence && field.registry_column == Some("user_id")))))
                 && field.attributes.is_none()
                 && !unique && columns.as_slice() == [field.column.as_str()]
         });

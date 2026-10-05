@@ -1,0 +1,448 @@
+{
+  "version": "1.7.6",
+  "database": "postgres",
+  "input": {
+    "address": "0x1111111111111111111111111111111111111111",
+    "wallets": [
+      {
+        "chainId": 1,
+        "isPrimary": true,
+        "createdAt": "2030-01-02T03:04:05.123Z"
+      },
+      {
+        "chainId": 137,
+        "isPrimary": false,
+        "createdAt": "2030-01-02T03:04:06.456Z"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "walletAddress",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "walletAddress",
+          "position": "2",
+          "name": "userId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "walletAddress",
+          "position": "3",
+          "name": "address",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "walletAddress",
+          "position": "4",
+          "name": "chainId",
+          "type": "integer",
+          "nativeType": "int4",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "walletAddress",
+          "position": "5",
+          "name": "isPrimary",
+          "type": "boolean",
+          "nativeType": "bool",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "walletAddress",
+          "position": "6",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"walletAddress\" (\"id\" text not null primary key, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"address\" text not null, \"chainId\" integer not null, \"isPrimary\" boolean not null, \"createdAt\" timestamptz not null);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"walletAddress_userId_idx\" on \"walletAddress\" (\"userId\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "walletAddress",
+            "name": "walletAddress_pkey",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          },
+          {
+            "table": "walletAddress",
+            "name": "walletAddress_userId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "userId"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "walletAddress",
+            "name": "walletAddress_userId_fkey",
+            "position": "1",
+            "column": "userId",
+            "targetTable": "user",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          }
+        ],
+        "storage": {
+          "created": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byAddress": {
+            "userId": "<owner-id>",
+            "address": "0x1111111111111111111111111111111111111111",
+            "chainId": 1,
+            "isPrimary": true,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "id": "<wallet-1-id>"
+          },
+          "byAddressAndChain": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byOwner": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "raw": [
+            {
+              "id": "<wallet-1-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            },
+            {
+              "id": "<wallet-137-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z"
+            }
+          ],
+          "rawTypes": [
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Boolean]",
+              "createdAt": "[object Date]"
+            },
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Boolean]",
+              "createdAt": "[object Date]"
+            }
+          ],
+          "ownerRetained": true,
+          "siweCallbacks": 0
+        }
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "walletAddress": {
+          "modelName": "display_catalog_wallets",
+          "fields": {
+            "userId": "person_link",
+            "address": "wallet_text",
+            "chainId": "network_number",
+            "isPrimary": "preferred_wallet",
+            "createdAt": "created_on"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "display_catalog_wallets",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_wallets",
+          "position": "2",
+          "name": "person_link",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_wallets",
+          "position": "3",
+          "name": "wallet_text",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_wallets",
+          "position": "4",
+          "name": "network_number",
+          "type": "integer",
+          "nativeType": "int4",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_wallets",
+          "position": "5",
+          "name": "preferred_wallet",
+          "type": "boolean",
+          "nativeType": "bool",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "display_catalog_wallets",
+          "position": "6",
+          "name": "created_on",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "NO",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"display_catalog_wallets\" (\"id\" text not null primary key, \"person_link\" text not null references \"user\" (\"id\") on delete cascade, \"wallet_text\" text not null, \"network_number\" integer not null, \"preferred_wallet\" boolean not null, \"created_on\" timestamptz not null);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_wallets_person_link_idx\" on \"display_catalog_wallets\" (\"person_link\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "display_catalog_wallets",
+            "name": "display_catalog_wallets_person_link_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "person_link"
+          },
+          {
+            "table": "display_catalog_wallets",
+            "name": "display_catalog_wallets_pkey",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "display_catalog_wallets",
+            "name": "display_catalog_wallets_person_link_fkey",
+            "position": "1",
+            "column": "person_link",
+            "targetTable": "user",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          }
+        ],
+        "storage": {
+          "created": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byAddress": {
+            "userId": "<owner-id>",
+            "address": "0x1111111111111111111111111111111111111111",
+            "chainId": 1,
+            "isPrimary": true,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "id": "<wallet-1-id>"
+          },
+          "byAddressAndChain": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byOwner": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "raw": [
+            {
+              "id": "<wallet-1-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            },
+            {
+              "id": "<wallet-137-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z"
+            }
+          ],
+          "rawTypes": [
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Boolean]",
+              "createdAt": "[object Date]"
+            },
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Boolean]",
+              "createdAt": "[object Date]"
+            }
+          ],
+          "ownerRetained": true,
+          "siweCallbacks": 0
+        }
+      }
+    }
+  ]
+}

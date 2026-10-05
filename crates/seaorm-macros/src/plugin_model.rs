@@ -102,6 +102,8 @@ pub(super) fn generate(
             quote!(self.#ident.map(f64::from))
         } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
+        } else if role == EntityRole::WalletAddress && name == "chain_id" {
+            quote!(i64::from(self.#ident))
         } else if role == EntityRole::ApiKey && name == "name"
             || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
         {

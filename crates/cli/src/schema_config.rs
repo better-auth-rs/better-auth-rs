@@ -45,6 +45,7 @@ pub(crate) fn sqlite_native_catalog(database: Database, role: Option<EntityRole>
                     | EntityRole::OrganizationRole
                     | EntityRole::Team
                     | EntityRole::Invitation
+                    | EntityRole::WalletAddress
             )
         )
 }
@@ -296,6 +297,7 @@ impl Entity {
                         | EntityRole::OrganizationRole
                         | EntityRole::Team
                         | EntityRole::Invitation
+                        | EntityRole::WalletAddress
                 )
             );
         let mut entity = Self {
@@ -328,8 +330,11 @@ impl Entity {
                             {
                                 "Option<String>"
                             } else if database != Database::Sqlite
-                                && definition.role == Some(EntityRole::Team)
-                                && field.name == "member_count"
+                                && matches!(
+                                    (definition.role, field.name),
+                                    (Some(EntityRole::Team), "member_count")
+                                        | (Some(EntityRole::WalletAddress), "chain_id")
+                                )
                             {
                                 "i32"
                             } else if database != Database::Sqlite

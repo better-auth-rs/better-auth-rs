@@ -1,4 +1,7 @@
-use super::server_catalog::{self, TestResult};
+use super::{
+    server_catalog::{self, TestResult},
+    server_catalog_indexes,
+};
 use better_auth::{
     AuthConfig, AuthSchema,
     config::IdGeneration,
@@ -11,9 +14,6 @@ use better_auth::{
     store::AuthStore,
 };
 use serde_json::{Value, json};
-
-#[path = "device_code_server_catalog.rs"]
-mod server_indexes;
 
 mod sqlite_default {
     include!(env!("BETTER_AUTH_DEVICE_CODE_SQLITE_DEFAULT_SCHEMA"));
@@ -214,7 +214,7 @@ async fn check(database: &DatabaseConnection, backend: DbBackend, case: &Value) 
             case.get("columns"),
             "{backend:?} DeviceCode columns {name}"
         );
-        let observation = server_indexes::observe(database, backend, &table).await?;
+        let observation = server_catalog_indexes::observe(database, backend, &table).await?;
         assert_eq!(
             Some(&observation),
             case.get("observation"),

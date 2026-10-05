@@ -3,7 +3,7 @@ title: Sign-In with Ethereum
 description: Verify signed Ethereum messages and persist wallet ownership across chains.
 ---
 
-Generate the schema with `--plugins siwe` and migrate the `wallet_address` table before enabling the plugin. Register the server domain, a nonce generator, and a signature verifier.
+Generate the schema with `--plugins siwe` and migrate the generated `walletAddress` table before enabling the plugin. Explicit model and field mappings can retain existing physical names. Register the server domain, a nonce generator, and a signature verifier.
 
 ```rust
 use better_auth::plugins::SiwePlugin;
@@ -25,7 +25,9 @@ Sequential sign-ins reuse a wallet's existing user across chains. Each new chain
 
 Custom plugins can register Wallet adapter fields with `AuthInitContext::register_model_fields(EntityRole::WalletAddress, fields)`. Direct store callers supply declared logical values in `CreateWalletAddress.additional_fields` and read the projected values from `WalletAddress.additional_fields`. Defaults and input transforms run before insertion. Output transforms run after insertion or lookup; an output error leaves the completed direct insert in storage. Generate application columns with `walletAddress.additionalFields` and `--plugins siwe`, then apply an application-owned migration. Native wallet fields and their mapped columns remain reserved.
 
-The SIWE flow supplies an empty additional-field map, so registered defaults can supply application values. The flow retains its native user binding and response fields. Secondary forwards Wallet create/get calls. Applications can call the same methods through `AuthTransaction`; a propagated output error rolls back that enclosing transaction. This capability does not change the SIWE flow's transaction boundary. Ordinary Memory/SQLite display-field contracts verify commit and output-error rollback, including Rust Secondary forwarding. Default physical table and column differences remain unresolved; see [schema mapping](/docs/concepts/database#map-plugin-tables-and-columns).
+The SIWE flow supplies an empty additional-field map, so registered defaults can supply application values. The flow retains its native user binding and response fields. Secondary forwards Wallet create/get calls. Applications can call the same methods through `AuthTransaction`; a propagated output error rolls back that enclosing transaction. This capability does not change the SIWE flow's transaction boundary. Ordinary Memory/SQLite display-field contracts verify commit and output-error rollback, including Rust Secondary forwarding.
+
+Fresh CLI Wallet schemas use native column names and an INTEGER chainId column. Generated PostgreSQL/MySQL models use `i32` storage and return the existing public `i64` chain ID; bundled and SQLite Rust models retain `i64`. The generated MySQL Wallet table has no physical userId foreign key or database cascade, matching the pinned catalog; Rust reference conversion and owner checks remain in place. Applications own migrations from existing tables. See [schema mapping](/docs/concepts/database#map-plugin-tables-and-columns) for backend types and the separate catalog acceptance boundary.
 
 As in Better Auth 1.7.6, wallet registration has no unique wallet constraint or atomic registration transaction. Concurrent first sign-ins for the same wallet can race. The email reservation below protects email claims; it does not lock wallet registration.
 

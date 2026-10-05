@@ -1,0 +1,856 @@
+{
+  "version": "1.7.6",
+  "database": "sqlite",
+  "input": {
+    "address": "0x1111111111111111111111111111111111111111",
+    "wallets": [
+      {
+        "chainId": 1,
+        "isPrimary": true,
+        "createdAt": "2030-01-02T03:04:05.123Z"
+      },
+      {
+        "chainId": 137,
+        "isPrimary": false,
+        "createdAt": "2030-01-02T03:04:06.456Z"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "catalog": {
+        "table": {
+          "type": "table",
+          "name": "walletAddress",
+          "tbl_name": "walletAddress"
+        },
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "userId",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "address",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "chainId",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "isPrimary",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "createdAt",
+            "type": "date",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "walletAddress_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "userId"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "userId",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "sqlite_autoindex_walletAddress_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": [
+          {
+            "id": 0,
+            "seq": 0,
+            "table": "user",
+            "from": "userId",
+            "to": "id",
+            "on_update": "NO ACTION",
+            "on_delete": "CASCADE",
+            "match": "NONE"
+          }
+        ]
+      },
+      "ddl": [
+        {
+          "type": "index",
+          "name": "sqlite_autoindex_walletAddress_1",
+          "tbl_name": "walletAddress",
+          "sql": null
+        },
+        {
+          "type": "index",
+          "name": "walletAddress_userId_idx",
+          "tbl_name": "walletAddress",
+          "sql": "CREATE INDEX \"walletAddress_userId_idx\" on \"walletAddress\" (\"userId\")"
+        },
+        {
+          "type": "table",
+          "name": "walletAddress",
+          "tbl_name": "walletAddress",
+          "sql": "CREATE TABLE \"walletAddress\" (\"id\" text not null primary key, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"address\" text not null, \"chainId\" integer not null, \"isPrimary\" integer not null, \"createdAt\" date not null)"
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"walletAddress\" (\"id\" text not null primary key, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"address\" text not null, \"chainId\" integer not null, \"isPrimary\" integer not null, \"createdAt\" date not null);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"walletAddress_userId_idx\" on \"walletAddress\" (\"userId\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "storage": {
+          "created": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byAddress": {
+            "userId": "<owner-id>",
+            "address": "0x1111111111111111111111111111111111111111",
+            "chainId": 1,
+            "isPrimary": true,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "id": "<wallet-1-id>"
+          },
+          "byAddressAndChain": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byOwner": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "raw": [
+            {
+              "id": "<wallet-1-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": 1,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            },
+            {
+              "id": "<wallet-137-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": 0,
+              "createdAt": "2030-01-02T03:04:06.456Z"
+            }
+          ],
+          "rawTypes": [
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Number]",
+              "createdAt": "[object String]"
+            },
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Number]",
+              "createdAt": "[object String]"
+            }
+          ],
+          "ownerRetained": true,
+          "siweCallbacks": 0
+        }
+      }
+    },
+    {
+      "name": "legacy",
+      "configuration": {
+        "walletAddress": {
+          "modelName": "wallet_address",
+          "fields": {
+            "userId": "user_id",
+            "address": "address",
+            "chainId": "chain_id",
+            "isPrimary": "is_primary",
+            "createdAt": "created_at"
+          }
+        }
+      },
+      "catalog": {
+        "table": {
+          "type": "table",
+          "name": "wallet_address",
+          "tbl_name": "wallet_address"
+        },
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "user_id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "address",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "chain_id",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "is_primary",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "created_at",
+            "type": "date",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "wallet_address_user_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "user_id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "user_id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "sqlite_autoindex_wallet_address_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": [
+          {
+            "id": 0,
+            "seq": 0,
+            "table": "user",
+            "from": "user_id",
+            "to": "id",
+            "on_update": "NO ACTION",
+            "on_delete": "CASCADE",
+            "match": "NONE"
+          }
+        ]
+      },
+      "ddl": [
+        {
+          "type": "index",
+          "name": "sqlite_autoindex_wallet_address_1",
+          "tbl_name": "wallet_address",
+          "sql": null
+        },
+        {
+          "type": "index",
+          "name": "wallet_address_user_id_idx",
+          "tbl_name": "wallet_address",
+          "sql": "CREATE INDEX \"wallet_address_user_id_idx\" on \"wallet_address\" (\"user_id\")"
+        },
+        {
+          "type": "table",
+          "name": "wallet_address",
+          "tbl_name": "wallet_address",
+          "sql": "CREATE TABLE \"wallet_address\" (\"id\" text not null primary key, \"user_id\" text not null references \"user\" (\"id\") on delete cascade, \"address\" text not null, \"chain_id\" integer not null, \"is_primary\" integer not null, \"created_at\" date not null)"
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"wallet_address\" (\"id\" text not null primary key, \"user_id\" text not null references \"user\" (\"id\") on delete cascade, \"address\" text not null, \"chain_id\" integer not null, \"is_primary\" integer not null, \"created_at\" date not null);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"wallet_address_user_id_idx\" on \"wallet_address\" (\"user_id\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "storage": {
+          "created": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byAddress": {
+            "userId": "<owner-id>",
+            "address": "0x1111111111111111111111111111111111111111",
+            "chainId": 1,
+            "isPrimary": true,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "id": "<wallet-1-id>"
+          },
+          "byAddressAndChain": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byOwner": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "raw": [
+            {
+              "id": "<wallet-1-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": 1,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            },
+            {
+              "id": "<wallet-137-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": 0,
+              "createdAt": "2030-01-02T03:04:06.456Z"
+            }
+          ],
+          "rawTypes": [
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Number]",
+              "createdAt": "[object String]"
+            },
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Number]",
+              "createdAt": "[object String]"
+            }
+          ],
+          "ownerRetained": true,
+          "siweCallbacks": 0
+        }
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "walletAddress": {
+          "modelName": "display_catalog_wallets",
+          "fields": {
+            "userId": "person_link",
+            "address": "wallet_text",
+            "chainId": "network_number",
+            "isPrimary": "preferred_wallet",
+            "createdAt": "created_on"
+          }
+        }
+      },
+      "catalog": {
+        "table": {
+          "type": "table",
+          "name": "display_catalog_wallets",
+          "tbl_name": "display_catalog_wallets"
+        },
+        "columns": [
+          {
+            "cid": 0,
+            "name": "id",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 1
+          },
+          {
+            "cid": 1,
+            "name": "person_link",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 2,
+            "name": "wallet_text",
+            "type": "TEXT",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 3,
+            "name": "network_number",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 4,
+            "name": "preferred_wallet",
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          },
+          {
+            "cid": 5,
+            "name": "created_on",
+            "type": "date",
+            "notnull": 1,
+            "dflt_value": null,
+            "pk": 0
+          }
+        ],
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "display_catalog_wallets_person_link_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "person_link"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "person_link",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "sqlite_autoindex_display_catalog_wallets_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": [
+          {
+            "id": 0,
+            "seq": 0,
+            "table": "user",
+            "from": "person_link",
+            "to": "id",
+            "on_update": "NO ACTION",
+            "on_delete": "CASCADE",
+            "match": "NONE"
+          }
+        ]
+      },
+      "ddl": [
+        {
+          "type": "index",
+          "name": "display_catalog_wallets_person_link_idx",
+          "tbl_name": "display_catalog_wallets",
+          "sql": "CREATE INDEX \"display_catalog_wallets_person_link_idx\" on \"display_catalog_wallets\" (\"person_link\")"
+        },
+        {
+          "type": "index",
+          "name": "sqlite_autoindex_display_catalog_wallets_1",
+          "tbl_name": "display_catalog_wallets",
+          "sql": null
+        },
+        {
+          "type": "table",
+          "name": "display_catalog_wallets",
+          "tbl_name": "display_catalog_wallets",
+          "sql": "CREATE TABLE \"display_catalog_wallets\" (\"id\" text not null primary key, \"person_link\" text not null references \"user\" (\"id\") on delete cascade, \"wallet_text\" text not null, \"network_number\" integer not null, \"preferred_wallet\" integer not null, \"created_on\" date not null)"
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"display_catalog_wallets\" (\"id\" text not null primary key, \"person_link\" text not null references \"user\" (\"id\") on delete cascade, \"wallet_text\" text not null, \"network_number\" integer not null, \"preferred_wallet\" integer not null, \"created_on\" date not null);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_wallets_person_link_idx\" on \"display_catalog_wallets\" (\"person_link\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "storage": {
+          "created": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byAddress": {
+            "userId": "<owner-id>",
+            "address": "0x1111111111111111111111111111111111111111",
+            "chainId": 1,
+            "isPrimary": true,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "id": "<wallet-1-id>"
+          },
+          "byAddressAndChain": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "byOwner": [
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": true,
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "id": "<wallet-1-id>"
+            },
+            {
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": false,
+              "createdAt": "2030-01-02T03:04:06.456Z",
+              "id": "<wallet-137-id>"
+            }
+          ],
+          "raw": [
+            {
+              "id": "<wallet-1-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 1,
+              "isPrimary": 1,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            },
+            {
+              "id": "<wallet-137-id>",
+              "userId": "<owner-id>",
+              "address": "0x1111111111111111111111111111111111111111",
+              "chainId": 137,
+              "isPrimary": 0,
+              "createdAt": "2030-01-02T03:04:06.456Z"
+            }
+          ],
+          "rawTypes": [
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Number]",
+              "createdAt": "[object String]"
+            },
+            {
+              "id": "[object String]",
+              "userId": "[object String]",
+              "address": "[object String]",
+              "chainId": "[object Number]",
+              "isPrimary": "[object Number]",
+              "createdAt": "[object String]"
+            }
+          ],
+          "ownerRetained": true,
+          "siweCallbacks": 0
+        }
+      }
+    }
+  ]
+}
