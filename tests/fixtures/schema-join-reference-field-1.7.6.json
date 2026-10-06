@@ -1,0 +1,1816 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "unknown-user-target",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingUserField not found in model user",
+        "owner": "Field missingUserField not found in model user"
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Field missingUserField not found in model user"
+      }
+    },
+    {
+      "name": "unknown-user-target",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingUserField not found in model user",
+        "owner": "Field missingUserField not found in model user"
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field missingUserField not found in model user"
+      }
+    },
+    {
+      "name": "unknown-user-target",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingUserField not found in model user",
+        "owner": "Field missingUserField not found in model user"
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Field missingUserField not found in model user"
+      }
+    },
+    {
+      "name": "unknown-user-target",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingUserField not found in model user",
+        "owner": "Field missingUserField not found in model user"
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field missingUserField not found in model user"
+      }
+    },
+    {
+      "name": "unknown-account-forward-target",
+      "userFields": {
+        "name": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unknown-account-forward-target",
+      "userFields": {
+        "name": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field missingAccountField not found in model account"
+      }
+    },
+    {
+      "name": "unknown-account-forward-target",
+      "userFields": {
+        "name": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unknown-account-forward-target",
+      "userFields": {
+        "name": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field missingAccountField not found in model account"
+      }
+    },
+    {
+      "name": "unknown-account-reverse-target",
+      "accountFields": {
+        "userId": {}
+      },
+      "userFields": {
+        "image": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingAccountField not found in model account",
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Field missingAccountField not found in model account"
+      }
+    },
+    {
+      "name": "unknown-account-reverse-target",
+      "accountFields": {
+        "userId": {}
+      },
+      "userFields": {
+        "image": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingAccountField not found in model account",
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field missingAccountField not found in model account"
+      }
+    },
+    {
+      "name": "unknown-account-reverse-target",
+      "accountFields": {
+        "userId": {}
+      },
+      "userFields": {
+        "image": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingAccountField not found in model account",
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Field missingAccountField not found in model account"
+      }
+    },
+    {
+      "name": "unknown-account-reverse-target",
+      "accountFields": {
+        "userId": {}
+      },
+      "userFields": {
+        "image": {
+          "references": {
+            "model": "account",
+            "field": "missingAccountField"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field missingAccountField not found in model account",
+        "owner": "Field missingAccountField not found in model account"
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field missingAccountField not found in model account"
+      }
+    },
+    {
+      "name": "multiple-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported.",
+        "owner": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "name": "multiple-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported.",
+        "owner": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "name": "multiple-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported.",
+        "owner": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "name": "multiple-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported.",
+        "owner": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "name": "unknown-model-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "missingModel",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Model \"missingModel\" not found in schema",
+        "owner": "Model \"missingModel\" not found in schema"
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Model \"missingModel\" not found in schema"
+      }
+    },
+    {
+      "name": "unknown-model-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "missingModel",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Model \"missingModel\" not found in schema",
+        "owner": "Model \"missingModel\" not found in schema"
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Model \"missingModel\" not found in schema"
+      }
+    },
+    {
+      "name": "unknown-model-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "missingModel",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Model \"missingModel\" not found in schema",
+        "owner": "Model \"missingModel\" not found in schema"
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Model \"missingModel\" not found in schema"
+      }
+    },
+    {
+      "name": "unknown-model-before-target-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "missingUserField"
+          }
+        },
+        "accessToken": {
+          "references": {
+            "model": "missingModel",
+            "field": "id"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Model \"missingModel\" not found in schema",
+        "owner": "Model \"missingModel\" not found in schema"
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Model \"missingModel\" not found in schema"
+      }
+    },
+    {
+      "name": "primary-id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "stored_id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "stored_id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "stored_id"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-_id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "_id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "_id"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "stored_id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-_id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "_id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "_id"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-_id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "_id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "_id"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "stored_id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "primary-_id-before-alias",
+      "userFields": {
+        "id": {
+          "fieldName": "stored_id"
+        },
+        "name": {
+          "fieldName": "_id"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "_id"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "stored_id"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-field-alias",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "stored_name"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-field-alias",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "stored_name"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-field-alias",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "stored_name"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "stored_name",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-field-alias",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "stored_name"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "stored_name"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-before-physical-field",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        },
+        "lookup": {
+          "fieldName": "name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "name"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-before-physical-field",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        },
+        "lookup": {
+          "fieldName": "name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "name"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-before-physical-field",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        },
+        "lookup": {
+          "fieldName": "name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "name"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "stored_name",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-before-physical-field",
+      "userFields": {
+        "name": {
+          "fieldName": "stored_name"
+        },
+        "lookup": {
+          "fieldName": "name"
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "name"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "stored_name"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unregistered-plugin-user-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field username not found in model user",
+        "owner": "Field username not found in model user"
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Field username not found in model user"
+      }
+    },
+    {
+      "name": "unregistered-plugin-user-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field username not found in model user",
+        "owner": "Field username not found in model user"
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field username not found in model user"
+      }
+    },
+    {
+      "name": "unregistered-plugin-user-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field username not found in model user",
+        "owner": "Field username not found in model user"
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "Field username not found in model user"
+      }
+    },
+    {
+      "name": "unregistered-plugin-user-field",
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "errors": {
+        "accounts": "Field username not found in model user",
+        "owner": "Field username not found in model user"
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "Field username not found in model user"
+      }
+    },
+    {
+      "name": "declared-additional-user-field",
+      "userFields": {
+        "username": {}
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "declared-additional-user-field",
+      "userFields": {
+        "username": {}
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "declared-additional-user-field",
+      "userFields": {
+        "username": {}
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "username",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "declared-additional-user-field",
+      "userFields": {
+        "username": {}
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": "username"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "username"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unrelated-target-field-unvisited",
+      "accountFields": {
+        "accessToken": {
+          "references": {
+            "model": "session",
+            "field": "missingSessionField"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unrelated-target-field-unvisited",
+      "accountFields": {
+        "accessToken": {
+          "references": {
+            "model": "session",
+            "field": "missingSessionField"
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unrelated-target-field-unvisited",
+      "accountFields": {
+        "accessToken": {
+          "references": {
+            "model": "session",
+            "field": "missingSessionField"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "unrelated-target-field-unvisited",
+      "accountFields": {
+        "accessToken": {
+          "references": {
+            "model": "session",
+            "field": "missingSessionField"
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "empty-alias-native-order",
+      "userFields": {
+        "image": {
+          "fieldName": ""
+        },
+        "name": {
+          "fieldName": ""
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": ""
+          }
+        }
+      },
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "empty-alias-native-order",
+      "userFields": {
+        "image": {
+          "fieldName": ""
+        },
+        "name": {
+          "fieldName": ""
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": ""
+          }
+        }
+      },
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "empty-alias-native-order",
+      "userFields": {
+        "image": {
+          "fieldName": ""
+        },
+        "name": {
+          "fieldName": ""
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": ""
+          }
+        }
+      },
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "name",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "empty-alias-native-order",
+      "userFields": {
+        "image": {
+          "fieldName": ""
+        },
+        "name": {
+          "fieldName": ""
+        }
+      },
+      "accountFields": {
+        "userId": {
+          "references": {
+            "model": "user",
+            "field": ""
+          }
+        }
+      },
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "name"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    }
+  ]
+}

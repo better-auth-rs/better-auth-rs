@@ -27,6 +27,9 @@ const EMAIL: &str = "owner@schema-join-reference.test";
 #[path = "schema_join_reference_tests/unknown.rs"]
 mod unknown;
 
+#[path = "schema_join_reference_tests/reference_fields.rs"]
+mod reference_fields;
+
 #[path = "native_core_join_tests/account.rs"]
 #[expect(
     unreachable_pub,
