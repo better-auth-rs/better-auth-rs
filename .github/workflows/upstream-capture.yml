@@ -7,64 +7,17 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/*-capture.mjs
-      - compat-tests/reference-server/contracts/server-catalog-shared.mjs
-      - compat-tests/schema-consumer/verification-catalog-config.json
-      - compat-tests/schema-consumer/jwk-rate-limit-catalog-config.json
-      - compat-tests/schema-consumer/member-organization-role-catalog-config.json
-      - compat-tests/schema-consumer/team-catalog-config.json
-      - compat-tests/schema-consumer/invitation-catalog-config.json
-      - compat-tests/schema-consumer/session-catalog-config.json
-      - compat-tests/schema-consumer/device-code-catalog-config.json
-      - compat-tests/schema-consumer/wallet-address-catalog-config.json
-      - compat-tests/schema-consumer/two-factor-catalog-config.json
-      - compat-tests/schema-consumer/passkey-catalog-config.json
+      - compat-tests/reference-server/contracts/two-factor-fields-capture.mjs
 
 permissions:
   contents: read
 
 jobs:
   capture:
-    strategy:
-      fail-fast: false
-      matrix:
-        contract: [two-factor, apple, tiktok]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    services:
-      postgres:
-        image: postgres:18.6
-        env:
-          POSTGRES_USER: better_auth
-          POSTGRES_PASSWORD: better_auth_ci
-          POSTGRES_DB: better_auth_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U better_auth -d better_auth_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-      mysql:
-        image: mysql:8.4.11
-        env:
-          MYSQL_ROOT_PASSWORD: better_auth_ci
-          MYSQL_ROOT_HOST: "%"
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbetter_auth_ci --silent"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      CAPTURE_CONTRACT: ${{ matrix.contract }}
-      BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
-      BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
@@ -84,31 +37,7 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          case "$CAPTURE_CONTRACT" in
-            two-factor)
-              sequence_dir="$capture_dir/original-sequence"
-              mkdir -p "$sequence_dir"
-              for original in \
-                compat-tests/reference-server/contracts/two-factor-catalog-capture.mjs \
-                compat-tests/reference-server/consumer-contracts/two-factor-catalog.test.ts \
-                tests/fixtures/two-factor-sqlite-catalog-1.7.6.json \
-                tests/fixtures/two-factor-postgres-catalog-1.7.6.json \
-                tests/fixtures/two-factor-mysql-catalog-1.7.6.json; do
-                git show "f766ed5d0c5b47477ac7130d5daf4156fbbbd369:$original" > "$sequence_dir/${original##*/}"
-              done
-              printf '%s\n' 'Original capture: 37344899433 at b9157ec4d9770f8d456255aa2496cdab6cbb3a10.' 'Original sampler, contract, and imported fixtures preserved from f766ed5d0c5b47477ac7130d5daf4156fbbbd369.' > "$sequence_dir/PROVENANCE.txt"
-              (cd "$sequence_dir" && sha256sum *.mjs *.ts *.json > SHA256SUMS)
-              for backend in sqlite postgres mysql; do
-                bun --no-install ./compat-tests/reference-server/contracts/two-factor-catalog-capture.mjs "$backend" "$capture_dir/two-factor-$backend-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/two-factor-$backend-catalog.log"
-              done
-              ;;
-            apple)
-              bun --no-install ./compat-tests/reference-server/contracts/apple-capture.mjs "$capture_dir/social-apple-1.7.6.json" 2>&1 | tee "$capture_dir/apple.log"
-              ;;
-            tiktok)
-              bun --no-install ./compat-tests/reference-server/contracts/tiktok-capture.mjs "$capture_dir/tiktok-1.7.6.json" 2>&1 | tee "$capture_dir/tiktok.log"
-              ;;
-          esac
+          bun --no-install ./compat-tests/reference-server/contracts/two-factor-fields-capture.mjs "$capture_dir/two-factor-fields-1.7.6.json" 2>&1 | tee "$capture_dir/two-factor-fields.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -116,7 +45,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-alignment-${{ matrix.contract }}-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-two-factor-fields-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
