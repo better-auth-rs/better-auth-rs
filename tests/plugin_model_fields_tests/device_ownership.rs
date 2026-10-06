@@ -14,14 +14,44 @@ use better_auth_core::{
 };
 use chrono::{DateTime, Utc};
 
-const CASES: [(&str, &str, &str); 4] = [
-    ("tenant-match-after-prepare", "direct", "tenant-after"),
-    ("tenant-match-after-prepare", "transaction", "tenant-after"),
-    ("tenant-mismatch-after-prepare", "direct", "tenant-before"),
+const CASES: [(&str, &str, &str, &str); 8] = [
+    (
+        "tenant-match-after-prepare",
+        "direct",
+        "tenantKey",
+        "tenant-after",
+    ),
+    (
+        "tenant-match-after-prepare",
+        "transaction",
+        "tenantKey",
+        "tenant-after",
+    ),
+    (
+        "tenant-mismatch-after-prepare",
+        "direct",
+        "tenantKey",
+        "tenant-before",
+    ),
     (
         "tenant-mismatch-after-prepare",
         "transaction",
+        "tenantKey",
         "tenant-before",
+    ),
+    ("scope-match-after-prepare", "direct", "scope", "prepared"),
+    (
+        "scope-match-after-prepare",
+        "transaction",
+        "scope",
+        "prepared",
+    ),
+    ("scope-mismatch-after-prepare", "direct", "scope", "initial"),
+    (
+        "scope-mismatch-after-prepare",
+        "transaction",
+        "scope",
+        "initial",
     ),
 ];
 
@@ -125,7 +155,9 @@ async fn setup<S: AuthSchema>(
             polling_interval: Some(5000.0),
             client_id: Some("ordinary-client".into()),
             scope: Some("initial".into()).into(),
-            additional_fields: [("tenantKey".into(), json!("tenant-before"))].into(),
+            additional_fields: [("tenantKey".into(), json!("tenant-before"))]
+                .into_iter()
+                .collect(),
         })
         .await?;
     assert!(!owner.id.typed()?.is_empty());
@@ -146,7 +178,7 @@ async fn redeem<S: AuthSchema>(
     context: &AuthContext<S>,
     transaction: Option<&dyn AuthTransaction<S>>,
     observation: Arc<Observation>,
-    target: &'static str,
+    (field, target): (&'static str, &'static str),
 ) -> AuthResult<Value> {
     let mut endpoint = EndpointContext::native(None, None, Value::Null, context);
     endpoint.transaction = transaction;
@@ -167,7 +199,7 @@ async fn redeem<S: AuthSchema>(
                 }));
                 Ok(DeviceCodeRedemptionAuthorization {
                     ownership: DeviceCodeOwnership::FieldEquals {
-                        field: "tenantKey".into(),
+                        field: field.into(),
                         value: json!(target),
                     },
                     context: json!({"issuer": "ordinary-issuer"}),
@@ -190,7 +222,9 @@ async fn redeem<S: AuthSchema>(
                         &row.id,
                         UpdateDeviceCode {
                             scope: Some("prepared".into()).into(),
-                            additional_fields: [("tenantKey".into(), json!("tenant-after"))].into(),
+                            additional_fields: [("tenantKey".into(), json!("tenant-after"))]
+                                .into_iter()
+                                .collect(),
                             ..Default::default()
                         },
                     )
@@ -218,7 +252,7 @@ async fn redeem<S: AuthSchema>(
 async fn contract<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
-    (name, mode, target): (&'static str, &'static str, &'static str),
+    (name, mode, field, target): (&'static str, &'static str, &'static str, &'static str),
 ) -> AuthResult<()> {
     let (auth, observation) = setup(raw, ownership_fields()).await?;
     let before = observation.device(&observation.seeded)?;
@@ -226,11 +260,13 @@ async fn contract<S: AuthSchema>(
         let context = auth.context().clone();
         let active = observation.clone();
         transaction(auth.store().as_ref(), move |transaction| {
-            Box::pin(async move { redeem(&context, Some(transaction), active, target).await })
+            Box::pin(
+                async move { redeem(&context, Some(transaction), active, (field, target)).await },
+            )
         })
         .await
     } else {
-        redeem(auth.context(), None, observation.clone(), target).await
+        redeem(auth.context(), None, observation.clone(), (field, target)).await
     };
     let (result, error) = match result {
         Ok(value) => (value, Value::Null),
@@ -248,7 +284,7 @@ async fn contract<S: AuthSchema>(
     let remaining = observation.remaining(auth.store().as_ref()).await?;
     let observed = json!({
         "name": name, "mode": mode,
-        "ownershipWhere": {"field": "tenantKey", "value": target},
+        "ownershipWhere": {"field": field, "value": target},
         "before": before,
         "events": observation.events.lock().unwrap().clone(),
         "result": result, "error": error,
@@ -284,7 +320,7 @@ async fn contract<S: AuthSchema>(
             "consumeOneResult"
         ]
     );
-    // Rust exposes typed consumption. Bun compares both adapter-only events against the complete 14-case fixture.
+    // Rust exposes typed consumption. Bun compares both adapter-only events against the complete 22-case fixture.
     // Keep every semantic callback, result, error and storage value in this paired comparison.
     events.truncate(3);
     assert_eq!(observed, expected, "{backend}/{name}/{mode}");
@@ -311,50 +347,58 @@ async fn sqlite_device_ownership_equality_matches_upstream() -> AuthResult<()> {
 #[tokio::test]
 async fn memory_device_ownership_change_before_commit_preserves_external_record() -> AuthResult<()>
 {
-    let (auth, observation) = setup(memory(), ownership_fields()).await?;
-    let context = auth.context().clone();
-    let store = auth.store().clone();
-    let active = observation.clone();
-    let (consumed, consumption) = oneshot::channel();
-    let (resume, continuation) = oneshot::channel();
-    let pending = tokio::spawn(async move {
-        transaction(store.as_ref(), move |transaction| {
-            Box::pin(async move {
-                let result = redeem(&context, Some(transaction), active, "tenant-after").await?;
-                consumed.send(()).unwrap();
-                continuation.await.unwrap();
-                Ok(result)
+    for (field, target, external_value) in [
+        ("tenantKey", "tenant-after", "tenant-external"),
+        ("scope", "prepared", "scope-external"),
+    ] {
+        let (auth, observation) = setup(memory(), ownership_fields()).await?;
+        let context = auth.context().clone();
+        let store = auth.store().clone();
+        let active = observation.clone();
+        let (consumed, consumption) = oneshot::channel();
+        let (resume, continuation) = oneshot::channel();
+        let pending = tokio::spawn(async move {
+            transaction(store.as_ref(), move |transaction| {
+                Box::pin(async move {
+                    let result =
+                        redeem(&context, Some(transaction), active, (field, target)).await?;
+                    consumed.send(()).unwrap();
+                    continuation.await.unwrap();
+                    Ok(result)
+                })
             })
-        })
-        .await
-    });
-    consumption.await.unwrap();
-    assert_eq!(
-        observation.inside_remaining.lock().unwrap().as_ref(),
-        Some(&json!([]))
-    );
-    let external = auth
-        .store()
-        .update_device_code(
-            &observation.seeded.id,
-            UpdateDeviceCode {
-                additional_fields: [("tenantKey".into(), json!("tenant-external"))].into(),
-                ..Default::default()
-            },
-        )
-        .await?;
-    resume.send(()).unwrap();
-    original_error(
-        pending.await.unwrap().unwrap_err(),
-        "Device code changed before transaction commit",
-    );
-    let mut expected = observation.device(&observation.seeded)?;
-    expected["tenantKey"] = json!("tenant-external");
-    assert_eq!(observation.device(&external)?, expected);
-    assert_eq!(
-        observation.remaining(auth.store().as_ref()).await?,
-        json!([expected])
-    );
+            .await
+        });
+        consumption.await.unwrap();
+        assert_eq!(
+            observation.inside_remaining.lock().unwrap().as_ref(),
+            Some(&json!([]))
+        );
+        let mut update = UpdateDeviceCode::default();
+        if field == "scope" {
+            update.scope = Some(external_value.into()).into();
+        } else {
+            let _ = update
+                .additional_fields
+                .insert(field.into(), json!(external_value));
+        }
+        let external = auth
+            .store()
+            .update_device_code(&observation.seeded.id, update)
+            .await?;
+        resume.send(()).unwrap();
+        original_error(
+            pending.await.unwrap().unwrap_err(),
+            "Device code changed before transaction commit",
+        );
+        let mut expected = observation.device(&observation.seeded)?;
+        expected[field] = json!(external_value);
+        assert_eq!(observation.device(&external)?, expected);
+        assert_eq!(
+            observation.remaining(auth.store().as_ref()).await?,
+            json!([expected])
+        );
+    }
     Ok(())
 }
 

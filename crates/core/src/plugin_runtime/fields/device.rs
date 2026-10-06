@@ -1,5 +1,6 @@
 use super::*;
 use crate::DeviceCode;
+use crate::user_fields::UserFieldConfig;
 
 fn native_name(name: &str) -> bool {
     crate::store::schema::core_fields(EntityRole::DeviceCode)
@@ -44,9 +45,14 @@ impl ModelFields {
         &self,
         name: &str,
         value: &Value,
-    ) -> AuthResult<(&str, &crate::user_fields::UserFieldConfig)> {
+    ) -> AuthResult<(&str, &UserFieldConfig)> {
+        static SCOPE: LazyLock<UserFieldConfig> = LazyLock::new(|| UserFieldConfig {
+            required: Some(false),
+            ..Default::default()
+        });
         let (logical, field) =
             crate::user_query::declared_field(name, self.fields(EntityRole::DeviceCode))
+                .or_else(|| (name == "scope").then(|| ("scope", &*SCOPE)))
                 .ok_or_else(|| {
                     AuthError::config(format!(
                         "DeviceCode ownership field {name} is not registered"

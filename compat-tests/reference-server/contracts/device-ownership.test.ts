@@ -16,6 +16,10 @@ test("Device ownership preserves complete callback, consumption and transaction 
       ["or-tenant-mismatch", "direct"],
       ["or-tenant-mismatch", "transaction"],
       ["or-selects-earlier-owner", "direct"],
+      ["scope-match-after-prepare", "direct"],
+      ["scope-match-after-prepare", "transaction"],
+      ["scope-mismatch-after-prepare", "direct"],
+      ["scope-mismatch-after-prepare", "transaction"],
     ]);
   }
   expect(captured).toStrictEqual(fixture);
