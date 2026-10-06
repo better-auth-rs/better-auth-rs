@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Database } from "bun:sqlite";
+import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { twoFactor } from "better-auth/plugins";
 import { captureFreshServerCatalog, observeServerIndexes } from "./server-catalog-shared.mjs";
@@ -12,6 +13,93 @@ import { observeSqliteCatalog } from "./sqlite-catalog.ts";
 
 const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
 assert.equal(version, "1.7.6");
+
+const json = value => JSON.parse(JSON.stringify(value));
+
+async function observeStorage({ options, query, backend }, configuration) {
+  const { adapter } = await betterAuth(options).$context;
+  const createdAt = "2030-01-02T03:04:05.123Z";
+  const owner = json(await adapter.create({
+    model: "user",
+    data: {
+      name: "TwoFactor catalog owner", email: "owner@two-factor-catalog.test",
+      emailVerified: false, image: null,
+      createdAt: new Date(createdAt), updatedAt: new Date(createdAt),
+    },
+  }));
+  assert.equal(typeof owner.id, "string");
+  assert.ok(owner.id.length > 0);
+  assert.deepEqual(owner, {
+    id: owner.id, name: "TwoFactor catalog owner", email: "owner@two-factor-catalog.test",
+    emailVerified: false, image: null, createdAt, updatedAt: createdAt, twoFactorEnabled: false,
+  });
+  const ownerWhere = [{ field: "id", value: owner.id }];
+  const ownerRead = json(await adapter.findOne({ model: "user", where: ownerWhere }));
+  assert.deepEqual(ownerRead, owner);
+  const created = json(await adapter.create({
+    model: "twoFactor",
+    data: {
+      userId: owner.id, secret: "ordinary-encrypted-secret",
+      backupCodes: "ordinary-encrypted-codes", verified: false,
+    },
+  }));
+  assert.equal(typeof created.id, "string");
+  assert.ok(created.id.length > 0);
+  assert.deepEqual(created, {
+    id: created.id, userId: owner.id, secret: "ordinary-encrypted-secret",
+    backupCodes: "ordinary-encrypted-codes", verified: false,
+    failedVerificationCount: 0, lockedUntil: null,
+  });
+
+  const quote = name => backend === "mysql" ? `\`${name.replaceAll("`", "``")}\`` : `"${name.replaceAll('"', '""')}"`;
+  const table = model => quote(configuration[model]?.modelName || model);
+  const column = (model, field) => quote(configuration[model]?.fields?.[field] || field);
+  const parameter = backend === "postgres" ? "$1" : "?";
+  await query(`UPDATE ${table("user")} SET ${column("user", "twoFactorEnabled")} = NULL WHERE ${quote("id")} = ${parameter}`, [owner.id]);
+  await query(`UPDATE ${table("twoFactor")} SET ${column("twoFactor", "verified")} = NULL, ${column("twoFactor", "failedVerificationCount")} = NULL WHERE ${quote("id")} = ${parameter}`, [created.id]);
+  const nullableOwner = json(await adapter.findOne({ model: "user", where: ownerWhere }));
+  assert.deepEqual(nullableOwner, { ...owner, twoFactorEnabled: null });
+  const where = [{ field: "id", value: created.id }];
+  const read = async () => json(await adapter.findOne({ model: "twoFactor", where }));
+  const nullable = await read();
+  assert.deepEqual(nullable, { ...created, verified: null, failedVerificationCount: null });
+  const increment = async () => json(await adapter.incrementOne({
+    model: "twoFactor", where, increment: { failedVerificationCount: 1 },
+  }));
+  const nullableIncrement = await increment();
+  assert.deepEqual(nullableIncrement, nullable);
+  const nullableRead = await read();
+  assert.deepEqual(nullableRead, nullable);
+  const reset = json(await adapter.update({
+    model: "twoFactor", where, update: { failedVerificationCount: 0, lockedUntil: null },
+  }));
+  assert.deepEqual(reset, { ...nullable, failedVerificationCount: 0 });
+  const increments = [];
+  for (const failedVerificationCount of [1, 2]) {
+    const row = await increment();
+    assert.deepEqual(row, { ...reset, failedVerificationCount });
+    increments.push(row);
+  }
+  const updated = json(await adapter.update({
+    model: "twoFactor", where,
+    update: { backupCodes: "replacement-encrypted-codes", verified: true },
+  }));
+  assert.deepEqual(updated, {
+    ...increments[1], backupCodes: "replacement-encrypted-codes", verified: true,
+  });
+  const updatedRead = await read();
+  assert.deepEqual(updatedRead, updated);
+  assert.deepEqual(json(await adapter.findOne({ model: "user", where: ownerWhere })), nullableOwner);
+  const visibleOwner = row => ({ ...row, id: "<owner-id>" });
+  const visible = row => ({ ...row, id: "<two-factor-id>", userId: "<owner-id>" });
+  return {
+    ownerCreated: visibleOwner(owner), ownerRead: visibleOwner(ownerRead), created: visible(created),
+    nullableOwner: visibleOwner(nullableOwner), nullable: visible(nullable),
+    nullableIncrement: visible(nullableIncrement), nullableRead: visible(nullableRead),
+    reset: visible(reset), increments: increments.map(visible),
+    updated: visible(updated), updatedRead: visible(updatedRead),
+  };
+}
 
 function configuredOptions(configuration) {
   if (configuration.twoFactor === undefined) return { plugins: [twoFactor()] };
@@ -25,7 +113,7 @@ function configuredOptions(configuration) {
   };
 }
 
-async function captureSqlite(tableNames, configuration) {
+async function captureSqlite(tableNames, configuration, observeRows) {
   const database = new Database(":memory:");
   try {
     const options = {
@@ -49,7 +137,8 @@ async function captureSqlite(tableNames, configuration) {
     assert.equal(repeated.toBeAdded.length, 0);
     assert.equal(repeated.toBeAddedIndexes.length, 0);
     assert.equal(repeated.schemaProblems.length, 0);
-    return { catalog, ddl, migration: { initialSql, repeatedSql: await repeated.compileMigrations() } };
+    const storage = await observeRows({ options, backend: "sqlite", query: async (sql, values) => database.query(sql).all(...values) });
+    return { catalog, ddl, migration: { initialSql, repeatedSql: await repeated.compileMigrations() }, observation: { storage } };
   } finally {
     database.close();
   }
@@ -63,13 +152,15 @@ async function captureCase(backend, name) {
     twoFactor: configuration.twoFactor?.modelName || "twoFactor",
   };
   const options = configuredOptions(configuration);
+  const observeRows = context => observeStorage(context, configuration);
   const observed = backend === "sqlite"
-    ? await captureSqlite(tableNames, options)
+    ? await captureSqlite(tableNames, options, observeRows)
     : await captureFreshServerCatalog(backend, Object.values(tableNames), options, async context => {
       const observation = {};
       for (const [model, tableName] of Object.entries(tableNames)) {
         observation[model] = await observeServerIndexes(context, tableName);
       }
+      observation.storage = await observeRows(context);
       return observation;
     });
   return { name, configuration, ...observed };
