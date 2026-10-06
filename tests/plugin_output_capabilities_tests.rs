@@ -7,7 +7,7 @@
 #[path = "support/plugin_output_capabilities_rows.rs"]
 mod rows;
 
-#[path = "support/api_key_fields.rs"]
+#[path = "support/api_key_fields_common.rs"]
 mod api_key;
 #[path = "support/device_fields.rs"]
 mod device;

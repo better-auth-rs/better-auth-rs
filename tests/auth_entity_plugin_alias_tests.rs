@@ -36,9 +36,7 @@ mod mapped {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
-#[tokio::test]
-async fn plugin_physical_columns_support_writes_and_projection_without_serde_renaming()
--> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn contract() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use sea_orm::ActiveValue::Set;
 
     assert!(matches!(
@@ -97,4 +95,10 @@ async fn plugin_physical_columns_support_writes_and_projection_without_serde_ren
         .await?;
     assert_eq!(serde_json::to_value(output)?, json!([{"key":"after"}]));
     Ok(())
+}
+
+#[tokio::test]
+async fn plugin_physical_columns_support_writes_and_projection_without_serde_renaming()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    contract().await
 }
