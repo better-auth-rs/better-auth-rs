@@ -42,6 +42,8 @@ mod device_consumption;
 mod device_fixture;
 #[path = "plugin_model_fields_tests/device_ownership.rs"]
 mod device_ownership;
+#[path = "plugin_model_fields_tests/device_ownership_sets.rs"]
+mod device_ownership_sets;
 #[path = "plugin_model_fields_tests/device_redemption.rs"]
 mod device_redemption;
 

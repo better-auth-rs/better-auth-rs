@@ -8,6 +8,26 @@ use better_auth_core::{AuthResult, DeviceCode, DeviceCodeOwnership};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, sea_query::Condition,
 };
+use serde_json::Value;
+
+fn candidate(value: Value, numeric: bool) -> sea_orm::Value {
+    match value {
+        Value::Null if numeric => sea_orm::Value::Double(None),
+        Value::Null => sea_orm::Value::String(None),
+        Value::String(value) => value.into(),
+        Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                value.into()
+            } else if let Some(value) = value.as_u64() {
+                value.into()
+            } else {
+                value.as_f64().into()
+            }
+        }
+        Value::Bool(value) => value.into(),
+        value @ (Value::Array(_) | Value::Object(_)) => sea_orm::Value::Json(Some(Box::new(value))),
+    }
+}
 
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
@@ -32,6 +52,29 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                     P::DeviceCode::column(resolve_field_name(field.field_name.as_deref(), name))?,
                     &value,
                 )
+            }
+            DeviceCodeOwnership::FieldIn { field, values }
+            | DeviceCodeOwnership::FieldNotIn { field, values } => {
+                let (name, field) = self
+                    .model_fields
+                    .device_code_ownership_set_field(field, values)?;
+                let values: Vec<Value> =
+                    serde_json::from_value(better_auth_core::user_query::bind_filter(
+                        field,
+                        &Value::Array(values.clone()),
+                    )?)?;
+                let numeric = matches!(
+                    field.field_type,
+                    better_auth_core::user_fields::UserFieldType::Number
+                );
+                let values = values.into_iter().map(|value| candidate(value, numeric));
+                let column =
+                    P::DeviceCode::column(resolve_field_name(field.field_name.as_deref(), name))?;
+                if matches!(ownership, DeviceCodeOwnership::FieldIn { .. }) {
+                    column.is_in(values)
+                } else {
+                    column.is_not_in(values)
+                }
             }
         };
         let filter = Condition::all()

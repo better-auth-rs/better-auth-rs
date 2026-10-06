@@ -224,12 +224,28 @@ pub enum DeviceCodeOwnership {
     ClientId(String),
     /// Match native `scope` or a declared string, number, or boolean field without a reference.
     /// This condition uses `eq`, `AND`, and case-sensitive comparison.
-    /// Other operators, connectors, and field types are not supported.
+    /// Other connectors and field types are not supported by this variant.
     FieldEquals {
         /// Native `scope`, a registered logical field name, or a configured storage field name.
         field: String,
         /// Scalar null, string, number, or boolean query value.
         value: serde_json::Value,
+    },
+    /// Require membership in a candidate set with `AND` and case-sensitive comparison.
+    FieldIn {
+        /// Native `scope`, or a registered string or number field without a reference.
+        /// Configured storage field names are accepted.
+        field: String,
+        /// Null, string, or number candidates. An empty set never matches.
+        values: Vec<serde_json::Value>,
+    },
+    /// Exclude a candidate set with `AND` and the selected adapter's null semantics.
+    FieldNotIn {
+        /// Native `scope`, or a registered string or number field without a reference.
+        /// Configured storage field names are accepted.
+        field: String,
+        /// Null, string, or number candidates. An empty set matches every bound row.
+        values: Vec<serde_json::Value>,
     },
 }
 

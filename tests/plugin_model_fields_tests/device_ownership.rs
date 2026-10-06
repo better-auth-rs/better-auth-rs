@@ -477,3 +477,176 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn memory_device_ownership_set_change_conflicts_even_when_both_values_match() -> AuthResult<()>
+{
+    for (field, logical) in [("stored_tenant", "tenantKey"), ("scope", "scope")] {
+        let (auth, observation) = setup(memory(), ownership_fields()).await?;
+        let update = move |value: &str| {
+            if logical == "scope" {
+                UpdateDeviceCode {
+                    scope: Some(value.into()).into(),
+                    ..Default::default()
+                }
+            } else {
+                UpdateDeviceCode {
+                    additional_fields: [(logical.into(), json!(value))].into(),
+                    ..Default::default()
+                }
+            }
+        };
+        let expected = observation.seeded.clone();
+        let external_store = auth.store().clone();
+        let result = transaction(auth.store().as_ref(), move |transaction| {
+            Box::pin(async move {
+                let prepared = transaction
+                    .update_device_code(&expected.id, update("candidate-before"))
+                    .await?;
+                let consumed = transaction
+                    .consume_device_code(
+                        &expected,
+                        &DeviceCodeOwnership::FieldIn {
+                            field: field.into(),
+                            values: vec![json!("candidate-before"), json!("candidate-after")],
+                        },
+                    )
+                    .await?;
+                assert_eq!(consumed, Some(prepared));
+                assert!(
+                    transaction
+                        .get_device_code_by_device_code(&expected.device_code)
+                        .await?
+                        .is_none()
+                );
+                external_store
+                    .update_device_code(&expected.id, update("candidate-after"))
+                    .await
+            })
+        })
+        .await;
+        original_error(
+            result.unwrap_err(),
+            "Device code changed before transaction commit",
+        );
+        let mut expected = observation.seeded.clone();
+        if logical == "scope" {
+            expected.scope = Some("candidate-after".into()).into();
+        } else {
+            let _ = expected
+                .additional_fields
+                .insert(logical.into(), json!("candidate-after"));
+        }
+        assert_eq!(
+            auth.store()
+                .get_device_code_by_device_code(&expected.device_code)
+                .await?,
+            Some(expected)
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks() -> AuthResult<()>
+{
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut policies = ownership_fields();
+    let input_calls = calls.clone();
+    let output_calls = calls.clone();
+    policies
+        .fields_mut()
+        .get_mut("tenantKey")
+        .unwrap()
+        .transform = Some(FieldTransforms {
+        input: Some(UserFieldTransform::new(move |value| {
+            let _ = input_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(value)
+        })),
+        output: Some(UserFieldTransform::new(move |value| {
+            let _ = output_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(value)
+        })),
+    });
+    for (name, field_type) in [
+        ("activatedAt", UserFieldType::Date),
+        ("details", UserFieldType::Json),
+        ("labels", UserFieldType::StringArray),
+        ("scores", UserFieldType::NumberArray),
+        ("enabledFlag", UserFieldType::Boolean),
+    ] {
+        let _ = policies.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                field_type,
+                required: Some(false),
+                ..Default::default()
+            },
+        );
+    }
+    let _ = policies.fields_mut().insert(
+        "referenceKey".into(),
+        UserFieldConfig {
+            references: Some(UserFieldReference {
+                model: "user".into(),
+                field: "id".into(),
+            }),
+            required: Some(false),
+            ..Default::default()
+        },
+    );
+    let (auth, observation) = setup(memory(), policies).await?;
+    let before = observation.seeded.clone();
+    let unsupported_type =
+        "DeviceCode field sets support only declared string and number fields without references";
+    let non_scalar = "DeviceCode field sets require scalar null, string, or number candidates";
+    for (field, value, message) in [
+        (
+            "unregistered",
+            json!("tenant-before"),
+            "DeviceCode ownership field unregistered is not registered",
+        ),
+        ("tenantKey", json!(["tenant-before"]), non_scalar),
+        ("tenantKey", json!({"value":"tenant-before"}), non_scalar),
+        ("tenantKey", json!(true), non_scalar),
+        (
+            "activatedAt",
+            json!("2030-01-01T00:00:00Z"),
+            unsupported_type,
+        ),
+        ("details", Value::Null, unsupported_type),
+        ("labels", json!("tenant-before"), unsupported_type),
+        ("scores", json!(1), unsupported_type),
+        ("enabledFlag", json!("true"), unsupported_type),
+        ("referenceKey", json!("owner"), unsupported_type),
+    ] {
+        for ownership in [
+            DeviceCodeOwnership::FieldIn {
+                field: field.into(),
+                values: vec![value.clone()],
+            },
+            DeviceCodeOwnership::FieldNotIn {
+                field: field.into(),
+                values: vec![value.clone()],
+            },
+        ] {
+            calls.store(0, Ordering::SeqCst);
+            let error = auth
+                .store()
+                .consume_device_code(&before, &ownership)
+                .await
+                .unwrap_err();
+            assert!(matches!(error, AuthError::Config(ref actual) if actual == message));
+            assert_eq!(calls.load(Ordering::SeqCst), 0);
+            assert_eq!(
+                auth.store()
+                    .get_device_code_by_device_code(&before.device_code)
+                    .await?,
+                Some(before.clone())
+            );
+        }
+    }
+    Ok(())
+}

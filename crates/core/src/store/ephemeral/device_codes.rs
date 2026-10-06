@@ -47,6 +47,25 @@ fn field_equals(row: &DeviceCode, field: &str, expected: &Value) -> bool {
     }
 }
 
+fn field_in(row: &DeviceCode, field: &str, values: &[Value]) -> bool {
+    let contains = |actual: &Value| {
+        values
+            .iter()
+            .any(|expected| scalar_equals(Some(actual), expected))
+    };
+    if field != "scope" {
+        return row.additional_fields.get(field).is_some_and(contains);
+    }
+    match &row.scope {
+        crate::SchemaValue::Undefined => false,
+        crate::SchemaValue::Typed(None) => values.iter().any(Value::is_null),
+        crate::SchemaValue::Typed(Some(actual)) => values
+            .iter()
+            .any(|expected| expected.as_str() == Some(actual.as_str())),
+        crate::SchemaValue::Dynamic(actual) => contains(actual),
+    }
+}
+
 impl EphemeralStore {
     async fn find_device_code(
         &self,
@@ -316,6 +335,22 @@ impl DeviceCodeStore for EphemeralStore {
                     value: crate::user_query::bind_filter(config, &value)?,
                 }
             }
+            crate::DeviceCodeOwnership::FieldIn { field, values }
+            | crate::DeviceCodeOwnership::FieldNotIn { field, values } => {
+                let (logical, config) = self
+                    .model_fields
+                    .device_code_ownership_set_field(field, values)?;
+                let values = serde_json::from_value(crate::user_query::bind_filter(
+                    config,
+                    &Value::Array(values.clone()),
+                )?)?;
+                let field = resolve_field_name(config.field_name.as_deref(), logical).into();
+                if matches!(ownership, crate::DeviceCodeOwnership::FieldIn { .. }) {
+                    crate::DeviceCodeOwnership::FieldIn { field, values }
+                } else {
+                    crate::DeviceCodeOwnership::FieldNotIn { field, values }
+                }
+            }
         };
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
@@ -331,6 +366,12 @@ impl DeviceCodeStore for EphemeralStore {
                             crate::DeviceCodeOwnership::FieldEquals { field, value } => {
                                 field_equals(row, field, value)
                             }
+                            crate::DeviceCodeOwnership::FieldIn { field, values } => {
+                                field_in(row, field, values)
+                            }
+                            crate::DeviceCodeOwnership::FieldNotIn { field, values } => {
+                                !field_in(row, field, values)
+                            }
                         }
                 })?;
                 if let Some(row) = &row
@@ -345,7 +386,9 @@ impl DeviceCodeStore for EphemeralStore {
                             row: row.clone(),
                             ownership_field: match &ownership {
                                 crate::DeviceCodeOwnership::ClientId(_) => None,
-                                crate::DeviceCodeOwnership::FieldEquals { field, .. } => {
+                                crate::DeviceCodeOwnership::FieldEquals { field, .. }
+                                | crate::DeviceCodeOwnership::FieldIn { field, .. }
+                                | crate::DeviceCodeOwnership::FieldNotIn { field, .. } => {
                                     Some(field.clone())
                                 }
                             },

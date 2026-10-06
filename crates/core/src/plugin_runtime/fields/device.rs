@@ -40,24 +40,30 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
 }
 
 impl ModelFields {
+    fn declared_device_code_ownership_field(
+        &self,
+        name: &str,
+    ) -> AuthResult<(&str, &UserFieldConfig)> {
+        static SCOPE: LazyLock<UserFieldConfig> = LazyLock::new(|| UserFieldConfig {
+            required: Some(false),
+            ..Default::default()
+        });
+        crate::user_query::declared_field(name, self.fields(EntityRole::DeviceCode))
+            .or_else(|| (name == "scope").then(|| ("scope", &*SCOPE)))
+            .ok_or_else(|| {
+                AuthError::config(format!(
+                    "DeviceCode ownership field {name} is not registered"
+                ))
+            })
+    }
+
     /// Resolve and validate the supported scalar DeviceCode ownership query without running field callbacks.
     pub fn device_code_ownership_field(
         &self,
         name: &str,
         value: &Value,
     ) -> AuthResult<(&str, &UserFieldConfig)> {
-        static SCOPE: LazyLock<UserFieldConfig> = LazyLock::new(|| UserFieldConfig {
-            required: Some(false),
-            ..Default::default()
-        });
-        let (logical, field) =
-            crate::user_query::declared_field(name, self.fields(EntityRole::DeviceCode))
-                .or_else(|| (name == "scope").then(|| ("scope", &*SCOPE)))
-                .ok_or_else(|| {
-                    AuthError::config(format!(
-                        "DeviceCode ownership field {name} is not registered"
-                    ))
-                })?;
+        let (logical, field) = self.declared_device_code_ownership_field(name)?;
         if field.references.is_some()
             || !matches!(
                 field.field_type,
@@ -71,6 +77,34 @@ impl ModelFields {
         if value.is_array() || value.is_object() {
             return Err(AuthError::config(
                 "DeviceCode FieldEquals requires a scalar null, string, number, or boolean value",
+            ));
+        }
+        Ok((logical, field))
+    }
+
+    /// Validate DeviceCode ownership candidates without invoking field input or output callbacks.
+    pub fn device_code_ownership_set_field(
+        &self,
+        name: &str,
+        values: &[Value],
+    ) -> AuthResult<(&str, &UserFieldConfig)> {
+        let (logical, field) = self.declared_device_code_ownership_field(name)?;
+        if field.references.is_some()
+            || !matches!(
+                field.field_type,
+                UserFieldType::String | UserFieldType::Number
+            )
+        {
+            return Err(AuthError::config(
+                "DeviceCode field sets support only declared string and number fields without references",
+            ));
+        }
+        if values
+            .iter()
+            .any(|value| !matches!(value, Value::Null | Value::String(_) | Value::Number(_)))
+        {
+            return Err(AuthError::config(
+                "DeviceCode field sets require scalar null, string, or number candidates",
             ));
         }
         Ok((logical, field))
