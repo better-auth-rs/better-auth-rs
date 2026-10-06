@@ -158,3 +158,123 @@ async fn memory_server_device_redemption_matches_upstream() -> AuthResult<()> {
 async fn sqlite_server_device_redemption_matches_upstream() -> AuthResult<()> {
     contract(sqlite().await?, "sqlite").await
 }
+
+async fn redeemed_user<S: AuthSchema>(
+    context: &AuthContext<S>,
+    transaction: Option<&dyn AuthTransaction<S>>,
+    code: &str,
+) -> AuthResult<Value> {
+    let mut endpoint = EndpointContext::native(None, None, Value::Null, context);
+    endpoint.transaction = transaction;
+    let result = redeem_device_code(
+        &endpoint,
+        code,
+        |_, _| {
+            Box::pin(async {
+                Ok(DeviceCodeRedemptionAuthorization {
+                    ownership: DeviceCodeOwnership::ClientId("ordinary-client".into()),
+                    context: (),
+                })
+            })
+        },
+        |_, _, _| Box::pin(async { Ok(()) }),
+    )
+    .await?;
+    Ok(serde_json::to_value(result.user)?)
+}
+
+async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
+    let outputs = Arc::new(Mutex::new(Vec::new()));
+    let callback_outputs = outputs.clone();
+    let mut config = config();
+    config.user = fields(
+        "name",
+        UserFieldConfig {
+            returned: Some(false),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    callback_outputs.lock().unwrap().push(value.clone());
+                    Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let auth = BetterAuth::new(config)
+        .store_arc(raw)
+        .plugin(DeviceAuthorizationPlugin::new())
+        .build()
+        .await?;
+    let created_at = "2030-01-01T00:00:00Z".parse().unwrap();
+    let owner = auth
+        .store()
+        .create_user(CreateUser {
+            created_at: Some(created_at),
+            updated_at: Some(created_at),
+            image: None.into(),
+            ..CreateUser::new()
+                .with_name("Hidden owner")
+                .with_email("hidden@device-redemption.test")
+        })
+        .await?;
+    for mode in ["direct", "transaction"] {
+        let code = format!("hidden-user:{mode}");
+        let _ = auth
+            .store()
+            .create_device_code(CreateDeviceCode {
+                device_code: code.clone(),
+                user_code: format!("hidden-user-code:{mode}"),
+                user_id: Some(owner.id.typed()?.clone()),
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+                status: "approved".into(),
+                last_polled_at: None,
+                polling_interval: None,
+                client_id: Some("ordinary-client".into()),
+                scope: Default::default(),
+                additional_fields: Default::default(),
+            })
+            .await?;
+        outputs.lock().unwrap().clear();
+        let observed = if mode == "transaction" {
+            let context = auth.context().clone();
+            transaction(auth.store().as_ref(), move |transaction| {
+                Box::pin(async move { redeemed_user(&context, Some(transaction), &code).await })
+            })
+            .await?
+        } else {
+            redeemed_user(auth.context(), None, &code).await?
+        };
+        assert_eq!(
+            observed,
+            json!({
+                "id": owner.id,
+                "name": "Hidden owner:out",
+                "email": "hidden@device-redemption.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": "2030-01-01T00:00:00.000Z",
+                "updatedAt": "2030-01-01T00:00:00.000Z",
+            }),
+            "{mode} redemption must preserve the complete internal user schema"
+        );
+        assert_eq!(
+            *outputs.lock().unwrap(),
+            [Some(json!("Hidden owner"))],
+            "{mode} redemption must apply the user output callback once"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_device_redemption_preserves_hidden_user_fields_without_repeating_output()
+-> AuthResult<()> {
+    hidden_user_contract(memory()).await
+}
+
+#[tokio::test]
+async fn sqlite_device_redemption_preserves_hidden_user_fields_without_repeating_output()
+-> AuthResult<()> {
+    hidden_user_contract(sqlite().await?).await
+}

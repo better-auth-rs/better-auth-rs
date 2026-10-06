@@ -30,7 +30,7 @@ pub struct DeviceCodeRedemptionResult<A, R> {
     pub authorization_context: A,
     /// The state returned by the preparation callback.
     pub redemption_context: R,
-    /// The user found through the active store before consumption.
+    /// The user projected through the active schema before consumption, including hidden fields.
     pub user: UserView,
 }
 
@@ -116,6 +116,7 @@ where
     let Some(user) = user else {
         return Err(device_error_response(500, "server_error", USER_NOT_FOUND)?.into());
     };
+    let user = endpoint.auth.internal_user_view(&user).await?;
     let claimed = store
         .consume_device_code(&device_code, &authorization.ownership)
         .await?;
