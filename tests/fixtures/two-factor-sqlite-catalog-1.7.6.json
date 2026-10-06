@@ -383,6 +383,123 @@
       "migration": {
         "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" integer not null, \"image\" text, \"createdAt\" date not null, \"updatedAt\" date not null, \"twoFactorEnabled\" integer);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"twoFactor\" (\"id\" text not null primary key, \"secret\" text not null, \"backupCodes\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"verified\" integer, \"failedVerificationCount\" integer, \"lockedUntil\" date);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"twoFactor_secret_idx\" on \"twoFactor\" (\"secret\");\n\ncreate index \"twoFactor_userId_idx\" on \"twoFactor\" (\"userId\");",
         "repeatedSql": ";"
+      },
+      "observation": {
+        "storage": {
+          "ownerCreated": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "ownerRead": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "created": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableOwner": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": null,
+            "id": "<owner-id>"
+          },
+          "nullable": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableIncrement": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "reset": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "increments": [
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 1,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            },
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 2,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            }
+          ],
+          "updated": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "updatedRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          }
+        }
       }
     },
     {
@@ -790,6 +907,123 @@
       "migration": {
         "initialSql": "create table \"users\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"email_verified\" integer not null, \"image\" text, \"created_at\" date not null, \"updated_at\" date not null, \"two_factor_enabled\" integer);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"users\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"two_factor\" (\"id\" text not null primary key, \"secret\" text not null, \"backup_codes\" text not null, \"user_id\" text not null references \"users\" (\"id\") on delete cascade, \"verified\" integer, \"failed_verification_count\" integer, \"locked_until\" date);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"two_factor_secret_idx\" on \"two_factor\" (\"secret\");\n\ncreate index \"two_factor_user_id_idx\" on \"two_factor\" (\"user_id\");",
         "repeatedSql": ";"
+      },
+      "observation": {
+        "storage": {
+          "ownerCreated": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "ownerRead": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "created": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableOwner": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": null,
+            "id": "<owner-id>"
+          },
+          "nullable": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableIncrement": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "reset": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "increments": [
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 1,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            },
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 2,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            }
+          ],
+          "updated": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "updatedRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          }
+        }
       }
     },
     {
@@ -1197,6 +1431,123 @@
       "migration": {
         "initialSql": "create table \"display_catalog_users\" (\"id\" text not null primary key, \"display_name\" text not null, \"mail_label\" text not null unique, \"mail_confirmed\" integer not null, \"portrait_text\" text, \"created_on\" date not null, \"updated_on\" date not null, \"second_factor_enabled\" integer);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" date not null, \"token\" text not null unique, \"createdAt\" date not null, \"updatedAt\" date not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"display_catalog_users\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"display_catalog_users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" date, \"refreshTokenExpiresAt\" date, \"scope\" text, \"password\" text, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" date not null, \"createdAt\" date not null, \"updatedAt\" date not null);\n\ncreate table \"display_catalog_two_factors\" (\"id\" text not null primary key, \"secret_text\" text not null, \"backup_text\" text not null, \"person_link\" text not null references \"display_catalog_users\" (\"id\") on delete cascade, \"is_verified\" integer, \"failure_count\" integer, \"locked_until_time\" date);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"display_catalog_two_factors_secret_text_idx\" on \"display_catalog_two_factors\" (\"secret_text\");\n\ncreate index \"display_catalog_two_factors_person_link_idx\" on \"display_catalog_two_factors\" (\"person_link\");",
         "repeatedSql": ";"
+      },
+      "observation": {
+        "storage": {
+          "ownerCreated": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "ownerRead": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "created": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableOwner": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": null,
+            "id": "<owner-id>"
+          },
+          "nullable": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableIncrement": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "reset": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "increments": [
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 1,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            },
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 2,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            }
+          ],
+          "updated": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "updatedRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          }
+        }
       }
     }
   ]

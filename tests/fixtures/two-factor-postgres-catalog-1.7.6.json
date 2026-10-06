@@ -232,6 +232,121 @@
               "onDelete": "CASCADE"
             }
           ]
+        },
+        "storage": {
+          "ownerCreated": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "ownerRead": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "created": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableOwner": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": null,
+            "id": "<owner-id>"
+          },
+          "nullable": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableIncrement": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "reset": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "increments": [
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 1,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            },
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 2,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            }
+          ],
+          "updated": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "updatedRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          }
         }
       }
     },
@@ -489,6 +604,121 @@
               "onDelete": "CASCADE"
             }
           ]
+        },
+        "storage": {
+          "ownerCreated": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "ownerRead": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": false,
+            "id": "<owner-id>"
+          },
+          "created": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableOwner": {
+            "name": "TwoFactor catalog owner",
+            "email": "owner@two-factor-catalog.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.123Z",
+            "updatedAt": "2030-01-02T03:04:05.123Z",
+            "twoFactorEnabled": null,
+            "id": "<owner-id>"
+          },
+          "nullable": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableIncrement": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "nullableRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": null,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "reset": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": null,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "increments": [
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 1,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            },
+            {
+              "secret": "ordinary-encrypted-secret",
+              "backupCodes": "ordinary-encrypted-codes",
+              "userId": "<owner-id>",
+              "verified": null,
+              "failedVerificationCount": 2,
+              "lockedUntil": null,
+              "id": "<two-factor-id>"
+            }
+          ],
+          "updated": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          },
+          "updatedRead": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "replacement-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "id": "<two-factor-id>"
+          }
         }
       }
     }

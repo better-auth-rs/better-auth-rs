@@ -1,8 +1,9 @@
 use super::server_catalog::TestResult;
 use better_auth::{
-    AuthConfig, AuthSchema, AuthUser, UserView,
+    AuthConfig, AuthSchema,
     prelude::{
-        CreateTwoFactor, CreateUser, TwoFactor, TwoFactorStorage, UpdateTwoFactor, UpdateUser,
+        AuthUser, CreateTwoFactor, CreateUser, TwoFactor, TwoFactorStorage, UpdateTwoFactor,
+        UpdateUser, UserView,
     },
     seaorm::{
         __private_chrono as chrono, DatabaseConnection, SeaOrmAccountModel, SeaOrmPluginModel,
