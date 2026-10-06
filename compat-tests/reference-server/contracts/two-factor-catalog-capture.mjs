@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Database } from "bun:sqlite";
 import { getMigrations } from "better-auth/db/migration";
 import { twoFactor } from "better-auth/plugins";
 import { captureFreshServerCatalog, observeServerIndexes } from "./server-catalog-shared.mjs";
 import { observeSqliteCatalog } from "./sqlite-catalog.ts";
+
+const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
+assert.equal(version, "1.7.6");
 
 function configuredOptions(configuration) {
   if (configuration.twoFactor === undefined) return { plugins: [twoFactor()] };
@@ -48,35 +55,50 @@ async function captureSqlite(tableNames, configuration) {
   }
 }
 
+async function captureCase(backend, name) {
+  const configurations = JSON.parse(readFileSync(new URL("../../schema-consumer/two-factor-catalog-config.json", import.meta.url), "utf8"));
+  const configuration = configurations[name];
+  const tableNames = {
+    user: configuration.user?.modelName || "user",
+    twoFactor: configuration.twoFactor?.modelName || "twoFactor",
+  };
+  const options = configuredOptions(configuration);
+  const observed = backend === "sqlite"
+    ? await captureSqlite(tableNames, options)
+    : await captureFreshServerCatalog(backend, Object.values(tableNames), options, async context => {
+      const observation = {};
+      for (const [model, tableName] of Object.entries(tableNames)) {
+        observation[model] = await observeServerIndexes(context, tableName);
+      }
+      return observation;
+    });
+  return { name, configuration, ...observed };
+}
+
 export async function captureTwoFactorCatalog(backend) {
   assert.ok(["sqlite", "postgres", "mysql"].includes(backend), "Select sqlite, postgres or mysql");
-  const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
-  assert.equal(version, "1.7.6");
-  const configurations = JSON.parse(readFileSync(new URL("../../schema-consumer/two-factor-catalog-config.json", import.meta.url), "utf8"));
-  const cases = [];
-  for (const name of backend === "sqlite" ? ["default", "legacy", "custom"] : ["default", "custom"]) {
-    const configuration = configurations[name];
-    const tableNames = {
-      user: configuration.user?.modelName || "user",
-      twoFactor: configuration.twoFactor?.modelName || "twoFactor",
-    };
-    const options = configuredOptions(configuration);
-    const observed = backend === "sqlite"
-      ? await captureSqlite(tableNames, options)
-      : await captureFreshServerCatalog(backend, Object.values(tableNames), options, async context => {
-        const observation = {};
-        for (const [model, tableName] of Object.entries(tableNames)) {
-          observation[model] = await observeServerIndexes(context, tableName);
-        }
-        return observation;
+  const directory = await mkdtemp(join(tmpdir(), "better-auth-two-factor-cases-"));
+  try {
+    const cases = [];
+    for (const name of backend === "sqlite" ? ["default", "legacy", "custom"] : ["default", "custom"]) {
+      const output = join(directory, `${name}.json`);
+      // Upstream mutates shared schema references. Each configuration needs a fresh process.
+      const child = Bun.spawn([process.execPath, "--no-install", fileURLToPath(import.meta.url), backend, output, name], {
+        stdout: "inherit", stderr: "inherit",
       });
-    cases.push({ name, configuration, ...observed });
+      assert.equal(await child.exited, 0, `${backend}/${name} catalog capture succeeds`);
+      cases.push(JSON.parse(await readFile(output, "utf8")));
+    }
+    return { version, database: backend, cases };
+  } finally {
+    await rm(directory, { recursive: true });
   }
-  return { version, database: backend, cases };
 }
 
 if (import.meta.main) {
-  const [backend, output] = process.argv.slice(2);
+  const [backend, output, name] = process.argv.slice(2);
   assert.ok(output, "Pass the fixture output path as the second argument");
-  writeFileSync(output, `${JSON.stringify(await captureTwoFactorCatalog(backend), null, 2)}\n`);
+  const observation = name === undefined
+    ? await captureTwoFactorCatalog(backend) : await captureCase(backend, name);
+  writeFileSync(output, `${JSON.stringify(observation, null, 2)}\n`);
 }

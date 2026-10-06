@@ -25,6 +25,10 @@ permissions:
 
 jobs:
   capture:
+    strategy:
+      fail-fast: false
+      matrix:
+        contract: [two-factor, apple, tiktok]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -54,10 +58,13 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      CAPTURE_CONTRACT: ${{ matrix.contract }}
       BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
       BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
@@ -69,7 +76,7 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Capture pinned TwoFactor and Passkey catalogs
+      - name: Capture pinned upstream contract
         shell: devenv shell -- bash -e {0}
         run: |
           set -euo pipefail
@@ -77,11 +84,31 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          for plugin in two-factor passkey; do
-            for backend in sqlite postgres mysql; do
-              bun --no-install "./compat-tests/reference-server/contracts/$plugin-catalog-capture.mjs" "$backend" "$capture_dir/$plugin-$backend-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/$plugin-$backend-catalog.log"
-            done
-          done
+          case "$CAPTURE_CONTRACT" in
+            two-factor)
+              sequence_dir="$capture_dir/original-sequence"
+              mkdir -p "$sequence_dir"
+              for original in \
+                compat-tests/reference-server/contracts/two-factor-catalog-capture.mjs \
+                compat-tests/reference-server/consumer-contracts/two-factor-catalog.test.ts \
+                tests/fixtures/two-factor-sqlite-catalog-1.7.6.json \
+                tests/fixtures/two-factor-postgres-catalog-1.7.6.json \
+                tests/fixtures/two-factor-mysql-catalog-1.7.6.json; do
+                git show "f766ed5d0c5b47477ac7130d5daf4156fbbbd369:$original" > "$sequence_dir/${original##*/}"
+              done
+              printf '%s\n' 'Original capture: 37344899433 at b9157ec4d9770f8d456255aa2496cdab6cbb3a10.' 'Original sampler, contract, and imported fixtures preserved from f766ed5d0c5b47477ac7130d5daf4156fbbbd369.' > "$sequence_dir/PROVENANCE.txt"
+              (cd "$sequence_dir" && sha256sum *.mjs *.ts *.json > SHA256SUMS)
+              for backend in sqlite postgres mysql; do
+                bun --no-install ./compat-tests/reference-server/contracts/two-factor-catalog-capture.mjs "$backend" "$capture_dir/two-factor-$backend-catalog-1.7.6.json" 2>&1 | tee "$capture_dir/two-factor-$backend-catalog.log"
+              done
+              ;;
+            apple)
+              bun --no-install ./compat-tests/reference-server/contracts/apple-capture.mjs "$capture_dir/social-apple-1.7.6.json" 2>&1 | tee "$capture_dir/apple.log"
+              ;;
+            tiktok)
+              bun --no-install ./compat-tests/reference-server/contracts/tiktok-capture.mjs "$capture_dir/tiktok-1.7.6.json" 2>&1 | tee "$capture_dir/tiktok.log"
+              ;;
+          esac
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -89,7 +116,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-two-factor-passkey-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-alignment-${{ matrix.contract }}-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14

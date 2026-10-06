@@ -80,7 +80,7 @@ export async function captureTikTok() {
       const inputProfile = input.profile;
       globalThis.fetch = Object.assign(async (input, init) => {
         const request = new Request(input, init);
-        if (request.url !== metadata.profileEndpoint) throw new Error(`Unexpected TikTok profile URL: ${request.url}`);
+        if (request.url !== "https://open.tiktokapis.com/v2/user/info/?fields=open_id%2Cavatar_large_url%2Cdisplay_name%2Cusername") throw new Error(`Unexpected TikTok profile URL: ${request.url}`);
         requests.push(profileRequest(request));
         explicitAccepts.push(request.headers.get("accept"));
         return Response.json(inputProfile);

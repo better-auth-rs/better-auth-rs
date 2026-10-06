@@ -40,7 +40,7 @@ export async function captureAppleFlows({ sign, jwk, metadata, normalized }) {
         const cookie = start.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
         assert.ok(cookie);
         const callback = await auth.handler(new Request("http://localhost:3000/api/auth/callback/apple", {
-          method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+          method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: "http://localhost:3000", cookie },
           body: new URLSearchParams({ state, code: "ordinary-code", user: JSON.stringify(userInput) }),
         }));
         status.push(callback.status);

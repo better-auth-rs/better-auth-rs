@@ -53,6 +53,9 @@ async fn apple_direct_and_form_post_success_persist_user_account_and_session() -
             let user = serde_json::to_string(user_input)?;
             let mut callback = AuthRequest::new(HttpMethod::Post, "/callback/apple");
             callback.headers.insert("cookie".into(), cookie.clone());
+            callback
+                .headers
+                .insert("origin".into(), "http://localhost:3000".into());
             callback.headers.insert(
                 "content-type".into(),
                 "application/x-www-form-urlencoded".into(),
