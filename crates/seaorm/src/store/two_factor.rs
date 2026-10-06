@@ -5,8 +5,7 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, ExprTrait, QueryFilter,
-    sea_query::Expr,
+    ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, ExprTrait, QueryFilter, sea_query::Expr,
 };
 use serde_json::{Map, json};
 

@@ -702,7 +702,9 @@ fn gen_column_type(field: &AdditionalField) -> TokenStream {
 }
 
 fn inline_native_unique(entity: &Entity, field: &Field, database: Database) -> bool {
-    (sqlite_native_catalog(database, entity.role) || entity.session_row_presence)
+    (sqlite_native_catalog(database, entity.role)
+        || entity.role == Some(EntityRole::User)
+        || entity.session_row_presence)
         && field.attributes.is_none()
         && field.registry_column.is_some_and(|column| {
             entity.catalog_field(column).is_some()
