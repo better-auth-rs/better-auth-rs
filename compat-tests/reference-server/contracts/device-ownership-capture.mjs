@@ -26,6 +26,10 @@ const scenarios = [
   { name: "tenant-mismatch-after-prepare", ownershipWhere: { field: "tenantKey", value: "tenant-before" } },
   { name: "or-tenant-mismatch", ownershipWhere: { field: "tenantKey", value: "foreign-tenant", connector: "OR" } },
 ];
+const scopeScenarios = [
+  { name: "scope-match-after-prepare", ownershipWhere: { field: "scope", value: "prepared" } },
+  { name: "scope-mismatch-after-prepare", ownershipWhere: { field: "scope", value: "initial" } },
+];
 
 async function captureCase(backend, mode, { name, ownershipWhere, decoy = false }) {
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
@@ -170,7 +174,8 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
     assert.deepEqual(events[1].row, before);
     assert.deepEqual(events[1].authorizationContext, authorizationContext);
     assert.deepEqual(events[2].row, prepared);
-    const succeeds = name === "tenant-match-after-prepare" || (ownershipWhere.connector === "OR" && backend === "memory");
+    const succeeds = name === "tenant-match-after-prepare" || name === "scope-match-after-prepare"
+      || (ownershipWhere.connector === "OR" && backend === "memory");
     if (succeeds) {
       const claimed = decoy ? visibleDevice(decoyCode) : prepared;
       assert.equal(error, null);
@@ -206,6 +211,9 @@ export async function captureDeviceOwnership() {
       name: "or-selects-earlier-owner", decoy: true,
       ownershipWhere: { field: "tenantKey", value: "decoy-tenant", connector: "OR" },
     }));
+    for (const scenario of scopeScenarios) {
+      for (const mode of ["direct", "transaction"]) cases.push(await captureCase(backend, mode, scenario));
+    }
     backends.push({ backend, cases });
   }
   return { version, backends };
