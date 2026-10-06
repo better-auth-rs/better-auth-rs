@@ -73,6 +73,16 @@ Use `TwoFactorPlugin::callbacks(TwoFactorCallbacks::<AppAuthSchema>::default().s
 
 The sender factory returns `AuthResult<Option<BackgroundFuture>>` after OTP persistence. Factory errors propagate immediately. `Ok(None)` schedules no work. `Ok(Some(task))` uses the configured background handler or awaits delivery. Retain callback data and `endpoint.to_owned()` when the task needs them. Asynchronous delivery failures produce one `Failed to send two-factor OTP` error log and retain the successful response. A background handler failure is logged separately as `Failed to run background task:` and does not cancel delivery.
 
+## Storage
+
+Generate a fresh upstream schema with `better-auth-rs generate --plugins two-factor` and bind the generated `AppPluginSchema`. Native storage has seven columns and no creation or update timestamps. `--two-factor-legacy-schema` preserves the earlier generated schema, including timestamps, userId uniqueness, and non-null verification fields. Bundled and unmarked application models use `TwoFactorStorage::Legacy`; marked models use `TwoFactorStorage::Native`. Existing tables require an application-owned migration before changing storage mode.
+
+`TwoFactor.verified` is `Option<bool>`, and `failed_verification_count` is `Option<i64>`. Preserve null on read. `created_at` and `updated_at` use `SchemaValue<DateTime<Utc>>`; Native records return `Undefined`, while Legacy records retain typed dates. `AuthTwoFactor` getters expose the same values. Creation and update inputs retain their existing Boolean fields. Direct callers must compare verification values explicitly and use `.typed()?` when a timestamp is required.
+
+`UserView.two_factor_enabled` is `Option<bool>` and preserves nullable storage through output projection and session caching. `AuthUser::two_factor_enabled()` remains a Boolean truthiness accessor. Native generated User models use `Option<bool>` and create users with `Some(false)`; updates write the supplied Boolean. Legacy generated User models retain `bool`.
+
+Imported SQL records with a null failure counter retain null after `column + 1`, matching the upstream SQL adapter. These records do not accumulate failures toward account lockout until the counter is set to a number. Ordinary plugin creation writes zero, and successful verification resets the counter to zero. Memory treats a null counter as zero before incrementing. Applications must preserve this adapter distinction when importing records.
+
 ## How It Works
 
 ### Enrollment Flow

@@ -16,9 +16,10 @@ use crate::{SchemaValue, types::InvitationStatus};
 
 /// Trait representing a user entity.
 ///
-/// The framework reads `name` and `image` from model serialization and other core fields through getters.
+/// The framework reads `name`, `image`, and nullable `twoFactorEnabled` from model serialization.
+/// Other core fields use getters. The `two_factor_enabled` getter supplies truthiness to runtime guards.
 /// Custom types must provide all framework fields and may have additional fields.
-/// If serialized keys differ from `name` or `image`, override [`Self::serialized_field_name`].
+/// If serialized keys differ, override [`Self::serialized_field_name`].
 /// `AuthEntity` generates the serialized field mapping for derived models.
 pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
     /// Field presence for runtime records and signed snapshots. Database models use `None`.
@@ -225,11 +226,11 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
     fn secret(&self) -> &str;
     fn backup_codes(&self) -> &str;
     fn user_id(&self) -> Cow<'_, str>;
-    fn verified(&self) -> bool;
-    fn failed_verification_count(&self) -> i64;
+    fn verified(&self) -> Option<bool>;
+    fn failed_verification_count(&self) -> Option<i64>;
     fn locked_until(&self) -> Option<DateTime<Utc>>;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>>;
 }
 
 /// Trait representing an API key entity.

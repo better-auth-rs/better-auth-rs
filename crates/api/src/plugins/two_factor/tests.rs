@@ -246,13 +246,14 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
         session.clone(),
         Some(EnrollmentMethod::Totp),
         &ctx,
+        std::future::ready(Ok(())),
     )
     .await
     .unwrap();
 
     let queued = request.take_response_headers().unwrap();
     let set_cookie_headers: Vec<_> = queued.get_all("set-cookie").collect();
-    assert!(!response.user.two_factor_enabled);
+    assert_eq!(response.user.two_factor_enabled, Some(false));
     assert_eq!(response.token.as_deref(), Some(session.token.as_str()));
     assert_eq!(set_cookie_headers.len(), 1);
     assert!(
@@ -278,7 +279,7 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     );
     let (enabled_user, new_session) = ctx.require_session(&request).await.unwrap();
     assert_ne!(new_session.token, session.token);
-    assert!(enabled_user.two_factor_enabled);
+    assert_eq!(enabled_user.two_factor_enabled, Some(true));
 }
 
 #[tokio::test]

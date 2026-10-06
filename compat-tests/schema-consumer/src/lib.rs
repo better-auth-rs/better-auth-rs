@@ -32,6 +32,8 @@ mod tests {
     mod sqlite_json;
     mod team_catalog;
     mod team_invitation_server;
+    mod two_factor_catalog;
+    mod two_factor_catalog_storage;
     mod user_account_catalog;
     mod verification_catalog;
     mod verification_server_catalog;

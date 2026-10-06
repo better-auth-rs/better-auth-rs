@@ -76,7 +76,10 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         .database
         .get_two_factor_by_user_id(user.id().typed()?)
         .await?;
-    if existing.as_ref().is_some_and(|factor| factor.verified) {
+    if existing
+        .as_ref()
+        .is_some_and(|factor| factor.verified != Some(false))
+    {
         return Err(AuthError::Upstream {
             status: 400,
             code: "TOTP_ALREADY_ENABLED",
@@ -271,7 +274,7 @@ pub(super) async fn verify_totp_core(
     require_totp(config)?;
     let state = resolve_two_factor_state(req, ctx).await?;
     let two_factor = load_two_factor_record(state.user(), ctx).await?;
-    if state.is_sign_in() && !two_factor.verified {
+    if state.is_sign_in() && two_factor.verified == Some(false) {
         return Err(AuthError::bad_request("TOTP not enabled"));
     }
     assert_not_locked(&state, &two_factor, &config.account_lockout, ctx).await?;
@@ -293,25 +296,37 @@ pub(super) async fn verify_totp_core(
         return Err(AuthError::authentication_failed("Invalid code"));
     }
     reset_failures(&state, &two_factor, &config.account_lockout, ctx).await?;
-    if !two_factor.verified {
-        let _ = ctx
-            .database
-            .update_two_factor(
-                &two_factor.id,
-                better_auth_core::UpdateTwoFactor {
-                    verified: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?;
-    }
+    let needs_enrollment = two_factor.verified != Some(true);
+    let update_enrollment = async {
+        if needs_enrollment {
+            let _ = ctx
+                .database
+                .update_two_factor(
+                    &two_factor.id,
+                    better_auth_core::UpdateTwoFactor {
+                        verified: Some(true),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+        }
+        Ok::<(), AuthError>(())
+    };
 
     match state {
         ResolvedTwoFactorState::Session { user, session, .. } => {
-            verify_existing_session_factor(req, user, *session, Some(EnrollmentMethod::Totp), ctx)
-                .await
+            verify_existing_session_factor(
+                req,
+                user,
+                *session,
+                needs_enrollment.then_some(EnrollmentMethod::Totp),
+                ctx,
+                update_enrollment,
+            )
+            .await
         }
         ResolvedTwoFactorState::Pending(pending) => {
+            update_enrollment.await?;
             finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
         }
     }
@@ -460,8 +475,15 @@ pub(super) async fn verify_otp_core(
 
     match state {
         ResolvedTwoFactorState::Session { user, session, .. } => {
-            verify_existing_session_factor(req, user, *session, Some(EnrollmentMethod::Otp), ctx)
-                .await
+            verify_existing_session_factor(
+                req,
+                user,
+                *session,
+                Some(EnrollmentMethod::Otp),
+                ctx,
+                std::future::ready(Ok(())),
+            )
+            .await
         }
         ResolvedTwoFactorState::Pending(pending) => {
             finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
@@ -584,7 +606,15 @@ pub(super) async fn verify_backup_code_core(
                     Vec::new(),
                 ))
             } else {
-                verify_existing_session_factor(req, user, *session, None, ctx).await
+                verify_existing_session_factor(
+                    req,
+                    user,
+                    *session,
+                    None,
+                    ctx,
+                    std::future::ready(Ok(())),
+                )
+                .await
             }
         }
         ResolvedTwoFactorState::Pending(pending) => {

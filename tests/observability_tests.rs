@@ -1296,14 +1296,14 @@ async fn check_two_factor_operations(
             .get_two_factor_by_user_id("owner")
             .await?
             .expect("created factor");
-        assert_eq!(locked.failed_verification_count, 2);
+        assert_eq!(locked.failed_verification_count, Some(2));
         assert!(locked.locked_until.is_some());
         store.reset_two_factor_failures(&factor.id, None).await?;
         let reset = store
             .get_two_factor_by_user_id("owner")
             .await?
             .expect("created factor");
-        assert_eq!(reset.failed_verification_count, 0);
+        assert_eq!(reset.failed_verification_count, Some(0));
         assert!(reset.locked_until.is_none());
         store
             .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
@@ -1318,7 +1318,7 @@ async fn check_two_factor_operations(
             .get_two_factor_by_user_id("owner")
             .await?
             .expect("created factor");
-        assert_eq!(expired.failed_verification_count, 0);
+        assert_eq!(expired.failed_verification_count, Some(0));
         assert!(expired.locked_until.is_none());
         Ok::<_, AuthError>(())
     }

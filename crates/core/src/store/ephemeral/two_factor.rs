@@ -18,9 +18,9 @@ impl TwoFactorStore for EphemeralStore {
                 factor.backup_codes = codes;
             }
             if let Some(verified) = update.verified {
-                factor.verified = verified;
+                factor.verified = Some(verified);
             }
-            factor.updated_at = Utc::now();
+            factor.updated_at = Utc::now().into();
             Ok(Some(factor.clone()))
         })
         .await?
@@ -41,7 +41,7 @@ impl TwoFactorStore for EphemeralStore {
                 return Ok(false);
             };
             factor.backup_codes = replacement.to_owned();
-            factor.updated_at = Utc::now();
+            factor.updated_at = Utc::now().into();
             Ok(true)
         })
         .await
@@ -55,19 +55,20 @@ impl TwoFactorStore for EphemeralStore {
         let failures = self
             .raw("twoFactor", "incrementOne", |state| {
                 Ok(state.two_factors.get_mut(id)?.map_or(0, |mut factor| {
-                    factor.failed_verification_count += 1;
-                    factor.failed_verification_count
+                    let failures = factor.failed_verification_count.unwrap_or(0) + 1;
+                    factor.failed_verification_count = Some(failures);
+                    failures
                 }))
             })
             .await?;
         if failures >= max_attempts {
             let locked_until = locked_until()?;
             self.raw("twoFactor", "incrementOne", |state| {
-                if let Some(mut factor) = state
-                    .two_factors
-                    .get_mut(id)?
-                    .filter(|factor| factor.failed_verification_count >= max_attempts)
-                {
+                if let Some(mut factor) = state.two_factors.get_mut(id)?.filter(|factor| {
+                    factor
+                        .failed_verification_count
+                        .is_some_and(|failures| failures >= max_attempts)
+                }) {
                     factor.locked_until = Some(locked_until);
                 }
                 Ok(())
@@ -94,7 +95,7 @@ impl TwoFactorStore for EphemeralStore {
                         factor.locked_until.is_some_and(|until| until <= before)
                     })
                 }) {
-                    factor.failed_verification_count = 0;
+                    factor.failed_verification_count = Some(0);
                     factor.locked_until = None;
                 }
                 Ok(())
@@ -111,11 +112,11 @@ impl TwoFactorStore for EphemeralStore {
             user_id: input.user_id,
             secret: input.secret,
             backup_codes: input.backup_codes,
-            verified: input.verified,
-            failed_verification_count: 0,
+            verified: Some(input.verified),
+            failed_verification_count: Some(0),
             locked_until: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
         };
         self.raw("twoFactor", "create", |state| {
             state.two_factors.push(factor.clone());
@@ -147,7 +148,7 @@ impl TwoFactorStore for EphemeralStore {
                 return Ok(None);
             };
             factor.backup_codes = backup_codes.to_owned();
-            factor.updated_at = Utc::now();
+            factor.updated_at = Utc::now().into();
             Ok(Some(factor.clone()))
         })
         .await?
@@ -161,5 +162,52 @@ impl TwoFactorStore for EphemeralStore {
             Ok(())
         })
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn nullable_memory_counter_starts_at_zero_and_keeps_account_lockout() {
+        let store = EphemeralStore::default();
+        let factor = store
+            .create_two_factor(CreateTwoFactor {
+                user_id: "owner".to_owned(),
+                secret: "encrypted-secret".to_owned(),
+                backup_codes: "encrypted-codes".to_owned(),
+                verified: true,
+            })
+            .await
+            .expect("create two-factor record");
+        store
+            .raw("twoFactor", "update", |state| {
+                state
+                    .two_factors
+                    .get_mut(&factor.id)?
+                    .expect("created record")
+                    .failed_verification_count = None;
+                Ok(())
+            })
+            .await
+            .expect("store a nullable counter");
+        let lock = Utc::now() + chrono::Duration::minutes(15);
+        for expected in [1, 2] {
+            store
+                .record_two_factor_failure(&factor.id, 2, &|| Ok(lock))
+                .await
+                .expect("increment counter");
+            let stored = store
+                .get_two_factor_by_user_id("owner")
+                .await
+                .expect("read record")
+                .expect("existing record");
+            assert_eq!(stored.failed_verification_count, Some(expected));
+            assert_eq!(stored.locked_until, (expected == 2).then_some(lock));
+            assert_eq!(stored.verified, Some(true));
+            assert_eq!(stored.secret, factor.secret);
+            assert_eq!(stored.backup_codes, factor.backup_codes);
+        }
     }
 }

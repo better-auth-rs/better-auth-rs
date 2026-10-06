@@ -3,12 +3,10 @@ use super::*;
 pub(super) fn generate(
     input: &DeriveInput,
     fields: &syn::FieldsNamed,
-    role: EntityRole,
-    model_name: Option<&LitStr>,
-    native_passkey: bool,
-    seaorm_root: &TokenStream,
-    core_root: &TokenStream,
+    options: &EntityOptions,
+    (seaorm_root, core_root): (&TokenStream, &TokenStream),
 ) -> syn::Result<TokenStream> {
+    let role = options.role;
     let record = match role {
         EntityRole::ApiKey => "ApiKey",
         EntityRole::DeviceCode => "DeviceCode",
@@ -105,6 +103,22 @@ pub(super) fn generate(
             quote!(f64::from(self.#ident.to_owned()))
         } else if role == EntityRole::WalletAddress && name == "chain_id" {
             quote!(i64::from(self.#ident))
+        } else if role == EntityRole::TwoFactor && name == "verified" {
+            if identity::optional_inner(&field.ty).is_some() {
+                quote!(self.#ident)
+            } else {
+                quote!(Some(self.#ident))
+            }
+        } else if role == EntityRole::TwoFactor && name == "failed_verification_count" {
+            if identity::optional_inner(&field.ty).is_some() {
+                quote!(self.#ident.map(i64::from))
+            } else {
+                quote!(Some(i64::from(self.#ident)))
+            }
+        } else if role == EntityRole::TwoFactor
+            && matches!(name.as_str(), "created_at" | "updated_at")
+        {
+            quote!(#core_root::SchemaValue::Typed(self.#ident))
         } else if role == EntityRole::Passkey && name == "created_at" {
             if identity::optional_inner(&field.ty).is_some() {
                 quote!(#core_root::SchemaValue::Typed(self.#ident))
@@ -138,12 +152,21 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
-    let passkey_storage = native_passkey.then(|| {
+    let passkey_storage = options.native_passkey.then(|| {
         output.push(quote!(credential: #core_root::SchemaValue::Undefined,));
         output.push(quote!(updated_at: #core_root::SchemaValue::Undefined,));
         quote! {
             fn passkey_storage() -> #core_root::PasskeyStorage {
                 #core_root::PasskeyStorage::Native
+            }
+        }
+    });
+    let two_factor_storage = options.native_two_factor.then(|| {
+        output.push(quote!(created_at: #core_root::SchemaValue::Undefined,));
+        output.push(quote!(updated_at: #core_root::SchemaValue::Undefined,));
+        quote! {
+            fn two_factor_storage() -> #core_root::TwoFactorStorage {
+                #core_root::TwoFactorStorage::Native
             }
         }
     });
@@ -153,7 +176,7 @@ pub(super) fn generate(
     ) {
         output.push(quote!(additional_fields: Default::default(),));
     }
-    let declaration = model_name.map(|name| {
+    let declaration = options.model_name.as_ref().map(|name| {
         quote! {
             fn model_declaration() -> Option<#core_root::schema::ModelDeclaration> {
                 Some(#core_root::schema::ModelDeclaration {
@@ -173,6 +196,7 @@ pub(super) fn generate(
             type Column = Column;
             #declaration
             #passkey_storage
+            #two_factor_storage
             fn column(name: &str) -> #core_root::AuthResult<Column> {
                 match name { #(#columns)* _ => Err(#core_root::AuthError::config(format!("Unknown plugin model column: {name}"))) }
             }

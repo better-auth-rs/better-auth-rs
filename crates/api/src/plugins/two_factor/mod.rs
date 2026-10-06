@@ -44,6 +44,8 @@ use helpers::*;
 use security::*;
 
 #[cfg(test)]
+mod enrollment_tests;
+#[cfg(test)]
 mod security_tests;
 #[cfg(test)]
 mod tests;
@@ -419,7 +421,7 @@ pub(crate) async fn begin_sign_in_challenge(
             .database
             .get_two_factor_by_user_id(user.id().typed()?)
             .await?
-            .is_some_and(|factor| factor.verified)
+            .is_some_and(|factor| factor.verified != Some(false))
     {
         two_factor_methods.push("totp");
     }
@@ -755,6 +757,7 @@ async fn verify_existing_session_factor(
     session: impl AuthSession,
     enrollment: Option<EnrollmentMethod>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    complete_enrollment: impl std::future::Future<Output = AuthResult<()>>,
 ) -> AuthResult<(SessionTokenResponse<UserView>, Vec<String>)> {
     if enrollment.is_some() && !user.two_factor_enabled() {
         let updated_user = ctx
@@ -786,6 +789,7 @@ async fn verify_existing_session_factor(
             )
             .await?;
         ctx.database.delete_session(session.token()).await?;
+        complete_enrollment.await?;
         return Ok((
             SessionTokenResponse {
                 token: Some(if enrollment == Some(EnrollmentMethod::Otp) {
@@ -805,6 +809,7 @@ async fn verify_existing_session_factor(
         ));
     }
 
+    complete_enrollment.await?;
     Ok((
         SessionTokenResponse {
             token: Some(session.token().to_string()),

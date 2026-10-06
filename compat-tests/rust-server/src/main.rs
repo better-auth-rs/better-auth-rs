@@ -103,6 +103,7 @@ mod token_routes;
 mod trailing_slashes;
 mod two_factor_after;
 mod two_factor_context;
+mod two_factor_native;
 mod two_factor_options;
 mod user_admission;
 mod user_fields;
@@ -264,7 +265,11 @@ async fn reset_database_state(database: &DatabaseConnection) -> Result<(), DbErr
         passkey::Entity::delete_many().exec(database).await?;
     }
     api_key::Entity::delete_many().exec(database).await?;
-    two_factor::Entity::delete_many().exec(database).await?;
+    if std::env::var("COMPAT_PROFILE").as_deref() == Ok("native-two-factor") {
+        two_factor_native::reset(database).await?;
+    } else {
+        two_factor::Entity::delete_many().exec(database).await?;
+    }
     better_auth_seaorm::store::entities::team_member::Entity::delete_many()
         .exec(database)
         .await?;
@@ -938,6 +943,9 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
     if device_profile == "native-passkey" {
         passkey_native::create_tables(&database).await?;
     }
+    if device_profile == "native-two-factor" {
+        two_factor_native::create_tables(&database).await?;
+    }
     let disabled_user_router = if device_profile == "user-fields" {
         user_fields::disabled_router(config.clone(), database.clone()).await?
     } else {
@@ -994,6 +1002,8 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
             Arc::new(store.with_plugin_schema::<plugin_schema::Models>())
         } else if device_profile == "native-passkey" {
             Arc::new(store.with_plugin_schema::<passkey_native::Models>())
+        } else if device_profile == "native-two-factor" {
+            Arc::new(store.with_plugin_schema::<two_factor_native::Models>())
         } else {
             Arc::new(store)
         };

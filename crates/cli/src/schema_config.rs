@@ -76,6 +76,7 @@ pub(crate) struct SchemaOptions {
     pub session_active_column: bool,
     pub device_code_legacy_schema: bool,
     pub passkey_legacy_schema: bool,
+    pub two_factor_legacy_schema: bool,
 }
 
 #[derive(Default, Deserialize)]
@@ -185,6 +186,7 @@ pub(crate) struct Entity {
     pub session_row_presence: bool,
     pub device_code_native_schema: bool,
     pub passkey_native_schema: bool,
+    pub two_factor_native_schema: bool,
 }
 
 pub(crate) struct Field {
@@ -291,16 +293,26 @@ impl Entity {
             definition.role == Some(EntityRole::DeviceCode) && !options.device_code_legacy_schema;
         let passkey_native_schema =
             definition.role == Some(EntityRole::Passkey) && !options.passkey_legacy_schema;
+        let two_factor_native_schema = !options.two_factor_legacy_schema
+            && (definition.role == Some(EntityRole::TwoFactor)
+                || definition.role == Some(EntityRole::User)
+                    && fields
+                        .iter()
+                        .any(|field| field.name == "two_factor_enabled"));
         let fields = fields
             .iter()
             .filter(|field| {
                 !(passkey_native_schema && matches!(field.name, "credential" | "updated_at"))
+                    && !(two_factor_native_schema
+                        && definition.role == Some(EntityRole::TwoFactor)
+                        && matches!(field.name, "created_at" | "updated_at"))
             })
             .collect::<Vec<_>>();
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
             || device_code_native_schema
             || passkey_native_schema
+            || two_factor_native_schema
             || matches!(
                 definition.role,
                 Some(
@@ -330,6 +342,7 @@ impl Entity {
             session_row_presence,
             device_code_native_schema,
             passkey_native_schema,
+            two_factor_native_schema,
             fields: fields
                 .iter()
                 .map(|field| {
@@ -344,6 +357,18 @@ impl Entity {
                         ty: syn::parse_str(
                             if passkey_native_schema && field.name == "created_at" {
                                 "Option<DateTimeUtc>"
+                            } else if two_factor_native_schema
+                                && matches!(field.name, "verified" | "two_factor_enabled")
+                            {
+                                "Option<bool>"
+                            } else if two_factor_native_schema
+                                && field.name == "failed_verification_count"
+                            {
+                                if database == Database::Sqlite {
+                                    "Option<i64>"
+                                } else {
+                                    "Option<i32>"
+                                }
                             } else if passkey_native_schema
                                 && field.name == "counter"
                                 && database != Database::Sqlite
@@ -372,8 +397,12 @@ impl Entity {
                         )
                         .map_err(|error| format!("invalid field type: {error}"))?,
                         column: if native_catalog
-                            && core_field(definition.role, field.column_name.unwrap_or(field.name))
-                                .is_some()
+                            && (core_field(
+                                definition.role,
+                                field.column_name.unwrap_or(field.name),
+                            )
+                            .is_some()
+                                || two_factor_native_schema && field.name == "two_factor_enabled")
                         {
                             logical_name.clone()
                         } else {
@@ -565,6 +594,18 @@ impl Entity {
             .iter()
             .find(|field| field.registry_column == Some(registry_column))
             .map(|field| field.column.as_str())
+    }
+
+    pub(crate) fn catalog_field(&self, column: &str) -> Option<&'static FieldDef> {
+        core_field(self.role, column).or_else(|| {
+            if !self.two_factor_native_schema || self.role != Some(EntityRole::User) {
+                return None;
+            }
+            better_auth_schema_registry::plugin_schemas()
+                .iter()
+                .flat_map(|plugin| plugin.user_fields)
+                .find(|field| field.name == "two_factor_enabled" && field.name == column)
+        })
     }
 }
 

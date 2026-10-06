@@ -123,7 +123,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
         .get_two_factor_by_user_id("ordinary-deadline-error")
         .await?
         .expect("created factor remains");
-    assert_eq!(stored.failed_verification_count, 1);
+    assert_eq!(stored.failed_verification_count, Some(1));
     assert!(stored.locked_until.is_none());
     Ok(())
 }

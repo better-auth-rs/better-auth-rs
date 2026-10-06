@@ -67,7 +67,7 @@ pub struct UserView {
     #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
     #[serde(rename = "twoFactorEnabled", default)]
-    pub two_factor_enabled: bool,
+    pub two_factor_enabled: Option<bool>,
     pub role: Option<String>,
     #[serde(default)]
     pub banned: bool,
@@ -142,7 +142,10 @@ impl UserView {
             phone_number_verified: user.phone_number_verified(),
             username: user.username().map(str::to_owned),
             display_username: user.display_username().map(str::to_owned),
-            two_factor_enabled: user.two_factor_enabled(),
+            two_factor_enabled: match model.get(T::serialized_field_name("twoFactorEnabled")) {
+                Some(value) => serde_json::from_value(value.clone())?,
+                None => Some(user.two_factor_enabled()),
+            },
             role: user.role().map(str::to_owned),
             banned: user.banned(),
             ban_reason: user.ban_reason().map(str::to_owned),
@@ -344,7 +347,7 @@ impl AuthUser for UserView {
         self.display_username.as_deref()
     }
     fn two_factor_enabled(&self) -> bool {
-        self.two_factor_enabled
+        self.two_factor_enabled == Some(true)
     }
     fn role(&self) -> Option<&str> {
         self.role.as_deref()
@@ -681,7 +684,7 @@ mod tests {
             phone_number_verified: None,
             username: Some("ada".to_string()),
             display_username: Some("Ada".to_string()),
-            two_factor_enabled: true,
+            two_factor_enabled: Some(true),
             role: Some("admin".to_string()),
             banned: false,
             ban_reason: None,
@@ -693,6 +696,44 @@ mod tests {
         assert_eq!(json["emailVerified"], true);
         assert_eq!(json["displayUsername"], "Ada");
         assert_eq!(json["twoFactorEnabled"], true);
+    }
+
+    #[tokio::test]
+    async fn two_factor_enabled_preserves_null_through_projection_and_cache() {
+        let metadata = crate::plugin::MetadataMap::from_iter([(
+            "two_factor.enabled".to_owned(),
+            serde_json::json!(true),
+        )]);
+        for value in [None, Some(false), Some(true)] {
+            let user: UserView = serde_json::from_value(serde_json::json!({
+                "id": "owner",
+                "name": "Owner",
+                "email": "owner@example.com",
+                "emailVerified": true,
+                "createdAt": "2026-10-07T00:00:00.000Z",
+                "updatedAt": "2026-10-07T00:00:00.000Z",
+                "twoFactorEnabled": value,
+            }))
+            .expect("user response");
+            let projected = UserView::with_fields(&user, &Default::default(), &metadata)
+                .await
+                .expect("project nullable plugin field");
+            let cached: UserView = serde_json::from_value(
+                serde_json::to_value(&projected).expect("serialize signed cache user"),
+            )
+            .expect("deserialize signed cache user");
+            let projected = UserView::with_fields(&cached, &Default::default(), &metadata)
+                .await
+                .expect("reproject cached user");
+            assert_eq!(projected.two_factor_enabled, value);
+            assert_eq!(projected.two_factor_enabled(), value == Some(true));
+            assert_eq!(
+                serde_json::to_value(projected)
+                    .expect("serialize public user")
+                    .get("twoFactorEnabled"),
+                Some(&serde_json::json!(value)),
+            );
+        }
     }
 
     #[test]

@@ -185,7 +185,7 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
         format!("better-auth.session_token={}", cookie_value(&cookies[0])),
     );
     let (updated, current) = ctx.require_session(&req).await.unwrap();
-    assert!(updated.two_factor_enabled);
+    assert_eq!(updated.two_factor_enabled, Some(true));
     assert_ne!(session.token, current.token);
 }
 
@@ -215,7 +215,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .await
         .unwrap()
         .unwrap();
-    assert!(!first_record.verified);
+    assert_eq!(first_record.verified, Some(false));
     let (second, _) = enable_core(
         &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &body,
@@ -295,7 +295,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .unwrap();
     assert_eq!(preserved.secret, second_record.secret);
     assert_eq!(preserved.backup_codes, second_record.backup_codes);
-    assert!(preserved.verified);
+    assert_eq!(preserved.verified, Some(true));
 }
 
 #[tokio::test]
@@ -374,7 +374,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(factor.failed_verification_count, 10);
+    assert_eq!(factor.failed_verification_count, Some(10));
     ctx.database
         .record_two_factor_failure(&factor.id, 10, &|| Ok(Utc::now() - Duration::seconds(1)))
         .await
@@ -388,7 +388,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(factor.failed_verification_count, 0);
+    assert_eq!(factor.failed_verification_count, Some(0));
     assert!(factor.locked_until.is_none());
 }
 

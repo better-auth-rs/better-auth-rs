@@ -22,20 +22,31 @@ pub struct TwoFactor {
     #[serde(rename = "userId")]
     pub user_id: String,
     /// Whether the authenticator secret has completed enrollment.
-    pub verified: bool,
+    pub verified: Option<bool>,
     /// Consecutive failed sign-in verifications across factors and challenges.
     #[serde(rename = "failedVerificationCount")]
-    pub failed_verification_count: i64,
+    pub failed_verification_count: Option<i64>,
     /// End of the account-level verification lock.
     #[serde(rename = "lockedUntil")]
     #[serde(serialize_with = "crate::utils::date::serialize_option")]
     pub locked_until: Option<DateTime<Utc>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    pub created_at: SchemaValue<DateTime<Utc>>,
     #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    pub updated_at: SchemaValue<DateTime<Utc>>,
+}
+
+/// Two-factor persistence representation selected by the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TwoFactorStorage {
+    /// Store the upstream columns without creation or update timestamps.
+    Native,
+    /// Preserve the legacy creation and update timestamps.
+    Legacy,
 }
 
 /// Two-factor authentication creation data.
@@ -342,20 +353,20 @@ impl AuthTwoFactor for TwoFactor {
     fn user_id(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.user_id)
     }
-    fn verified(&self) -> bool {
+    fn verified(&self) -> Option<bool> {
         self.verified
     }
-    fn failed_verification_count(&self) -> i64 {
+    fn failed_verification_count(&self) -> Option<i64> {
         self.failed_verification_count
     }
     fn locked_until(&self) -> Option<DateTime<Utc>> {
         self.locked_until
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
+    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.created_at
     }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
+    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>> {
+        &self.updated_at
     }
 }
 
@@ -369,8 +380,8 @@ impl<T: AuthTwoFactor> From<&T> for TwoFactor {
             verified: two_factor.verified(),
             failed_verification_count: two_factor.failed_verification_count(),
             locked_until: two_factor.locked_until(),
-            created_at: two_factor.created_at(),
-            updated_at: two_factor.updated_at(),
+            created_at: two_factor.created_at().clone(),
+            updated_at: two_factor.updated_at().clone(),
         }
     }
 }

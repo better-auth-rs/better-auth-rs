@@ -28,14 +28,14 @@ print(executables[0])
 PY
 )
 
-# Existing ID/reference consumers own the legacy DeviceCode and Passkey schemas; fresh schemas have separate contracts.
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --output "$schema_dir/auth_schema.rs"
+# Existing ID/reference consumers own the legacy DeviceCode, Passkey, and TwoFactor schemas; fresh schemas have separate contracts.
+"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --output "$schema_dir/auth_schema.rs"
 export BETTER_AUTH_GENERATED_SCHEMA="$schema_dir/auth_schema.rs"
 "$consumer_cli" generate --plugins organization --schema-config compat-tests/schema-consumer/organization-schema.json --output "$schema_dir/organization_schema.rs"
 export BETTER_AUTH_ORGANIZATION_SCHEMA="$schema_dir/organization_schema.rs"
 "$consumer_cli" generate --plugins organization --database sqlite --schema-config compat-tests/schema-consumer/sqlite-json-schema.json --output "$schema_dir/sqlite_json_schema.rs"
 export BETTER_AUTH_SQLITE_JSON_SCHEMA="$schema_dir/sqlite_json_schema.rs"
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
+"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
 "$consumer_cli" generate --plugins jwt --schema-config compat-tests/schema-consumer/jwk-fields-schema.json --output "$schema_dir/jwk_fields_schema.rs"
 export BETTER_AUTH_JWK_FIELDS_SCHEMA="$schema_dir/jwk_fields_schema.rs"
@@ -74,6 +74,9 @@ for name, configuration in wallet_catalog.items():
 passkey_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/passkey-catalog-config.json").read_text())
 for name, configuration in passkey_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"passkey_catalog_{name}.json").write_text(json.dumps(configuration))
+two_factor_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/two-factor-catalog-config.json").read_text())
+for name, configuration in two_factor_catalog.items():
+    (pathlib.Path(sys.argv[1]) / f"two_factor_catalog_{name}.json").write_text(json.dumps(configuration))
 jwk_rate_limit_catalog = json.loads(pathlib.Path("compat-tests/schema-consumer/jwk-rate-limit-catalog-config.json").read_text())
 for name, configuration in jwk_rate_limit_catalog.items():
     (pathlib.Path(sys.argv[1]) / f"jwk_rate_limit_catalog_{name}.json").write_text(json.dumps(configuration))
@@ -164,6 +167,21 @@ export BETTER_AUTH_PASSKEY_POSTGRES_CUSTOM_SCHEMA="$schema_dir/passkey_postgres_
 export BETTER_AUTH_PASSKEY_MYSQL_DEFAULT_SCHEMA="$schema_dir/passkey_mysql_default.rs"
 export BETTER_AUTH_PASSKEY_MYSQL_CUSTOM_SCHEMA="$schema_dir/passkey_mysql_custom.rs"
 for case in default legacy custom; do
+  "$consumer_cli" generate --plugins two-factor --database sqlite --schema-config "$schema_dir/two_factor_catalog_${case}.json" --output "$schema_dir/two_factor_sqlite_${case}.rs"
+done
+export BETTER_AUTH_TWO_FACTOR_SQLITE_DEFAULT_SCHEMA="$schema_dir/two_factor_sqlite_default.rs"
+export BETTER_AUTH_TWO_FACTOR_SQLITE_LEGACY_SCHEMA="$schema_dir/two_factor_sqlite_legacy.rs"
+export BETTER_AUTH_TWO_FACTOR_SQLITE_CUSTOM_SCHEMA="$schema_dir/two_factor_sqlite_custom.rs"
+for backend in postgres mysql; do
+  for case in default custom; do
+    "$consumer_cli" generate --plugins two-factor --database "$backend" --schema-config "$schema_dir/two_factor_catalog_${case}.json" --output "$schema_dir/two_factor_${backend}_${case}.rs"
+  done
+done
+export BETTER_AUTH_TWO_FACTOR_POSTGRES_DEFAULT_SCHEMA="$schema_dir/two_factor_postgres_default.rs"
+export BETTER_AUTH_TWO_FACTOR_POSTGRES_CUSTOM_SCHEMA="$schema_dir/two_factor_postgres_custom.rs"
+export BETTER_AUTH_TWO_FACTOR_MYSQL_DEFAULT_SCHEMA="$schema_dir/two_factor_mysql_default.rs"
+export BETTER_AUTH_TWO_FACTOR_MYSQL_CUSTOM_SCHEMA="$schema_dir/two_factor_mysql_custom.rs"
+for case in default legacy custom; do
   "$consumer_cli" generate --plugins jwt --rate-limit-database --database sqlite --schema-config "$schema_dir/jwk_rate_limit_catalog_${case}.json" --output "$schema_dir/jwk_rate_limit_catalog_${case}.rs"
 done
 export BETTER_AUTH_JWK_RATE_LIMIT_CATALOG_DEFAULT_SCHEMA="$schema_dir/jwk_rate_limit_catalog_default.rs"
@@ -214,14 +232,14 @@ export BETTER_AUTH_RATE_MODEL_EMPTY_SCHEMA="$schema_dir/rate_model_empty.rs"
 export BETTER_AUTH_RATE_MODEL_DEFAULTS_SCHEMA="$schema_dir/rate_model_explicitDefaults.rs"
 export BETTER_AUTH_RATE_MODEL_RENAMED_SCHEMA="$schema_dir/rate_model_renamed.rs"
 for mode in serial uuid database; do
-  "$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --generate-id "$mode" --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/${mode}_schema.rs"
+  "$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id "$mode" --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/${mode}_schema.rs"
 done
 export BETTER_AUTH_SERIAL_SCHEMA="$schema_dir/serial_schema.rs"
 export BETTER_AUTH_UUID_SCHEMA="$schema_dir/uuid_schema.rs"
 export BETTER_AUTH_DATABASE_SCHEMA="$schema_dir/database_schema.rs"
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --generate-id uuid --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_uuid_schema.rs"
+"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id uuid --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_uuid_schema.rs"
 export BETTER_AUTH_POSTGRES_UUID_SCHEMA="$schema_dir/postgres_uuid_schema.rs"
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --generate-id serial --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_serial_schema.rs"
+"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id serial --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_serial_schema.rs"
 export BETTER_AUTH_POSTGRES_SERIAL_SCHEMA="$schema_dir/postgres_serial_schema.rs"
 
 for backend in postgres mysql; do
@@ -331,11 +349,11 @@ server_catalog_tests=(
 )
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
   bun --no-install test "${server_catalog_tests[@]}" --test-name-pattern postgres
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::device_code_catalog::live_postgres_device_code_catalog_matches_upstream tests::wallet_catalog::live_postgres_wallet_catalog_and_storage_match_upstream tests::passkey_catalog::live_postgres_passkey_catalog_and_native_storage tests::session_server::live_postgres_session_storage_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_counter_matches_upstream tests::member_server_catalog::live_postgres_member_catalog_matches_upstream tests::organization_role_server::live_postgres_organization_role_storage_matches_upstream tests::team_invitation_server::live_postgres_team_invitation_storage_matches_upstream
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::device_code_catalog::live_postgres_device_code_catalog_matches_upstream tests::wallet_catalog::live_postgres_wallet_catalog_and_storage_match_upstream tests::passkey_catalog::live_postgres_passkey_catalog_and_native_storage tests::two_factor_catalog::live_postgres_two_factor_catalog_and_native_storage tests::session_server::live_postgres_session_storage_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_counter_matches_upstream tests::member_server_catalog::live_postgres_member_catalog_matches_upstream tests::organization_role_server::live_postgres_organization_role_storage_matches_upstream tests::team_invitation_server::live_postgres_team_invitation_storage_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests live_postgres -- --ignored
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_MYSQL_URL:-}" ]]; then
   bun --no-install test "${server_catalog_tests[@]}" --test-name-pattern mysql
-  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::device_code_catalog::live_mysql_device_code_catalog_matches_upstream tests::wallet_catalog::live_mysql_wallet_catalog_and_storage_match_upstream tests::passkey_catalog::live_mysql_passkey_catalog_and_native_storage tests::session_server::live_mysql_session_storage_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_counter_matches_upstream tests::member_server_catalog::live_mysql_member_catalog_matches_upstream tests::organization_role_server::live_mysql_organization_role_storage_matches_upstream tests::team_invitation_server::live_mysql_team_invitation_storage_matches_upstream
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::device_code_catalog::live_mysql_device_code_catalog_matches_upstream tests::wallet_catalog::live_mysql_wallet_catalog_and_storage_match_upstream tests::passkey_catalog::live_mysql_passkey_catalog_and_native_storage tests::two_factor_catalog::live_mysql_two_factor_catalog_and_native_storage tests::session_server::live_mysql_session_storage_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_counter_matches_upstream tests::member_server_catalog::live_mysql_member_catalog_matches_upstream tests::organization_role_server::live_mysql_organization_role_storage_matches_upstream tests::team_invitation_server::live_mysql_team_invitation_storage_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test schema_preflight_tests mysql::live_mysql_preflight_tracks_migrations_defaults_and_auto_increment -- --ignored --exact
 fi

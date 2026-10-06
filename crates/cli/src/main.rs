@@ -52,6 +52,10 @@ enum Command {
         #[arg(long)]
         passkey_legacy_schema: bool,
 
+        /// Retain the previous TwoFactor timestamps, required values, and unique user index.
+        #[arg(long)]
+        two_factor_legacy_schema: bool,
+
         /// Match advanced.database.generate_id in the application's AuthConfig.
         #[arg(long, value_enum, default_value_t = schema_config::IdGeneration::Random)]
         generate_id: schema_config::IdGeneration,
@@ -86,6 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 session_active_column,
                 device_code_legacy_schema,
                 passkey_legacy_schema,
+                two_factor_legacy_schema,
                 generate_id,
                 database,
             },
@@ -124,6 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             session_active_column,
             device_code_legacy_schema,
             passkey_legacy_schema,
+            two_factor_legacy_schema,
         },
     )?;
     if let Some(path) = output {

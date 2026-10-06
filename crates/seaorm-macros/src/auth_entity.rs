@@ -86,10 +86,17 @@ fn resolve_roots() -> (TokenStream, TokenStream) {
 
 pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     let (seaorm_root, core_root) = resolve_roots();
-    let (role, model_name, row_presence, native_passkey) = match parse_options(input) {
+    let options = match parse_options(input) {
         Ok(options) => options,
         Err(err) => return err.to_compile_error(),
     };
+    let EntityOptions {
+        role,
+        row_presence,
+        native_passkey,
+        native_two_factor,
+        ..
+    } = options;
 
     let fields = match &input.data {
         Data::Struct(data) => match &data.fields {
@@ -120,7 +127,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     // Validate core fields are present
     if let Some(missing) = core.iter().find(|required| {
         !(row_presence && **required == "active"
-            || native_passkey && matches!(**required, "credential" | "updated_at"))
+            || native_passkey && matches!(**required, "credential" | "updated_at")
+            || native_two_factor && matches!(**required, "created_at" | "updated_at"))
             && !idents.iter().any(|ident| ident == *required)
     }) {
         return syn::Error::new_spanned(
@@ -191,6 +199,19 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                     "native_passkey models cannot expose credential or updatedAt fields",
                 ));
             }
+            if native_two_factor
+                && column_aliases.iter().any(|alias| {
+                    matches!(
+                        alias.as_str(),
+                        "created_at" | "createdAt" | "updated_at" | "updatedAt"
+                    )
+                })
+            {
+                return Err(syn::Error::new_spanned(
+                    field,
+                    "native_two_factor models cannot expose createdAt or updatedAt fields",
+                ));
+            }
             field_columns.push(quote! { #(#column_aliases)|* => Ok(Column::#column), });
             if role != EntityRole::Session
                 && all_known.iter().any(|known| ident == known)
@@ -256,7 +277,10 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             &all_known
                 .iter()
                 .copied()
-                .filter(|name| role != EntityRole::User || !["name", "image"].contains(name))
+                .filter(|name| {
+                    role != EntityRole::User
+                        || !["name", "image", "two_factor_enabled"].contains(name)
+                })
                 .collect::<Vec<_>>(),
         ) {
             Ok(methods) => methods,
@@ -291,22 +315,16 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             adapter_record::generate(input, fields, role, &seaorm_root, &core_root)
                 .unwrap_or_else(syn::Error::into_compile_error)
         }
-        role @ (EntityRole::ApiKey
+        EntityRole::ApiKey
         | EntityRole::DeviceCode
         | EntityRole::Passkey
         | EntityRole::TwoFactor
         | EntityRole::Jwk
         | EntityRole::WalletAddress
-        | EntityRole::RateLimit) => plugin_model::generate(
-            input,
-            fields,
-            role,
-            model_name.as_ref(),
-            native_passkey,
-            &seaorm_root,
-            &core_root,
-        )
-        .unwrap_or_else(syn::Error::into_compile_error),
+        | EntityRole::RateLimit => {
+            plugin_model::generate(input, fields, &options, (&seaorm_root, &core_root))
+                .unwrap_or_else(syn::Error::into_compile_error)
+        }
         role => gen_organization_model(input, fields, role, &seaorm_root, &core_root)
             .unwrap_or_else(|error| error.to_compile_error()),
     }
@@ -324,6 +342,13 @@ fn gen_user(
     let (ident, fields) = model;
     let id_type = identity::field_type(fields, "id")?;
     let id_view = identity::string_view(id_type, "id");
+    let optional_two_factor = fields.named.iter().any(|field| {
+        field
+            .ident
+            .as_ref()
+            .is_some_and(|ident| ident == "two_factor_enabled")
+            && identity::optional_inner(&field.ty).is_some()
+    });
     let plugin_fields: Vec<_> = registry::plugin_field_names(EntityRole::User)
         .into_iter()
         .filter(|name| has(name))
@@ -359,7 +384,11 @@ fn gen_user(
         quote! { fn display_username(&self) -> Option<&str> { None } }
     };
     let two_factor_impl = if has("two_factor_enabled") {
-        quote! { fn two_factor_enabled(&self) -> bool { self.two_factor_enabled } }
+        if optional_two_factor {
+            quote! { fn two_factor_enabled(&self) -> bool { self.two_factor_enabled == Some(true) } }
+        } else {
+            quote! { fn two_factor_enabled(&self) -> bool { self.two_factor_enabled } }
+        }
     } else {
         quote! { fn two_factor_enabled(&self) -> bool { false } }
     };
@@ -394,10 +423,10 @@ fn gen_user(
     };
 
     // new_active — plugin fields get Set(default) when present, omitted when absent
-    let plugin_new_active = plugin_set_fields_user(has, seaorm_root);
+    let plugin_new_active = plugin_set_fields_user(has, optional_two_factor, seaorm_root);
 
     // apply_update — only update fields that exist
-    let plugin_apply_update = plugin_update_fields_user(has, seaorm_root);
+    let plugin_apply_update = plugin_update_fields_user(has, optional_two_factor, seaorm_root);
 
     let username_column_impl = if has("username") {
         quote! { fn username_column() -> Option<Self::Column> { Some(Column::Username) } }
@@ -505,6 +534,7 @@ fn gen_user(
 /// Generate `new_active` field assignments for present plugin fields on User.
 fn plugin_set_fields_user(
     has: &dyn Fn(&str) -> bool,
+    optional_two_factor: bool,
     seaorm_root: &TokenStream,
 ) -> Vec<TokenStream> {
     let mut out = Vec::new();
@@ -525,7 +555,12 @@ fn plugin_set_fields_user(
         out.push(quote! { display_username: #seaorm_root::sea_orm::ActiveValue::Set(create_user.display_username.flatten()) });
     }
     if has("two_factor_enabled") {
-        out.push(quote! { two_factor_enabled: #seaorm_root::sea_orm::ActiveValue::Set(false) });
+        let value = if optional_two_factor {
+            quote!(Some(false))
+        } else {
+            quote!(false)
+        };
+        out.push(quote! { two_factor_enabled: #seaorm_root::sea_orm::ActiveValue::Set(#value) });
     }
     if has("role") {
         out.push(quote! { role: #seaorm_root::sea_orm::ActiveValue::Set(create_user.role) });
@@ -550,6 +585,7 @@ fn plugin_set_fields_user(
 /// Generate `apply_update` statements for present plugin fields on User.
 fn plugin_update_fields_user(
     has: &dyn Fn(&str) -> bool,
+    optional_two_factor: bool,
     seaorm_root: &TokenStream,
 ) -> Vec<TokenStream> {
     let mut out = Vec::new();
@@ -584,9 +620,14 @@ fn plugin_update_fields_user(
         });
     }
     if has("two_factor_enabled") {
+        let value = if optional_two_factor {
+            quote!(Some(two_factor_enabled))
+        } else {
+            quote!(two_factor_enabled)
+        };
         out.push(quote! {
             if let ::std::option::Option::Some(two_factor_enabled) = update.two_factor_enabled {
-                active.two_factor_enabled = #seaorm_root::sea_orm::ActiveValue::Set(two_factor_enabled);
+                active.two_factor_enabled = #seaorm_root::sea_orm::ActiveValue::Set(#value);
             }
         });
     }
@@ -814,11 +855,20 @@ fn gen_session(
     })
 }
 
-fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>, bool, bool)> {
+struct EntityOptions {
+    role: EntityRole,
+    model_name: Option<LitStr>,
+    row_presence: bool,
+    native_passkey: bool,
+    native_two_factor: bool,
+}
+
+fn parse_options(input: &DeriveInput) -> syn::Result<EntityOptions> {
     let mut parsed = None;
     let mut model_name = None;
     let mut row_presence = false;
     let mut native_passkey = false;
+    let mut native_two_factor = false;
     for attr in &input.attrs {
         if !attr.path().is_ident("auth") {
             continue;
@@ -859,11 +909,14 @@ fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>
             } else if meta.path.is_ident("native_passkey") {
                 native_passkey = true;
                 Ok(())
+            } else if meta.path.is_ident("native_two_factor") {
+                native_two_factor = true;
+                Ok(())
             } else if meta.path.is_ident("model_name") {
                 model_name = Some(meta.value()?.parse::<LitStr>()?);
                 Ok(())
             } else {
-                Err(meta.error("expected `role = \"...\"`, `model_name = \"...\"`, `row_presence`, or `native_passkey`"))
+                Err(meta.error("expected `role = \"...\"`, `model_name = \"...\"`, `row_presence`, `native_passkey`, or `native_two_factor`"))
             }
         })?;
     }
@@ -894,5 +947,17 @@ fn parse_options(input: &DeriveInput) -> syn::Result<(EntityRole, Option<LitStr>
             "native_passkey is supported for the passkey role",
         ));
     }
-    Ok((role, model_name, row_presence, native_passkey))
+    if native_two_factor && role != EntityRole::TwoFactor {
+        return Err(syn::Error::new_spanned(
+            input,
+            "native_two_factor is supported for the two_factor role",
+        ));
+    }
+    Ok(EntityOptions {
+        role,
+        model_name,
+        row_presence,
+        native_passkey,
+        native_two_factor,
+    })
 }

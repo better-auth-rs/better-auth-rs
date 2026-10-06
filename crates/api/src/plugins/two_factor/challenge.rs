@@ -15,7 +15,7 @@ impl TwoFactorPlugin {
         }
         let Some(data) = req
             .new_session()?
-            .filter(|data| data.user.two_factor_enabled)
+            .filter(|data| data.user.two_factor_enabled == Some(true))
         else {
             return Ok(());
         };

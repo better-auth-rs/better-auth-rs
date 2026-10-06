@@ -17,7 +17,7 @@ async fn raw_username_projection_resolves_empty_aliases_and_preserves_serialized
         image: None,
         username: Some("ordinary_user".into()),
         display_username: Some("Ordinary Display".into()),
-        two_factor_enabled: false,
+        two_factor_enabled: Some(false),
         role: None,
         banned: false,
         ban_reason: None,

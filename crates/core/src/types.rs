@@ -20,8 +20,8 @@ pub use super::types_org::{
 pub use super::types_plugin::{
     ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, CreateWalletAddress,
     DeviceCode, DeviceCodeOwnership, Passkey, PasskeyCredentialState, PasskeyStorage, TwoFactor,
-    UpdateApiKey, UpdateDeviceCode, UpdatePasskey, UpdatePasskeyAuthentication, UpdateTwoFactor,
-    WalletAddress,
+    TwoFactorStorage, UpdateApiKey, UpdateDeviceCode, UpdatePasskey, UpdatePasskeyAuthentication,
+    UpdateTwoFactor, WalletAddress,
 };
 
 /// HTTP method enumeration

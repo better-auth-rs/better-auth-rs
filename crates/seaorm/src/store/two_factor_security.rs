@@ -78,10 +78,10 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(factor.verified);
+        assert_eq!(factor.verified, Some(true));
         assert_eq!(factor.secret, "encrypted-secret");
         assert_eq!(factor.backup_codes, "encrypted-codes");
-        assert_eq!(factor.failed_verification_count, 0);
+        assert_eq!(factor.failed_verification_count, Some(0));
         assert!(factor.locked_until.is_none());
         store
             .record_two_factor_failure(&factor.id, 1, &|| {
@@ -94,7 +94,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(factor.failed_verification_count, 1);
+        assert_eq!(factor.failed_verification_count, Some(1));
         assert!(factor.locked_until.is_some());
     }
 }

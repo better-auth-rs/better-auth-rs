@@ -113,8 +113,8 @@ pub use types::{
     HealthCheckResponse, HttpMethod, Invitation, InvitationStatus, ListUsersParams, Member,
     OkResponse, Organization, Passkey, PasskeyCredentialState, PasskeyStorage,
     RateLimitErrorResponse, RequestMeta, StatusMessageResponse, StatusResponse,
-    SuccessMessageResponse, SuccessResponse, TwoFactor, UpdateAccount, UpdateApiKey,
-    UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
+    SuccessMessageResponse, SuccessResponse, TwoFactor, TwoFactorStorage, UpdateAccount,
+    UpdateApiKey, UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
     UpdateTwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
     WalletAddress,
 };

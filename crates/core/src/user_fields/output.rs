@@ -479,8 +479,7 @@ impl TryFrom<Map<String, Value>> for UserView {
                     .cloned()
                     .unwrap_or(Value::Null),
             )?,
-            two_factor_enabled: take::<Option<bool>>(&mut fields, "twoFactorEnabled")?
-                .unwrap_or(false),
+            two_factor_enabled: take(&mut fields, "twoFactorEnabled")?,
             role: take(&mut fields, "role")?,
             banned: take::<Option<bool>>(&mut fields, "banned")?.unwrap_or(false),
             ban_reason: take(&mut fields, "banReason")?,

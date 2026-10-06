@@ -27,6 +27,10 @@ pub trait SeaOrmPluginModel:
     fn passkey_storage() -> better_auth_core::PasskeyStorage {
         better_auth_core::PasskeyStorage::Legacy
     }
+    /// Select the two-factor columns supported by this model.
+    fn two_factor_storage() -> better_auth_core::TwoFactorStorage {
+        better_auth_core::TwoFactorStorage::Legacy
+    }
     /// Resolve a logical field name to its typed column.
     fn column(name: &str) -> AuthResult<Self::Column>;
     /// Return the canonical public name of a built-in column.

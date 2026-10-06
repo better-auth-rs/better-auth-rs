@@ -230,7 +230,7 @@ impl EphemeralStore {
                         user.ban_expires = ban_expires;
                     }
                     if let Some(two_factor_enabled) = update.two_factor_enabled {
-                        user.two_factor_enabled = two_factor_enabled;
+                        user.two_factor_enabled = Some(two_factor_enabled);
                     }
                     if let Some(metadata) = update.metadata {
                         user.metadata = metadata;
@@ -379,7 +379,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             phone_number_verified: create_user.phone_number_verified,
             username,
             display_username,
-            two_factor_enabled: false,
+            two_factor_enabled: Some(false),
             role: create_user.role,
             banned: create_user.banned.unwrap_or(false),
             ban_reason: create_user.ban_reason,

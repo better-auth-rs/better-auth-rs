@@ -30,6 +30,7 @@ on:
           - device-validation
           - provider-options
           - passkey
+          - two-factor
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string
@@ -164,3 +165,6 @@ jobs:
       - name: Check Passkey storage and authentication
         if: env.CHECK_STAGE == 'passkey'
         run: devenv shell -- ./scripts/check.sh passkey
+      - name: Check TwoFactor storage and authentication
+        if: env.CHECK_STAGE == 'two-factor'
+        run: devenv shell -- ./scripts/check.sh two-factor

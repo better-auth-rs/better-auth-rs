@@ -66,11 +66,11 @@ impl From<&entities::two_factor::Model> for TwoFactor {
             secret: model.secret.clone(),
             backup_codes: model.backup_codes.clone(),
             user_id: model.user_id.clone(),
-            verified: model.verified,
-            failed_verification_count: model.failed_verification_count,
+            verified: Some(model.verified),
+            failed_verification_count: Some(model.failed_verification_count),
             locked_until: model.locked_until,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
+            created_at: model.created_at.into(),
+            updated_at: model.updated_at.into(),
         }
     }
 }
