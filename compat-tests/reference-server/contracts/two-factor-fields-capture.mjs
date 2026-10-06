@@ -108,6 +108,17 @@ async function withFixture(backend, run) {
   }
 }
 
+async function recordFailure(context, id) {
+  const originalNow = Date.now;
+  try {
+    Date.now = () => Date.parse(lockDeadline) - 900_000;
+    await recordTwoFactorFailure({ context }, "twoFactor", { id });
+  } finally {
+    Date.now = originalNow;
+  }
+  return null;
+}
+
 async function captureOperations(backend) {
   return await withFixture(backend, async ({ context, adapter, ownerId, events, stored }) => {
     const operations = [];
@@ -138,18 +149,8 @@ async function captureOperations(backend) {
     });
     await observe("cas-success", () => exchange("ordinary-updated-codes", "ordinary-cas-codes"), row => row !== null);
     await observe("cas-mismatch", () => exchange("ordinary-updated-codes", "must-not-replace"), row => row !== null);
-    const recordFailure = async () => {
-      const originalNow = Date.now;
-      try {
-        Date.now = () => Date.parse(lockDeadline) - 900_000;
-        await recordTwoFactorFailure({ context }, "twoFactor", { id });
-      } finally {
-        Date.now = originalNow;
-      }
-      return null;
-    };
-    await observe("failure-increment", recordFailure);
-    await observe("failure-lock", recordFailure);
+    await observe("failure-increment", () => recordFailure(context, id));
+    await observe("failure-lock", () => recordFailure(context, id));
     const guardedReset = async before => {
       await adapter.incrementOne({
         model: "twoFactor", where: [...where, { field: "lockedUntil", operator: "lte", value: new Date(before) }],
@@ -159,7 +160,7 @@ async function captureOperations(backend) {
     };
     await observe("reset-guard-mismatch", () => guardedReset("2030-01-01T00:00:00.000Z"));
     await observe("reset-guard-success", () => guardedReset("2030-01-03T00:00:00.000Z"));
-    await observe("failure-increment-after-reset", recordFailure);
+    await observe("failure-increment-after-reset", () => recordFailure(context, id));
     await observe("reset-unconditional", async () => {
       await resetTwoFactorFailures({ context }, "twoFactor", { id });
       return null;
@@ -235,6 +236,55 @@ async function captureFailure(backend, operation, phase) {
   });
 }
 
+async function captureBoundary(backend, name) {
+  return await withFixture(backend, async ({ context, adapter, ownerId, events, errors, stored, setFailure }) => {
+    const seeded = await adapter.create({ model: "twoFactor", data: factorInput(ownerId) });
+    await recordFailure(context, seeded.id);
+    const before = await stored();
+    assert.equal(before.failedVerificationCount, 1);
+    assert.equal(before.lockedUntil, null);
+    events.length = 0;
+    let result = null;
+    if (name === "failure-lock-input-error") {
+      setFailure("input");
+      let sameError = false;
+      try {
+        await recordFailure(context, seeded.id);
+      } catch (error) {
+        if (error !== errors.input) throw error;
+        sameError = true;
+      }
+      assert.equal(sameError, true, "The lock assignment must reject after the failure counter commits");
+      setFailure(undefined);
+      result = { sameError, message: errors.input.message };
+    } else {
+      assert.ok(["reset-guard-null-before-epoch", "reset-guard-null"].includes(name));
+      const cutoff = name === "reset-guard-null-before-epoch"
+        ? "1969-12-31T23:59:59.999Z" : "2030-01-03T00:00:00.000Z";
+      await adapter.incrementOne({
+        model: "twoFactor", where: [
+          { field: "id", value: seeded.id },
+          { field: "lockedUntil", operator: "lte", value: new Date(cutoff) },
+        ],
+        increment: {}, set: { failedVerificationCount: 0, lockedUntil: null },
+      });
+    }
+    const persisted = await stored();
+    const phases = events.map(([phase]) => phase);
+    if (name === "failure-lock-input-error") {
+      assert.deepEqual(persisted, { ...before, failedVerificationCount: 2 });
+      assert.deepEqual(phases, ["output", "output", "output", "output", "onUpdate", "input"]);
+    } else if (backend === "memory" && name === "reset-guard-null") {
+      assert.deepEqual(persisted, { ...before, failedVerificationCount: 0, revision: 2.5 });
+      assert.deepEqual(phases, ["onUpdate", "input", "output", "output", "output", "output"]);
+    } else {
+      assert.deepEqual(persisted, before);
+      assert.deepEqual(phases, ["onUpdate", "input"]);
+    }
+    return { name, events: events.splice(0), result, stored: persisted };
+  });
+}
+
 export async function captureTwoFactorFields() {
   const backends = [];
   for (const backend of ["memory", "sqlite"]) {
@@ -243,7 +293,11 @@ export async function captureTwoFactorFields() {
     for (const operation of ["create", "update", "cas"]) {
       for (const phase of ["input", "output"]) failures.push(await captureFailure(backend, operation, phase));
     }
-    backends.push({ backend, operations, failures });
+    const boundaries = [];
+    for (const name of ["failure-lock-input-error", "reset-guard-null-before-epoch", "reset-guard-null"]) {
+      boundaries.push(await captureBoundary(backend, name));
+    }
+    backends.push({ backend, operations, failures, boundaries });
   }
   return { version, backends };
 }

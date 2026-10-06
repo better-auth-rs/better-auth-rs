@@ -10,6 +10,9 @@ test("TwoFactor additional fields preserve complete JSON callback traces, record
   for (const backend of captured.backends) {
     expect(backend.operations).toHaveLength(12);
     expect(backend.failures).toHaveLength(6);
+    expect(backend.boundaries.map(({ name }: { name: string }) => name)).toStrictEqual([
+      "failure-lock-input-error", "reset-guard-null-before-epoch", "reset-guard-null",
+    ]);
   }
   expect(captured).toStrictEqual(fixture);
 });
