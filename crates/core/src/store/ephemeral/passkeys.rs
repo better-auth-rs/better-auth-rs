@@ -198,7 +198,7 @@ impl PasskeyStore for EphemeralStore {
             .await?;
         let selected = self
             .raw("passkey", "update", |state| {
-                let Some(source) = state.passkeys.first_ref(|row| &row.id == id)? else {
+                let Some(source) = state.passkeys.first_ref(|row| row.id == id)? else {
                     return Ok(None);
                 };
                 let snapshot = source.write(|passkey| {
