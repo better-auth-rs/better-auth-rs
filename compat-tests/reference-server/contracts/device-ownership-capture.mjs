@@ -18,7 +18,7 @@ const authorizationContext = { issuer: "ordinary-issuer" };
 const redemptionContext = { issuedFor: "ordinary-issuer" };
 const deviceFields = [
   "id", "deviceCode", "userCode", "userId", "expiresAt", "status",
-  "lastPolledAt", "pollingInterval", "clientId", "scope", "tenantKey",
+  "lastPolledAt", "pollingInterval", "clientId", "scope",
 ];
 const userFields = ["id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt"];
 const scenarios = [
@@ -31,7 +31,15 @@ const scopeScenarios = [
   { name: "scope-mismatch-after-prepare", ownershipWhere: { field: "scope", value: "initial" } },
 ];
 
-async function captureCase(backend, mode, { name, ownershipWhere, decoy = false }) {
+export async function captureDeviceOwnershipCase(backend, mode, {
+  name, ownershipWhere, decoy = false, expectedClaim,
+  fields = { tenantKey: { type: "string", fieldName: "stored_tenant", required: false } },
+  initialFields = { tenantKey: "tenant-before" },
+  preparedFields = { tenantKey: "tenant-after", scope: "prepared" },
+  decoyFields = { scope: "decoy-scope", tenantKey: "decoy-tenant" },
+}) {
+  assert.ok(["requested", "decoy", null].includes(expectedClaim));
+  if (expectedClaim === "decoy") assert.equal(decoy, true);
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   try {
@@ -43,9 +51,7 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
       telemetry: { enabled: false },
       plugins: [deviceAuthorization(), {
         id: "ordinary-device-ownership",
-        schema: { deviceCode: { fields: {
-          tenantKey: { type: "string", fieldName: "stored_tenant", required: false },
-        } } },
+        schema: { deviceCode: { fields } },
       }],
     };
     if (sqlite) await (await getMigrations(options)).runMigrations();
@@ -65,13 +71,13 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
       decoyCode = await adapter.create({ model: "deviceCode", data: {
         deviceCode: "decoy-device", userCode: "decoy-user", userId: decoyOwner.id,
         expiresAt: new Date(expiresAt), status: "approved", lastPolledAt: null,
-        pollingInterval: 5000, clientId: "decoy-client", scope: "decoy-scope", tenantKey: "decoy-tenant",
+        pollingInterval: 5000, clientId: "decoy-client", ...decoyFields,
       } });
     }
     const seeded = await adapter.create({ model: "deviceCode", data: {
       deviceCode: "ordinary-device", userCode: "ordinary-user", userId: owner.id,
       expiresAt: new Date(expiresAt), status: "approved", lastPolledAt: null,
-      pollingInterval: 5000, clientId: "ordinary-client", scope: "initial", tenantKey: "tenant-before",
+      pollingInterval: 5000, clientId: "ordinary-client", scope: "initial", ...initialFields,
     } });
     assert.equal(typeof owner.id, "string");
     assert.equal(typeof seeded.id, "string");
@@ -88,7 +94,7 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
     const startedAt = Date.now();
     const visibleDevice = row => {
       if (row === null) return null;
-      assert.deepEqual(Object.keys(row).sort(), [...deviceFields].sort());
+      assert.deepEqual(Object.keys(row).sort(), [...deviceFields, ...Object.keys(fields)].sort());
       const isDecoy = decoy && row.id === decoyCode.id;
       assert.equal(row.id, isDecoy ? decoyCode.id : seeded.id);
       assert.equal(row.userId, isDecoy ? decoyOwner.id : owner.id);
@@ -147,7 +153,7 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
             events.push({ type: "prepare", row: visibleDevice(row), authorizationContext: json(authorization) });
             const prepared = await active.update({
               model: "deviceCode", where: [{ field: "id", value: row.id }],
-              update: { tenantKey: "tenant-after", scope: "prepared" },
+              update: preparedFields,
             });
             events.push({ type: "prepared", row: visibleDevice(prepared) });
             return { issuedFor: authorization.issuer };
@@ -168,21 +174,20 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
       error = { status: caught.status, statusCode: caught.statusCode, body: json(caught.body) };
     }
     const remaining = await remainingRows(adapter);
-    const prepared = { ...before, tenantKey: "tenant-after", scope: "prepared", lastPolledAt: "<polled-at>" };
+    const prepared = { ...before, ...preparedFields, lastPolledAt: "<polled-at>" };
     assert.deepEqual(events.map(event => event.type), ["authorize", "prepare", "prepared", "consumeOne", "consumeOneResult"]);
     assert.deepEqual(events[0].row, before);
     assert.deepEqual(events[1].row, before);
     assert.deepEqual(events[1].authorizationContext, authorizationContext);
     assert.deepEqual(events[2].row, prepared);
-    const succeeds = name === "tenant-match-after-prepare" || name === "scope-match-after-prepare"
-      || (ownershipWhere.connector === "OR" && backend === "memory");
-    if (succeeds) {
-      const claimed = decoy ? visibleDevice(decoyCode) : prepared;
+    if (expectedClaim !== null) {
+      const claimed = expectedClaim === "decoy" ? visibleDevice(decoyCode) : prepared;
       assert.equal(error, null);
       assert.deepEqual(events[4].row, claimed);
       assert.deepEqual(result, { claimedDeviceCode: claimed, authorizationContext, redemptionContext, user: visibleUser(owner) });
-      assert.deepEqual(insideRemaining, decoy ? [prepared] : []);
-      assert.deepEqual(remaining, decoy ? [prepared] : []);
+      const unclaimed = expectedClaim === "decoy" ? [prepared] : decoy ? [visibleDevice(decoyCode)] : [];
+      assert.deepEqual(insideRemaining, unclaimed);
+      assert.deepEqual(remaining, unclaimed);
     } else {
       assert.equal(result, null);
       assert.equal(events[4].row, null);
@@ -198,6 +203,14 @@ async function captureCase(backend, mode, { name, ownershipWhere, decoy = false 
   } finally {
     sqlite?.close();
   }
+}
+
+async function captureCase(backend, mode, scenario) {
+  const succeeds = scenario.name === "tenant-match-after-prepare" || scenario.name === "scope-match-after-prepare"
+    || (scenario.ownershipWhere.connector === "OR" && backend === "memory");
+  return captureDeviceOwnershipCase(backend, mode, {
+    ...scenario, expectedClaim: succeeds ? scenario.decoy ? "decoy" : "requested" : null,
+  });
 }
 
 export async function captureDeviceOwnership() {

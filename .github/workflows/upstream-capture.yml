@@ -7,14 +7,24 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/passkey-display-mapping-capture.mjs
-      - compat-tests/reference-server/contracts/passkey-fields-capture.mjs
+      - compat-tests/reference-server/contracts/schema-join-reference-conflict-capture.mjs
+      - compat-tests/reference-server/contracts/schema-join-reference-unknown-capture.mjs
+      - compat-tests/reference-server/contracts/device-ownership-capture.mjs
+      - compat-tests/reference-server/contracts/device-ownership-set-capture.mjs
 
 permissions:
   contents: read
 
 jobs:
   capture:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - contract: schema-join-reference-unknown
+            regression: schema-join-reference-conflict
+          - contract: device-ownership-set
+            regression: device-ownership
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,13 +42,17 @@ jobs:
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
       - name: Capture pinned upstream contract
         shell: devenv shell -- bash -e {0}
+        env:
+          CAPTURE_CONTRACT: ${{ matrix.contract }}
+          CAPTURE_REGRESSION: ${{ matrix.regression }}
         run: |
           set -euo pipefail
           capture_dir="$RUNNER_TEMP/upstream-fixtures"
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun --no-install ./compat-tests/reference-server/contracts/passkey-display-mapping-capture.mjs "$capture_dir/passkey-display-mapping-1.7.6.json" 2>&1 | tee "$capture_dir/passkey-display-mapping.log"
+          bun --no-install test "./compat-tests/reference-server/contracts/$CAPTURE_REGRESSION.test.ts" 2>&1 | tee "$capture_dir/regression.log"
+          bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "$capture_dir/$CAPTURE_CONTRACT-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -46,7 +60,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-passkey-mapping-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-${{ matrix.contract }}-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14

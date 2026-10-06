@@ -21,6 +21,23 @@ const scenarios = [
   }))),
 ];
 
+export async function observeSchemaJoinReferenceBoundary(options, operation, events) {
+  // The real adapter factory validates references before invoking the raw reader.
+  const adapter = createAdapterFactory({
+    config: { adapterId: "schema-reference-boundary", supportsJSON: true },
+    adapter: () => ({
+      async findOne(input) { events.push(["findOne", input]); return null; },
+    }),
+  })(options);
+  try {
+    return operation === "accounts"
+      ? await adapter.findOne({ model: "user", where: [{ field: "id", value: "owner" }], join: { account: true } })
+      : await adapter.findOne({ model: "account", where: [{ field: "id", value: "account" }], join: { user: true } });
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
 async function observe(scenario, joins, operation) {
   const events = [];
   const output = field => value => { events.push(["output", field, value]); return value; };
@@ -46,21 +63,7 @@ async function observe(scenario, joins, operation) {
       async get() { return null; }, async set() {}, async delete() {},
     } } : {}),
   };
-  // The real adapter factory validates references before invoking the raw reader.
-  const adapter = createAdapterFactory({
-    config: { adapterId: "schema-reference-boundary", supportsJSON: true },
-    adapter: () => ({
-      async findOne(input) { events.push(["findOne", input]); return null; },
-    }),
-  })(options);
-  let result;
-  try {
-    result = operation === "accounts"
-      ? await adapter.findOne({ model: "user", where: [{ field: "id", value: "owner" }], join: { account: true } })
-      : await adapter.findOne({ model: "account", where: [{ field: "id", value: "account" }], join: { user: true } });
-  } catch (error) {
-    result = { error: error.message };
-  }
+  const result = await observeSchemaJoinReferenceBoundary(options, operation, events);
   if (scenario.invalid) {
     const [model, base] = operation === "accounts" ? ["account", "user"] : ["user", "account"];
     assert.deepEqual(result, { error: `No foreign key found for model ${model} and base model ${base} while performing join operation.` });
