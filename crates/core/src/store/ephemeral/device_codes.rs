@@ -278,7 +278,9 @@ impl DeviceCodeStore for EphemeralStore {
         expected: &DeviceCode,
         ownership: &crate::DeviceCodeOwnership,
     ) -> AuthResult<Option<DeviceCode>> {
-        let (mut query, field) = self.model_fields.device_code_ownership_query(ownership)?;
+        let (mut query, field) = self
+            .model_fields
+            .device_code_ownership_query(ownership, self.config.advanced.database.generate_id())?;
         query.value = field.adapter_input(query.value, false, false)?;
         let row = self
             .raw("deviceCode", "consumeOne", |state| {

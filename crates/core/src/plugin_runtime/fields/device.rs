@@ -1,4 +1,5 @@
 use super::*;
+use crate::id::IdGeneration;
 use crate::user_fields::UserFieldConfig;
 use crate::{DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator};
 
@@ -45,6 +46,7 @@ impl ModelFields {
     pub fn device_code_ownership_query(
         &self,
         ownership: &DeviceCodeOwnership,
+        policy: &IdGeneration,
     ) -> AuthResult<(DeviceCodeWhere, &UserFieldConfig)> {
         static CLIENT_ID: LazyLock<UserFieldConfig> = LazyLock::new(UserFieldConfig::default);
         let (mut query, logical, field) = match ownership {
@@ -77,11 +79,14 @@ impl ModelFields {
             }
             DeviceCodeOwnership::Where(query) => {
                 let (logical, field) = self.declared_device_code_ownership_field(&query.field)?;
-                validate_query(field, query)?;
+                validate_query(field, query, policy)?;
                 (query.clone(), logical, field)
             }
         };
         validate_finite_binding(field, &query.value)?;
+        if field.references_id() && matches!(policy, IdGeneration::Serial) {
+            query.value = crate::id::serial_reference_query_value(query.value)?;
+        }
         query.value = crate::user_query::bind_filter(field, &query.value)?;
         query.field = resolve_field_name(field.field_name.as_deref(), logical).to_owned();
         Ok((query, field))
@@ -256,21 +261,32 @@ impl ModelFields {
     }
 }
 
-fn validate_query(field: &UserFieldConfig, query: &DeviceCodeWhere) -> AuthResult<()> {
+fn validate_query(
+    field: &UserFieldConfig,
+    query: &DeviceCodeWhere,
+    policy: &IdGeneration,
+) -> AuthResult<()> {
     if field.references.is_some()
-        || !matches!(
-            field.field_type,
-            UserFieldType::String
-                | UserFieldType::Number
-                | UserFieldType::Boolean
-                | UserFieldType::StringArray
-                | UserFieldType::NumberArray
-                | UserFieldType::Json
-                | UserFieldType::Enum(_)
-        )
+        && !(matches!(policy, IdGeneration::Serial)
+            && field.references_id()
+            && matches!(field.field_type, UserFieldType::String))
     {
         return Err(AuthError::config(
-            "DeviceCode Where supports scope and declared scalar, array, or JSON fields without references; Date fields require a query representation that preserves adapter semantics",
+            "DeviceCode Where reference fields require the String type, an id target, and Serial ID generation",
+        ));
+    }
+    if !matches!(
+        field.field_type,
+        UserFieldType::String
+            | UserFieldType::Number
+            | UserFieldType::Boolean
+            | UserFieldType::StringArray
+            | UserFieldType::NumberArray
+            | UserFieldType::Json
+            | UserFieldType::Enum(_)
+    ) {
+        return Err(AuthError::config(
+            "DeviceCode Where supports scope and declared scalar, array, or JSON fields; Date fields require a query representation that preserves adapter semantics",
         ));
     }
     let scalar = |value: &Value| !value.is_array() && !value.is_object();
@@ -296,7 +312,7 @@ fn validate_query(field: &UserFieldConfig, query: &DeviceCodeWhere) -> AuthResul
 }
 
 fn validate_finite_binding(field: &UserFieldConfig, value: &Value) -> AuthResult<()> {
-    if !matches!(field.field_type, UserFieldType::Number) {
+    if !field.references_id() && !matches!(field.field_type, UserFieldType::Number) {
         return Ok(());
     }
     let parsed = |value: &Value| {
@@ -304,14 +320,24 @@ fn validate_finite_binding(field: &UserFieldConfig, value: &Value) -> AuthResult
             .as_str()
             .and_then(crate::organization_fields::numeric_filter)
     };
-    let nonfinite = match value {
-        Value::String(_) => parsed(value).is_some_and(|number| !number.is_finite()),
-        Value::Array(values) => values
+    let nonfinite = if field.references_id() {
+        value
+            .as_array()
+            .map_or(std::slice::from_ref(value), Vec::as_slice)
             .iter()
-            .map(parsed)
-            .collect::<Option<Vec<_>>>()
-            .is_some_and(|values| values.iter().any(|number| !number.is_finite())),
-        _ => false,
+            .try_fold(false, |nonfinite, value| {
+                crate::query::number(value).map(|number| nonfinite || !number.is_finite())
+            })?
+    } else {
+        match value {
+            Value::String(_) => parsed(value).is_some_and(|number| !number.is_finite()),
+            Value::Array(values) => values
+                .iter()
+                .map(parsed)
+                .collect::<Option<Vec<_>>>()
+                .is_some_and(|values| values.iter().any(|number| !number.is_finite())),
+            _ => false,
+        }
     };
     if nonfinite {
         return Err(AuthError::config(

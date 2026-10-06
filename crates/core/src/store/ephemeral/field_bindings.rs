@@ -75,18 +75,7 @@ impl EphemeralStore {
             .then(|| value.clone())
             .filter(|value| value.is_object() || value.is_array() || value.is_null());
         let value = if field.is_some_and(|field| self.uses_serial_reference(field)) {
-            let mut value = crate::id::serial_reference_value(value)?;
-            // Where conversion uses Number(null), while stored references preserve null.
-            let replace_null = |value: &mut Value| {
-                if value.is_null() {
-                    *value = Value::from(0);
-                }
-            };
-            match &mut value {
-                Value::Array(values) => values.iter_mut().for_each(replace_null),
-                value => replace_null(value),
-            }
-            value
+            crate::id::serial_reference_query_value(value)?
         } else {
             value
         };

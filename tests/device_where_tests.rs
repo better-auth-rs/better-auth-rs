@@ -16,24 +16,31 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 #[tokio::test]
 async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -> TestResult {
     let captured = contract::load("memory")?;
-    contract::run(
-        Arc::new(EphemeralStore::new(Arc::new(contract::config()))),
-        "memory",
-        &inventory::paired(&captured, "memory"),
-    )
-    .await?;
+    for (serial, cases) in inventory::paired(&captured, "memory") {
+        let config = contract::config(serial);
+        contract::run(
+            Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
+            "memory",
+            &cases,
+            config,
+        )
+        .await?;
+    }
     Ok(())
 }
 
 async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult {
     let captured = contract::load(backend)?;
-    let store = fixture::setup(contract::config(), database).await?;
-    contract::run(
-        Arc::new(store),
-        backend,
-        &inventory::paired(&captured, backend),
-    )
-    .await?;
+    for (serial, cases) in inventory::paired(&captured, backend) {
+        let config = contract::config(serial);
+        if serial {
+            let store = fixture::setup_serial(config.clone(), database.clone()).await?;
+            contract::run(Arc::new(store), backend, &cases, config).await?;
+        } else {
+            let store = fixture::setup(config.clone(), database.clone()).await?;
+            contract::run(Arc::new(store), backend, &cases, config).await?;
+        }
+    }
     Ok(())
 }
 

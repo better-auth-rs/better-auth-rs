@@ -50,7 +50,7 @@ fn ownership_predicate(
         value => value,
     };
     Ok(match query.operator {
-        WhereOperator::Eq | WhereOperator::Ne if query.value.is_null() => {
+        WhereOperator::Eq | WhereOperator::Ne if matches!(&query.value, Value::Null) => {
             if query.operator == WhereOperator::Eq {
                 column.is_null()
             } else {
@@ -123,7 +123,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let policy = self.config().advanced.database.generate_id();
         let user = P::DeviceCode::column("user_id")?;
         let client = P::DeviceCode::column("client_id")?;
-        let (mut query, field) = self.model_fields.device_code_ownership_query(ownership)?;
+        let (mut query, field) = self
+            .model_fields
+            .device_code_ownership_query(ownership, policy)?;
         let backend = connection.get_database_backend();
         query.value = field.adapter_input(query.value, backend == DbBackend::Postgres, false)?;
         if backend != DbBackend::Postgres

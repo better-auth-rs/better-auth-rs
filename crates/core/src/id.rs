@@ -132,3 +132,20 @@ pub(crate) fn serial_reference_value(value: serde_json::Value) -> AuthResult<ser
         value => convert(value),
     }
 }
+
+pub(crate) fn serial_reference_query_value(
+    value: serde_json::Value,
+) -> AuthResult<serde_json::Value> {
+    let mut value = serial_reference_value(value)?;
+    // Where conversion uses Number(null), while stored references preserve null.
+    let replace_null = |value: &mut serde_json::Value| {
+        if value.is_null() {
+            *value = serde_json::Value::from(0);
+        }
+    };
+    match &mut value {
+        serde_json::Value::Array(values) => values.iter_mut().for_each(replace_null),
+        value => replace_null(value),
+    }
+    Ok(value)
+}

@@ -252,7 +252,8 @@ pub enum DeviceCodeOwnership {
 }
 
 /// A DeviceCode ownership condition over scope or a declared scalar, array, or JSON field.
-/// Date and reference fields require query representations that preserve their adapter semantics.
+/// String fields that reference `id` support Serial ID generation.
+/// Date fields and other references require query representations that preserve their adapter semantics.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceCodeWhere {
     /// Native `scope`, a registered logical field name, or a configured storage field name.

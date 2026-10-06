@@ -80,15 +80,12 @@ fn inventory() -> BTreeMap<String, Option<&'static str>> {
         "serial-reference-null",
         "serial-reference-candidates",
     ] {
-        add(
-            name.into(),
-            Some("Serial reference conversion remains outside DeviceCodeWhere"),
-        );
+        add(name.into(), None);
     }
     cases
 }
 
-pub(crate) fn paired<'a>(fixture: &'a Fixture, backend: &str) -> Vec<&'a Case> {
+pub(crate) fn paired<'a>(fixture: &'a Fixture, backend: &str) -> Vec<(bool, Vec<&'a Case>)> {
     assert_eq!(fixture.version, "1.7.6");
     assert_eq!(fixture.backend, backend);
     assert_eq!(
@@ -117,15 +114,35 @@ pub(crate) fn paired<'a>(fixture: &'a Fixture, backend: &str) -> Vec<&'a Case> {
         .iter()
         .filter_map(|(name, reason)| reason.map(|reason| (name, reason)))
         .collect::<Vec<_>>();
-    assert_eq!(unpaired.len(), 18);
+    assert_eq!(unpaired.len(), 15);
     eprintln!("Device Where cases that remain unpaired: {unpaired:?}");
     eprintln!(
         "JavaScript Error.name and Rust AuthError identity remain unpaired. Database wrappers retain their Rust diagnostics."
     );
-    let paired = captured
-        .into_iter()
-        .filter(|case| inventory.get(&case.name) == Some(&None))
+    let paired = fixture
+        .groups
+        .iter()
+        .map(|group| {
+            (
+                group.serial,
+                group
+                    .cases
+                    .iter()
+                    .filter(|case| inventory.get(&case.name) == Some(&None))
+                    .collect::<Vec<_>>(),
+            )
+        })
         .collect::<Vec<_>>();
-    assert_eq!(paired.len(), 72);
+    assert_eq!(
+        paired.iter().map(|(_, cases)| cases.len()).sum::<usize>(),
+        75
+    );
+    assert_eq!(
+        paired
+            .iter()
+            .map(|(_, cases)| cases.len())
+            .collect::<Vec<_>>(),
+        [72, 3]
+    );
     paired
 }

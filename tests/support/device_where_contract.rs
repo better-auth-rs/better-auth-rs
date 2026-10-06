@@ -4,6 +4,7 @@ use better_auth_core::{
     AuthRoute, AuthSchema, AuthStore, CreateDeviceCode, CreateUser, DeviceCode,
     DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator,
     error::DatabaseError,
+    id::IdGeneration,
     store::{DeviceCodeStore, schema::EntityRole, transaction},
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform,
@@ -85,11 +86,12 @@ impl<S: AuthSchema> AuthPlugin<S> for Fields {
     }
 }
 
-pub(crate) fn config() -> AuthConfig {
+pub(crate) fn config(serial: bool) -> AuthConfig {
     let mut config = AuthConfig::new("ordinary-device-where-contract-at-least-32-characters")
         .base_url("http://device-where.test");
     config.logger.disabled = Some(true);
     config.telemetry.enabled = false;
+    config.advanced.database.generate_id = serial.then_some(IdGeneration::Serial);
     config
 }
 
@@ -318,16 +320,18 @@ pub(crate) async fn run<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
     cases: &[&Case],
+    config: AuthConfig,
 ) -> AuthResult<()> {
+    let serial = matches!(config.advanced.database.generate_id(), IdGeneration::Serial);
     let trace = Trace::default();
     let storage_trace = Trace::default();
-    let auth = BetterAuth::new(config())
+    let auth = BetterAuth::new(config.clone())
         .store_arc(raw.clone())
         .plugin(DeviceAuthorizationPlugin::new())
         .plugin(Fields(policies(&trace)))
         .build()
         .await?;
-    let reader = BetterAuth::new(config())
+    let reader = BetterAuth::new(config)
         .store_arc(raw)
         .plugin(DeviceAuthorizationPlugin::new())
         .plugin(Fields(policies(&storage_trace)))
@@ -341,6 +345,9 @@ pub(crate) async fn run<S: AuthSchema>(
                 .with_email("owner@device-where.test"),
         )
         .await?;
+    if serial {
+        assert_eq!(owner.id.typed()?, "1", "Serial fixtures start with owner 1");
+    }
     for case in cases {
         let mut additional_fields = Map::new();
         let inputs = case
