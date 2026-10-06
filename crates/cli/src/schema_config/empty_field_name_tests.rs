@@ -69,3 +69,50 @@ fn ordinary_display_columns_match_the_pinned_empty_alias_schema() {
     assert_eq!(generated[0], generated[1]);
     assert!(generated[2].contains("column_name = \" \""));
 }
+
+#[test]
+#[expect(
+    clippy::expect_used,
+    reason = "The CLI must generate the same complete schema for equivalent scope aliases."
+)]
+fn device_scope_empty_alias_uses_the_native_column() {
+    for database in [Database::Sqlite, Database::Postgres, Database::Mysql] {
+        let mut baseline = None;
+        for alias in [
+            None,
+            Some(""),
+            Some("scope"),
+            Some(" "),
+            Some("stored_scope"),
+        ] {
+            let mut field = json!({"type": "string", "required": false});
+            if let Some(alias) = alias {
+                let _ = field
+                    .as_object_mut()
+                    .expect("scope declaration")
+                    .insert("fieldName".into(), json!(alias));
+            }
+            let config: SchemaConfig = serde_json::from_value(json!({
+                "deviceCode": {"additionalFields": {"scope": field}}
+            }))
+            .expect("scope configuration parses");
+            let generated = crate::generate::generate_schema(
+                &["device-authorization".into()],
+                &config,
+                false,
+                IdGeneration::Random,
+                database,
+                Default::default(),
+            );
+            if matches!(alias, Some(" " | "stored_scope")) {
+                assert!(generated.is_err(), "native scope aliases remain restricted");
+            } else {
+                let generated = generated.expect("default scope alias generates");
+                assert_eq!(
+                    &generated,
+                    baseline.get_or_insert_with(|| generated.clone())
+                );
+            }
+        }
+    }
+}

@@ -470,10 +470,7 @@ impl Entity {
                     if entity.role == Some(EntityRole::DeviceCode) && name == "scope" {
                         if !matches!(&field.field_type, FieldType::Name(name) if name == "string")
                             || field.references.is_some()
-                            || field
-                                .field_name
-                                .as_deref()
-                                .is_some_and(|column| column != "scope")
+                            || resolve_field_name(field.field_name.as_deref(), name) != "scope"
                         {
                             return Err("DeviceCode scope requires its ordinary string column without reference or field-name replacement".into());
                         }
