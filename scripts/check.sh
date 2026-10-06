@@ -67,7 +67,10 @@ run_stage() {
         --test schema_join_reference_conflict_tests --test schema_preflight_tests \
         --test fallback_join_tests --test native_core_join_tests \
         --test native_memory_join_tests --test account_owner_batch_tests
-      bun --no-install test ./compat-tests/reference-server/contracts/schema-join-reference.test.ts ./compat-tests/reference-server/contracts/schema-join-reference-conflict.test.ts
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/schema-join-reference.test.ts \
+        ./compat-tests/reference-server/contracts/schema-join-reference-conflict.test.ts \
+        ./compat-tests/reference-server/contracts/schema-join-reference-unknown.test.ts
       ;;
     passkey)
       cargo fmt --all -- --check
@@ -93,7 +96,8 @@ run_stage() {
       ;;
     device-validation)
       cargo fmt --all -- --check
-      cargo clippy --locked -p better-auth-core -p better-auth-api -- -D warnings
+      cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth-cli -- -D warnings
+      cargo test --locked -p better-auth-cli empty_field_name_tests
       cargo test --locked -p better-auth-core -p better-auth-api --lib -- \
         plugin::tests::async_body_dispatch:: \
         openapi::tests:: \
@@ -104,13 +108,15 @@ run_stage() {
         --test openapi_property_order_tests --test openapi_endpoint_key_order_tests \
         --test openapi_rate_limit_model_tests \
         --test device_issuance_tests --test native_endpoint_tests
-      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- device_redemption:: device_ownership::
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
+        device_redemption:: device_ownership:: device_ownership_sets:: device_consumption::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
         ./compat-tests/reference-server/contracts/device-grant.test.ts \
         ./compat-tests/reference-server/contracts/device-grant-metadata.test.ts \
         ./compat-tests/reference-server/contracts/device-request-schema.test.ts \
         ./compat-tests/reference-server/contracts/device-ownership.test.ts \
+        ./compat-tests/reference-server/contracts/device-ownership-set.test.ts \
         ./compat-tests/reference-server/contracts/openapi-property-order.test.ts \
         ./compat-tests/reference-server/contracts/openapi-endpoint-key-order.test.ts \
         ./compat-tests/reference-server/contracts/openapi-rate-limit-model.test.ts \
