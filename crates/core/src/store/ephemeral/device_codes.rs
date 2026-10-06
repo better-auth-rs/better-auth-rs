@@ -4,6 +4,9 @@ use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
 use crate::user_fields::project_adapter_value;
 
+#[path = "device_query.rs"]
+mod query;
+
 #[derive(Clone)]
 pub(super) struct DeviceCodeConsumption {
     pub(super) row: DeviceCode,
@@ -21,48 +24,6 @@ impl DeviceCodeConsumption {
                     live.additional_fields.get(field) == baseline.additional_fields.get(field)
                 }
             })
-    }
-}
-
-fn scalar_equals(actual: Option<&Value>, expected: &Value) -> bool {
-    match (actual, expected) {
-        (None | Some(Value::Null), Value::Null) => true,
-        (Some(Value::Number(actual)), Value::Number(expected)) => {
-            actual.as_f64() == expected.as_f64()
-        }
-        (Some(actual), expected) => actual == expected,
-        _ => false,
-    }
-}
-
-fn field_equals(row: &DeviceCode, field: &str, expected: &Value) -> bool {
-    if field != "scope" {
-        return scalar_equals(row.additional_fields.get(field), expected);
-    }
-    match (&row.scope, expected) {
-        (crate::SchemaValue::Undefined | crate::SchemaValue::Typed(None), Value::Null) => true,
-        (crate::SchemaValue::Typed(Some(actual)), Value::String(expected)) => actual == expected,
-        (crate::SchemaValue::Dynamic(actual), expected) => scalar_equals(Some(actual), expected),
-        _ => false,
-    }
-}
-
-fn field_in(row: &DeviceCode, field: &str, values: &[Value]) -> bool {
-    let contains = |actual: &Value| {
-        values
-            .iter()
-            .any(|expected| scalar_equals(Some(actual), expected))
-    };
-    if field != "scope" {
-        return row.additional_fields.get(field).is_some_and(contains);
-    }
-    match &row.scope {
-        crate::SchemaValue::InvalidDate | crate::SchemaValue::Undefined => false,
-        crate::SchemaValue::Typed(None) => values.iter().any(Value::is_null),
-        crate::SchemaValue::Typed(Some(actual)) => values
-            .iter()
-            .any(|expected| expected.as_str() == Some(actual.as_str())),
-        crate::SchemaValue::Dynamic(actual) => contains(actual),
     }
 }
 
@@ -317,63 +278,27 @@ impl DeviceCodeStore for EphemeralStore {
         expected: &DeviceCode,
         ownership: &crate::DeviceCodeOwnership,
     ) -> AuthResult<Option<DeviceCode>> {
-        let ownership = match ownership {
-            crate::DeviceCodeOwnership::ClientId(client_id) => {
-                crate::DeviceCodeOwnership::ClientId(client_id.clone())
-            }
-            crate::DeviceCodeOwnership::FieldEquals { field, value } => {
-                let (logical, config) = self
-                    .model_fields
-                    .device_code_ownership_field(field, value)?;
-                let value = self.memory_field_query(
-                    self.model_fields.fields(EntityRole::DeviceCode),
-                    logical,
-                    value.clone(),
-                )?;
-                crate::DeviceCodeOwnership::FieldEquals {
-                    field: resolve_field_name(config.field_name.as_deref(), logical).into(),
-                    value: crate::user_query::bind_filter(config, &value)?,
-                }
-            }
-            crate::DeviceCodeOwnership::FieldIn { field, values }
-            | crate::DeviceCodeOwnership::FieldNotIn { field, values } => {
-                let (logical, config) = self
-                    .model_fields
-                    .device_code_ownership_set_field(field, values)?;
-                let values = serde_json::from_value(crate::user_query::bind_filter(
-                    config,
-                    &Value::Array(values.clone()),
-                )?)?;
-                let field = resolve_field_name(config.field_name.as_deref(), logical).into();
-                if matches!(ownership, crate::DeviceCodeOwnership::FieldIn { .. }) {
-                    crate::DeviceCodeOwnership::FieldIn { field, values }
-                } else {
-                    crate::DeviceCodeOwnership::FieldNotIn { field, values }
-                }
-            }
-        };
+        let (mut query, field) = self.model_fields.device_code_ownership_query(ownership)?;
+        query.value = field.adapter_input(query.value, false, false)?;
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
-                let row = state.device_codes.remove_first(|row| {
-                    same_bindings(row, expected)
+                let mut selected = None;
+                // Memory evaluates every row before consumption, including rows with another ID.
+                for row in state.device_codes.snapshot()? {
+                    let matches = query::matches(&row, &query)?;
+                    if selected.is_none()
+                        && same_bindings(&row, expected)
                         && row.user_id.is_some()
                         && row.status == "approved"
-                        && match &ownership {
-                            crate::DeviceCodeOwnership::ClientId(client_id) => matches!(
-                                &row.client_id,
-                                crate::SchemaValue::Typed(Some(actual)) if actual == client_id
-                            ),
-                            crate::DeviceCodeOwnership::FieldEquals { field, value } => {
-                                field_equals(row, field, value)
-                            }
-                            crate::DeviceCodeOwnership::FieldIn { field, values } => {
-                                field_in(row, field, values)
-                            }
-                            crate::DeviceCodeOwnership::FieldNotIn { field, values } => {
-                                !field_in(row, field, values)
-                            }
-                        }
-                })?;
+                        && matches
+                    {
+                        selected = Some(row);
+                    }
+                }
+                let row = match selected {
+                    Some(selected) => state.device_codes.remove_first(|row| row == &selected)?,
+                    None => None,
+                };
                 if let Some(row) = &row
                     && let Some(consumed) = &self.device_code_consumptions
                 {
@@ -384,14 +309,11 @@ impl DeviceCodeStore for EphemeralStore {
                         })?
                         .push(DeviceCodeConsumption {
                             row: row.clone(),
-                            ownership_field: match &ownership {
-                                crate::DeviceCodeOwnership::ClientId(_) => None,
-                                crate::DeviceCodeOwnership::FieldEquals { field, .. }
-                                | crate::DeviceCodeOwnership::FieldIn { field, .. }
-                                | crate::DeviceCodeOwnership::FieldNotIn { field, .. } => {
-                                    Some(field.clone())
-                                }
-                            },
+                            ownership_field: (!matches!(
+                                ownership,
+                                crate::DeviceCodeOwnership::ClientId(_)
+                            ))
+                            .then(|| query.field.clone()),
                         });
                 }
                 Ok(row)

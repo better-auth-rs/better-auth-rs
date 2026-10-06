@@ -247,6 +247,74 @@ pub enum DeviceCodeOwnership {
         /// Null, string, or number candidates. An empty set matches every bound row.
         values: Vec<serde_json::Value>,
     },
+    /// Apply a typed `AND` condition while retaining the selected code and owner bindings.
+    Where(DeviceCodeWhere),
+}
+
+/// A DeviceCode ownership condition over scope or a declared scalar, array, or JSON field.
+/// Date and reference fields require query representations that preserve their adapter semantics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceCodeWhere {
+    /// Native `scope`, a registered logical field name, or a configured storage field name.
+    pub field: String,
+    /// Comparison operator. The default is equality.
+    pub operator: WhereOperator,
+    /// A finite JSON scalar or null. `In` and `NotIn` require flat scalar arrays.
+    /// JSON fields also accept arrays and objects with `Eq` and `Ne`.
+    /// Native array identity cannot be expressed by this value representation.
+    pub value: serde_json::Value,
+    /// String comparison mode. Range comparisons ignore this setting.
+    pub mode: WhereMode,
+}
+
+impl DeviceCodeWhere {
+    /// Construct a case-sensitive equality condition.
+    pub fn new(field: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+        Self {
+            field: field.into(),
+            operator: WhereOperator::Eq,
+            value: value.into(),
+            mode: WhereMode::Sensitive,
+        }
+    }
+}
+
+/// Operators accepted by the upstream adapter's Where condition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WhereOperator {
+    /// Equal to the query value.
+    #[default]
+    Eq,
+    /// Not equal to the query value.
+    Ne,
+    /// Less than the query value.
+    Lt,
+    /// Less than or equal to the query value.
+    Lte,
+    /// Greater than the query value.
+    Gt,
+    /// Greater than or equal to the query value.
+    Gte,
+    /// Included in the query candidates.
+    In,
+    /// Excluded from the query candidates.
+    NotIn,
+    /// Contain the query value with the selected adapter's pattern semantics.
+    Contains,
+    /// Start with the query value with the selected adapter's pattern semantics.
+    StartsWith,
+    /// End with the query value with the selected adapter's pattern semantics.
+    EndsWith,
+}
+
+/// Case handling for string equality, membership, and pattern comparisons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WhereMode {
+    /// Retain the selected adapter's ordinary comparison behavior.
+    #[default]
+    Sensitive,
+    /// Use the selected adapter's case-insensitive string comparison behavior.
+    Insensitive,
 }
 
 /// Input for creating a new device authorization code.

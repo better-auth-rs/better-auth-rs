@@ -105,9 +105,51 @@ The helper authorizes the issuer, enforces the polling interval, updates `lastPo
 
 Set `EndpointContext.transaction` when the caller runs inside an active transaction. The helper uses that transaction for every store operation, including user lookup. `AuthTransaction` exposes the DeviceCode store operations. The default `/device/token` route uses the same helper and creates its session after consumption, using the consumed row's bound user ID.
 
-The ownership condition supports `DeviceCodeOwnership::ClientId(String)`, `FieldEquals { field, value }`, `FieldIn { field, values }`, and `FieldNotIn { field, values }`. `FieldEquals` compares native `scope` without additional registration, or a registered String, Number, or Boolean field using its logical name or mapped column name. Its value can be null, a string, a number, or a Boolean. Register additional fields through a custom plugin or grant.
+### Ownership conditions
 
-`FieldIn` and `FieldNotIn` accept candidate sets for native `scope` and declared String or Number fields. Candidates can be null, strings, or numbers. The shared query conversion runs without field callbacks. A Number candidate set of numeric strings converts only when every candidate parses as a number. Memory compares stored values directly; SQL uses the database's `IN` and `NOT IN` semantics, including null handling. An empty `FieldIn` never matches; an empty `FieldNotIn` adds no field restriction. Reference fields, dates, JSON, stored arrays, other operators, and OR conditions remain unsupported. Every condition retains the original code, client, user, identifier, and approved-status bindings during consumption. Configured grant callbacks use the same consumption path.
+Use `DeviceCodeOwnership::Where(DeviceCodeWhere)` to add one `AND` condition to consumption. Every condition retains the original ID, device code, client, user, and approved-status bindings. The condition cannot select a different code or replace those bindings. Configured grant callbacks and direct transaction calls use the same consumption path.
+
+`DeviceCodeWhere` accepts native `scope` without registration. Other fields must be declared through a custom plugin or grant. Use the logical name or the configured physical column name. Supported field types are String, Number, Boolean, Enum, StringArray, NumberArray, and Json, without references. Use `DeviceCodeOwnership::ClientId` for the native client binding.
+
+For a declared String field named `tenantKey`, return this ownership condition from the redemption authorization callback:
+
+```rust
+use better_auth::prelude::{DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator};
+use serde_json::json;
+
+let ownership = DeviceCodeOwnership::Where(DeviceCodeWhere {
+    field: "tenantKey".into(),
+    operator: WhereOperator::In,
+    value: json!(["fleet", "support"]),
+    mode: WhereMode::Insensitive,
+});
+```
+
+`DeviceCodeWhere::new("scope", "read")` selects `Eq` and `Sensitive`. The available operators are:
+
+| Rust operator | Upstream operator | Query value |
+| --- | --- | --- |
+| `Eq`, `Ne` | `eq`, `ne` | A finite scalar or null; Json fields also accept JSON arrays and objects |
+| `Lt`, `Lte`, `Gt`, `Gte` | `lt`, `lte`, `gt`, `gte` | A finite scalar or null |
+| `In`, `NotIn` | `in`, `not_in` | A flat array of finite scalars or nulls |
+| `Contains`, `StartsWith`, `EndsWith` | `contains`, `starts_with`, `ends_with` | A finite scalar or null |
+
+Here, a scalar is a string, a Boolean, or a finite JSON number. An empty `In` set never matches. An empty `NotIn` set adds no field restriction. Array and Json fields use the selected adapter's stored representation; accepting a field type does not guarantee that every operator succeeds on that backend.
+
+`WhereMode::Sensitive` retains the adapter's ordinary comparison behavior, including SQL collation. `Insensitive` applies to string equality, membership, and pattern comparisons. The query operand must be a string, or every membership candidate must be a string; a mixed candidate set does not enable case folding. Range operators ignore the mode. SQL pattern operators retain `LIKE` semantics, including `%` and `_` wildcards. Memory string patterns use literal substring, prefix, or suffix matching; Memory `Contains` on an array checks membership. Null handling and database type errors also remain specific to the adapter.
+
+Query conversion does not invoke field input or output callbacks. A Number candidate set of numeric strings converts only when every candidate parses as a number. Matching consumption awaits the consumed row's output callbacks. A query error or a condition that matches no row leaves the stored row intact. Rust preserves `AuthError` and database-driver diagnostics; JavaScript `Error.name` identity is not reproduced.
+
+The following predicates remain unsupported:
+
+- Date fields, including ISO-string operands, invalid dates, and JavaScript Date identity.
+- Any field with `references`, including Serial reference conversion.
+- JavaScript `undefined`, `NaN`, or infinity as query values. A Number conversion that produces a non-finite value is also rejected.
+- Array-valued operands outside `In` and `NotIn`, except Json `Eq` and `Ne`. Native array equality based on object identity is not represented.
+- Object-valued operands outside Json `Eq` and `Ne`, or nested arrays and objects inside membership candidate sets.
+- Undeclared fields, other native DeviceCode fields through `Where`, and `OR` or multiple caller-supplied conditions.
+
+The existing `ClientId`, `FieldEquals`, `FieldIn`, and `FieldNotIn` variants remain available with their original input limits. `FieldEquals` accepts `scope` or a declared String, Number, or Boolean field and a scalar or null operand. `FieldIn` and `FieldNotIn` accept `scope` or declared String or Number fields, with null, string, or number candidates. These variants do not accept reference fields.
 
 ## Atomic consumption and transactions
 

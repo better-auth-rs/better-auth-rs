@@ -1,6 +1,6 @@
 use super::*;
-use crate::DeviceCode;
 use crate::user_fields::UserFieldConfig;
+use crate::{DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator};
 
 fn native_name(name: &str) -> bool {
     crate::store::schema::core_fields(EntityRole::DeviceCode)
@@ -40,6 +40,53 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
 }
 
 impl ModelFields {
+    /// Bind one ownership condition without invoking application field callbacks.
+    /// The returned condition uses its physical storage field name.
+    pub fn device_code_ownership_query(
+        &self,
+        ownership: &DeviceCodeOwnership,
+    ) -> AuthResult<(DeviceCodeWhere, &UserFieldConfig)> {
+        static CLIENT_ID: LazyLock<UserFieldConfig> = LazyLock::new(UserFieldConfig::default);
+        let (mut query, logical, field) = match ownership {
+            DeviceCodeOwnership::ClientId(client) => (
+                DeviceCodeWhere::new("clientId", client.clone()),
+                "clientId",
+                &*CLIENT_ID,
+            ),
+            DeviceCodeOwnership::FieldEquals { field, value } => {
+                let (logical, config) = self.device_code_ownership_field(field, value)?;
+                (DeviceCodeWhere::new(field, value.clone()), logical, config)
+            }
+            DeviceCodeOwnership::FieldIn { field, values }
+            | DeviceCodeOwnership::FieldNotIn { field, values } => {
+                let (logical, config) = self.device_code_ownership_set_field(field, values)?;
+                (
+                    DeviceCodeWhere {
+                        field: field.clone(),
+                        operator: if matches!(ownership, DeviceCodeOwnership::FieldIn { .. }) {
+                            WhereOperator::In
+                        } else {
+                            WhereOperator::NotIn
+                        },
+                        value: Value::Array(values.clone()),
+                        mode: WhereMode::Sensitive,
+                    },
+                    logical,
+                    config,
+                )
+            }
+            DeviceCodeOwnership::Where(query) => {
+                let (logical, field) = self.declared_device_code_ownership_field(&query.field)?;
+                validate_query(field, query)?;
+                (query.clone(), logical, field)
+            }
+        };
+        validate_finite_binding(field, &query.value)?;
+        query.value = crate::user_query::bind_filter(field, &query.value)?;
+        query.field = resolve_field_name(field.field_name.as_deref(), logical).to_owned();
+        Ok((query, field))
+    }
+
     fn declared_device_code_ownership_field(
         &self,
         name: &str,
@@ -207,4 +254,69 @@ impl ModelFields {
             .collect();
         Ok(())
     }
+}
+
+fn validate_query(field: &UserFieldConfig, query: &DeviceCodeWhere) -> AuthResult<()> {
+    if field.references.is_some()
+        || !matches!(
+            field.field_type,
+            UserFieldType::String
+                | UserFieldType::Number
+                | UserFieldType::Boolean
+                | UserFieldType::StringArray
+                | UserFieldType::NumberArray
+                | UserFieldType::Json
+                | UserFieldType::Enum(_)
+        )
+    {
+        return Err(AuthError::config(
+            "DeviceCode Where supports scope and declared scalar, array, or JSON fields without references; Date fields require a query representation that preserves adapter semantics",
+        ));
+    }
+    let scalar = |value: &Value| !value.is_array() && !value.is_object();
+    if matches!(query.operator, WhereOperator::In | WhereOperator::NotIn) {
+        if !query
+            .value
+            .as_array()
+            .is_some_and(|values| values.iter().all(scalar))
+        {
+            return Err(AuthError::config(
+                "DeviceCode In and NotIn require flat arrays of finite scalar or null values",
+            ));
+        }
+    } else if !scalar(&query.value)
+        && !(matches!(field.field_type, UserFieldType::Json)
+            && matches!(query.operator, WhereOperator::Eq | WhereOperator::Ne))
+    {
+        return Err(AuthError::config(
+            "DeviceCode Where requires a finite scalar or null operand outside JSON equality and membership; native array and object identity cannot be represented",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_finite_binding(field: &UserFieldConfig, value: &Value) -> AuthResult<()> {
+    if !matches!(field.field_type, UserFieldType::Number) {
+        return Ok(());
+    }
+    let parsed = |value: &Value| {
+        value
+            .as_str()
+            .and_then(crate::organization_fields::numeric_filter)
+    };
+    let nonfinite = match value {
+        Value::String(_) => parsed(value).is_some_and(|number| !number.is_finite()),
+        Value::Array(values) => values
+            .iter()
+            .map(parsed)
+            .collect::<Option<Vec<_>>>()
+            .is_some_and(|values| values.iter().any(|number| !number.is_finite())),
+        _ => false,
+    };
+    if nonfinite {
+        return Err(AuthError::config(
+            "DeviceCode Where cannot represent a non-finite number after query conversion",
+        ));
+    }
+    Ok(())
 }

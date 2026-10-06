@@ -101,6 +101,7 @@ run_stage() {
     device-validation)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth-cli -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test device_where_tests -- -D warnings
       cargo test --locked -p better-auth-cli empty_field_name_tests
       cargo test --locked -p better-auth-core -p better-auth-api --lib -- \
         plugin::tests::async_body_dispatch:: \
@@ -114,7 +115,12 @@ run_stage() {
         --test device_issuance_tests --test native_endpoint_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
         device_redemption:: device_ownership:: device_ownership_sets:: device_consumption::
+      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests live_postgres_ -- --ignored
+      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests live_mysql_ -- --ignored
       bun --no-install test \
+        ./compat-tests/reference-server/contracts/device-where.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-where.test.ts \
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
         ./compat-tests/reference-server/contracts/device-grant.test.ts \
         ./compat-tests/reference-server/contracts/device-grant-metadata.test.ts \

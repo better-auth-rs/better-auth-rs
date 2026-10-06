@@ -3,10 +3,13 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use super::{SeaOrmStore, map_db_err};
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
-use better_auth_core::store::schema::resolve_field_name;
-use better_auth_core::{AuthResult, DeviceCode, DeviceCodeOwnership};
+use better_auth_core::{
+    AuthResult, DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, SchemaValue, WhereMode,
+    WhereOperator, user_fields::UserFieldType,
+};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, sea_query::Condition,
+    ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
+    sea_query::{Condition, ExprTrait, Func, SimpleExpr, extension::postgres::PgExpr},
 };
 use serde_json::Value;
 
@@ -29,6 +32,85 @@ fn candidate(value: Value, numeric: bool) -> sea_orm::Value {
     }
 }
 
+fn ownership_predicate(
+    column: impl ColumnTrait,
+    query: DeviceCodeWhere,
+    numeric: bool,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    let insensitive = query.mode == WhereMode::Insensitive
+        && (query.value.is_string()
+            || query
+                .value
+                .as_array()
+                .is_some_and(|values| values.iter().all(Value::is_string)));
+    let column = column.into_expr();
+    let lower = |value: Value| match value {
+        Value::String(value) if insensitive => Value::String(value.to_lowercase()),
+        value => value,
+    };
+    Ok(match query.operator {
+        WhereOperator::Eq | WhereOperator::Ne if query.value.is_null() => {
+            if query.operator == WhereOperator::Eq {
+                column.is_null()
+            } else {
+                column.is_not_null()
+            }
+        }
+        WhereOperator::Eq | WhereOperator::Ne => {
+            let column = if insensitive {
+                Func::lower(column).into()
+            } else {
+                column
+            };
+            let value = candidate(lower(query.value), numeric);
+            if query.operator == WhereOperator::Eq {
+                column.eq(value)
+            } else {
+                column.ne(value)
+            }
+        }
+        WhereOperator::In | WhereOperator::NotIn => {
+            let column = if insensitive {
+                Func::lower(column).into()
+            } else {
+                column
+            };
+            let values = match query.value {
+                Value::Array(values) => values,
+                value => vec![value],
+            };
+            let values = values
+                .into_iter()
+                .map(|value| candidate(lower(value), numeric));
+            if query.operator == WhereOperator::In {
+                column.is_in(values)
+            } else {
+                column.is_not_in(values)
+            }
+        }
+        WhereOperator::Lt => column.lt(candidate(query.value, numeric)),
+        WhereOperator::Lte => column.lte(candidate(query.value, numeric)),
+        WhereOperator::Gt => column.gt(candidate(query.value, numeric)),
+        WhereOperator::Gte => column.gte(candidate(query.value, numeric)),
+        WhereOperator::Contains | WhereOperator::StartsWith | WhereOperator::EndsWith => {
+            let text = SchemaValue::<Value>::Dynamic(query.value).display_string()?;
+            let pattern = match query.operator {
+                WhereOperator::Contains => format!("%{text}%"),
+                WhereOperator::StartsWith => format!("{text}%"),
+                _ => format!("%{text}"),
+            };
+            if insensitive && backend == DbBackend::Postgres {
+                column.ilike(pattern)
+            } else if insensitive {
+                Func::lower(column).binary(sea_orm::sea_query::BinOper::Like, Func::lower(pattern))
+            } else {
+                column.like(pattern)
+            }
+        }
+    })
+}
+
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
@@ -41,42 +123,21 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let policy = self.config().advanced.database.generate_id();
         let user = P::DeviceCode::column("user_id")?;
         let client = P::DeviceCode::column("client_id")?;
-        let ownership = match ownership {
-            DeviceCodeOwnership::ClientId(client_id) => client.eq(client_id),
-            DeviceCodeOwnership::FieldEquals { field, value } => {
-                let (name, field) = self
-                    .model_fields
-                    .device_code_ownership_field(field, value)?;
-                let value = better_auth_core::user_query::bind_filter(field, value)?;
-                super::value_filter::equals(
-                    P::DeviceCode::column(resolve_field_name(field.field_name.as_deref(), name))?,
-                    &value,
-                )
-            }
-            DeviceCodeOwnership::FieldIn { field, values }
-            | DeviceCodeOwnership::FieldNotIn { field, values } => {
-                let (name, field) = self
-                    .model_fields
-                    .device_code_ownership_set_field(field, values)?;
-                let values: Vec<Value> =
-                    serde_json::from_value(better_auth_core::user_query::bind_filter(
-                        field,
-                        &Value::Array(values.clone()),
-                    )?)?;
-                let numeric = matches!(
-                    field.field_type,
-                    better_auth_core::user_fields::UserFieldType::Number
-                );
-                let values = values.into_iter().map(|value| candidate(value, numeric));
-                let column =
-                    P::DeviceCode::column(resolve_field_name(field.field_name.as_deref(), name))?;
-                if matches!(ownership, DeviceCodeOwnership::FieldIn { .. }) {
-                    column.is_in(values)
-                } else {
-                    column.is_not_in(values)
-                }
-            }
-        };
+        let (mut query, field) = self.model_fields.device_code_ownership_query(ownership)?;
+        let backend = connection.get_database_backend();
+        query.value = field.adapter_input(query.value, backend == DbBackend::Postgres, false)?;
+        if backend != DbBackend::Postgres
+            && matches!(field.field_type, UserFieldType::Boolean)
+            && let Value::Bool(value) = query.value
+        {
+            query.value = Value::from(i64::from(value));
+        }
+        let ownership = ownership_predicate(
+            P::DeviceCode::column(&query.field)?,
+            query,
+            matches!(field.field_type, UserFieldType::Number),
+            backend,
+        )?;
         let filter = Condition::all()
             .add(P::DeviceCode::column("id")?.eq_id(expected.id.typed()?, policy)?)
             .add(P::DeviceCode::column("device_code")?.eq(&expected.device_code))

@@ -19,9 +19,9 @@ pub use super::types_org::{
 };
 pub use super::types_plugin::{
     ApiKey, CreateApiKey, CreateDeviceCode, CreatePasskey, CreateTwoFactor, CreateWalletAddress,
-    DeviceCode, DeviceCodeOwnership, Passkey, PasskeyCredentialState, PasskeyStorage, TwoFactor,
-    TwoFactorStorage, UpdateApiKey, UpdateDeviceCode, UpdatePasskey, UpdatePasskeyAuthentication,
-    UpdateTwoFactor, WalletAddress,
+    DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, Passkey, PasskeyCredentialState,
+    PasskeyStorage, TwoFactor, TwoFactorStorage, UpdateApiKey, UpdateDeviceCode, UpdatePasskey,
+    UpdatePasskeyAuthentication, UpdateTwoFactor, WalletAddress, WhereMode, WhereOperator,
 };
 
 /// HTTP method enumeration

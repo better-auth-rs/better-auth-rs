@@ -12,7 +12,7 @@ use better_auth::plugins::{
     endpoint_context::EndpointContext,
 };
 use better_auth_core::{
-    CreateDeviceCode, DeviceCode, UpdateDeviceCode,
+    CreateDeviceCode, DeviceCode, DeviceCodeWhere, UpdateDeviceCode, WhereMode, WhereOperator,
     store::{AuthTransaction, DeviceCodeStore, transaction},
     wire::UserView,
 };
@@ -50,7 +50,18 @@ enum SetOperator {
 }
 
 impl OwnershipWhere {
-    fn condition(&self) -> DeviceCodeOwnership {
+    fn condition(&self, shared_where: bool) -> DeviceCodeOwnership {
+        if shared_where {
+            return DeviceCodeOwnership::Where(DeviceCodeWhere {
+                field: self.field.clone(),
+                value: Value::Array(self.value.clone()),
+                operator: match self.operator {
+                    SetOperator::In => WhereOperator::In,
+                    SetOperator::NotIn => WhereOperator::NotIn,
+                },
+                mode: WhereMode::Sensitive,
+            });
+        }
         match self.operator {
             SetOperator::In => DeviceCodeOwnership::FieldIn {
                 field: self.field.clone(),
@@ -375,11 +386,15 @@ async fn redeem<S: AuthSchema>(
     }))
 }
 
-async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Case) -> AuthResult<Value> {
+async fn observe<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    case: &Case,
+    shared_where: bool,
+) -> AuthResult<Value> {
     let (auth, observation) = setup(raw, &case.name).await?;
     let before = observation.device(&observation.seeded)?;
     let before_rows = json!([observation.device(&observation.decoy)?, before]);
-    let ownership = case.ownership_where.condition();
+    let ownership = case.ownership_where.condition(shared_where);
     let prepared_tenant = if case.name == "tenant-null-not-in" {
         Value::Null
     } else {
@@ -519,19 +534,31 @@ async fn contract(backend: &str) -> AuthResult<()> {
         CASES
     );
     for (case, expected) in parsed.iter().zip(cases) {
-        let observed = if backend == "memory" {
-            observe(memory(), case).await?
-        } else {
-            let (store, _) = device_fixture::sqlite(config()).await;
-            observe(Arc::new(store), case).await?
-        };
-        assert_eq!(
-            observed,
-            semantic_observation(expected.clone(), &case.ownership_where),
-            "{backend}/{}/{}",
-            case.name,
-            case.mode
-        );
+        for shared_where in [false, true] {
+            if shared_where
+                && !matches!(
+                    case.name.as_str(),
+                    "scope-in-match-after-prepare"
+                        | "tenant-not-in-match-after-prepare"
+                        | "tenant-alias-in-mismatch-after-prepare"
+                )
+            {
+                continue;
+            }
+            let observed = if backend == "memory" {
+                observe(memory(), case, shared_where).await?
+            } else {
+                let (store, _) = device_fixture::sqlite(config()).await;
+                observe(Arc::new(store), case, shared_where).await?
+            };
+            assert_eq!(
+                observed,
+                semantic_observation(expected.clone(), &case.ownership_where),
+                "{backend}/{}/{}/shared_where={shared_where}",
+                case.name,
+                case.mode
+            );
+        }
     }
     Ok(())
 }
