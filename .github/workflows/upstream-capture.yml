@@ -7,11 +7,7 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/api-key-fields-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-name-mapping-capture.mjs
-      - compat-tests/reference-server/contracts/schema-join-reference-field-capture.mjs
-      - compat-tests/reference-server/contracts/device-where-capture.mjs
-      - compat-tests/reference-server/contracts/device-where-scenarios.mjs
+      - compat-tests/reference-server/contracts/schema-join-reference-history-capture.mjs
 
 permissions:
   contents: read
@@ -22,21 +18,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: schema-join-reference-field
-            regression: schema-join-reference-unknown
+          - contract: schema-join-reference-history
+            regression: schema-join-reference-field
             backend: ''
-          - contract: device-where
-            regression: device-ownership-set
-            backend: memory
-          - contract: device-where
-            regression: device-ownership-set
-            backend: sqlite
-          - contract: device-where
-            regression: device-ownership-set
-            backend: postgres
-          - contract: device-where
-            regression: device-ownership-set
-            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
