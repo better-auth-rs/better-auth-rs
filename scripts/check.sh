@@ -73,6 +73,9 @@ run_stage() {
         plugins::oauth::verifier_context_tests:: \
         plugins::oauth::gitlab_issuer_tests:: \
         plugins::oauth::microsoft_tests:: \
+        plugins::oauth::apple_tests:: \
+        plugins::oauth::apple_flow_tests:: \
+        plugins::oauth::tiktok_tests:: \
         plugins::oauth::providers::twitch::tests:: \
         plugins::oauth::signin::override_tests:: \
         plugins::oauth::generic_profile::result_tests::
@@ -85,6 +88,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/google-client-ids.test.ts \
         ./compat-tests/reference-server/contracts/gitlab-issuer.test.ts \
         ./compat-tests/reference-server/contracts/social-microsoft.test.ts \
+        ./compat-tests/reference-server/contracts/apple.test.ts \
+        ./compat-tests/reference-server/contracts/tiktok.test.ts \
         ./compat-tests/reference-server/contracts/twitch-provider.test.ts \
         ./compat-tests/reference-server/contracts/oauth-profile-override.test.ts \
         ./compat-tests/reference-server/contracts/social-refresh-context.test.ts \

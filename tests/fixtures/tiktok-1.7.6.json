@@ -1,0 +1,450 @@
+{
+  "version": "1.7.6",
+  "metadata": {
+    "clientKey": "ordinary-tiktok-key",
+    "clientSecret": "ordinary-tiktok-secret",
+    "callbackURL": "https://app.example.test/callback/tiktok",
+    "codeVerifier": "ordinary-tiktok-verifier-at-least-forty-three-characters",
+    "authorizationEndpoint": "https://www.tiktok.com/v2/auth/authorize",
+    "tokenEndpoint": "https://open.tiktokapis.com/v2/oauth/token/",
+    "profileEndpoint": "https://open.tiktokapis.com/v2/user/info/?fields=open_id,avatar_large_url,display_name,username"
+  },
+  "tokenResponse": {
+    "access_token": "ordinary-access",
+    "refresh_token": "ordinary-refresh",
+    "token_type": "Bearer",
+    "scope": "user.info.basic,user.info.profile"
+  },
+  "authorization": [
+    {
+      "name": "defaults",
+      "options": {},
+      "url": "https://www.tiktok.com/v2/auth/authorize?scope=user.info.profile&response_type=code&client_key=ordinary-tiktok-key&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Ftiktok&state=ordinary-state"
+    },
+    {
+      "name": "merged",
+      "options": {
+        "scope": [
+          "configured",
+          "user.info.profile"
+        ]
+      },
+      "scopes": [
+        "request",
+        "configured"
+      ],
+      "url": "https://www.tiktok.com/v2/auth/authorize?scope=user.info.profile%2Cconfigured%2Cuser.info.profile%2Crequest%2Cconfigured&response_type=code&client_key=ordinary-tiktok-key&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Ftiktok&state=ordinary-state"
+    },
+    {
+      "name": "empty",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": []
+      },
+      "scopes": [],
+      "url": "https://www.tiktok.com/v2/auth/authorize?scope=&response_type=code&client_key=ordinary-tiktok-key&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Ftiktok&state=ordinary-state"
+    },
+    {
+      "name": "configured callback",
+      "options": {
+        "redirectURI": "https://app.example.test/configured-callback",
+        "prompt": "consent",
+        "authorizationEndpoint": "https://unused.example.test/authorize"
+      },
+      "additionalParams": {
+        "request_marker": "ordinary"
+      },
+      "url": "https://www.tiktok.com/v2/auth/authorize?scope=user.info.profile&response_type=code&client_key=ordinary-tiktok-key&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&state=ordinary-state&request_marker=ordinary"
+    },
+    {
+      "name": "additional hint",
+      "options": {},
+      "additionalParams": {
+        "login_hint": "request@example.test",
+        "prompt": "consent"
+      },
+      "url": "https://www.tiktok.com/v2/auth/authorize?scope=user.info.profile&response_type=code&client_key=ordinary-tiktok-key&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Ftiktok&state=ordinary-state&login_hint=request%40example.test&prompt=consent"
+    }
+  ],
+  "grants": [
+    {
+      "name": "defaults",
+      "clientKey": "ordinary-tiktok-key",
+      "clientSecret": "ordinary-tiktok-secret",
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-tiktok-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/callback/tiktok",
+            "client_key": "ordinary-tiktok-key",
+            "client_secret": "ordinary-tiktok-secret"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_key": "ordinary-tiktok-key",
+            "client_secret": "ordinary-tiktok-secret"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "user.info.basic,user.info.profile"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "user.info.basic,user.info.profile"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "user.info.basic,user.info.profile"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "current credentials",
+      "clientKey": "updated-tiktok-key",
+      "clientSecret": "updated-tiktok-secret",
+      "redirectURI": "https://app.example.test/configured-callback",
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-tiktok-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/configured-callback",
+            "client_key": "updated-tiktok-key",
+            "client_secret": "updated-tiktok-secret"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_key": "updated-tiktok-key",
+            "client_secret": "updated-tiktok-secret"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "user.info.basic,user.info.profile"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "user.info.basic,user.info.profile"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "user.info.basic,user.info.profile"
+          ]
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "name": "complete",
+      "mode": "default",
+      "profile": {
+        "data": {
+          "user": {
+            "open_id": "ordinary-tiktok-user",
+            "display_name": "TikTok Reader",
+            "username": "reader",
+            "avatar_large_url": "https://images.example.test/tiktok.png",
+            "email": "reader@example.test"
+          }
+        },
+        "error": {
+          "code": "ok",
+          "message": "",
+          "log_id": "ordinary-log"
+        }
+      },
+      "result": {
+        "user": {
+          "email": "reader@example.test",
+          "name": "TikTok Reader",
+          "image": "https://images.example.test/tiktok.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "user": {
+              "open_id": "ordinary-tiktok-user",
+              "display_name": "TikTok Reader",
+              "username": "reader",
+              "avatar_large_url": "https://images.example.test/tiktok.png",
+              "email": "reader@example.test"
+            }
+          },
+          "error": {
+            "code": "ok",
+            "message": "",
+            "log_id": "ordinary-log"
+          }
+        }
+      },
+      "subject": "ordinary-tiktok-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v2/user/info/",
+          "query": {
+            "fields": "open_id,avatar_large_url,display_name,username"
+          },
+          "authorization": "Bearer ordinary-access"
+        }
+      ],
+      "explicitAccepts": [
+        null
+      ]
+    },
+    {
+      "name": "username fallback",
+      "mode": "default",
+      "profile": {
+        "data": {
+          "user": {
+            "open_id": "ordinary-fallback-user",
+            "display_name": "",
+            "username": "Fallback",
+            "avatar_large_url": null
+          }
+        },
+        "error": {
+          "code": "ok"
+        }
+      },
+      "result": {
+        "user": {
+          "email": "ordinary-fallback-user@tiktok.placeholder.invalid",
+          "name": "Fallback",
+          "image": null,
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "user": {
+              "open_id": "ordinary-fallback-user",
+              "display_name": "",
+              "username": "Fallback",
+              "avatar_large_url": null
+            }
+          },
+          "error": {
+            "code": "ok"
+          }
+        }
+      },
+      "subject": "ordinary-fallback-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v2/user/info/",
+          "query": {
+            "fields": "open_id,avatar_large_url,display_name,username"
+          },
+          "authorization": "Bearer ordinary-access"
+        }
+      ],
+      "explicitAccepts": [
+        null
+      ]
+    },
+    {
+      "name": "empty name",
+      "mode": "default",
+      "profile": {
+        "data": {
+          "user": {
+            "open_id": "ordinary-empty-user",
+            "email": "",
+            "username": ""
+          }
+        }
+      },
+      "result": {
+        "user": {
+          "email": "ordinary-empty-user@tiktok.placeholder.invalid",
+          "name": "",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "user": {
+              "open_id": "ordinary-empty-user",
+              "email": "",
+              "username": ""
+            }
+          }
+        }
+      },
+      "subject": "ordinary-empty-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v2/user/info/",
+          "query": {
+            "fields": "open_id,avatar_large_url,display_name,username"
+          },
+          "authorization": "Bearer ordinary-access"
+        }
+      ],
+      "explicitAccepts": [
+        null
+      ]
+    },
+    {
+      "name": "ignored mapper",
+      "mode": "mapper",
+      "profile": {
+        "data": {
+          "user": {
+            "open_id": "ordinary-tiktok-user",
+            "display_name": "TikTok Reader",
+            "username": "reader",
+            "avatar_large_url": "https://images.example.test/tiktok.png",
+            "email": "reader@example.test"
+          }
+        },
+        "error": {
+          "code": "ok",
+          "message": "",
+          "log_id": "ordinary-log"
+        }
+      },
+      "result": {
+        "user": {
+          "email": "reader@example.test",
+          "name": "TikTok Reader",
+          "image": "https://images.example.test/tiktok.png",
+          "emailVerified": false
+        },
+        "data": {
+          "data": {
+            "user": {
+              "open_id": "ordinary-tiktok-user",
+              "display_name": "TikTok Reader",
+              "username": "reader",
+              "avatar_large_url": "https://images.example.test/tiktok.png",
+              "email": "reader@example.test"
+            }
+          },
+          "error": {
+            "code": "ok",
+            "message": "",
+            "log_id": "ordinary-log"
+          }
+        }
+      },
+      "subject": "ordinary-tiktok-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v2/user/info/",
+          "query": {
+            "fields": "open_id,avatar_large_url,display_name,username"
+          },
+          "authorization": "Bearer ordinary-access"
+        }
+      ],
+      "explicitAccepts": [
+        null
+      ]
+    },
+    {
+      "name": "custom handler",
+      "mode": "custom",
+      "profile": {
+        "data": {
+          "user": {
+            "open_id": "ordinary-tiktok-user",
+            "display_name": "TikTok Reader",
+            "username": "reader",
+            "avatar_large_url": "https://images.example.test/tiktok.png",
+            "email": "reader@example.test"
+          }
+        },
+        "error": {
+          "code": "ok",
+          "message": "",
+          "log_id": "ordinary-log"
+        }
+      },
+      "result": {
+        "user": {
+          "id": "custom-tiktok-user",
+          "name": "Custom",
+          "email": "custom@example.test",
+          "image": null,
+          "emailVerified": true
+        },
+        "data": {
+          "data": {
+            "user": {
+              "open_id": "custom-tiktok-user"
+            }
+          }
+        }
+      },
+      "subject": "custom-tiktok-user",
+      "mapperInputs": [],
+      "calls": [
+        "get"
+      ],
+      "requests": [],
+      "explicitAccepts": []
+    }
+  ]
+}

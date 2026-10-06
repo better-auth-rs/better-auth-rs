@@ -1,0 +1,863 @@
+{
+  "version": "1.7.6",
+  "metadata": {
+    "clientId": "ordinary-client",
+    "clientSecret": "ordinary-client-secret",
+    "callbackURL": "https://app.example.test/callback/apple",
+    "codeVerifier": "ordinary-code-verifier-at-least-forty-three-characters",
+    "issuer": "https://appleid.apple.com",
+    "tokenEndpoint": "https://appleid.apple.com/auth/token",
+    "jwksEndpoint": "https://appleid.apple.com/auth/keys"
+  },
+  "tokenResponse": {
+    "access_token": "ordinary-access",
+    "refresh_token": "ordinary-refresh",
+    "token_type": "Bearer",
+    "scope": "email name"
+  },
+  "authorization": [
+    {
+      "name": "defaults",
+      "options": {},
+      "url": "https://appleid.apple.com/auth/authorize?response_type=code+id_token&client_id=ordinary-client&state=ordinary-state&scope=email+name&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Fapple&response_mode=form_post&code_challenge_method=S256&code_challenge=L5T2uTCjfUNHAM7qTXEA00R9zCq1ATEo1SrQYAW3-Z4"
+    },
+    {
+      "name": "merged scopes",
+      "options": {
+        "scope": [
+          "name",
+          "configured"
+        ]
+      },
+      "scopes": [
+        "request",
+        "configured"
+      ],
+      "url": "https://appleid.apple.com/auth/authorize?response_type=code+id_token&client_id=ordinary-client&state=ordinary-state&scope=email+name+name+configured+request+configured&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Fapple&response_mode=form_post&code_challenge_method=S256&code_challenge=L5T2uTCjfUNHAM7qTXEA00R9zCq1ATEo1SrQYAW3-Z4"
+    },
+    {
+      "name": "empty scopes",
+      "options": {
+        "disableDefaultScope": true,
+        "scope": []
+      },
+      "scopes": [],
+      "url": "https://appleid.apple.com/auth/authorize?response_type=code+id_token&client_id=ordinary-client&state=ordinary-state&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Fapple&response_mode=form_post&code_challenge_method=S256&code_challenge=L5T2uTCjfUNHAM7qTXEA00R9zCq1ATEo1SrQYAW3-Z4"
+    },
+    {
+      "name": "configured endpoints",
+      "options": {
+        "authorizationEndpoint": "https://authorize.example.test/apple?retained=ordinary",
+        "redirectURI": "https://app.example.test/configured-callback",
+        "prompt": "consent"
+      },
+      "url": "https://authorize.example.test/apple?retained=ordinary&response_type=code+id_token&client_id=ordinary-client&state=ordinary-state&scope=email+name&redirect_uri=https%3A%2F%2Fapp.example.test%2Fconfigured-callback&response_mode=form_post&code_challenge_method=S256&code_challenge=L5T2uTCjfUNHAM7qTXEA00R9zCq1ATEo1SrQYAW3-Z4"
+    },
+    {
+      "name": "multiple clients",
+      "options": {
+        "clientId": [
+          "ordinary-client",
+          "ordinary-secondary-client"
+        ]
+      },
+      "url": "https://appleid.apple.com/auth/authorize?response_type=code+id_token&client_id=ordinary-client&state=ordinary-state&scope=email+name&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Fapple&response_mode=form_post&code_challenge_method=S256&code_challenge=L5T2uTCjfUNHAM7qTXEA00R9zCq1ATEo1SrQYAW3-Z4"
+    },
+    {
+      "name": "additional parameters",
+      "options": {},
+      "additionalParams": {
+        "response_mode": "query",
+        "login_hint": "additional@example.test",
+        "prompt": "consent"
+      },
+      "url": "https://appleid.apple.com/auth/authorize?response_type=code+id_token&client_id=ordinary-client&state=ordinary-state&scope=email+name&redirect_uri=https%3A%2F%2Fapp.example.test%2Fcallback%2Fapple&response_mode=query&code_challenge_method=S256&code_challenge=L5T2uTCjfUNHAM7qTXEA00R9zCq1ATEo1SrQYAW3-Z4&login_hint=additional%40example.test&prompt=consent"
+    }
+  ],
+  "grants": [
+    {
+      "name": "defaults",
+      "options": {},
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-code-verifier-at-least-forty-three-characters",
+            "redirect_uri": "https://app.example.test/callback/apple",
+            "client_id": "ordinary-client",
+            "client_secret": "ordinary-client-secret"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-client",
+            "client_secret": "ordinary-client-secret"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "email",
+            "name"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "email name"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "email",
+            "name"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "configured callback and client key",
+      "options": {
+        "redirectURI": "https://app.example.test/configured-callback",
+        "clientKey": "ordinary-client-key"
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "authorization_code",
+            "code": "ordinary-code",
+            "code_verifier": "ordinary-code-verifier-at-least-forty-three-characters",
+            "client_key": "ordinary-client-key",
+            "redirect_uri": "https://app.example.test/configured-callback",
+            "client_id": "ordinary-client",
+            "client_secret": "ordinary-client-secret"
+          }
+        },
+        {
+          "method": "POST",
+          "contentType": "application/x-www-form-urlencoded",
+          "accept": "application/json",
+          "authorization": null,
+          "body": {
+            "grant_type": "refresh_token",
+            "refresh_token": "ordinary-refresh",
+            "client_id": "ordinary-client",
+            "client_secret": "ordinary-client-secret"
+          }
+        }
+      ],
+      "tokens": [
+        {
+          "tokenType": "Bearer",
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "scopes": [
+            "email",
+            "name"
+          ],
+          "raw": {
+            "access_token": "ordinary-access",
+            "refresh_token": "ordinary-refresh",
+            "token_type": "Bearer",
+            "scope": "email name"
+          }
+        },
+        {
+          "accessToken": "ordinary-access",
+          "refreshToken": "ordinary-refresh",
+          "tokenType": "Bearer",
+          "scopes": [
+            "email",
+            "name"
+          ]
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "name": "token name",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "result": {
+        "user": {
+          "name": "Token Name",
+          "emailVerified": true,
+          "email": "apple@example.test"
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "Token Name",
+          "email": "apple@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "callback names",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": "true",
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "user": {
+        "name": {
+          "firstName": "Callback",
+          "lastName": "Name"
+        },
+        "email": "ignored@example.test"
+      },
+      "result": {
+        "user": {
+          "name": "Callback Name",
+          "emailVerified": true,
+          "email": "apple@example.test"
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "Callback Name",
+          "email": "apple@example.test",
+          "email_verified": "true",
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "first name",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": false,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "user": {
+        "name": {
+          "firstName": "First"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "First",
+          "emailVerified": false,
+          "email": "apple@example.test"
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "First",
+          "email": "apple@example.test",
+          "email_verified": false,
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "last name",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": "false",
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "user": {
+        "name": {
+          "lastName": "Last"
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Last",
+          "emailVerified": false,
+          "email": "apple@example.test"
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "Last",
+          "email": "apple@example.test",
+          "email_verified": "false",
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "empty callback name",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "user": {
+        "name": {}
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "emailVerified": true,
+          "email": "apple@example.test"
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "",
+          "email": "apple@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "omitted fields",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "result": {
+        "user": {
+          "name": "",
+          "emailVerified": false
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>",
+          "name": ""
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "null email and trim",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": null,
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "user": {
+        "name": {
+          "firstName": "﻿ Trimmed",
+          "lastName": "Name "
+        }
+      },
+      "result": {
+        "user": {
+          "name": "Trimmed Name",
+          "emailVerified": true,
+          "email": null
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "Trimmed Name",
+          "email": null,
+          "email_verified": true,
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [],
+      "calls": [],
+      "requests": []
+    },
+    {
+      "name": "mapped fields",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "user": {
+        "name": {
+          "firstName": "Before",
+          "lastName": "Mapper"
+        }
+      },
+      "patch": {
+        "name": "Mapped Name",
+        "email": "mapped@example.test",
+        "image": null,
+        "emailVerified": false
+      },
+      "result": {
+        "user": {
+          "name": "Mapped Name",
+          "emailVerified": false,
+          "email": "mapped@example.test",
+          "image": null
+        },
+        "data": {
+          "sub": "ordinary-apple-user",
+          "name": "Before Mapper",
+          "email": "apple@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      },
+      "subject": "ordinary-apple-user",
+      "mapperInputs": [
+        {
+          "sub": "ordinary-apple-user",
+          "name": "Before Mapper",
+          "email": "apple@example.test",
+          "email_verified": true,
+          "picture": "https://images.example.test/ignored.png",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      ],
+      "calls": [
+        "map"
+      ],
+      "requests": []
+    },
+    {
+      "name": "custom handler",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "patch": {
+        "name": "Unused Mapper"
+      },
+      "custom": {
+        "user": {
+          "id": "custom-apple-user",
+          "name": "Custom Name",
+          "email": "custom@example.test",
+          "image": null,
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "custom-apple-user"
+        }
+      },
+      "result": {
+        "user": {
+          "id": "custom-apple-user",
+          "name": "Custom Name",
+          "email": "custom@example.test",
+          "image": null,
+          "emailVerified": true
+        },
+        "data": {
+          "sub": "custom-apple-user"
+        }
+      },
+      "subject": "custom-apple-user",
+      "mapperInputs": [],
+      "calls": [
+        "get"
+      ],
+      "requests": []
+    }
+  ],
+  "verification": [
+    {
+      "name": "primary client",
+      "options": {},
+      "audience": "ordinary-client",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary-client"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "additional client",
+      "options": {
+        "clientId": [
+          "ordinary-client",
+          "ordinary-secondary-client"
+        ]
+      },
+      "audience": "ordinary-secondary-client",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-secondary-client"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary-client",
+        "ordinary-secondary-client"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "bundle",
+      "options": {
+        "appBundleIdentifier": "ordinary.bundle"
+      },
+      "audience": "ordinary.bundle",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary.bundle"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary.bundle"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "explicit audience",
+      "options": {
+        "audience": [
+          "explicit-primary",
+          "explicit-secondary"
+        ],
+        "appBundleIdentifier": "unused.bundle"
+      },
+      "audience": "explicit-secondary",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "explicit-secondary"
+      },
+      "accepted": true,
+      "audiences": [
+        "explicit-primary",
+        "explicit-secondary"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "empty audience uses bundle",
+      "options": {
+        "audience": [],
+        "appBundleIdentifier": "ordinary.bundle"
+      },
+      "audience": "ordinary.bundle",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary.bundle"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary.bundle"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "empty bundle uses client",
+      "options": {
+        "appBundleIdentifier": ""
+      },
+      "audience": "ordinary-client",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary-client"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "exact nonce",
+      "options": {},
+      "audience": "ordinary-client",
+      "nonce": "ordinary-nonce",
+      "claimNonce": "ordinary-nonce",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-nonce"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary-client"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    },
+    {
+      "name": "hashed nonce",
+      "options": {},
+      "audience": "ordinary-client",
+      "nonce": "ordinary-nonce",
+      "claimNonce": "d2f3fba78267a10fe4766cce073aaa7dd84c0b21fc05a07d56f24e26d4a0ddfc",
+      "claims": {
+        "sub": "ordinary-apple-user",
+        "name": "Token Name",
+        "email": "apple@example.test",
+        "email_verified": true,
+        "picture": "https://images.example.test/ignored.png",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client",
+        "nonce": "d2f3fba78267a10fe4766cce073aaa7dd84c0b21fc05a07d56f24e26d4a0ddfc"
+      },
+      "accepted": true,
+      "audiences": [
+        "ordinary-client"
+      ],
+      "requests": [
+        "/auth/keys"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "mode": "direct",
+      "claims": {
+        "sub": "ordinary-flow-user",
+        "name": "Token Name",
+        "email": "apple-flow@example.test",
+        "email_verified": "true",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-flow-nonce"
+      },
+      "userInput": {
+        "name": {
+          "firstName": "Callback",
+          "lastName": "Owner"
+        },
+        "email": "ignored@example.test"
+      },
+      "status": [
+        200
+      ],
+      "location": null,
+      "mapperInputs": [
+        {
+          "sub": "ordinary-flow-user",
+          "name": "Callback Owner",
+          "email": "apple-flow@example.test",
+          "email_verified": "true",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-flow-nonce",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      ],
+      "requests": [
+        "/auth/keys"
+      ],
+      "result": {
+        "name": "Mapped Flow Owner",
+        "email": "apple-flow@example.test",
+        "emailVerified": true,
+        "image": null,
+        "provider": "apple",
+        "subject": "ordinary-flow-user",
+        "accountCount": 1,
+        "sessionCount": 1,
+        "sessionMatchesUser": true
+      }
+    },
+    {
+      "mode": "form_post",
+      "claims": {
+        "sub": "ordinary-flow-user",
+        "name": "Token Name",
+        "email": "apple-flow@example.test",
+        "email_verified": "true",
+        "iss": "https://appleid.apple.com",
+        "aud": "ordinary-client",
+        "nonce": "ordinary-flow-nonce"
+      },
+      "userInput": {
+        "name": {
+          "firstName": "Callback",
+          "lastName": "Owner"
+        },
+        "email": "ignored@example.test"
+      },
+      "status": [
+        200,
+        302,
+        302
+      ],
+      "location": "http://localhost:3000/welcome",
+      "mapperInputs": [
+        {
+          "sub": "ordinary-flow-user",
+          "name": "Callback Owner",
+          "email": "apple-flow@example.test",
+          "email_verified": "true",
+          "iss": "https://appleid.apple.com",
+          "aud": "ordinary-client",
+          "nonce": "ordinary-flow-nonce",
+          "iat": "<issued-at>",
+          "exp": "<expiry>"
+        }
+      ],
+      "requests": [
+        "/auth/token"
+      ],
+      "result": {
+        "name": "Mapped Flow Owner",
+        "email": "apple-flow@example.test",
+        "emailVerified": true,
+        "image": null,
+        "provider": "apple",
+        "subject": "ordinary-flow-user",
+        "accountCount": 1,
+        "sessionCount": 1,
+        "sessionMatchesUser": true
+      }
+    }
+  ]
+}
