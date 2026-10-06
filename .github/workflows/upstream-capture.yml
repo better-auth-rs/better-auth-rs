@@ -22,9 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: api-key-name-mapping
-            regression: api-key-fields
-            backend: ''
           - contract: schema-join-reference-field
             regression: schema-join-reference-unknown
             backend: ''

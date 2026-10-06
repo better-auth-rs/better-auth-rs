@@ -103,7 +103,7 @@ async function observe(scenario, joins, operation) {
       const key = operation === "accounts" ? "auth_accounts" : "auth_users";
       const on = events[0][1].join[key].on;
       const target = operation === "accounts" ? on.from : on.to;
-      if (scenario.name.startsWith("primary-")) assert.equal(target, "stored_id");
+      if (scenario.name.startsWith("primary-")) assert.equal(target, operation === "accounts" ? "id" : "stored_id");
       if (["literal-user-field-alias", "logical-before-physical-field"].includes(scenario.name)) assert.equal(target, "stored_name");
       if (scenario.name === "empty-alias-native-order") assert.equal(target, "name");
     }

@@ -11,7 +11,7 @@ import { deviceWhereScenarios } from "./device-where-scenarios.mjs";
 const version = JSON.parse(readFileSync(new URL("../node_modules/@better-auth/core/package.json", import.meta.url), "utf8")).version;
 assert.equal(version, "1.7.6");
 const fixedDate = "2030-01-02T03:04:05.000Z";
-const expiry = "2100-01-02T03:04:05.000Z";
+const expiry = "2032-01-02T03:04:05.000Z";
 const fieldTypes = { label: "string", quantity: "number", flag: "boolean", moment: "date", labels: "string[]", payload: "json", ownerRef: "string" };
 
 // Tagged observations retain Date, undefined, and non-finite values before JSON serialization.
