@@ -70,6 +70,10 @@ fn result(value: AuthResult<()>) -> Value {
 }
 
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract asserts complete captured results while propagating fixture I/O and decoding errors."
+)]
 fn logical_reference_resolution_matches_the_pinned_adapter_boundary()
 -> Result<(), Box<dyn std::error::Error>> {
     let fixture: Fixture = serde_json::from_slice(&std::fs::read(
@@ -167,6 +171,10 @@ impl AuthSchema for SessionNamedUserSchema {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract asserts schema selection while propagating real database and authentication errors."
+)]
 async fn runtime_join_resolution_uses_secondary_storage_schema_presence()
 -> Result<(), Box<dyn std::error::Error>> {
     for store_session in [false, true] {
