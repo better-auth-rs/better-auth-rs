@@ -58,6 +58,8 @@ async fn secondary_passkey_fields_forward_policies_and_extra_values() -> AuthRes
 async fn passkey_additional_fields_cannot_replace_native_identity_or_credential_columns() {
     for (name, column) in [
         ("credential", None),
+        ("credentialID", None),
+        ("credentialId", None),
         ("userId", None),
         ("counter", None),
         ("label", Some("credential")),
