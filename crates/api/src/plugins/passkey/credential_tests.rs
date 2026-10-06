@@ -30,6 +30,9 @@ use super::{
     webauthn::{VERIFICATION_POLICY, extract_registration_metadata},
 };
 
+#[path = "credential_reopen_tests.rs"]
+mod reopen;
+
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 const ORIGIN: &str = "https://passkey.example";
 const RP_ID: &str = "passkey.example";
@@ -95,7 +98,12 @@ impl Authenticator {
         Ok(serde_json::from_value(response)?)
     }
 
-    fn authenticate(&self, challenge: &[u8], counter: u32) -> TestResult<PublicKeyCredential> {
+    fn authenticate(
+        &self,
+        challenge: &[u8],
+        counter: u32,
+        user_handle: &[u8],
+    ) -> TestResult<PublicKeyCredential> {
         let data = authenticator_data(0x05, counter);
         let client_data = client_data("webauthn.get", challenge)?;
         let mut signer = Signer::new(MessageDigest::sha256(), &self.key)?;
@@ -109,7 +117,7 @@ impl Authenticator {
                 "authenticatorData": URL_SAFE_NO_PAD.encode(data),
                 "clientDataJSON": URL_SAFE_NO_PAD.encode(client_data),
                 "signature": URL_SAFE_NO_PAD.encode(signer.sign_to_vec()?),
-                "userHandle": URL_SAFE_NO_PAD.encode(OWNER)
+                "userHandle": URL_SAFE_NO_PAD.encode(user_handle)
             },
             "clientExtensionResults": {}
         }))?)
@@ -199,8 +207,11 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                     .new_challenge_authenticate_builder(Vec::new(), Some(VERIFICATION_POLICY))?
                     .allow_backup_eligible_upgrade(true);
                 let (options, mut state) = webauthn.generate_challenge_authenticate(builder)?;
-                let authentication =
-                    authenticator.authenticate(options.public_key.challenge.as_ref(), counter)?;
+                let authentication = authenticator.authenticate(
+                    options.public_key.challenge.as_ref(),
+                    counter,
+                    OWNER,
+                )?;
                 state.set_allowed_credentials(vec![stored.cred.clone()]);
                 let result = webauthn.authenticate_credential(&authentication, &state)?;
                 assert_eq!(result.cred_id(), &stored.cred.cred_id);
