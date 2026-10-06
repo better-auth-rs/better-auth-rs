@@ -22,6 +22,49 @@ pub struct SchemaConfiguration {
 }
 
 impl SchemaConfiguration {
+    /// Select persisted model roles and their upstream logical names from the final configuration.
+    pub fn models(&self) -> Vec<(EntityRole, &'static str)> {
+        let mut models = vec![(EntityRole::User, "user")];
+        if self.database_sessions() {
+            models.push((EntityRole::Session, "session"));
+        }
+        models.push((EntityRole::Account, "account"));
+        if self.database_verifications() {
+            models.push((EntityRole::Verification, "verification"));
+        }
+        for name in &self.plugins {
+            match *name {
+                "organization" => {
+                    models.extend([
+                        (EntityRole::Organization, "organization"),
+                        (EntityRole::Member, "member"),
+                        (EntityRole::Invitation, "invitation"),
+                    ]);
+                    if self.metadata_flag("organization.teams_enabled") {
+                        models.extend([
+                            (EntityRole::Team, "team"),
+                            (EntityRole::TeamMember, "teamMember"),
+                        ]);
+                    }
+                    if self.metadata_flag("organization.dynamic_access_control") {
+                        models.push((EntityRole::OrganizationRole, "organizationRole"));
+                    }
+                }
+                "api-key" => models.push((EntityRole::ApiKey, "apikey")),
+                "device-authorization" => models.push((EntityRole::DeviceCode, "deviceCode")),
+                "passkey" => models.push((EntityRole::Passkey, "passkey")),
+                "two-factor" => models.push((EntityRole::TwoFactor, "twoFactor")),
+                "jwt" => models.push((EntityRole::Jwk, "jwks")),
+                "siwe" => models.push((EntityRole::WalletAddress, "walletAddress")),
+                _ => {}
+            }
+        }
+        if self.database_rate_limit {
+            models.push((EntityRole::RateLimit, "rateLimit"));
+        }
+        models
+    }
+
     pub fn database_sessions(&self) -> bool {
         !self.secondary_storage || self.config.session.store_session_in_database()
     }

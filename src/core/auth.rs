@@ -237,10 +237,20 @@ impl<S: AuthSchema> AuthBuilder<S> {
         let mut init_parts = init_context.into_parts();
         let mut context = AuthContext::new(config.clone(), store.clone());
         init_parts.apply_request_runtime(&mut context);
-        let (adapter_config, endpoint_config, model_fields) =
+        let (adapter_config, endpoint_config, mut model_fields) =
             init_parts.plugin_fields.resolve(&config);
         let adapter_fields = adapter_config.user.clone();
         let adapter_config = Arc::new(adapter_config);
+        let rate_limit_config = self.rate_limit_config.unwrap_or_default();
+        let schema_configuration = better_auth_core::store::schema::SchemaConfiguration {
+            config: adapter_config.clone(),
+            plugins: self.plugins.iter().map(|plugin| plugin.name()).collect(),
+            metadata: init_parts.metadata.clone(),
+            secondary_storage: init_parts.secondary_storage.is_some(),
+            database_rate_limit: rate_limit_config.storage
+                == Some(better_auth_core::middleware::RateLimitStorageKind::Database),
+        };
+        model_fields.set_schema_configuration(&schema_configuration);
         let openapi_fields = model_fields.clone();
         let store = store.with_runtime(
             adapter_config.clone(),
@@ -254,16 +264,7 @@ impl<S: AuthSchema> AuthBuilder<S> {
                 adapter_fields,
             ));
 
-        let rate_limit_config = self.rate_limit_config.unwrap_or_default();
-        let schema_check =
-            store.schema_check(&better_auth_core::store::schema::SchemaConfiguration {
-                config: adapter_config.clone(),
-                plugins: self.plugins.iter().map(|plugin| plugin.name()).collect(),
-                metadata: init_parts.metadata.clone(),
-                secondary_storage: init_parts.secondary_storage.is_some(),
-                database_rate_limit: rate_limit_config.storage
-                    == Some(better_auth_core::middleware::RateLimitStorageKind::Database),
-            })?;
+        let schema_check = store.schema_check(&schema_configuration)?;
         let schema_validation =
             schema_check.map(|check| better_auth_core::store::schema::SchemaValidation {
                 check,

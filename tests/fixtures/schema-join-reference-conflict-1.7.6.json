@@ -1,0 +1,1369 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "user-alias-account",
+      "userTable": "account",
+      "accountReference": "account",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-account",
+      "userTable": "account",
+      "accountReference": "account",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-account",
+      "userTable": "account",
+      "accountReference": "account",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-account",
+      "userTable": "account",
+      "accountReference": "account",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-session",
+      "userTable": "session",
+      "accountReference": "session",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-session",
+      "userTable": "session",
+      "accountReference": "session",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-session",
+      "userTable": "session",
+      "accountReference": "session",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-session",
+      "userTable": "session",
+      "accountReference": "session",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-verification",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-verification",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-verification",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "user-alias-verification",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "literal-user-alias",
+      "userTable": "app_users",
+      "accountReference": "app_users",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "app_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-alias",
+      "userTable": "app_users",
+      "accountReference": "app_users",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-alias",
+      "userTable": "app_users",
+      "accountReference": "app_users",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "app_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "literal-user-alias",
+      "userTable": "app_users",
+      "accountReference": "app_users",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "app_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "inactive-plugin-alias",
+      "userTable": "passkey",
+      "accountReference": "passkey",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "passkey",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "inactive-plugin-alias",
+      "userTable": "passkey",
+      "accountReference": "passkey",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "inactive-plugin-alias",
+      "userTable": "passkey",
+      "accountReference": "passkey",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "passkey",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "inactive-plugin-alias",
+      "userTable": "passkey",
+      "accountReference": "passkey",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "passkey": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-user-reference",
+      "userTable": "account",
+      "accountReference": "user",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "account",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-user-reference",
+      "userTable": "account",
+      "accountReference": "user",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-user-reference",
+      "userTable": "account",
+      "accountReference": "user",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "account",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "logical-user-reference",
+      "userTable": "account",
+      "accountReference": "user",
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "account": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-user",
+      "accountTable": "user",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-user",
+      "accountTable": "user",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "user",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-user",
+      "accountTable": "user",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "user": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-user",
+      "accountTable": "user",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "user",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-session",
+      "accountTable": "session",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-session",
+      "accountTable": "session",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "session",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-session",
+      "accountTable": "session",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "session": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-session",
+      "accountTable": "session",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "session",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-verification",
+      "accountTable": "verification",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-verification",
+      "accountTable": "verification",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "verification",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-verification",
+      "accountTable": "verification",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_users",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "verification": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "account-alias-verification",
+      "accountTable": "verification",
+      "userReferences": true,
+      "invalid": false,
+      "userTable": "auth_users",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "verification",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_users": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "session-secondary",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "session",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "session-secondary",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "session-secondary",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "session",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "session-secondary",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "session": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "session-database",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "session-database",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "session-database",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "session-database",
+      "userTable": "session",
+      "accountReference": "session",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "verification-secondary",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "verification",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "verification-secondary",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "verification-secondary",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "verification",
+            "modelKey": "user",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "owner",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "auth_accounts": {
+                "modelKey": "account",
+                "on": {
+                  "from": "id",
+                  "to": "userId"
+                },
+                "limit": 100,
+                "relation": "one-to-many"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "verification-secondary",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": false,
+      "invalid": false,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [
+        [
+          "findOne",
+          {
+            "model": "auth_accounts",
+            "modelKey": "account",
+            "where": [
+              {
+                "operator": "eq",
+                "connector": "AND",
+                "field": "id",
+                "value": "account",
+                "mode": "sensitive"
+              }
+            ],
+            "join": {
+              "verification": {
+                "modelKey": "user",
+                "on": {
+                  "from": "userId",
+                  "to": "id"
+                },
+                "limit": 1,
+                "relation": "one-to-one"
+              }
+            }
+          }
+        ]
+      ],
+      "result": null
+    },
+    {
+      "name": "verification-database",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "verification-database",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": false,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    },
+    {
+      "name": "verification-database",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "accounts",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model account and base model user while performing join operation."
+      }
+    },
+    {
+      "name": "verification-database",
+      "userTable": "verification",
+      "accountReference": "verification",
+      "secondaryStorage": true,
+      "storeCore": true,
+      "invalid": true,
+      "accountTable": "auth_accounts",
+      "joins": true,
+      "operation": "owner",
+      "events": [],
+      "result": {
+        "error": "No foreign key found for model user and base model account while performing join operation."
+      }
+    }
+  ]
+}

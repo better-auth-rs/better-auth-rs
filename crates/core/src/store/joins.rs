@@ -19,10 +19,12 @@ impl AccountOwner {
         config: &AuthConfig,
         user_table: &str,
         account_table: &str,
+        schema_models: &[&str],
     ) -> AuthResult<()> {
         validate_references(
             ("account", account_table, &config.account.field_schema()),
             ("user", user_table, &config.user),
+            schema_models,
         )
     }
 
@@ -58,10 +60,12 @@ impl UserAccounts {
         config: &AuthConfig,
         user_table: &str,
         account_table: &str,
+        schema_models: &[&str],
     ) -> AuthResult<()> {
         validate_references(
             ("user", user_table, &config.user),
             ("account", account_table, &config.account.field_schema()),
+            schema_models,
         )
     }
 
@@ -87,16 +91,21 @@ impl UserAccounts {
 fn validate_references(
     (base, base_table, base_fields): (&str, &str, &UserConfig),
     (model, model_table, model_fields): (&str, &str, &UserConfig),
+    schema_models: &[&str],
 ) -> AuthResult<()> {
     let references = |fields: &UserConfig, target: &str, table: &str| {
         fields
             .fields()
             .values()
             .filter(|field| {
-                field
-                    .references
-                    .as_ref()
-                    .is_some_and(|reference| reference.model == target || reference.model == table)
+                field.references.as_ref().is_some_and(|reference| {
+                    // Upstream resolves active logical names before physical table aliases.
+                    if schema_models.contains(&reference.model.as_str()) {
+                        reference.model == target
+                    } else {
+                        reference.model == table
+                    }
+                })
             })
             .count()
     };

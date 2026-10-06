@@ -16,6 +16,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Default)]
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
+    schema_models: Option<Vec<&'static str>>,
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
@@ -33,6 +34,18 @@ fn optional_string(
 }
 
 impl ModelFields {
+    /// Retain the same active logical models used by runtime schema validation.
+    pub fn set_schema_configuration(&mut self, config: &crate::store::schema::SchemaConfiguration) {
+        self.schema_models = Some(config.models().into_iter().map(|(_, name)| name).collect());
+    }
+
+    /// Read active logical names; raw stores have the four core models by default.
+    pub fn schema_model_names(&self) -> &[&'static str] {
+        self.schema_models
+            .as_deref()
+            .unwrap_or(&["user", "session", "account", "verification"])
+    }
+
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
             EntityRole::ApiKey => api_key::validate_fields(&fields)?,

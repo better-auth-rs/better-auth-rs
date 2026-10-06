@@ -300,6 +300,7 @@ where
             self.config(),
             <S::User as SeaOrmUserModel>::Entity::default().table_name(),
             <S::Account as SeaOrmAccountModel>::Entity::default().table_name(),
+            self.model_fields.schema_model_names(),
         )?;
         let (records, native_users) = if self.config().advanced.database.joins == Some(true) {
             let query = super::joins::joined_query::<

@@ -114,124 +114,74 @@ where
     P: crate::SeaOrmPluginSchema,
 {
     let config = &settings.config;
-    let mut expected = vec![model::<<S::User as SeaOrmUserModel>::Entity>(columns(
-        core_fields(EntityRole::User).iter().map(|field| field.name),
-        &config.user,
-        S::User::field_column,
-        S::User::PLUGIN_FIELDS,
-        S::User::extra_insert_columns(),
-    )?)];
-    if settings.database_sessions() {
-        let fields = UserConfig {
-            additional_fields: config.session.additional_fields.clone(),
-        };
-        expected.push(model::<<S::Session as SeaOrmSessionModel>::Entity>(
-            columns(
-                core_fields(EntityRole::Session)
-                    .iter()
-                    .map(|field| field.name)
-                    .filter(|name| *name != "active" || S::Session::active_column().is_some()),
-                &fields,
-                S::Session::field_column,
-                S::Session::PLUGIN_FIELDS,
-                S::Session::extra_insert_columns(),
-            )?,
-        ));
-    }
-    let fields = UserConfig {
-        additional_fields: Some(config.account.additional_fields.clone()),
-    };
-    expected.push(model::<<S::Account as SeaOrmAccountModel>::Entity>(
-        columns(
-            core_fields(EntityRole::Account)
-                .iter()
-                .map(|field| field.name),
-            &fields,
-            S::Account::field_column,
-            &[],
-            S::Account::extra_insert_columns(),
-        )?,
-    ));
-    if settings.database_verifications() {
-        let fields = UserConfig {
-            additional_fields: Some(config.verification.additional_fields.clone()),
-        };
-        expected.push(
-            model::<<S::Verification as SeaOrmVerificationModel>::Entity>(columns(
-                core_fields(EntityRole::Verification)
-                    .iter()
-                    .map(|field| field.name),
-                &fields,
+    settings
+        .models()
+        .into_iter()
+        .map(|(role, _)| match role {
+            EntityRole::User => Ok(model::<<S::User as SeaOrmUserModel>::Entity>(columns(
+                core_fields(role).iter().map(|field| field.name),
+                &config.user,
+                S::User::field_column,
+                S::User::PLUGIN_FIELDS,
+                S::User::extra_insert_columns(),
+            )?)),
+            EntityRole::Session => Ok(model::<<S::Session as SeaOrmSessionModel>::Entity>(
+                columns(
+                    core_fields(role)
+                        .iter()
+                        .map(|field| field.name)
+                        .filter(|name| *name != "active" || S::Session::active_column().is_some()),
+                    &UserConfig {
+                        additional_fields: config.session.additional_fields.clone(),
+                    },
+                    S::Session::field_column,
+                    S::Session::PLUGIN_FIELDS,
+                    S::Session::extra_insert_columns(),
+                )?,
+            )),
+            EntityRole::Account => Ok(model::<<S::Account as SeaOrmAccountModel>::Entity>(
+                columns(
+                    core_fields(role).iter().map(|field| field.name),
+                    &UserConfig {
+                        additional_fields: Some(config.account.additional_fields.clone()),
+                    },
+                    S::Account::field_column,
+                    &[],
+                    S::Account::extra_insert_columns(),
+                )?,
+            )),
+            EntityRole::Verification => Ok(model::<
+                <S::Verification as SeaOrmVerificationModel>::Entity,
+            >(columns(
+                core_fields(role).iter().map(|field| field.name),
+                &UserConfig {
+                    additional_fields: Some(config.verification.additional_fields.clone()),
+                },
                 S::Verification::field_column,
                 &[],
                 S::Verification::extra_insert_columns(),
-            )?),
-        );
-    }
-    for name in &settings.plugins {
-        match *name {
-            "organization" => {
-                expected.push(organization::<O::Organization>(
-                    EntityRole::Organization,
-                    &organization_fields.organization,
-                )?);
-                expected.push(organization::<O::Member>(
-                    EntityRole::Member,
-                    &organization_fields.member,
-                )?);
-                expected.push(organization::<O::Invitation>(
-                    EntityRole::Invitation,
-                    &organization_fields.invitation,
-                )?);
-                if settings.metadata_flag("organization.teams_enabled") {
-                    expected.push(organization::<O::Team>(
-                        EntityRole::Team,
-                        &organization_fields.team,
-                    )?);
-                    expected.push(organization::<O::TeamMember>(
-                        EntityRole::TeamMember,
-                        &UserConfig::default(),
-                    )?);
-                }
-                if settings.metadata_flag("organization.dynamic_access_control") {
-                    expected.push(organization::<O::OrganizationRole>(
-                        EntityRole::OrganizationRole,
-                        &organization_fields.organization_role,
-                    )?);
-                }
+            )?)),
+            EntityRole::Organization => {
+                organization::<O::Organization>(role, &organization_fields.organization)
             }
-            "api-key" => expected.push(plugin::<P::ApiKey>(
-                EntityRole::ApiKey,
-                model_fields.fields(EntityRole::ApiKey),
-            )?),
-            "device-authorization" => expected.push(plugin::<P::DeviceCode>(
-                EntityRole::DeviceCode,
-                model_fields.fields(EntityRole::DeviceCode),
-            )?),
-            "passkey" => expected.push(plugin::<P::Passkey>(
-                EntityRole::Passkey,
-                model_fields.fields(EntityRole::Passkey),
-            )?),
-            "two-factor" => expected.push(plugin::<P::TwoFactor>(
-                EntityRole::TwoFactor,
-                model_fields.fields(EntityRole::TwoFactor),
-            )?),
-            "jwt" => expected.push(plugin::<P::Jwk>(
-                EntityRole::Jwk,
-                model_fields.fields(EntityRole::Jwk),
-            )?),
-            "siwe" => expected.push(plugin::<P::WalletAddress>(
-                EntityRole::WalletAddress,
-                model_fields.fields(EntityRole::WalletAddress),
-            )?),
-            _ => {}
-        }
-    }
-    if settings.database_rate_limit {
-        expected.push(plugin::<P::RateLimit>(
-            EntityRole::RateLimit,
-            model_fields.fields(EntityRole::RateLimit),
-        )?);
-    }
-    Ok(expected)
+            EntityRole::Member => organization::<O::Member>(role, &organization_fields.member),
+            EntityRole::Invitation => {
+                organization::<O::Invitation>(role, &organization_fields.invitation)
+            }
+            EntityRole::Team => organization::<O::Team>(role, &organization_fields.team),
+            EntityRole::TeamMember => organization::<O::TeamMember>(role, &UserConfig::default()),
+            EntityRole::OrganizationRole => {
+                organization::<O::OrganizationRole>(role, &organization_fields.organization_role)
+            }
+            EntityRole::ApiKey => plugin::<P::ApiKey>(role, model_fields.fields(role)),
+            EntityRole::DeviceCode => plugin::<P::DeviceCode>(role, model_fields.fields(role)),
+            EntityRole::Passkey => plugin::<P::Passkey>(role, model_fields.fields(role)),
+            EntityRole::TwoFactor => plugin::<P::TwoFactor>(role, model_fields.fields(role)),
+            EntityRole::Jwk => plugin::<P::Jwk>(role, model_fields.fields(role)),
+            EntityRole::WalletAddress => {
+                plugin::<P::WalletAddress>(role, model_fields.fields(role))
+            }
+            EntityRole::RateLimit => plugin::<P::RateLimit>(role, model_fields.fields(role)),
+        })
+        .collect()
 }

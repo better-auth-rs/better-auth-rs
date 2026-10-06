@@ -164,7 +164,12 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         provider: &str,
         account_id: &str,
     ) -> AuthResult<Option<crate::store::AccountOwner>> {
-        crate::store::AccountOwner::validate_schema(&self.config, "user", "account")?;
+        crate::store::AccountOwner::validate_schema(
+            &self.config,
+            "user",
+            "account",
+            self.model_fields.schema_model_names(),
+        )?;
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_account_owner(provider, account_id).await;
         }
