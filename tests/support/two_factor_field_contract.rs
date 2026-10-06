@@ -194,6 +194,10 @@ impl<S: AuthSchema> Fixture<S> {
         Ok(json!({"name":name, "events":events, "result":result, "stored":stored}))
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "The fixed fixture dates must parse before the corresponding store operations"
+    )]
     async fn operations(&self) -> AuthResult<Value> {
         let created = self.store.create_two_factor(input(&self.owner)).await?;
         let mut operations = vec![
@@ -229,7 +233,9 @@ impl<S: AuthSchema> Fixture<S> {
                 .await?;
             operations.push(self.observe(name, json!(exchanged)).await?);
         }
-        let deadline = "2030-01-02T03:04:05.123Z".parse()?;
+        let deadline = "2030-01-02T03:04:05.123Z"
+            .parse()
+            .expect("fixed fixture deadline parses");
         for name in ["failure-increment", "failure-lock"] {
             self.store
                 .record_two_factor_failure(&created.id, 2, &|| Ok(deadline))
@@ -241,7 +247,10 @@ impl<S: AuthSchema> Fixture<S> {
             ("reset-guard-success", "2030-01-03T00:00:00.000Z"),
         ] {
             self.store
-                .reset_two_factor_failures(&created.id, Some(cutoff.parse()?))
+                .reset_two_factor_failures(
+                    &created.id,
+                    Some(cutoff.parse().expect("fixed fixture cutoff parses")),
+                )
                 .await?;
             operations.push(self.observe(name, Value::Null).await?);
         }
@@ -314,9 +323,15 @@ impl<S: AuthSchema> Fixture<S> {
         Ok(observation)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "The fixed fixture dates must parse before the corresponding store operations"
+    )]
     async fn boundary(&self, scenario: Scenario) -> AuthResult<Value> {
         let created = self.store.create_two_factor(input(&self.owner)).await?;
-        let deadline = "2030-01-02T03:04:05.123Z".parse()?;
+        let deadline = "2030-01-02T03:04:05.123Z"
+            .parse()
+            .expect("fixed fixture deadline parses");
         self.store
             .record_two_factor_failure(&created.id, 2, &|| Ok(deadline))
             .await?;
@@ -358,7 +373,10 @@ impl<S: AuthSchema> Fixture<S> {
                     ("reset-guard-null", "2030-01-03T00:00:00.000Z")
                 };
                 self.store
-                    .reset_two_factor_failures(&created.id, Some(cutoff.parse()?))
+                    .reset_two_factor_failures(
+                        &created.id,
+                        Some(cutoff.parse().expect("fixed fixture cutoff parses")),
+                    )
                     .await?;
                 let observation = self.observe(name, Value::Null).await?;
                 if before_epoch {
