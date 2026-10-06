@@ -7,8 +7,11 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/schema-join-reference-conflict-capture.mjs
-      - compat-tests/reference-server/contracts/schema-join-reference-unknown-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-fields-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-name-mapping-capture.mjs
+      - compat-tests/reference-server/contracts/schema-join-reference-field-capture.mjs
+      - compat-tests/reference-server/contracts/device-where-capture.mjs
+      - compat-tests/reference-server/contracts/device-where-scenarios.mjs
 
 permissions:
   contents: read
@@ -19,10 +22,46 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: schema-join-reference-unknown
-            regression: schema-join-reference-conflict
+          - contract: api-key-name-mapping
+            regression: api-key-fields
+            backend: ''
+          - contract: schema-join-reference-field
+            regression: schema-join-reference-unknown
+            backend: ''
+          - contract: device-where
+            regression: device-ownership-set
+            backend: memory
+          - contract: device-where
+            regression: device-ownership-set
+            backend: sqlite
+          - contract: device-where
+            regression: device-ownership-set
+            backend: postgres
+          - contract: device-where
+            regression: device-ownership-set
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: ${{ matrix.backend == 'postgres' && 'postgres:18.6' || '' }}
+        env:
+          POSTGRES_USER: better_auth
+          POSTGRES_PASSWORD: better_auth_ci
+          POSTGRES_DB: better_auth_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U better_auth -d better_auth_test"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      mysql:
+        image: ${{ matrix.backend == 'mysql' && 'mysql:8.4.11' || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: better_auth_ci
+          MYSQL_ROOT_HOST: "%"
+        ports: [3306:3306]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbetter_auth_ci --silent"
+          --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
@@ -41,6 +80,9 @@ jobs:
         env:
           CAPTURE_CONTRACT: ${{ matrix.contract }}
           CAPTURE_REGRESSION: ${{ matrix.regression }}
+          CAPTURE_BACKEND: ${{ matrix.backend }}
+          BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
+          BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
         run: |
           set -euo pipefail
           capture_dir="$RUNNER_TEMP/upstream-fixtures"
@@ -48,7 +90,13 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
           bun --no-install test "./compat-tests/reference-server/contracts/$CAPTURE_REGRESSION.test.ts" 2>&1 | tee "$capture_dir/regression.log"
-          bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "$capture_dir/$CAPTURE_CONTRACT-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
+          capture_args=()
+          capture_suffix=""
+          if [[ -n "$CAPTURE_BACKEND" ]]; then
+            capture_args+=("$CAPTURE_BACKEND")
+            capture_suffix="-$CAPTURE_BACKEND"
+          fi
+          bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "${capture_args[@]}" "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -56,7 +104,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-${{ matrix.contract }}-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-${{ matrix.contract }}${{ matrix.backend != '' && format('-{0}', matrix.backend) || '' }}-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14

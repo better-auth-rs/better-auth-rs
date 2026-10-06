@@ -13,7 +13,11 @@ const updatedAt = "2030-01-02T04:04:05.123Z";
 const times = Array.from({ length: 6 }, (_, i) => `2031-02-03T04:05:0${i}.000Z`);
 const json = value => JSON.parse(JSON.stringify(value));
 const callbackValue = value => value === undefined ? { type: "undefined" } : json(value);
-const policies = () => ({
+const policies = nameMapping => ({
+  ...(nameMapping === undefined ? {} : { name: {
+    type: "string", required: false,
+    ...(nameMapping === "default" ? {} : { fieldName: nameMapping === "empty" ? "" : "stored_name" }),
+  } }),
   label: { type: "string", fieldName: "stored_label", required: false, defaultValue: " Default " },
   activatedAt: { type: "date", fieldName: "stored_activation", required: false },
   details: { type: "json", fieldName: "stored_details", required: false },
@@ -24,8 +28,8 @@ const nativeFields = [
   "lastRefillAt", "enabled", "rateLimitEnabled", "rateLimitTimeWindow", "rateLimitMax", "requestCount",
   "remaining", "lastRequest", "expiresAt", "createdAt", "updatedAt", "permissions", "metadata",
 ];
-const input = () => ({
-  name: "Desk", start: null, prefix: null, key: "ordinary-stored-hash", referenceId: "ordinary-owner",
+const input = nameMapping => ({
+  name: nameMapping === undefined ? "Desk" : " Desk ", start: null, prefix: null, key: "ordinary-stored-hash", referenceId: "ordinary-owner",
   configId: "default", refillInterval: 60000, refillAmount: 10, lastRefillAt: null, enabled: true,
   rateLimitEnabled: true, rateLimitTimeWindow: 60000, rateLimitMax: 3, requestCount: 0, remaining: 10,
   lastRequest: null, expiresAt: null, createdAt: new Date(createdAt), updatedAt: new Date(createdAt),
@@ -39,7 +43,8 @@ export const operationNames = [
 ];
 export const failureOperations = ["create", "update", "refill", "decrement", "start-window", "increment-window", "last-request", "updated-at"];
 
-async function withFixture(backend, run) {
+async function withFixture(backend, run, nameMapping) {
+  assert.ok(nameMapping === undefined || ["default", "empty", "renamed"].includes(nameMapping));
   const memory = { user: [], session: [], account: [], verification: [], ordinary_api_key_fields: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const options = fields => ({
@@ -51,13 +56,16 @@ async function withFixture(backend, run) {
     } }],
   });
   try {
-    if (sqlite) await (await getMigrations(options(policies()))).runMigrations();
-    const reader = (await betterAuth(options(policies())).$context).adapter;
+    if (sqlite) await (await getMigrations(options(policies(nameMapping)))).runMigrations();
+    const reader = (await betterAuth(options(policies(nameMapping))).$context).adapter;
     const events = [];
     const errors = { input: new Error("ordinary API Key input error"), output: new Error("ordinary API Key output error") };
     let failure;
-    const fields = Object.fromEntries(Object.entries(policies()).map(([name, field]) => [name, {
+    const fields = Object.fromEntries(Object.entries(policies(nameMapping)).map(([name, field]) => [name, {
       ...field,
+      ...(name === "name" ? {
+        onUpdate() { events.push(["onUpdate", name]); return " Renewed "; },
+      } : {}),
       ...(name === "revision" ? {
         defaultValue() { events.push(["default", name]); return 1.5; },
         onUpdate() { events.push(["onUpdate", name]); return 2.5; },
@@ -65,13 +73,13 @@ async function withFixture(backend, run) {
       transform: {
         input(value) {
           events.push(["input", name, callbackValue(value)]);
-          if (name === "revision" && failure === "input") throw errors.input;
-          return name === "label" && typeof value === "string" ? value.trim() : value;
+          if (name === (nameMapping === undefined ? "revision" : "name") && failure === "input") throw errors.input;
+          return ["name", "label"].includes(name) && typeof value === "string" ? value.trim() : value;
         },
         output(value) {
           events.push(["output", name, callbackValue(value)]);
-          if (name === "label" && failure === "output") throw errors.output;
-          return name === "label" && typeof value === "string" ? `${value}:out` : value;
+          if (name === (nameMapping === undefined ? "label" : "name") && failure === "output") throw errors.output;
+          return ["name", "label"].includes(name) && typeof value === "string" ? `${value}:out` : value;
         },
       },
     }]));
@@ -80,7 +88,7 @@ async function withFixture(backend, run) {
     let expectedUpdatedAt = createdAt;
     const visible = row => {
       if (row === null) return null;
-      assert.deepEqual(Object.keys(row).sort(), [...nativeFields, ...Object.keys(policies())].sort());
+      assert.deepEqual(Object.keys(row).sort(), [...new Set([...nativeFields, ...Object.keys(policies(nameMapping))])].sort());
       assert.equal(typeof row.id, "string");
       assert.ok(row.id.length > 0);
       if (identity === undefined) identity = row.id;
@@ -98,19 +106,36 @@ async function withFixture(backend, run) {
     const stored = async () => {
       const rows = await reader.findMany({ model: "apikey", where: [{ field: "referenceId", value: "ordinary-owner" }] });
       assert.ok(rows.length <= 1);
+      if (nameMapping !== undefined) {
+        const column = nameMapping === "renamed" ? "stored_name" : "name";
+        const physical = sqlite ? sqlite.query("SELECT * FROM ordinary_api_key_fields").all() : memory.ordinary_api_key_fields;
+        assert.equal(physical.length, rows.length);
+        if (sqlite) {
+          const columns = sqlite.query("PRAGMA table_info(ordinary_api_key_fields)").all().map(column => column.name);
+          assert.equal(columns.includes(column), true);
+          if (nameMapping === "renamed") assert.equal(columns.includes("name"), false);
+        }
+        for (const row of rows) {
+          const raw = physical.find(raw => raw.id === row.id);
+          assert.ok(raw);
+          assert.equal(Object.hasOwn(raw, column), true);
+          assert.equal(raw[column], row.name);
+          if (nameMapping === "renamed") assert.equal(Object.hasOwn(raw, "name"), false);
+        }
+      }
       return rows.map(visible);
     };
     const execute = async (operation, id) => {
       const model = "apikey";
       const where = [{ field: "id", value: id }];
       const date = index => new Date(times[index]);
-      if (operation === "create") return [await adapter.create({ model, data: input() })];
+      if (operation === "create") return [await adapter.create({ model, data: input(nameMapping) })];
       if (operation === "get-id") return [await adapter.findOne({ model, where })];
       if (operation === "get-hash") return [await adapter.findOne({ model, where: [{ field: "key", value: "ordinary-stored-hash" }] })];
       if (operation === "list") return await adapter.findMany({ model, where: [{ field: "referenceId", value: "ordinary-owner" }] });
       if (operation === "update") {
         if (failure !== "input") expectedUpdatedAt = updatedAt;
-        return [await adapter.update({ model, where, update: { name: "Desk-renamed", label: " Revised ", updatedAt: new Date(updatedAt) } })];
+        return [await adapter.update({ model, where, update: { name: nameMapping === undefined ? "Desk-renamed" : " Desk-renamed ", label: " Revised ", updatedAt: new Date(updatedAt) } })];
       }
       if (operation === "last-request") return [await adapter.update({ model, where, update: { lastRequest: date(4) } })];
       if (operation === "updated-at") {
@@ -146,7 +171,7 @@ async function withFixture(backend, run) {
   }
 }
 
-async function captureOperations(backend) {
+export async function captureApiKeyFieldOperations(backend, nameMapping) {
   return await withFixture(backend, async ({ execute, visible, stored, events, setFailure }) => {
     const operations = [];
     let id;
@@ -167,10 +192,10 @@ async function captureOperations(backend) {
       operations.push(observation);
     }
     return operations;
-  });
+  }, nameMapping);
 }
 
-async function captureFailure(backend, operation, phase) {
+export async function captureApiKeyFieldFailure(backend, operation, phase, nameMapping) {
   return await withFixture(backend, async ({ execute, stored, events, errors, setFailure }) => {
     let id;
     if (operation !== "create") id = (await execute("create"))[0].id;
@@ -189,16 +214,16 @@ async function captureFailure(backend, operation, phase) {
     if (phase === "input") assert.deepEqual(persisted, before);
     else assert.equal(persisted.length, 1);
     return { name: `${operation}-${phase}-error`, events: events.splice(0), result: { sameError, message: errors[phase].message }, stored: persisted };
-  });
+  }, nameMapping);
 }
 
 export async function captureApiKeyFields() {
   const backends = [];
   for (const backend of ["memory", "sqlite"]) {
-    const operations = await captureOperations(backend);
+    const operations = await captureApiKeyFieldOperations(backend);
     const failures = [];
     for (const operation of failureOperations) {
-      for (const phase of operation === "decrement" ? ["output"] : ["input", "output"]) failures.push(await captureFailure(backend, operation, phase));
+      for (const phase of operation === "decrement" ? ["output"] : ["input", "output"]) failures.push(await captureApiKeyFieldFailure(backend, operation, phase));
     }
     backends.push({ backend, operations, failures });
   }
