@@ -42,6 +42,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
         serde_json::from_str(include_str!("../fixtures/account-lockout-clock-1.7.6.json"))?;
     let factor = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: "ordinary-clock".into(),
             secret: "ordinary-secret".into(),
             backup_codes: "ordinary-codes".into(),
@@ -91,6 +92,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
 
     let factor = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: "ordinary-deadline-error".into(),
             secret: "ordinary-secret".into(),
             backup_codes: "ordinary-codes".into(),

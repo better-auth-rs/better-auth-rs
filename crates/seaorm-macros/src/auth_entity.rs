@@ -63,29 +63,28 @@ fn found_crate_tokens(name: &str) -> Option<TokenStream> {
     }
 }
 
-fn resolve_roots() -> (TokenStream, TokenStream) {
+fn resolve_roots() -> syn::Result<(TokenStream, TokenStream)> {
     if let Some(better_auth_root) = found_crate_tokens("better-auth") {
-        return (
+        return Ok((
             quote!(#better_auth_root::seaorm),
             quote!(#better_auth_root::__private_core),
-        );
+        ));
     }
-
-    match crate_name("better-auth-seaorm") {
-        Ok(FoundCrate::Itself) => (quote!(crate), quote!(crate::__private_core)),
-        _ => (
-            syn::Error::new(
-                Span::call_site(),
-                "AuthEntity must be used through better_auth::seaorm with the `seaorm2` feature enabled",
-            )
-            .to_compile_error(),
-            quote!(::core::compile_error!("unreachable")),
-        ),
+    if let Some(seaorm_root) = found_crate_tokens("better-auth-seaorm") {
+        let core_root = quote!(#seaorm_root::__private_core);
+        return Ok((seaorm_root, core_root));
     }
+    Err(syn::Error::new(
+        Span::call_site(),
+        "AuthEntity requires better-auth with the `seaorm2` feature or a direct better-auth-seaorm dependency",
+    ))
 }
 
 pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
-    let (seaorm_root, core_root) = resolve_roots();
+    let (seaorm_root, core_root) = match resolve_roots() {
+        Ok(roots) => roots,
+        Err(error) => return error.to_compile_error(),
+    };
     let options = match parse_options(input) {
         Ok(options) => options,
         Err(err) => return err.to_compile_error(),

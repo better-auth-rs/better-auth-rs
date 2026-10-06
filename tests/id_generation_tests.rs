@@ -314,6 +314,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
     assert_eq!(device.device_code, "credential");
     let two_factor = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: user.id.typed().unwrap().clone(),
             secret: "secret".into(),
             backup_codes: "[]".into(),

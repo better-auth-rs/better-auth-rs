@@ -247,6 +247,7 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
     let owner = user.id.typed().unwrap();
     let factor = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: owner.clone(),
             secret: "secret".into(),
             backup_codes: "codes".into(),

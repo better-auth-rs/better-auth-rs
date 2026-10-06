@@ -1,4 +1,73 @@
+use super::rows::RowRef;
 use super::*;
+use crate::store::schema::{EntityRole, resolve_field_name};
+use crate::user_fields::project_adapter_value;
+
+impl EphemeralStore {
+    async fn prepare_two_factor_fields(
+        &self,
+        fields: Map<String, Value>,
+        create: bool,
+    ) -> AuthResult<Map<String, Value>> {
+        self.model_fields
+            .fields(EntityRole::TwoFactor)
+            .storage_fields_with_binding(fields, create, |_, field, value| {
+                self.memory_plugin_field_input(field, value)
+            })
+            .await
+    }
+
+    async fn project_two_factor(
+        &self,
+        mut snapshot: TwoFactor,
+        source: RowRef<TwoFactor>,
+    ) -> AuthResult<TwoFactor> {
+        let mut output = Map::new();
+        for (name, field) in self.model_fields.fields(EntityRole::TwoFactor).fields() {
+            let value = source.read(|row| {
+                Ok(row
+                    .additional_fields
+                    .get(resolve_field_name(field.field_name.as_deref(), name))
+                    .cloned())
+            })?;
+            if let Some(value) = project_adapter_value(value, field, field.references_id(), true)
+                .await?
+                .json()?
+            {
+                let _ = output.insert(name.to_owned(), value);
+            }
+        }
+        snapshot.additional_fields = output;
+        Ok(snapshot)
+    }
+
+    async fn write_two_factor_row(
+        &self,
+        operation: &str,
+        predicate: impl Fn(&TwoFactor) -> bool + Send,
+        write: impl FnOnce(&mut TwoFactor) + Send,
+    ) -> AuthResult<Option<TwoFactor>> {
+        let selected = self
+            .raw("twoFactor", operation, |state| {
+                state
+                    .two_factors
+                    .first_ref(predicate)?
+                    .map(|source| {
+                        let snapshot = source.write(|factor| {
+                            write(factor);
+                            Ok(factor.clone())
+                        })?;
+                        Ok((snapshot, source))
+                    })
+                    .transpose()
+            })
+            .await?;
+        match selected {
+            Some((snapshot, source)) => self.project_two_factor(snapshot, source).await.map(Some),
+            None => Ok(None),
+        }
+    }
+}
 
 #[async_trait]
 impl TwoFactorStore for EphemeralStore {
@@ -7,22 +76,25 @@ impl TwoFactorStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: crate::types::UpdateTwoFactor,
     ) -> AuthResult<TwoFactor> {
-        self.raw("twoFactor", "update", |state| {
-            let Some(mut factor) = state.two_factors.get_mut(id)? else {
-                return Ok(None);
-            };
-            if let Some(secret) = update.secret {
-                factor.secret = secret;
-            }
-            if let Some(codes) = update.backup_codes {
-                factor.backup_codes = codes;
-            }
-            if let Some(verified) = update.verified {
-                factor.verified = Some(verified);
-            }
-            factor.updated_at = Utc::now().into();
-            Ok(Some(factor.clone()))
-        })
+        let fields = self
+            .prepare_two_factor_fields(update.additional_fields, false)
+            .await?;
+        self.write_two_factor_row(
+            "update",
+            |factor| factor.id == *id,
+            |factor| {
+                if let Some(secret) = update.secret {
+                    factor.secret = secret;
+                }
+                if let Some(codes) = update.backup_codes {
+                    factor.backup_codes = codes;
+                }
+                if let Some(verified) = update.verified {
+                    factor.verified = Some(verified);
+                }
+                factor.additional_fields.extend(fields);
+            },
+        )
         .await?
         .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))
     }
@@ -32,19 +104,17 @@ impl TwoFactorStore for EphemeralStore {
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
-        self.raw("twoFactor", "incrementOne", |state| {
-            let Some(mut factor) = state
-                .two_factors
-                .get_mut(id)?
-                .filter(|factor| factor.backup_codes == previous)
-            else {
-                return Ok(false);
-            };
-            factor.backup_codes = replacement.to_owned();
-            factor.updated_at = Utc::now().into();
-            Ok(true)
-        })
+        let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+        self.write_two_factor_row(
+            "incrementOne",
+            |factor| factor.id == *id && factor.backup_codes == previous,
+            |factor| {
+                factor.backup_codes = replacement.to_owned();
+                factor.additional_fields.extend(fields);
+            },
+        )
         .await
+        .map(|row| row.is_some())
     }
     async fn record_two_factor_failure(
         &self,
@@ -53,27 +123,35 @@ impl TwoFactorStore for EphemeralStore {
         locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<Utc>> + Send + Sync),
     ) -> AuthResult<()> {
         let failures = self
-            .raw("twoFactor", "incrementOne", |state| {
-                Ok(state.two_factors.get_mut(id)?.map_or(0, |mut factor| {
+            .write_two_factor_row(
+                "incrementOne",
+                |factor| factor.id == *id,
+                |factor| {
                     let failures = factor.failed_verification_count.unwrap_or(0) + 1;
                     factor.failed_verification_count = Some(failures);
-                    failures
-                }))
-            })
-            .await?;
+                },
+            )
+            .await?
+            .and_then(|factor| factor.failed_verification_count)
+            .unwrap_or(0);
         if failures >= max_attempts {
             let locked_until = locked_until()?;
-            self.raw("twoFactor", "incrementOne", |state| {
-                if let Some(mut factor) = state.two_factors.get_mut(id)?.filter(|factor| {
-                    factor
-                        .failed_verification_count
-                        .is_some_and(|failures| failures >= max_attempts)
-                }) {
-                    factor.locked_until = Some(locked_until);
-                }
-                Ok(())
-            })
-            .await?;
+            let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+            let _ = self
+                .write_two_factor_row(
+                    "incrementOne",
+                    |factor| {
+                        factor.id == *id
+                            && factor
+                                .failed_verification_count
+                                .is_some_and(|failures| failures >= max_attempts)
+                    },
+                    |factor| {
+                        factor.locked_until = Some(locked_until);
+                        factor.additional_fields.extend(fields);
+                    },
+                )
+                .await?;
         }
         Ok(())
     }
@@ -82,29 +160,38 @@ impl TwoFactorStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         locked_before: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
-        self.raw(
-            "twoFactor",
-            if locked_before.is_some() {
-                "incrementOne"
-            } else {
-                "update"
-            },
-            |state| {
-                if let Some(mut factor) = state.two_factors.get_mut(id)?.filter(|factor| {
-                    locked_before.is_none_or(|before| {
-                        factor.locked_until.is_some_and(|until| until <= before)
-                    })
-                }) {
+        let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let _ = self
+            .write_two_factor_row(
+                if locked_before.is_some() {
+                    "incrementOne"
+                } else {
+                    "update"
+                },
+                |factor| {
+                    factor.id == *id
+                        && locked_before.is_none_or(|before| {
+                            // The upstream Memory adapter compares a null lock as epoch zero.
+                            factor
+                                .locked_until
+                                .map_or(before.timestamp_millis() >= 0, |until| until <= before)
+                        })
+                },
+                |factor| {
                     factor.failed_verification_count = Some(0);
                     factor.locked_until = None;
-                }
-                Ok(())
-            },
-        )
-        .await
+                    factor.additional_fields.extend(fields);
+                },
+            )
+            .await?;
+        Ok(())
     }
     async fn create_two_factor(&self, input: CreateTwoFactor) -> AuthResult<TwoFactor> {
+        let additional_fields = self
+            .prepare_two_factor_fields(input.additional_fields, true)
+            .await?;
         let factor = TwoFactor {
+            additional_fields,
             id: self
                 .generated_id("twoFactor", None, self.lock()?.two_factors.len())?
                 .map(crate::SchemaValue::Typed)
@@ -115,42 +202,49 @@ impl TwoFactorStore for EphemeralStore {
             verified: Some(input.verified),
             failed_verification_count: Some(0),
             locked_until: None,
-            created_at: Utc::now().into(),
-            updated_at: Utc::now().into(),
+            created_at: crate::SchemaValue::Undefined,
+            updated_at: crate::SchemaValue::Undefined,
         };
-        self.raw("twoFactor", "create", |state| {
-            state.two_factors.push(factor.clone());
-            Ok(factor)
-        })
-        .await
+        let (snapshot, source) = self
+            .raw("twoFactor", "create", |state| {
+                let source = state.two_factors.push_ref(factor.clone());
+                Ok((factor, source))
+            })
+            .await?;
+        self.project_two_factor(snapshot, source).await
     }
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
-        self.raw("twoFactor", "findOne", |state| {
-            Ok(state
-                .two_factors
-                .snapshot()?
-                .iter()
-                .find(|factor| factor.user_id == user_id)
-                .cloned())
-        })
-        .await
+        let selected = self
+            .raw("twoFactor", "findOne", |state| {
+                state
+                    .two_factors
+                    .first_ref(|factor| factor.user_id == user_id)?
+                    .map(|source| {
+                        let snapshot = source.read(|factor| Ok(factor.clone()))?;
+                        Ok((snapshot, source))
+                    })
+                    .transpose()
+            })
+            .await?;
+        match selected {
+            Some((snapshot, source)) => self.project_two_factor(snapshot, source).await.map(Some),
+            None => Ok(None),
+        }
     }
     async fn update_two_factor_backup_codes(
         &self,
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        self.raw("twoFactor", "update", |state| {
-            let Some(mut factor) = state
-                .two_factors
-                .find_mut(|factor| factor.user_id == user_id)?
-            else {
-                return Ok(None);
-            };
-            factor.backup_codes = backup_codes.to_owned();
-            factor.updated_at = Utc::now().into();
-            Ok(Some(factor.clone()))
-        })
+        let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+        self.write_two_factor_row(
+            "update",
+            |factor| factor.user_id == user_id,
+            |factor| {
+                factor.backup_codes = backup_codes.to_owned();
+                factor.additional_fields.extend(fields);
+            },
+        )
         .await?
         .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))
     }
@@ -174,6 +268,7 @@ mod tests {
         let store = EphemeralStore::default();
         let factor = store
             .create_two_factor(CreateTwoFactor {
+                additional_fields: Default::default(),
                 user_id: "owner".to_owned(),
                 secret: "encrypted-secret".to_owned(),
                 backup_codes: "encrypted-codes".to_owned(),

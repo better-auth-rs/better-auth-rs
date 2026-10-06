@@ -1276,6 +1276,7 @@ async fn check_two_factor_operations(
 ) -> AuthResult<()> {
     let factor = store
         .create_two_factor(better_auth_core::CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: "owner".into(),
             secret: "secret".into(),
             backup_codes: "codes".into(),

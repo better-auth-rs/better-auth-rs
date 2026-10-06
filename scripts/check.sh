@@ -47,7 +47,8 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib two_factor
-      cargo test --locked --features axum,seaorm2,redis-cache --test observability_tests --test two_factor_cookie_duration_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test observability_tests --test two_factor_cookie_duration_tests --test two_factor_additional_fields_tests
+      bun --no-install test ./compat-tests/reference-server/contracts/two-factor-fields.test.ts
       COMPAT_TEST_PROFILE=native-two-factor cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 phase11_client_compat phase12_client_compat configuration_client_compat
       ;;

@@ -10,6 +10,7 @@ use syn::{DeriveInput, parse_macro_input};
 ///
 /// # Usage
 ///
+/// Import `AuthEntity` from `better_auth::seaorm` or directly from `better_auth_seaorm`.
 /// Annotate a SeaORM `Model` struct with `#[derive(AuthEntity)]` and
 /// `#[auth(role = "...")]`. Core roles are `user`, `session`, `account`, and `verification`.
 /// Organization roles are `organization`, `member`, `invitation`, `team`, `team_member`, and `organization_role`.

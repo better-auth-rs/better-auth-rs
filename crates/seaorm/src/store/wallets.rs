@@ -150,6 +150,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             value.additional_fields,
             self.config().advanced.database.generate_id(),
             connection.get_database_backend(),
+            true,
         )
         .await?;
         super::plugin_models::apply::<P::WalletAddress>(

@@ -297,6 +297,7 @@ async fn test_view_backup_codes_returns_decrypted_codes() {
     _ = ctx
         .database
         .create_two_factor(better_auth_core::CreateTwoFactor {
+            additional_fields: Default::default(),
             verified: true,
             user_id: user.id.typed().unwrap().clone(),
             secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),
@@ -321,6 +322,7 @@ async fn test_view_backup_codes_rejects_invalid_stored_json() {
     _ = ctx
         .database
         .create_two_factor(better_auth_core::CreateTwoFactor {
+            additional_fields: Default::default(),
             verified: true,
             user_id: user.id.typed().unwrap().clone(),
             secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),

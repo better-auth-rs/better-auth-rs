@@ -29,7 +29,7 @@ Passkey `name`/`aaguid` and API Key `name` preserve omitted and null display val
 
 Generate Passkey storage with `--plugins passkey` for the 11 standard columns, or add `--passkey-legacy-schema` to retain opaque credential storage. Bind the generated `AppPluginSchema`; see [Passkey storage modes](docs/content/docs/plugins/passkey.mdx#storage-modes) for typed inputs and application-owned migrations.
 
-Generate TwoFactor storage with `--plugins two-factor` for the seven upstream columns and nullable verification fields. Use `--two-factor-legacy-schema` when regenerating the previous schema; see [TwoFactor storage](docs/content/docs/plugins/two-factor.mdx#storage).
+Generate TwoFactor storage with `--plugins two-factor` for the seven upstream columns and nullable verification fields. Use `--two-factor-legacy-schema` when regenerating the previous schema. Declare application columns with `twoFactor.additionalFields` and register matching runtime policies; see [TwoFactor storage](docs/content/docs/plugins/two-factor.mdx#storage) for the public `additional_fields` maps.
 
 API Key expiration configuration accepts fractional seconds for its default and fractional days for its bounds; see [API Key configuration](docs/content/docs/plugins/api-key.mdx#expiration-configuration) for units and the floating-point field migration.
 

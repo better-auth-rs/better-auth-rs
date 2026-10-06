@@ -38,6 +38,9 @@ pub struct TwoFactor {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(serialize_with = "crate::schema_value::serialize_date")]
     pub updated_at: SchemaValue<DateTime<Utc>>,
+    /// Declared application fields after adapter output projection.
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Two-factor persistence representation selected by the model.
@@ -52,6 +55,8 @@ pub enum TwoFactorStorage {
 /// Two-factor authentication creation data.
 #[derive(Debug, Clone)]
 pub struct CreateTwoFactor {
+    /// Declared application fields before adapter input policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub user_id: String,
     pub secret: String,
     pub backup_codes: String,
@@ -62,6 +67,8 @@ pub struct CreateTwoFactor {
 /// Fields changed when an existing authenticator enrollment is completed or replaced.
 #[derive(Debug, Default)]
 pub struct UpdateTwoFactor {
+    /// Declared application fields to update; omitted keys retain their stored values.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     /// Replacement encrypted authenticator secret.
     pub secret: Option<String>,
     /// Replacement encrypted backup codes.
@@ -341,6 +348,9 @@ pub struct UpdateApiKey {
 }
 
 impl AuthTwoFactor for TwoFactor {
+    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
@@ -373,6 +383,7 @@ impl AuthTwoFactor for TwoFactor {
 impl<T: AuthTwoFactor> From<&T> for TwoFactor {
     fn from(two_factor: &T) -> Self {
         Self {
+            additional_fields: two_factor.additional_fields().cloned().unwrap_or_default(),
             id: two_factor.id().into_owned(),
             secret: two_factor.secret().to_owned(),
             backup_codes: two_factor.backup_codes().to_owned(),

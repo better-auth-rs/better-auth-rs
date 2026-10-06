@@ -120,3 +120,53 @@ fn invalid_schema_configuration_preserves_existing_output() {
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn two_factor_additional_fields_cannot_replace_native_fields() {
+    let directory = std::env::temp_dir().join(format!(
+        "better-auth-cli-two-factor-fields-{}",
+        std::process::id()
+    ));
+    fs::create_dir(&directory).unwrap();
+    let config = directory.join("schema.json");
+    let output = directory.join("schema.rs");
+    fs::write(&output, "application-owned schema").unwrap();
+    for fields in [
+        r#"{"secret":{"type":"string"}}"#,
+        r#"{"label":{"type":"string","fieldName":"stored_secret"}}"#,
+        r#"{"createdAt":{"type":"date"}}"#,
+        r#"{"label":{"type":"date","fieldName":"updated_at"}}"#,
+    ] {
+        fs::write(
+            &config,
+            format!(
+                r#"{{"twoFactor":{{"fields":{{"secret":"stored_secret"}},"additionalFields":{fields}}}}}"#
+            ),
+        )
+        .unwrap();
+        let result = Command::new(env!("CARGO_BIN_EXE_better-auth-rs"))
+            .args([
+                "generate",
+                "--plugins",
+                "two-factor",
+                "--force",
+                "--schema-config",
+            ])
+            .arg(&config)
+            .arg("--output")
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert!(!result.status.success(), "{fields}");
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("cannot replace native field"),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            "application-owned schema"
+        );
+    }
+    fs::remove_dir_all(directory).unwrap();
+}

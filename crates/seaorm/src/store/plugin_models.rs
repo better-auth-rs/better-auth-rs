@@ -39,9 +39,10 @@ pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
     input: Map<String, serde_json::Value>,
     policy: &IdGeneration,
     backend: DbBackend,
+    create: bool,
 ) -> AuthResult<M::ActiveModel> {
     let fields = config
-        .storage_fields_with_binding(input, true, |name, field, value| {
+        .storage_fields_with_binding(input, create, |name, field, value| {
             crate::reference_id::input_binding(
                 name,
                 field,
@@ -77,7 +78,11 @@ pub(super) fn validate_additional_field_columns<M: SeaOrmPluginModel>(
     )?;
     for (name, field) in fields.fields() {
         let storage = resolve_field_name(field.field_name.as_deref(), name);
-        for core in core_fields(role) {
+        for core in core_fields(role).iter().filter(|field| {
+            !(role == EntityRole::TwoFactor
+                && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
+                && matches!(field.name, "created_at" | "updated_at"))
+        }) {
             let column = M::column(core.name)?;
             if [name.as_str(), storage].contains(&column.as_str()) {
                 return Err(AuthError::config(format!(

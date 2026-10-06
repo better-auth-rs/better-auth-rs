@@ -1,5 +1,6 @@
 mod device;
 mod jwk;
+mod two_factor;
 mod wallet;
 
 use crate::store::schema::{EntityRole, resolve_field_name};
@@ -52,6 +53,7 @@ impl ModelFields {
         match role {
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
+            EntityRole::TwoFactor => two_factor::validate_fields(&fields)?,
             EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
             EntityRole::User
             | EntityRole::Session

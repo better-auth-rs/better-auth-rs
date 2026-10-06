@@ -97,6 +97,7 @@ where
     .await?;
     let created = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: owner_id.clone(),
             secret: "ordinary-encrypted-secret".into(),
             backup_codes: "ordinary-encrypted-codes".into(),
@@ -106,6 +107,7 @@ where
     let id = created.id.typed()?.clone();
     assert!(!id.is_empty());
     let mut expected = TwoFactor {
+        additional_fields: Default::default(),
         id: created.id.clone(),
         user_id: owner_id.clone(),
         secret: "ordinary-encrypted-secret".into(),
@@ -240,6 +242,7 @@ where
         .await?;
     let other_factor = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: other_owner.id.typed()?.clone(),
             secret: "other-encrypted-secret".into(),
             backup_codes: "other-encrypted-codes".into(),

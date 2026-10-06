@@ -236,6 +236,7 @@ impl SchemaConfig {
                     | "deviceCode"
                     | "jwks"
                     | "walletAddress"
+                    | "twoFactor"
                     | "organization"
                     | "member"
                     | "invitation"
@@ -456,7 +457,10 @@ impl Entity {
             }
             for (name, field) in &config.additional_fields {
                 if let Some(
-                    role @ (EntityRole::DeviceCode | EntityRole::Jwk | EntityRole::WalletAddress),
+                    role @ (EntityRole::DeviceCode
+                    | EntityRole::Jwk
+                    | EntityRole::WalletAddress
+                    | EntityRole::TwoFactor),
                 ) = entity.role
                 {
                     if entity.role == Some(EntityRole::DeviceCode) && name == "scope" {
@@ -471,18 +475,26 @@ impl Entity {
                         }
                     } else {
                         let storage = resolve_field_name(field.field_name.as_deref(), name);
-                        if entity
-                            .fields
-                            .iter()
-                            .filter(|core| core.registry_column.is_some())
-                            .any(|core| {
-                                let rust = core.ident.to_string();
-                                [name.as_str(), storage].into_iter().any(|name| {
-                                    name == rust
-                                        || name == rust.to_lower_camel_case()
-                                        || name == core.column
+                        if role == EntityRole::TwoFactor
+                            && better_auth_schema_registry::core_field_names(role)
+                                .iter()
+                                .any(|core| {
+                                    [name.as_str(), storage].into_iter().any(|name| {
+                                        name == *core || name == core.to_lower_camel_case()
+                                    })
                                 })
-                            })
+                            || entity
+                                .fields
+                                .iter()
+                                .filter(|core| core.registry_column.is_some())
+                                .any(|core| {
+                                    let rust = core.ident.to_string();
+                                    [name.as_str(), storage].into_iter().any(|name| {
+                                        name == rust
+                                            || name == rust.to_lower_camel_case()
+                                            || name == core.column
+                                    })
+                                })
                         {
                             return Err(format!(
                                 "{role:?} additional field {name} cannot replace native field {storage}"

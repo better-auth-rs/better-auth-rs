@@ -55,6 +55,7 @@ pub(super) async fn reference_writes<
     };
     let factor = store
         .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
             user_id: alias.clone(),
             secret: "0x10".into(),
             backup_codes: "1e1".into(),
@@ -69,6 +70,7 @@ pub(super) async fn reference_writes<
         assert!(
             store
                 .create_two_factor(CreateTwoFactor {
+                    additional_fields: Default::default(),
                     user_id: invalid.into(),
                     secret: "invalid".into(),
                     backup_codes: "unused".into(),
@@ -82,6 +84,7 @@ pub(super) async fn reference_writes<
         assert!(
             store
                 .create_two_factor(CreateTwoFactor {
+                    additional_fields: Default::default(),
                     user_id: format!("0x{:x}", owner.parse::<u64>().unwrap()),
                     secret: "literal".into(),
                     backup_codes: "unused".into(),

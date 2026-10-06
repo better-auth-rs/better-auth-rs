@@ -133,6 +133,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .update_two_factor(
                 &existing.id,
                 better_auth_core::UpdateTwoFactor {
+                    additional_fields: Default::default(),
                     secret: Some(encrypted_secret),
                     backup_codes: Some(encrypted_backup_codes),
                     verified: Some(config.skip_verification_on_enable),
@@ -143,6 +144,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
         let _ = ctx
             .database
             .create_two_factor(CreateTwoFactor {
+                additional_fields: Default::default(),
                 user_id: user.id().typed()?.to_string(),
                 secret: encrypted_secret,
                 backup_codes: encrypted_backup_codes,

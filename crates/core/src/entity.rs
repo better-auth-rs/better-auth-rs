@@ -222,6 +222,10 @@ pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 
 
 /// Trait representing a two-factor authentication entity.
 pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Return application fields when the entity already contains an adapter projection.
+    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn secret(&self) -> &str;
     fn backup_codes(&self) -> &str;

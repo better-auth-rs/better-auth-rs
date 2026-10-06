@@ -206,6 +206,7 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                 .await?;
             let factor = store
                 .create_two_factor(CreateTwoFactor {
+                    additional_fields: Default::default(),
                     user_id: user.id().into_owned().typed().unwrap().clone(),
                     secret: "encrypted-secret".into(),
                     backup_codes: "original-codes".into(),

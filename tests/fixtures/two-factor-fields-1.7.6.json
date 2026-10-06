@@ -1,0 +1,2149 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "read",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update",
+          "events": [
+            [
+              "input",
+              "label",
+              " Changed "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "updated",
+                "enabled": false
+              }
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed:out",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update-backup-codes",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-updated-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed:out",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-updated-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-success",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": true,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-mismatch",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": false,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "failure-increment",
+          "events": [
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "failure-lock",
+          "events": [
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": "2030-01-02T03:04:05.123Z",
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-mismatch",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": "2030-01-02T03:04:05.123Z",
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-success",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "failure-increment-after-reset",
+          "events": [
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-unconditional",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        }
+      ],
+      "failures": [
+        {
+          "name": "create-input-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": null
+        },
+        {
+          "name": "create-output-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor output error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update-input-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Changed "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "updated",
+                "enabled": false
+              }
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update-output-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Changed "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "updated",
+                "enabled": false
+              }
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor output error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-input-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-output-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor output error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-error-cas-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        }
+      ],
+      "boundaries": [
+        {
+          "name": "failure-lock-input-error",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-null-before-epoch",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-null",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "read",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update",
+          "events": [
+            [
+              "input",
+              "label",
+              " Changed "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "updated",
+                "enabled": false
+              }
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed:out",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update-backup-codes",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-updated-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed:out",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-updated-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-success",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": true,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-mismatch",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": false,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "failure-increment",
+          "events": [
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "failure-lock",
+          "events": [
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": "2030-01-02T03:04:05.123Z",
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-mismatch",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 2,
+            "lockedUntil": "2030-01-02T03:04:05.123Z",
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-success",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "failure-increment-after-reset",
+          "events": [
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-unconditional",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"updated\",\"enabled\":false}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-cas-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        }
+      ],
+      "failures": [
+        {
+          "name": "create-input-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": null
+        },
+        {
+          "name": "create-output-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor output error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update-input-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Changed "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "updated",
+                "enabled": false
+              }
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "update-output-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Changed "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-02-03T04:05:06.789Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "updated",
+                "enabled": false
+              }
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Changed"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor output error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": true,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Changed",
+            "activatedAt": "2029-02-03T04:05:06.789Z",
+            "details": {
+              "channel": "updated",
+              "enabled": false
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-input-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "cas-output-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor output error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-error-cas-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 0,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<two-factor-id>"
+          }
+        }
+      ],
+      "boundaries": [
+        {
+          "name": "failure-lock-input-error",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ],
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary TwoFactor input error"
+          },
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 2,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-null-before-epoch",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        },
+        {
+          "name": "reset-guard-null",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": null,
+          "stored": {
+            "secret": "ordinary-encrypted-secret",
+            "backupCodes": "ordinary-encrypted-codes",
+            "userId": "<owner-id>",
+            "verified": false,
+            "failedVerificationCount": 1,
+            "lockedUntil": null,
+            "label": "Default",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<two-factor-id>"
+          }
+        }
+      ]
+    }
+  ]
+}

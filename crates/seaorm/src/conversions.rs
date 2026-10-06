@@ -62,6 +62,7 @@ impl From<&entities::invitation::Model> for Invitation {
 impl From<&entities::two_factor::Model> for TwoFactor {
     fn from(model: &entities::two_factor::Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id.clone().into(),
             secret: model.secret.clone(),
             backup_codes: model.backup_codes.clone(),

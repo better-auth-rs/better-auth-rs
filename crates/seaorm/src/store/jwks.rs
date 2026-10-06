@@ -187,6 +187,7 @@ impl<
             input.additional_fields,
             self.config().advanced.database.generate_id(),
             backend,
+            true,
         )
         .await?;
         super::plugin_models::apply::<P::Jwk>(
