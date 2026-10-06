@@ -3,6 +3,7 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use super::{SeaOrmStore, map_db_err};
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
+use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{AuthResult, DeviceCode, DeviceCodeOwnership};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, sea_query::Condition,
@@ -17,10 +18,22 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         expected: &DeviceCode,
         ownership: &DeviceCodeOwnership,
     ) -> AuthResult<Option<P::DeviceCode>> {
-        let DeviceCodeOwnership::ClientId(client_id) = ownership;
         let policy = self.config().advanced.database.generate_id();
         let user = P::DeviceCode::column("user_id")?;
         let client = P::DeviceCode::column("client_id")?;
+        let ownership = match ownership {
+            DeviceCodeOwnership::ClientId(client_id) => client.eq(client_id),
+            DeviceCodeOwnership::FieldEquals { field, value } => {
+                let (name, field) = self
+                    .model_fields
+                    .device_code_ownership_field(field, value)?;
+                let value = better_auth_core::user_query::bind_filter(field, value)?;
+                super::value_filter::equals(
+                    P::DeviceCode::column(resolve_field_name(field.field_name.as_deref(), name))?,
+                    &value,
+                )
+            }
+        };
         let filter = Condition::all()
             .add(P::DeviceCode::column("id")?.eq_id(expected.id.typed()?, policy)?)
             .add(P::DeviceCode::column("device_code")?.eq(&expected.device_code))
@@ -38,7 +51,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .add(user.is_not_null())
             .add(P::DeviceCode::column("status")?.eq(&expected.status))
             .add(P::DeviceCode::column("status")?.eq("approved"))
-            .add(client.eq(client_id));
+            .add(ownership);
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "consumeOne", async {
             let query = Entity::<P::DeviceCode>::delete_many().filter(filter.clone());
             if connection.support_returning() {

@@ -39,6 +39,37 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
 }
 
 impl ModelFields {
+    /// Resolve and validate the supported scalar DeviceCode ownership query without running field callbacks.
+    pub fn device_code_ownership_field(
+        &self,
+        name: &str,
+        value: &Value,
+    ) -> AuthResult<(&str, &crate::user_fields::UserFieldConfig)> {
+        let (logical, field) =
+            crate::user_query::declared_field(name, self.fields(EntityRole::DeviceCode))
+                .ok_or_else(|| {
+                    AuthError::config(format!(
+                        "DeviceCode ownership field {name} is not registered"
+                    ))
+                })?;
+        if field.references.is_some()
+            || !matches!(
+                field.field_type,
+                UserFieldType::String | UserFieldType::Number | UserFieldType::Boolean
+            )
+        {
+            return Err(AuthError::config(
+                "DeviceCode FieldEquals supports only declared string, number, and boolean fields without references",
+            ));
+        }
+        if value.is_array() || value.is_object() {
+            return Err(AuthError::config(
+                "DeviceCode FieldEquals requires a scalar null, string, number, or boolean value",
+            ));
+        }
+        Ok((logical, field))
+    }
+
     /// Prepare scope and declared application fields without changing credential or owner bindings.
     pub async fn device_code_fields_for_storage(
         &self,

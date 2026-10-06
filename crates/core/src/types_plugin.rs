@@ -218,6 +218,15 @@ pub struct DeviceCode {
 pub enum DeviceCodeOwnership {
     /// Require the stored client binding to equal this client identifier.
     ClientId(String),
+    /// Match a declared string, number, or boolean field without a reference.
+    /// This condition uses `eq`, `AND`, and case-sensitive comparison.
+    /// Other operators, connectors, and field types are not supported.
+    FieldEquals {
+        /// Registered logical field name or configured storage field name.
+        field: String,
+        /// Scalar null, string, number, or boolean query value.
+        value: serde_json::Value,
+    },
 }
 
 /// Input for creating a new device authorization code.

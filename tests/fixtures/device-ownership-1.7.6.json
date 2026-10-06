@@ -1,0 +1,2097 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "cases": [
+        {
+          "name": "tenant-match-after-prepare",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-after"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-after"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [],
+          "remaining": []
+        },
+        {
+          "name": "tenant-match-after-prepare",
+          "mode": "transaction",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-after"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-after"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [],
+          "remaining": []
+        },
+        {
+          "name": "tenant-mismatch-after-prepare",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-before"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-before"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ]
+        },
+        {
+          "name": "tenant-mismatch-after-prepare",
+          "mode": "transaction",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-before"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-before"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "initial",
+              "tenantKey": "tenant-before",
+              "id": "<device-id>"
+            }
+          ]
+        },
+        {
+          "name": "or-tenant-mismatch",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "foreign-tenant",
+            "connector": "OR"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "foreign-tenant",
+                    "connector": "OR"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [],
+          "remaining": []
+        },
+        {
+          "name": "or-tenant-mismatch",
+          "mode": "transaction",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "foreign-tenant",
+            "connector": "OR"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "foreign-tenant",
+                    "connector": "OR"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [],
+          "remaining": []
+        },
+        {
+          "name": "or-selects-earlier-owner",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "decoy-tenant",
+            "connector": "OR"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "beforeRows": [
+            {
+              "deviceCode": "decoy-device",
+              "userCode": "decoy-user",
+              "userId": "<decoy-owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "decoy-client",
+              "scope": "decoy-scope",
+              "tenantKey": "decoy-tenant",
+              "id": "<decoy-device-id>"
+            },
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "initial",
+              "tenantKey": "tenant-before",
+              "id": "<device-id>"
+            }
+          ],
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "decoy-tenant",
+                    "connector": "OR"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "decoy-device",
+                "userCode": "decoy-user",
+                "userId": "<decoy-owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "decoy-client",
+                "scope": "decoy-scope",
+                "tenantKey": "decoy-tenant",
+                "id": "<decoy-device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "decoy-device",
+              "userCode": "decoy-user",
+              "userId": "<decoy-owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "decoy-client",
+              "scope": "decoy-scope",
+              "tenantKey": "decoy-tenant",
+              "id": "<decoy-device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "cases": [
+        {
+          "name": "tenant-match-after-prepare",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-after"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-after"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [],
+          "remaining": []
+        },
+        {
+          "name": "tenant-match-after-prepare",
+          "mode": "transaction",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-after"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-after"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            }
+          ],
+          "result": {
+            "claimedDeviceCode": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            },
+            "authorizationContext": {
+              "issuer": "ordinary-issuer"
+            },
+            "redemptionContext": {
+              "issuedFor": "ordinary-issuer"
+            },
+            "user": {
+              "name": "Device ownership owner",
+              "email": "owner@device-ownership.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": "2030-01-01T00:00:00.000Z",
+              "updatedAt": "2030-01-01T00:00:00.000Z",
+              "id": "<owner-id>"
+            }
+          },
+          "error": null,
+          "insideRemaining": [],
+          "remaining": []
+        },
+        {
+          "name": "tenant-mismatch-after-prepare",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-before"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-before"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ]
+        },
+        {
+          "name": "tenant-mismatch-after-prepare",
+          "mode": "transaction",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "tenant-before"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "tenant-before"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "initial",
+              "tenantKey": "tenant-before",
+              "id": "<device-id>"
+            }
+          ]
+        },
+        {
+          "name": "or-tenant-mismatch",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "foreign-tenant",
+            "connector": "OR"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "foreign-tenant",
+                    "connector": "OR"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ]
+        },
+        {
+          "name": "or-tenant-mismatch",
+          "mode": "transaction",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "foreign-tenant",
+            "connector": "OR"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "foreign-tenant",
+                    "connector": "OR"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "initial",
+              "tenantKey": "tenant-before",
+              "id": "<device-id>"
+            }
+          ]
+        },
+        {
+          "name": "or-selects-earlier-owner",
+          "mode": "direct",
+          "ownershipWhere": {
+            "field": "tenantKey",
+            "value": "decoy-tenant",
+            "connector": "OR"
+          },
+          "before": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "initial",
+            "tenantKey": "tenant-before",
+            "id": "<device-id>"
+          },
+          "beforeRows": [
+            {
+              "deviceCode": "decoy-device",
+              "userCode": "decoy-user",
+              "userId": "<decoy-owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "decoy-client",
+              "scope": "decoy-scope",
+              "tenantKey": "decoy-tenant",
+              "id": "<decoy-device-id>"
+            },
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "initial",
+              "tenantKey": "tenant-before",
+              "id": "<device-id>"
+            }
+          ],
+          "events": [
+            {
+              "type": "authorize",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "prepare",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "initial",
+                "tenantKey": "tenant-before",
+                "id": "<device-id>"
+              },
+              "authorizationContext": {
+                "issuer": "ordinary-issuer"
+              }
+            },
+            {
+              "type": "prepared",
+              "row": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2100-01-01T00:00:00.000Z",
+                "status": "approved",
+                "lastPolledAt": "<polled-at>",
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "prepared",
+                "tenantKey": "tenant-after",
+                "id": "<device-id>"
+              }
+            },
+            {
+              "type": "consumeOne",
+              "input": {
+                "model": "deviceCode",
+                "where": [
+                  {
+                    "field": "id",
+                    "value": "<device-id>"
+                  },
+                  {
+                    "field": "tenantKey",
+                    "value": "decoy-tenant",
+                    "connector": "OR"
+                  },
+                  {
+                    "field": "status",
+                    "value": "approved"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "consumeOneResult",
+              "row": null
+            }
+          ],
+          "result": null,
+          "error": {
+            "status": "BAD_REQUEST",
+            "statusCode": 400,
+            "body": {
+              "error": "invalid_grant",
+              "error_description": "Invalid device code"
+            }
+          },
+          "insideRemaining": [
+            {
+              "deviceCode": "decoy-device",
+              "userCode": "decoy-user",
+              "userId": "<decoy-owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "decoy-client",
+              "scope": "decoy-scope",
+              "tenantKey": "decoy-tenant",
+              "id": "<decoy-device-id>"
+            },
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ],
+          "remaining": [
+            {
+              "deviceCode": "decoy-device",
+              "userCode": "decoy-user",
+              "userId": "<decoy-owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "decoy-client",
+              "scope": "decoy-scope",
+              "tenantKey": "decoy-tenant",
+              "id": "<decoy-device-id>"
+            },
+            {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2100-01-01T00:00:00.000Z",
+              "status": "approved",
+              "lastPolledAt": "<polled-at>",
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "prepared",
+              "tenantKey": "tenant-after",
+              "id": "<device-id>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

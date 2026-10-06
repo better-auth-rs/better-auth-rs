@@ -293,16 +293,16 @@ impl EphemeralStore {
         {
             let mut live = self.lock()?;
             for consumed in &consumed {
-                let Some(original) = base
-                    .device_codes
-                    .find(|row| row.id == consumed.id && row.device_code == consumed.device_code)?
+                let Some(original) = base.device_codes.find(|row| {
+                    row.id == consumed.row.id && row.device_code == consumed.row.device_code
+                })?
                 else {
                     // A code created and consumed within this transaction has no live baseline.
                     continue;
                 };
                 if live
                     .device_codes
-                    .find(|row| super::device_codes::same_bindings(row, &original))?
+                    .find(|row| consumed.unchanged(row, &original))?
                     .is_none()
                 {
                     return Err(AuthError::internal(

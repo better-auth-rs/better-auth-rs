@@ -4,6 +4,49 @@ use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
 use crate::user_fields::project_adapter_value;
 
+#[derive(Clone)]
+pub(super) struct DeviceCodeConsumption {
+    pub(super) row: DeviceCode,
+    ownership_field: Option<String>,
+}
+
+impl DeviceCodeConsumption {
+    pub(super) fn unchanged(&self, live: &DeviceCode, baseline: &DeviceCode) -> bool {
+        same_bindings(live, baseline)
+            && self.ownership_field.as_deref().is_none_or(|field| {
+                // Compare against the baseline because prepare may change the transaction's field.
+                if field == "scope" {
+                    live.scope == baseline.scope
+                } else {
+                    live.additional_fields.get(field) == baseline.additional_fields.get(field)
+                }
+            })
+    }
+}
+
+fn scalar_equals(actual: Option<&Value>, expected: &Value) -> bool {
+    match (actual, expected) {
+        (None | Some(Value::Null), Value::Null) => true,
+        (Some(Value::Number(actual)), Value::Number(expected)) => {
+            actual.as_f64() == expected.as_f64()
+        }
+        (Some(actual), expected) => actual == expected,
+        _ => false,
+    }
+}
+
+fn field_equals(row: &DeviceCode, field: &str, expected: &Value) -> bool {
+    if field != "scope" {
+        return scalar_equals(row.additional_fields.get(field), expected);
+    }
+    match (&row.scope, expected) {
+        (crate::SchemaValue::Undefined | crate::SchemaValue::Typed(None), Value::Null) => true,
+        (crate::SchemaValue::Typed(Some(actual)), Value::String(expected)) => actual == expected,
+        (crate::SchemaValue::Dynamic(actual), expected) => scalar_equals(Some(actual), expected),
+        _ => false,
+    }
+}
+
 impl EphemeralStore {
     async fn find_device_code(
         &self,
@@ -255,15 +298,40 @@ impl DeviceCodeStore for EphemeralStore {
         expected: &DeviceCode,
         ownership: &crate::DeviceCodeOwnership,
     ) -> AuthResult<Option<DeviceCode>> {
-        let crate::DeviceCodeOwnership::ClientId(client_id) = ownership;
-        let client_id = crate::SchemaValue::Typed(Some(client_id.clone()));
+        let ownership = match ownership {
+            crate::DeviceCodeOwnership::ClientId(client_id) => {
+                crate::DeviceCodeOwnership::ClientId(client_id.clone())
+            }
+            crate::DeviceCodeOwnership::FieldEquals { field, value } => {
+                let (logical, config) = self
+                    .model_fields
+                    .device_code_ownership_field(field, value)?;
+                let value = self.memory_field_query(
+                    self.model_fields.fields(EntityRole::DeviceCode),
+                    logical,
+                    value.clone(),
+                )?;
+                crate::DeviceCodeOwnership::FieldEquals {
+                    field: resolve_field_name(config.field_name.as_deref(), logical).into(),
+                    value: crate::user_query::bind_filter(config, &value)?,
+                }
+            }
+        };
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
                 let row = state.device_codes.remove_first(|row| {
                     same_bindings(row, expected)
                         && row.user_id.is_some()
                         && row.status == "approved"
-                        && row.client_id == client_id
+                        && match &ownership {
+                            crate::DeviceCodeOwnership::ClientId(client_id) => matches!(
+                                &row.client_id,
+                                crate::SchemaValue::Typed(Some(actual)) if actual == client_id
+                            ),
+                            crate::DeviceCodeOwnership::FieldEquals { field, value } => {
+                                field_equals(row, field, value)
+                            }
+                        }
                 })?;
                 if let Some(row) = &row
                     && let Some(consumed) = &self.device_code_consumptions
@@ -273,7 +341,15 @@ impl DeviceCodeStore for EphemeralStore {
                         .map_err(|_| {
                             AuthError::internal("Ephemeral device consumption write set poisoned")
                         })?
-                        .push(row.clone());
+                        .push(DeviceCodeConsumption {
+                            row: row.clone(),
+                            ownership_field: match &ownership {
+                                crate::DeviceCodeOwnership::ClientId(_) => None,
+                                crate::DeviceCodeOwnership::FieldEquals { field, .. } => {
+                                    Some(field.clone())
+                                }
+                            },
+                        });
                 }
                 Ok(row)
             })

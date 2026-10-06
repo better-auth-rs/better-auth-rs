@@ -105,7 +105,7 @@ The helper authorizes the issuer, enforces the polling interval, updates `lastPo
 
 Set `EndpointContext.transaction` when the caller runs inside an active transaction. The helper uses that transaction for every store operation, including user lookup. `AuthTransaction` exposes the DeviceCode store operations. The default `/device/token` route uses the same helper and creates its session after consumption, using the consumed row's bound user ID.
 
-The ownership condition currently supports `DeviceCodeOwnership::ClientId(String)`. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Arbitrary upstream `Where` predicates remain outside this API slice. Configured grant callbacks use the same native bindings and consumption path.
+The ownership condition supports `DeviceCodeOwnership::ClientId(String)` and `FieldEquals { field, value }`. `FieldEquals` compares a registered String, Number, or Boolean field using its logical name or mapped column name. Register the field through a custom plugin or grant. The value can be null, a string, a number, or a Boolean; the shared field query conversion runs without input or output callbacks. Reference fields, dates, JSON, arrays, other operators, and OR conditions remain unsupported. The store also requires the original code, client, user, identifier, and approved status to match during consumption. Configured grant callbacks use the same native bindings and consumption path.
 
 ## Atomic consumption and transactions
 
@@ -113,4 +113,4 @@ The ownership condition currently supports `DeviceCodeOwnership::ClientId(String
 
 `AuthTransaction` includes DeviceCode operations. Memory and SeaORM execute these operations through the active transaction; secondary storage forwards them to that transaction. Memory validates consumed records against the original transaction state before merging any changes. A code created and consumed in the same transaction needs no existing live record. An output error from an ordinary consumption propagates after deletion. An output error propagated out of a transaction aborts that transaction.
 
-Issuer ownership currently supports only `ClientId`. Additional fields registered by a custom plugin or grant use the same store operations. Additional ownership predicates remain unsupported.
+For `FieldEquals`, Memory checks the field's original value against the live record before transaction commit. A preparation callback can change the field inside its transaction; a concurrent external change rejects the commit. Direct and SQL transaction paths include the field condition in atomic consumption.

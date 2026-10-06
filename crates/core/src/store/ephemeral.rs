@@ -83,7 +83,7 @@ pub struct EphemeralStore {
     model_fields: crate::plugin_runtime::ModelFields,
     state: Arc<Mutex<State>>,
     verification_locks: Arc<Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>>,
-    device_code_consumptions: Option<Arc<Mutex<Vec<DeviceCode>>>>,
+    device_code_consumptions: Option<Arc<Mutex<Vec<device_codes::DeviceCodeConsumption>>>>,
     session_config: crate::config::SessionConfig,
     organization_fields: Arc<RwLock<crate::organization_fields::OrganizationFields>>,
     hooks: Vec<Arc<dyn DatabaseHooks<StatelessSchema>>>,

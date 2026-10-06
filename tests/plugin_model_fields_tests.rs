@@ -38,6 +38,10 @@ mod device_scope;
 
 #[path = "plugin_model_fields_tests/device_consumption.rs"]
 mod device_consumption;
+#[path = "support/device_fields.rs"]
+mod device_fixture;
+#[path = "plugin_model_fields_tests/device_ownership.rs"]
+mod device_ownership;
 #[path = "plugin_model_fields_tests/device_redemption.rs"]
 mod device_redemption;
 

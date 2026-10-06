@@ -1195,6 +1195,7 @@ pub trait DeviceCodeStore: Send + Sync {
     ) -> AuthResult<bool>;
     /// Consume an approved code while preserving its original identity and owner bindings.
     /// Return and project the actual consumed row, including changes to its scope or poll timestamp.
+    /// Evaluate field ownership against stored values after preparation, without invoking field input callbacks.
     async fn consume_device_code(
         &self,
         expected: &DeviceCode,

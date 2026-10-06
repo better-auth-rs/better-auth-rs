@@ -48,6 +48,9 @@ pub mod model {
         #[serde(rename = "stored_revision")]
         #[sea_orm(column_name = "stored_revision")]
         pub revision: Option<better_auth::seaorm::SqlNumber>,
+        #[serde(rename = "stored_tenant")]
+        #[sea_orm(column_name = "stored_tenant")]
+        pub tenant_key: Option<String>,
         pub unconfigured: Option<String>,
     }
 

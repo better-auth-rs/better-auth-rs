@@ -152,7 +152,7 @@ fn match_filter(
     matches(filter_value, operator)
 }
 
-fn declared_field<'a>(
+pub(crate) fn declared_field<'a>(
     name: &str,
     fields: &'a UserConfig,
 ) -> Option<(&'a str, &'a UserFieldConfig)> {
@@ -181,7 +181,8 @@ fn additional_field<'a>(
     ))
 }
 
-fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> {
+/// Convert number and boolean query values without invoking field input transforms.
+pub fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> {
     let number = |value: f64| -> AuthResult<Value> {
         Ok(serde_json::from_str(&crate::schema_value::number_string(
             value,

@@ -65,11 +65,13 @@ run_stage() {
         --test openapi_property_order_tests --test openapi_endpoint_key_order_tests \
         --test openapi_rate_limit_model_tests \
         --test device_issuance_tests --test native_endpoint_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- device_redemption:: device_ownership::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/device-request-validation.test.ts \
         ./compat-tests/reference-server/contracts/device-grant.test.ts \
         ./compat-tests/reference-server/contracts/device-grant-metadata.test.ts \
         ./compat-tests/reference-server/contracts/device-request-schema.test.ts \
+        ./compat-tests/reference-server/contracts/device-ownership.test.ts \
         ./compat-tests/reference-server/contracts/openapi-property-order.test.ts \
         ./compat-tests/reference-server/contracts/openapi-endpoint-key-order.test.ts \
         ./compat-tests/reference-server/contracts/openapi-rate-limit-model.test.ts \
