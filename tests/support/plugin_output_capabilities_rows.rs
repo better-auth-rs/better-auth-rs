@@ -20,6 +20,10 @@ fn input() -> Map<String, Value> {
     .collect()
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Contract assertions verify the complete Passkey record and legacy envelope; Result propagates serialization and typed-value errors."
+)]
 fn passkey_value(row: &Passkey, storage: PasskeyStorage) -> AuthResult<Value> {
     let value = serde_json::to_value(PasskeyView::from(row))?;
     let mut stored = serde_json::to_value(row)?;

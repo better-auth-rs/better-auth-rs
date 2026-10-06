@@ -48,31 +48,52 @@ async fn observe<S: AuthSchema>(
     let mut projection = policies(Some(events.clone()), failure);
     let name_events = events.clone();
     let id = seed.id.clone();
-    let _ = projection.fields_mut().insert("name".into(), UserFieldConfig {
-        required: Some(false),
-        transform: Some(FieldTransforms {
-            output: Some(UserFieldTransform::new_async(move |value| {
-                let events = name_events.clone();
-                let writer = writer.clone();
-                let id = id.clone();
-                async move {
-                    let name = value.as_ref().and_then(Value::as_str).expect("stored API Key name");
-                    events.lock().expect("trace lock").push(json!(["name", name]));
-                    let row = writer.write_api_key_usage(&id, ApiKeyUsageWrite::UpdatedAt(UPDATED_AT.parse().expect("fixed update timestamp")))
-                        .await?.expect("callback API Key exists");
-                    assert_eq!(row.additional_fields["label"], "Live");
-                    assert_eq!(row.additional_fields["revision"], 2.5);
-                    assert_eq!(row.updated_at, UPDATED_AT);
-                    events.lock().expect("trace lock").push(json!(["write", {
-                        "label":row.additional_fields["label"], "revision":row.additional_fields["revision"], "updatedAt":row.updated_at,
-                    }]));
-                    Ok(Some(json!(format!("{name}:out"))))
-                }
-            })),
+    let _ = projection.fields_mut().insert(
+        "name".into(),
+        UserFieldConfig {
+            required: Some(false),
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new_async(move |value| {
+                    let events = name_events.clone();
+                    let writer = writer.clone();
+                    let id = id.clone();
+                    async move {
+                        let name = value
+                            .as_ref()
+                            .and_then(Value::as_str)
+                            .expect("stored API Key name");
+                        events
+                            .lock()
+                            .expect("trace lock")
+                            .push(json!(["name", name]));
+                        let row = writer
+                            .write_api_key_usage(
+                                &id,
+                                ApiKeyUsageWrite::UpdatedAt(
+                                    UPDATED_AT.parse().expect("fixed update timestamp"),
+                                ),
+                            )
+                            .await?
+                            .expect("callback API Key exists");
+                        let label = row.additional_fields.get("label").expect("stored label");
+                        let revision = row
+                            .additional_fields
+                            .get("revision")
+                            .expect("stored revision");
+                        assert_eq!(label, &json!("Live"));
+                        assert_eq!(revision, &json!(2.5));
+                        assert_eq!(row.updated_at, UPDATED_AT);
+                        events.lock().expect("trace lock").push(json!(["write", {
+                            "label":label, "revision":revision, "updatedAt":row.updated_at,
+                        }]));
+                        Ok(Some(json!(format!("{name}:out"))))
+                    }
+                })),
+                ..Default::default()
+            }),
             ..Default::default()
-        }),
-        ..Default::default()
-    });
+        },
+    );
     if fail_output {
         let label_events = events.clone();
         projection
@@ -108,18 +129,22 @@ async fn observe<S: AuthSchema>(
         .get_api_key_by_id(seed.id.typed()?)
         .await?
         .expect("stored API Key exists");
-    assert_eq!(stored.additional_fields["label"], "Live");
-    assert_eq!(stored.additional_fields["revision"], 2.5);
+    assert_eq!(stored.additional_fields.get("label"), Some(&json!("Live")));
+    assert_eq!(stored.additional_fields.get("revision"), Some(&json!(2.5)));
     assert_eq!(stored.updated_at, UPDATED_AT);
     let visible = |row: &ApiKey| -> AuthResult<Value> {
         assert_eq!(row.id, seed.id);
         assert_eq!(row.created_at, seed.created_at);
         assert!(row.updated_at == seed.created_at || row.updated_at == UPDATED_AT);
         let mut value = adapter_value(row)?;
-        value["id"] = json!("<api-key-id>");
-        value["createdAt"] = json!("<created-at>");
+        *value.get_mut("id").expect("stored API Key id") = json!("<api-key-id>");
+        *value
+            .get_mut("createdAt")
+            .expect("stored API Key creation date") = json!("<created-at>");
         if row.updated_at == seed.created_at {
-            value["updatedAt"] = json!("<created-at>");
+            *value
+                .get_mut("updatedAt")
+                .expect("stored API Key update date") = json!("<created-at>");
         }
         Ok(value)
     };
@@ -140,31 +165,38 @@ pub(crate) async fn contract<S: AuthSchema>(
 ) -> AuthResult<()> {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/api-key-live-fields-1.7.6.json"))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let backends = fixture["backends"].as_array().expect("captured backends");
+    assert_eq!(
+        fixture.get("version").and_then(Value::as_str),
+        Some("1.7.6")
+    );
+    let backends = fixture
+        .get("backends")
+        .and_then(Value::as_array)
+        .expect("captured backends");
     assert_eq!(
         backends
             .iter()
-            .map(|case| case["backend"].as_str())
+            .map(|case| case.get("backend").and_then(Value::as_str))
             .collect::<Vec<_>>(),
         [Some("memory"), Some("sqlite")]
     );
     let cases = backends
         .iter()
-        .find(|case| case["backend"] == backend)
-        .expect("captured backend")["cases"]
-        .as_array()
+        .find(|case| case.get("backend").and_then(Value::as_str) == Some(backend))
+        .expect("captured backend")
+        .get("cases")
+        .and_then(Value::as_array)
         .expect("captured cases");
     assert_eq!(
         cases
             .iter()
-            .map(|case| case["failOutput"].as_bool())
+            .map(|case| case.get("failOutput").and_then(Value::as_bool))
             .collect::<Vec<_>>(),
         [Some(false), Some(true)]
     );
     let expected = cases
         .iter()
-        .find(|case| case["failOutput"] == fail_output)
+        .find(|case| case.get("failOutput").and_then(Value::as_bool) == Some(fail_output))
         .expect("captured output phase");
     assert_eq!(&observe(raw, fail_output).await?, expected);
     Ok(())

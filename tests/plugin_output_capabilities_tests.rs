@@ -195,6 +195,10 @@ struct Identity {
 }
 
 impl Identity {
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "Contract assertions verify IDs, owners, and timestamps before normalization; Result propagates JSON conversion errors."
+    )]
     fn normalize(&self, value: Value) -> AuthResult<Value> {
         // The shared JSON serializer retains JavaScript number formatting for SQL f64 columns.
         let mut value: Value = serde_json::from_str(
@@ -251,38 +255,51 @@ async fn contract<S: AuthSchema>(
         ))
         .map_err(|error| AuthError::internal(error.to_string()))?,
     )?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let backends = fixture["backends"].as_array().expect("captured backends");
+    assert_eq!(fixture.get("version").expect("captured version"), "1.7.6");
+    let backends = fixture
+        .get("backends")
+        .expect("captured backends field")
+        .as_array()
+        .expect("captured backends");
     assert_eq!(
         backends
             .iter()
-            .map(|case| case["backend"].as_str())
+            .map(|case| case.get("backend").expect("captured backend name").as_str())
             .collect::<Vec<_>>(),
         [Some("memory"), Some("sqlite")]
     );
     let expected = backends
         .iter()
-        .find(|case| case["backend"] == backend)
+        .find(|case| case.get("backend").expect("captured backend name") == backend)
         .expect("captured backend");
-    let models = expected["models"].as_array().expect("captured models");
+    let models = expected
+        .get("models")
+        .expect("captured models field")
+        .as_array()
+        .expect("captured models");
     assert_eq!(
         models
             .iter()
-            .map(|case| case["model"].as_str())
+            .map(|case| case.get("model").expect("captured model name").as_str())
             .collect::<Vec<_>>(),
         MODEL_NAMES.map(Some)
     );
     let expected = models
         .iter()
-        .find(|case| case["model"] == model)
+        .find(|case| case.get("model").expect("captured model name") == model)
         .expect("captured model");
-    let expected = expected["observations"]
+    let expected = expected
+        .get("observations")
+        .expect("captured observations field")
         .as_array()
         .expect("captured observations");
     assert_eq!(
         expected
             .iter()
-            .map(|case| case["name"].as_str())
+            .map(|case| case
+                .get("name")
+                .expect("captured observation name")
+                .as_str())
             .collect::<Vec<_>>(),
         OPERATIONS.map(Some)
     );
@@ -313,7 +330,9 @@ async fn contract<S: AuthSchema>(
         .build()
         .await?;
     let created = create(auth.store().as_ref(), model, &owner).await?;
-    let id = created["id"]
+    let id = created
+        .get("id")
+        .expect("generated model ID field")
         .as_str()
         .expect("generated model ID")
         .to_owned();

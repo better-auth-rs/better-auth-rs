@@ -84,7 +84,8 @@ struct Fixture<S: AuthSchema> {
 
 #[expect(
     clippy::expect_used,
-    reason = "The paired serialization must retain all native fields and additional fields"
+    clippy::panic_in_result_fn,
+    reason = "The contract asserts complete API Key serialization and propagates serialization errors"
 )]
 pub(crate) fn adapter_value(row: &ApiKey) -> AuthResult<Value> {
     let public = serde_json::to_value(ApiKeyView::from(row))?;
@@ -99,8 +100,10 @@ pub(crate) fn adapter_value(row: &ApiKey) -> AuthResult<Value> {
         "requestCount",
         "remaining",
     ] {
-        assert_eq!(object[name].as_f64(), public[name].as_f64());
-        let _ = object.insert(name.into(), public[name].clone());
+        let stored = object.get(name).expect("stored API Key numeric field");
+        let projected = public.get(name).expect("public API Key numeric field");
+        assert_eq!(stored.as_f64(), projected.as_f64());
+        let _ = object.insert(name.into(), projected.clone());
     }
     let mut view_fields = object.clone();
     assert_eq!(
@@ -204,7 +207,8 @@ impl<S: AuthSchema> Fixture<S> {
 
     #[expect(
         clippy::expect_used,
-        reason = "The paired record must retain all native fields and additional fields"
+        clippy::panic_in_result_fn,
+        reason = "The contract asserts API Key identity and timestamps before propagating serialization errors"
     )]
     fn visible(&self, row: &ApiKey) -> AuthResult<Value> {
         let id = row.id.typed()?;
@@ -286,7 +290,9 @@ impl<S: AuthSchema> Fixture<S> {
         let seed =
             seeded.ok_or_else(|| AuthError::internal("API Key operation requires a seed"))?;
         let date = |index: usize| {
-            TIMES[index]
+            TIMES
+                .get(index)
+                .expect("configured usage timestamp")
                 .parse::<DateTimeUtc>()
                 .expect("fixed usage timestamp")
         };
@@ -418,7 +424,7 @@ impl<S: AuthSchema> Fixture<S> {
             )
             .await?;
         if mode == 1 {
-            assert_eq!(observation["stored"], before);
+            assert_eq!(observation.get("stored"), Some(&before));
         }
         Ok(observation)
     }
@@ -435,45 +441,49 @@ pub(crate) async fn contract<S: AuthSchema>(
 ) -> AuthResult<()> {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/api-key-fields-1.7.6.json"))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let backends = fixture["backends"].as_array().expect("captured backends");
+    assert_eq!(
+        fixture.get("version").and_then(Value::as_str),
+        Some("1.7.6")
+    );
+    let backends = fixture
+        .get("backends")
+        .and_then(Value::as_array)
+        .expect("captured backends");
     assert_eq!(
         backends
             .iter()
-            .map(|case| case["backend"].as_str())
+            .map(|case| case.get("backend").and_then(Value::as_str))
             .collect::<Vec<_>>(),
         [Some("memory"), Some("sqlite")]
     );
     let expected = backends
         .iter()
-        .find(|case| case["backend"] == backend)
+        .find(|case| case.get("backend").and_then(Value::as_str) == Some(backend))
         .expect("captured backend");
+    let operations = expected.get("operations").expect("captured operations");
     assert_eq!(
-        expected["operations"]
+        operations
             .as_array()
             .expect("captured operations")
             .iter()
-            .map(|operation| operation["name"].as_str())
+            .map(|operation| operation.get("name").and_then(Value::as_str))
             .collect::<Vec<_>>(),
         OPERATIONS.map(Some)
     );
-    assert_eq!(
-        expected["failures"]
-            .as_array()
-            .expect("captured failures")
-            .len(),
-        15
-    );
+    let failures = expected
+        .get("failures")
+        .and_then(Value::as_array)
+        .expect("captured failures");
+    assert_eq!(failures.len(), 15);
     let fixture = Fixture::new(raw).await?;
     match scenario {
-        Scenario::Operations => assert_eq!(fixture.operations().await?, expected["operations"]),
+        Scenario::Operations => assert_eq!(&fixture.operations().await?, operations),
         Scenario::Failure { operation, phase } => {
             let actual = fixture.error(operation, phase).await?;
-            let expected = expected["failures"]
-                .as_array()
-                .expect("captured failures")
+            let name = actual.get("name").expect("observed error name");
+            let expected = failures
                 .iter()
-                .find(|failure| failure["name"] == actual["name"])
+                .find(|failure| failure.get("name") == Some(name))
                 .expect("captured error scenario");
             assert_eq!(&actual, expected);
         }
