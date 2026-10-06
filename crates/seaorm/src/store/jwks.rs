@@ -5,7 +5,6 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::{AuthResult, CreateJwk, Jwk, store::JwksStore};
-use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
 };
