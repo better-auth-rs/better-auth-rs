@@ -45,6 +45,9 @@ mod device_ownership;
 #[path = "plugin_model_fields_tests/device_redemption.rs"]
 mod device_redemption;
 
+#[path = "plugin_model_fields_tests/live_passkeys.rs"]
+mod live_passkeys;
+
 #[path = "plugin_model_fields_tests/organization.rs"]
 mod organization;
 

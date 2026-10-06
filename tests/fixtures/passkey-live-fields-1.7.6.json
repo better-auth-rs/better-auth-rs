@@ -1,0 +1,1131 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "cases": [
+        {
+          "path": "create",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ADCE0002-35BC-C60A-648B-0B25F1F05503",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "get-id",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ADCE0002-35BC-C60A-648B-0B25F1F05503",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "get-credential",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ADCE0002-35BC-C60A-648B-0B25F1F05503",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "list",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ],
+            "Travel": [
+              [
+                "name",
+                "Travel"
+              ],
+              [
+                "write",
+                {
+                  "name": "Travel",
+                  "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96"
+                }
+              ],
+              [
+                "aaguid",
+                "08987058-cadc-4b81-b6e1-30de50dcbe96"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ADCE0002-35BC-C60A-648B-0B25F1F05503",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "08987058-CADC-4B81-B6E1-30DE50DCBE96",
+              "id": "<Travel-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+              "id": "<Travel-id>"
+            }
+          ]
+        },
+        {
+          "path": "update-name",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk-renamed"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk-renamed",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk-renamed:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ADCE0002-35BC-C60A-648B-0B25F1F05503",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "update-auth",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ADCE0002-35BC-C60A-648B-0B25F1F05503",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "get-id",
+          "configuredAaguid": false,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "list",
+          "configuredAaguid": false,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ]
+            ],
+            "Travel": [
+              [
+                "name",
+                "Travel"
+              ],
+              [
+                "write",
+                {
+                  "name": "Travel",
+                  "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96"
+                }
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+              "id": "<Travel-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+              "id": "<Travel-id>"
+            }
+          ]
+        },
+        {
+          "path": "update-name",
+          "configuredAaguid": true,
+          "failOutput": true,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk-renamed"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk-renamed",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "adce0002-35bc-c60a-648b-0b25f1f05503"
+              ]
+            ]
+          },
+          "result": null,
+          "error": {
+            "sameError": true,
+            "message": "ordinary live Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "cases": [
+        {
+          "path": "create",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "get-id",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "get-credential",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "list",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ],
+            "Travel": [
+              [
+                "name",
+                "Travel"
+              ],
+              [
+                "write",
+                {
+                  "name": "Travel",
+                  "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96"
+                }
+              ],
+              [
+                "aaguid",
+                "dd4ec289-e01d-41c9-bb89-70fa845d4bf2"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "DD4EC289-E01D-41C9-BB89-70FA845D4BF2",
+              "id": "<Travel-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+              "id": "<Travel-id>"
+            }
+          ]
+        },
+        {
+          "path": "update-name",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk-renamed"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk-renamed",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk-renamed:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "update-auth",
+          "configuredAaguid": true,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "EA9B8D66-4D01-1D21-3CE4-B6B48CB575D4",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "get-id",
+          "configuredAaguid": false,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "id": "<Desk-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        },
+        {
+          "path": "list",
+          "configuredAaguid": false,
+          "failOutput": false,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ]
+            ],
+            "Travel": [
+              [
+                "name",
+                "Travel"
+              ],
+              [
+                "write",
+                {
+                  "name": "Travel",
+                  "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96"
+                }
+              ]
+            ]
+          },
+          "result": [
+            {
+              "name": "Desk:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel:out",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "dd4ec289-e01d-41c9-bb89-70fa845d4bf2",
+              "id": "<Travel-id>"
+            }
+          ],
+          "error": null,
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            },
+            {
+              "name": "Travel",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Travel",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "08987058-cadc-4b81-b6e1-30de50dcbe96",
+              "id": "<Travel-id>"
+            }
+          ]
+        },
+        {
+          "path": "update-name",
+          "configuredAaguid": true,
+          "failOutput": true,
+          "events": {
+            "Desk": [
+              [
+                "name",
+                "Desk-renamed"
+              ],
+              [
+                "write",
+                {
+                  "name": "Desk-renamed",
+                  "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503"
+                }
+              ],
+              [
+                "aaguid",
+                "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+              ]
+            ]
+          },
+          "result": null,
+          "error": {
+            "sameError": true,
+            "message": "ordinary live Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "credential:Desk",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "adce0002-35bc-c60a-648b-0b25f1f05503",
+              "id": "<Desk-id>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

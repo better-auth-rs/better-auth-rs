@@ -105,6 +105,8 @@ With the default `require_session: true`, both registration endpoints require a 
 
 Custom plugins can register `name` and `aaguid` string policies with `AuthInitContext::register_model_fields(EntityRole::Passkey, UserConfig)`. AAGUID identifies an authenticator model for display. Defaults, `on_update`, and synchronous or awaited input/output transforms use the shared adapter boundary for create, updates, lookups, and lists. A complete patch runs once in schema order, `name` before `aaguid`. Credentials and authentication state retain their existing typed paths.
 
+Memory reads each display field from the selected row when that field reaches its output phase. A `name` callback can therefore change the `aaguid` returned later, including when `aaguid` has no policy. SQL output uses the queried row snapshot. A failed output callback propagates its error after any preceding writes.
+
 `Passkey`, `CreatePasskey`, and `PasskeyView` use `SchemaValue<Option<String>>` for both fields. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a string. Public output omits undefined values and preserves explicit null. Omitted, empty, or explicit logical `field_name` values select the same field. Other Passkey fields, replacement types, and nonempty aliases that change the field name remain unsupported.
 
 ## How It Works
