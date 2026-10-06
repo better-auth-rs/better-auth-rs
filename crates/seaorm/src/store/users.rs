@@ -3,8 +3,7 @@ use async_trait::async_trait;
 use better_auth_core::store::schema::resolve_field_name;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityName, EntityTrait, QueryFilter,
-    QuerySelect,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
 };
 
 use better_auth_core::store::UserStore;
@@ -556,9 +555,8 @@ where
         use better_auth_core::AuthUser;
         better_auth_core::store::UserAccounts::validate_schema(
             self.config(),
-            <S::User as SeaOrmUserModel>::Entity::default().table_name(),
-            <S::Account as SeaOrmAccountModel>::Entity::default().table_name(),
-            self.model_fields.schema_model_names(),
+            &self.model_fields,
+            super::model_names::table_matches::<S, O, P>,
         )?;
         let (record, native_accounts) = if self.config().advanced.database.joins == Some(true) {
             let query = super::joins::joined_query::<

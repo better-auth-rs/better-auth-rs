@@ -18,6 +18,7 @@ mod joins;
 mod jwks;
 mod members;
 mod migrator;
+mod model_names;
 mod organization_extensions;
 mod organization_joins;
 mod organization_models;

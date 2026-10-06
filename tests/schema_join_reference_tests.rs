@@ -24,6 +24,9 @@ use tracing_subscriber::{Layer, layer::Context, prelude::*};
 
 const EMAIL: &str = "owner@schema-join-reference.test";
 
+#[path = "schema_join_reference_tests/unknown.rs"]
+mod unknown;
+
 #[path = "native_core_join_tests/account.rs"]
 #[expect(
     unreachable_pub,

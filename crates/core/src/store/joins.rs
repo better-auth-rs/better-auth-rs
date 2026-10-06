@@ -2,7 +2,10 @@
 
 use crate::{
     AuthConfig, AuthError, AuthResult, SchemaValue,
+    plugin_runtime::ModelFields,
+    store::schema::EntityRole,
     user_fields::UserConfig,
+    utils::json::array_index,
     wire::{AccountView, UserView},
 };
 
@@ -14,17 +17,17 @@ pub struct AccountOwner {
 }
 
 impl AccountOwner {
-    /// Reject missing or ambiguous Account/User references before reading either model.
+    /// Validate final Account/User references before reading either model.
     pub fn validate_schema(
         config: &AuthConfig,
-        user_table: &str,
-        account_table: &str,
-        schema_models: &[&str],
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
         validate_references(
-            ("account", account_table, &config.account.field_schema()),
-            ("user", user_table, &config.user),
-            schema_models,
+            ("account", &config.account.field_schema()),
+            ("user", &config.user),
+            schema,
+            table_matches,
         )
     }
 
@@ -55,17 +58,17 @@ pub struct UserAccounts {
 }
 
 impl UserAccounts {
-    /// Reject missing or ambiguous User/Account references before reading either model.
+    /// Validate final User/Account references before reading either model.
     pub fn validate_schema(
         config: &AuthConfig,
-        user_table: &str,
-        account_table: &str,
-        schema_models: &[&str],
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
         validate_references(
-            ("user", user_table, &config.user),
-            ("account", account_table, &config.account.field_schema()),
-            schema_models,
+            ("user", &config.user),
+            ("account", &config.account.field_schema()),
+            schema,
+            table_matches,
         )
     }
 
@@ -89,29 +92,47 @@ impl UserAccounts {
 }
 
 fn validate_references(
-    (base, base_table, base_fields): (&str, &str, &UserConfig),
-    (model, model_table, model_fields): (&str, &str, &UserConfig),
-    schema_models: &[&str],
+    (base, base_fields): (&str, &UserConfig),
+    (model, model_fields): (&str, &UserConfig),
+    schema: &ModelFields,
+    table_matches: impl Fn(EntityRole, &str) -> bool,
 ) -> AuthResult<()> {
-    let references = |fields: &UserConfig, target: &str, table: &str| {
-        fields
+    let references = |fields: &UserConfig, source: &str, target: &str| {
+        let mut references = fields
             .fields()
-            .values()
-            .filter(|field| {
-                field.references.as_ref().is_some_and(|reference| {
-                    // Upstream resolves active logical names before physical table aliases.
-                    if schema_models.contains(&reference.model.as_str()) {
-                        reference.model == target
-                    } else {
-                        reference.model == table
-                    }
-                })
+            .iter()
+            .filter_map(|(name, field)| {
+                field.references.as_ref().map(|reference| (name, reference))
             })
-            .count()
+            .collect::<Vec<_>>();
+        // Native replacements retain schema positions. Integer keys use JavaScript property order.
+        references.sort_by_key(|(name, _)| {
+            let native = if source == "user" {
+                let names = [
+                    "name",
+                    "email",
+                    "emailVerified",
+                    "image",
+                    "createdAt",
+                    "updatedAt",
+                ];
+                names
+                    .iter()
+                    .position(|field| *field == name.as_str())
+                    .unwrap_or(names.len())
+            } else {
+                0
+            };
+            array_index(name).map_or((true, 0, native), |index| (false, index, 0))
+        });
+        references.into_iter().try_fold(0, |count, (_, reference)| {
+            let model = schema.resolve_model_name(&reference.model, &table_matches)?;
+            Ok::<_, AuthError>(count + usize::from(model == target))
+        })
     };
-    let forward = references(model_fields, base, base_table);
+    let forward = references(model_fields, model, base)?;
     let count = if forward == 0 {
-        references(base_fields, model, model_table)
+        references(base_fields, base, model)?
     } else {
         forward
     };

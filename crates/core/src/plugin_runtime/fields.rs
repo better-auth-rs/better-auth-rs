@@ -16,7 +16,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Default)]
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
-    schema_models: Option<Vec<&'static str>>,
+    schema_models: Option<Vec<(EntityRole, &'static str)>>,
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
@@ -36,14 +36,31 @@ fn optional_string(
 impl ModelFields {
     /// Retain the same active logical models used by runtime schema validation.
     pub fn set_schema_configuration(&mut self, config: &crate::store::schema::SchemaConfiguration) {
-        self.schema_models = Some(config.models().into_iter().map(|(_, name)| name).collect());
+        self.schema_models = Some(config.models());
     }
 
-    /// Read active logical names; raw stores have the four core models by default.
-    pub fn schema_model_names(&self) -> &[&'static str] {
-        self.schema_models
-            .as_deref()
-            .unwrap_or(&["user", "session", "account", "verification"])
+    pub(crate) fn resolve_model_name(
+        &self,
+        candidate: &str,
+        table_matches: &impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<&'static str> {
+        let models = self.schema_models.as_deref().unwrap_or(&[
+            (EntityRole::User, "user"),
+            (EntityRole::Session, "session"),
+            (EntityRole::Account, "account"),
+            (EntityRole::Verification, "verification"),
+        ]);
+        // Logical model names take precedence over every physical table alias.
+        models
+            .iter()
+            .find(|(_, name)| *name == candidate)
+            .or_else(|| {
+                models
+                    .iter()
+                    .find(|(role, _)| table_matches(*role, candidate))
+            })
+            .map(|(_, name)| *name)
+            .ok_or_else(|| AuthError::config(format!("Model \"{candidate}\" not found in schema")))
     }
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {

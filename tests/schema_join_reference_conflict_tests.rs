@@ -4,7 +4,10 @@ use better_auth::AuthBuilder;
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema,
     plugin_runtime::ModelFields,
-    store::{AccountOwner, MemoryCacheAdapter, UserAccounts, schema::SchemaConfiguration},
+    store::{
+        AccountOwner, MemoryCacheAdapter, UserAccounts,
+        schema::{EntityRole, SchemaConfiguration},
+    },
     user_fields::{UserFieldConfig, UserFieldReference},
 };
 use better_auth_seaorm::{
@@ -106,19 +109,20 @@ fn logical_reference_resolution_matches_the_pinned_adapter_boundary()
         };
         let mut fields = ModelFields::default();
         fields.set_schema_configuration(&settings);
+        let table_matches = |role, candidate: &str| match role {
+            EntityRole::User => candidate == case.user_table,
+            EntityRole::Account => candidate == case.account_table,
+            EntityRole::Session => candidate == "auth_sessions",
+            EntityRole::Verification => candidate == "auth_verifications",
+            _ => false,
+        };
         let actual = match case.operation {
-            Operation::Accounts => UserAccounts::validate_schema(
-                &settings.config,
-                &case.user_table,
-                &case.account_table,
-                fields.schema_model_names(),
-            ),
-            Operation::Owner => AccountOwner::validate_schema(
-                &settings.config,
-                &case.user_table,
-                &case.account_table,
-                fields.schema_model_names(),
-            ),
+            Operation::Accounts => {
+                UserAccounts::validate_schema(&settings.config, &fields, table_matches)
+            }
+            Operation::Owner => {
+                AccountOwner::validate_schema(&settings.config, &fields, table_matches)
+            }
         };
         assert_eq!(
             result(actual),

@@ -2,8 +2,8 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityName, EntityTrait, IntoActiveModel,
-    QueryFilter, QuerySelect,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    QuerySelect,
 };
 
 use better_auth_core::store::AccountStore;
@@ -260,6 +260,8 @@ where
     S: AuthSchema + Send + Sync,
     S::Account: SeaOrmAccountModel,
     S::User: SeaOrmUserModel,
+    S::Session: crate::SeaOrmSessionModel,
+    S::Verification: crate::SeaOrmVerificationModel,
 {
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<AccountView> {
         self.create_account_optional(create_account)
@@ -298,9 +300,8 @@ where
     ) -> AuthResult<Option<better_auth_core::store::AccountOwner>> {
         better_auth_core::store::AccountOwner::validate_schema(
             self.config(),
-            <S::User as SeaOrmUserModel>::Entity::default().table_name(),
-            <S::Account as SeaOrmAccountModel>::Entity::default().table_name(),
-            self.model_fields.schema_model_names(),
+            &self.model_fields,
+            super::model_names::table_matches::<S, O, P>,
         )?;
         let (records, native_users) = if self.config().advanced.database.joins == Some(true) {
             let query = super::joins::joined_query::<
