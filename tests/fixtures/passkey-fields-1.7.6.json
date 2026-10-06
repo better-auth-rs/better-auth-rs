@@ -1,0 +1,1477 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "get-id",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "get-credential",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-name",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-auth",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        }
+      ],
+      "failures": [
+        {
+          "name": "create-input-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey input error"
+          },
+          "stored": []
+        },
+        {
+          "name": "create-output-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-name-input-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey input error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-name-output-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-auth-input-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey input error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-auth-output-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "get-id",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "get-credential",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-name",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-auth",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default:out",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ],
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        }
+      ],
+      "failures": [
+        {
+          "name": "create-input-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey input error"
+          },
+          "stored": []
+        },
+        {
+          "name": "create-output-error",
+          "events": [
+            [
+              "input",
+              "label",
+              " Default "
+            ],
+            [
+              "input",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "input",
+              "details",
+              {
+                "channel": "ordinary",
+                "enabled": true
+              }
+            ],
+            [
+              "default",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              1.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-name-input-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey input error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-name-output-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk-renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-auth-input-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey input error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 0,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 1.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        },
+        {
+          "name": "update-auth-output-error",
+          "events": [
+            [
+              "onUpdate",
+              "revision"
+            ],
+            [
+              "input",
+              "revision",
+              2.5
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": {
+            "sameError": true,
+            "message": "ordinary Passkey output error"
+          },
+          "stored": [
+            {
+              "name": "Desk",
+              "publicKey": "ordinary-public-key",
+              "userId": "<owner-id>",
+              "credentialID": "ordinary-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": "<created-at>",
+              "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+              "label": "Default",
+              "activatedAt": "2029-01-02T03:04:05.000Z",
+              "details": {
+                "channel": "ordinary",
+                "enabled": true
+              },
+              "revision": 2.5,
+              "id": "<passkey-id>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
