@@ -490,7 +490,7 @@ pub(super) async fn generate_backup_codes_core(
         true,
     )
     .await?;
-    let _ = load_two_factor_record(user, ctx).await?;
+    let two_factor = load_two_factor_record(user, ctx).await?;
 
     let backup_codes = config.backup_code_options.generate();
     let encrypted = config
@@ -500,7 +500,13 @@ pub(super) async fn generate_backup_codes_core(
         .await?;
     _ = ctx
         .database
-        .update_two_factor_backup_codes(user.id().typed()?, &encrypted)
+        .update_two_factor(
+            &two_factor.id,
+            better_auth_core::UpdateTwoFactor {
+                backup_codes: Some(encrypted),
+                ..Default::default()
+            },
+        )
         .await?;
 
     Ok(BackupCodesResponse {
