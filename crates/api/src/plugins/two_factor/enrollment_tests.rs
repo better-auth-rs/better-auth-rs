@@ -91,7 +91,7 @@ impl Fixture {
             better_auth_core::CreateUser::new()
                 .with_email("native-factor@example.test")
                 .with_name("Native Factor"),
-            Duration::hours(1),
+            ctx.config.session.expires_in(),
         )
         .await;
         factor::ActiveModel {

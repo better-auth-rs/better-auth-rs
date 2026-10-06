@@ -172,7 +172,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .await
         .unwrap()
         .unwrap();
-    assert!(factor.verified);
+    assert_eq!(factor.verified, Some(true));
     assert!(
         generated::user::Entity::find_by_id(user_id)
             .one(&database)
