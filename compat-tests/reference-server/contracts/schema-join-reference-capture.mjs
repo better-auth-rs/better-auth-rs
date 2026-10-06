@@ -14,7 +14,7 @@ assert.equal(version, "1.7.6");
 const email = "owner@schema-join-reference.test";
 const modes = ["default", "removed", "account-duplicate", "user-duplicate"];
 
-async function observe(backend, joins, mode, populated, operation, record) {
+async function observe(backend, joins, mode, populated, operation, record, tables) {
   const memory = { user: [], session: [], account: [], verification: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const options = {
@@ -23,6 +23,7 @@ async function observe(backend, joins, mode, populated, operation, record) {
     secret: "schema-join-reference-secret-at-least-thirty-two-characters",
     logger: { disabled: true }, telemetry: { enabled: false },
     advanced: { database: { joins } },
+    ...(tables ? { user: { modelName: tables.user }, account: { modelName: tables.account } } : {}),
   };
   const events = [];
   const output = field => value => { record()?.push(["output", field, value]); return value; };
@@ -33,12 +34,15 @@ async function observe(backend, joins, mode, populated, operation, record) {
     accountId: { type: "string", required: true, transform: { output: output("account.accountId") } },
   };
   if (mode === "removed") accountFields.userId = { type: "string", required: true };
-  if (mode === "account-duplicate") accountFields.accessToken = {
+  if (tables) accountFields.userId = {
+    type: "string", required: true, references: { model: tables.user, field: "id" },
+  };
+  if (mode === "account-duplicate" || mode === "account-mixed-duplicate") accountFields.accessToken = {
     type: "string", required: false, references: { model: "user", field: "id" },
   };
-  if (mode === "user-duplicate") {
+  if (mode === "user-duplicate" || mode === "user-mixed-duplicate") {
     userFields.name.references = { model: "account", field: "id" };
-    userFields.image = { type: "string", required: false, references: { model: "account", field: "id" } };
+    userFields.image = { type: "string", required: false, references: { model: tables?.account ?? "account", field: "id" } };
   }
   try {
     // Native field replacements change runtime metadata without changing the common physical tables.
@@ -56,7 +60,7 @@ async function observe(backend, joins, mode, populated, operation, record) {
       } });
     }
     const context = await betterAuth({ ...options,
-      user: { additionalFields: userFields }, account: { additionalFields: accountFields },
+      user: { ...options.user, additionalFields: userFields }, account: { ...options.account, additionalFields: accountFields },
     }).$context;
     record(events);
     let result;
@@ -71,7 +75,8 @@ async function observe(backend, joins, mode, populated, operation, record) {
     } catch (error) {
       result = { error: error.message };
     } finally { record(null); }
-    const invalid = mode === "removed" || mode === "account-duplicate" || (mode === "user-duplicate" && operation === "owner");
+    const invalid = mode === "removed" || mode === "account-duplicate" || mode === "account-mixed-duplicate"
+      || ((mode === "user-duplicate" || mode === "user-mixed-duplicate") && operation === "owner");
     if (invalid) {
       assert.equal(typeof result?.error, "string");
       assert.deepEqual(events, [], "Reference errors must precede raw reads and output callbacks");
@@ -80,7 +85,7 @@ async function observe(backend, joins, mode, populated, operation, record) {
       assert.equal(result === null, !populated);
       assert.ok(events.some(event => event[0] === "query"), "The successful control must execute a raw read");
     }
-    return { backend, joins, mode, populated, operation, events, result };
+    return { backend, joins, mode, populated, operation, ...(tables ? { tables } : {}), events, result };
   } finally { record(null); sqlite?.close(); }
 }
 
@@ -91,7 +96,7 @@ function accountSummary(account) {
   return { id: account.id, accountId: account.accountId, userId: account.userId, accessToken: account.accessToken };
 }
 
-export async function captureSchemaJoinReferences() {
+export async function captureSchemaJoinReferences({ aliases = false } = {}) {
   let events;
   let warmup = false;
   assert.equal(trace.setGlobalTracerProvider({ getTracer() { return {
@@ -116,10 +121,11 @@ export async function captureSchemaJoinReferences() {
       return events;
     };
     const cases = [];
-    for (const backend of ["memory", "sqlite"]) for (const joins of [false, true]) {
-      for (const mode of modes) for (const populated of [false, true]) {
+    const tableCases = aliases ? [{ user: "users", account: "accounts" }, { user: "users", account: "native_accounts" }] : [undefined];
+    for (const tables of tableCases) for (const backend of aliases ? ["sqlite"] : ["memory", "sqlite"]) for (const joins of [false, true]) {
+      for (const mode of aliases ? ["alias", "account-mixed-duplicate", "user-mixed-duplicate"] : modes) for (const populated of [false, true]) {
         for (const operation of ["accounts", "owner"]) {
-          cases.push(await observe(backend, joins, mode, populated, operation, record));
+          cases.push(await observe(backend, joins, mode, populated, operation, record, tables));
         }
       }
     }

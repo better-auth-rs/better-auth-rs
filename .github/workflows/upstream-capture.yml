@@ -7,8 +7,8 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/api-key-live-fields-capture.mjs
       - compat-tests/reference-server/contracts/schema-join-reference-capture.mjs
+      - compat-tests/reference-server/contracts/schema-join-reference-alias-capture.mjs
 
 permissions:
   contents: read
@@ -38,8 +38,7 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun --no-install ./compat-tests/reference-server/contracts/api-key-live-fields-capture.mjs "$capture_dir/api-key-live-fields-1.7.6.json" 2>&1 | tee "$capture_dir/api-key-live-fields.log"
-          bun --no-install ./compat-tests/reference-server/contracts/schema-join-reference-capture.mjs "$capture_dir/schema-join-reference-1.7.6.json" 2>&1 | tee "$capture_dir/schema-join-reference.log"
+          bun --no-install ./compat-tests/reference-server/contracts/schema-join-reference-alias-capture.mjs "$capture_dir/schema-join-reference-alias-1.7.6.json" 2>&1 | tee "$capture_dir/schema-join-reference-alias.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -47,7 +46,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-schema-fields-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-schema-join-alias-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
