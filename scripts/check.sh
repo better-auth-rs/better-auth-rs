@@ -115,9 +115,7 @@ run_stage() {
         --test device_issuance_tests --test native_endpoint_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
         device_redemption:: device_ownership:: device_ownership_sets:: device_consumption::
-      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests
-      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests live_postgres_ -- --ignored
-      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests live_mysql_ -- --ignored
+      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests -- --include-ignored
       bun --no-install test \
         ./compat-tests/reference-server/contracts/device-where.test.ts \
         ./compat-tests/reference-server/consumer-contracts/device-where.test.ts \
