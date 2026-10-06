@@ -200,7 +200,7 @@ async fn unsupported_model_fields_fail_during_initialization() {
     let cases = [
         (
             EntityRole::Passkey,
-            fields("label", UserFieldConfig::default()),
+            fields("credential", UserFieldConfig::default()),
         ),
         (
             EntityRole::Passkey,
@@ -214,7 +214,7 @@ async fn unsupported_model_fields_fail_during_initialization() {
         ),
         (
             EntityRole::ApiKey,
-            fields("label", UserFieldConfig::default()),
+            fields("key", UserFieldConfig::default()),
         ),
         (
             EntityRole::ApiKey,
