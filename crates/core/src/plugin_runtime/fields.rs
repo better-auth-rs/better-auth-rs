@@ -51,7 +51,11 @@ impl ModelFields {
             EntityRole::ApiKey => api_key::validate_fields(&fields)?,
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
-            EntityRole::Passkey => passkey::validate_fields(&fields)?,
+            EntityRole::Passkey => {
+                let mut combined = self.fields(role).clone();
+                combined.fields_mut().extend(fields.fields().clone());
+                passkey::validate_fields(&combined)?;
+            }
             EntityRole::TwoFactor => two_factor::validate_fields(&fields)?,
             EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
             EntityRole::User

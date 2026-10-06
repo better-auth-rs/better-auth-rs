@@ -77,6 +77,7 @@ run_stage() {
       bun --no-install test \
         ./compat-tests/reference-server/contracts/passkey-aaguid-fields.test.ts \
         ./compat-tests/reference-server/contracts/passkey-live-fields.test.ts \
+        ./compat-tests/reference-server/contracts/passkey-display-mapping.test.ts \
         ./compat-tests/reference-server/contracts/passkey-fields.test.ts
       COMPAT_TEST_PROFILE=native-passkey cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 phase8_client_compat configuration_client_compat

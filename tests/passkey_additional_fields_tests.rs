@@ -5,6 +5,12 @@ mod ordinary_field_policies;
 
 #[path = "support/passkey_field_contract.rs"]
 mod contract;
+#[path = "support/passkey_display_fields.rs"]
+mod display_fixture;
+#[path = "passkey_additional_fields_tests/display_mapping.rs"]
+mod display_mapping;
+#[path = "passkey_additional_fields_tests/display_mapping_conflicts.rs"]
+mod display_mapping_conflicts;
 #[path = "support/passkey_fields.rs"]
 mod fixture;
 
@@ -68,6 +74,10 @@ async fn passkey_additional_fields_cannot_replace_native_identity_or_credential_
         ("label", Some("credential")),
         ("label", Some("stored_owner")),
         ("label", Some("stored_counter")),
+        ("name", Some("stored_owner")),
+        ("aaguid", Some("stored_counter")),
+        ("name", Some("aaguid")),
+        ("aaguid", Some("name")),
     ] {
         let (store, _) = fixture::sqlite(contract::config()).await;
         let fields = UserConfig {

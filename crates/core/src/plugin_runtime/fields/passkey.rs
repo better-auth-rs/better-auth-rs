@@ -34,10 +34,10 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
         if matches!(name.as_str(), "name" | "aaguid") {
             if !matches!(field.field_type, UserFieldType::String)
                 || field.references.is_some()
-                || storage != name
+                || (native_name(storage) && storage != name)
             {
                 return Err(AuthError::config(format!(
-                    "Passkey {name} requires its ordinary string column without reference or field-name replacement"
+                    "Passkey {name} requires a string column without a reference or a different native field"
                 )));
             }
         } else if native_name(name) || native_name(storage) {
@@ -45,8 +45,26 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
                 "Passkey additional field {name} cannot replace native field {storage}"
             )));
         }
+        for native in ["name", "aaguid"] {
+            let column = storage_name(fields, native);
+            if name != native && (name == column || storage == column) {
+                return Err(AuthError::config(format!(
+                    "Passkey field {name} conflicts with {native} storage column {column}"
+                )));
+            }
+        }
     }
     Ok(())
+}
+
+fn storage_name<'a>(fields: &'a UserConfig, name: &'a str) -> &'a str {
+    resolve_field_name(
+        fields
+            .fields()
+            .get(name)
+            .and_then(|field| field.field_name.as_deref()),
+        name,
+    )
 }
 
 pub(crate) struct PasskeyFieldPatch {
@@ -87,8 +105,8 @@ impl ModelFields {
         let mut fields = config
             .organization_storage_fields(core, extras, create)
             .await?;
-        let name = optional_string(&mut fields, "name")?;
-        let aaguid = optional_string(&mut fields, "aaguid")?;
+        let name = optional_string(&mut fields, storage_name(config, "name"))?;
+        let aaguid = optional_string(&mut fields, storage_name(config, "aaguid"))?;
         for (name, field) in config.fields() {
             let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = fields.get_mut(storage) {
@@ -104,13 +122,14 @@ impl ModelFields {
 
     /// Project declared Passkey fields while retaining credential, owner, and counter snapshots.
     pub async fn project_passkeys(&self, rows: Vec<Passkey>) -> AuthResult<Vec<Passkey>> {
+        let fields = self.fields(EntityRole::Passkey);
         let records = rows
             .iter()
             .map(|row| {
                 let mut storage = row.additional_fields.clone();
                 for (name, value) in [("name", &row.name), ("aaguid", &row.aaguid)] {
                     if let Some(value) = value.json()? {
-                        let _ = storage.insert(name.into(), value);
+                        let _ = storage.insert(storage_name(fields, name).into(), value);
                     }
                 }
                 Ok(AdapterRecord::new(Map::new(), storage))
