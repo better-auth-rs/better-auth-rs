@@ -57,7 +57,7 @@ fn field_in(row: &DeviceCode, field: &str, values: &[Value]) -> bool {
         return row.additional_fields.get(field).is_some_and(contains);
     }
     match &row.scope {
-        crate::SchemaValue::Undefined => false,
+        crate::SchemaValue::InvalidDate | crate::SchemaValue::Undefined => false,
         crate::SchemaValue::Typed(None) => values.iter().any(Value::is_null),
         crate::SchemaValue::Typed(Some(actual)) => values
             .iter()
