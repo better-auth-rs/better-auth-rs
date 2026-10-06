@@ -1,3 +1,5 @@
+mod fields;
+
 use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
@@ -5,8 +7,8 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
+    ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, ExprTrait, Iterable, Order,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
 };
 use serde_json::{Map, json};
 
@@ -128,7 +130,6 @@ where
             .map(|start| start_for_database(start, self.connection().get_database_backend()))
             .transpose()?;
         let fields = Map::from_iter([
-            ("name".to_owned(), json!(input.name)),
             ("start".to_owned(), json!(start)),
             ("prefix".to_owned(), json!(input.prefix)),
             ("key_hash".to_owned(), json!(input.key_hash)),
@@ -162,30 +163,24 @@ where
             ("permissions".to_owned(), json!(input.permissions)),
             ("metadata".to_owned(), json!(input.metadata)),
         ]);
-        let fields = self
-            .model_fields
-            .fields(EntityRole::ApiKey)
-            .organization_storage_fields(fields, Map::new(), true)
+        let mut active = self
+            .prepare_api_key_fields(Some(input.name), input.additional_fields, true)
             .await?;
         let fields = self.create_fields("apikey", None, fields)?;
-        let active = super::plugin_models::active::<P::ApiKey>(
+        super::plugin_models::apply::<P::ApiKey>(
+            &mut active,
             fields,
             self.config().advanced.database.generate_id(),
         )?;
-        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
+        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
             active.insert(self.connection()).await.map_err(map_db_err)
         })
-        .await?
-        .record()?;
-        Ok(self
-            .model_fields
-            .project_api_keys(vec![row])
-            .await?
-            .remove(0))
+        .await?;
+        Ok(self.project_api_key_models(vec![model]).await?.remove(0))
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
+        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
             Entity::<P::ApiKey>::find()
                 .filter(
                     P::ApiKey::column("id")?
@@ -195,30 +190,24 @@ where
                 .await
                 .map_err(map_db_err)
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         Ok(self
-            .model_fields
-            .project_api_keys(row.into_iter().collect())
+            .project_api_key_models(model.into_iter().collect())
             .await?
             .pop())
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
-        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
+        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
             Entity::<P::ApiKey>::find()
                 .filter(P::ApiKey::column("key_hash")?.eq(hash))
                 .one(self.connection())
                 .await
                 .map_err(map_db_err)
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         Ok(self
-            .model_fields
-            .project_api_keys(row.into_iter().collect())
+            .project_api_key_models(model.into_iter().collect())
             .await?
             .pop())
     }
@@ -228,7 +217,7 @@ where
         reference_id: &str,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
-        let rows = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findMany", async {
+        let models = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findMany", async {
             let mut query = Entity::<P::ApiKey>::find()
                 .filter(P::ApiKey::column("reference_id")?.eq(reference_id));
             if let Some((field, direction)) = sort {
@@ -250,11 +239,8 @@ where
                 .await
                 .map_err(map_db_err)
         })
-        .await?
-        .iter()
-        .map(SeaOrmPluginModel::record)
-        .collect::<AuthResult<Vec<_>>>()?;
-        self.model_fields.project_api_keys(rows).await
+        .await?;
+        self.project_api_key_models(models).await
     }
 
     async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
@@ -284,26 +270,21 @@ where
         mut update: UpdateApiKey,
     ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
-        let name = self
-            .model_fields
-            .api_key_name_for_storage(update.name.take().map(Some), false)
+        let active = self
+            .prepare_api_key_fields(
+                update.name.take().map(Some),
+                std::mem::take(&mut update.additional_fields),
+                false,
+            )
             .await?;
-        let mut active = apply_update_fields::<P::ApiKey>(
-            Default::default(),
+        let active = apply_update_fields::<P::ApiKey>(
+            active,
             update,
             self.config().advanced.database.generate_id(),
         )?;
-        if let Some(name) = name {
-            set::<P::ApiKey>(
-                &mut active,
-                "name",
-                name,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
         let filter =
             P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
-        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
+        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
             super::updates::update_returning_one::<Entity<P::ApiKey>, _>(
                 self.connection(),
                 active,
@@ -312,12 +293,9 @@ where
             )
             .await
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         Ok(self
-            .model_fields
-            .project_api_keys(row.into_iter().collect())
+            .project_api_key_models(model.into_iter().collect())
             .await?
             .pop())
     }
@@ -329,12 +307,10 @@ where
     ) -> AuthResult<Option<ApiKey>> {
         let id = id.typed()?;
         // Upstream does not run update policies for an increment without a set patch.
-        let name = if matches!(&write, ApiKeyUsageWrite::Decrement) {
-            None
+        let fields = if matches!(&write, ApiKeyUsageWrite::Decrement) {
+            Default::default()
         } else {
-            self.model_fields
-                .api_key_name_for_storage(None, false)
-                .await?
+            self.prepare_api_key_fields(None, Map::new(), false).await?
         };
         let operation = write.operation();
         let reselect =
@@ -393,11 +369,13 @@ where
                 query = query.col_expr(P::ApiKey::column("updated_at")?, Expr::value(at));
             }
         }
-        if let Some(name) = name {
-            query = query.col_expr(P::ApiKey::column("name")?, Expr::value(name));
+        for column in <P::ApiKey as SeaOrmPluginModel>::Column::iter() {
+            if let sea_orm::ActiveValue::Set(value) = fields.get(column) {
+                query = query.col_expr(column, Expr::value(value));
+            }
         }
         let query = query.filter(guard.clone());
-        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
+        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {
                 super::updates::increment_returning_one::<Entity<P::ApiKey>>(
                     self.connection(),
@@ -415,12 +393,9 @@ where
                 .await
             }
         })
-        .await?
-        .map(|model| model.record())
-        .transpose()?;
+        .await?;
         Ok(self
-            .model_fields
-            .project_api_keys(row.into_iter().collect())
+            .project_api_key_models(model.into_iter().collect())
             .await?
             .pop())
     }

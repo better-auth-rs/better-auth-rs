@@ -102,12 +102,20 @@ impl UserFieldConfig {
         value: Option<Value>,
         supports_native_json: bool,
     ) -> AuthResult<Option<Value>> {
-        let value = self.prepare_output(value, supports_native_json)?;
-        self.adapter_output_from_raw(
+        self.adapter_output_with_capabilities(
             value,
             FieldOutputCapabilities::json_only(supports_native_json),
         )
         .await
+    }
+
+    pub(crate) async fn adapter_output_with_capabilities(
+        &self,
+        value: Option<Value>,
+        capabilities: FieldOutputCapabilities,
+    ) -> AuthResult<Option<Value>> {
+        let value = self.prepare_output(value, capabilities.supports_native_json)?;
+        self.adapter_output_from_raw(value, capabilities).await
     }
 
     pub(crate) async fn adapter_output_from_raw(

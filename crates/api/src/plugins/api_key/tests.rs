@@ -750,6 +750,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         let key = ctx
             .database
             .create_api_key(better_auth_core::CreateApiKey {
+                additional_fields: Default::default(),
                 reference_id: "list-owner".into(),
                 config_id: "default".into(),
                 name: Some(name.into()),

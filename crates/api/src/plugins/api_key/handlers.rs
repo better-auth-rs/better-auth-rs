@@ -294,6 +294,7 @@ pub(super) async fn create_key_for_user(
         None
     };
     let input = CreateApiKey {
+        additional_fields: Default::default(),
         reference_id,
         config_id: config.config_id.clone(),
         name: body.name.clone(),

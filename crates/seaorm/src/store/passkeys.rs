@@ -225,7 +225,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let fields = self.model_fields.fields(EntityRole::Passkey);
         let records = models
             .iter()
-            .map(|model| model.record_fields(fields))
+            .map(|model| {
+                super::plugin_models::record_fields(
+                    model,
+                    fields,
+                    self.connection().get_database_backend(),
+                )
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         let rows = models
             .iter()
@@ -235,7 +241,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .project_passkey_records(
                 rows,
                 records,
-                self.connection().get_database_backend() == DbBackend::Postgres,
+                super::field_output::capabilities(self.connection().get_database_backend()),
+                self.connection().get_database_backend() != DbBackend::Sqlite,
             )
             .await
     }

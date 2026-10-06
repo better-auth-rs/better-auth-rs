@@ -46,7 +46,7 @@ impl JwtPlugin {
 
     pub(super) async fn persist_key<S: AuthSchema>(
         &self,
-        data: CreateJwk,
+        mut data: CreateJwk,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<Jwk> {
         if let Some(callback) = endpoint
@@ -57,6 +57,7 @@ impl JwtPlugin {
         {
             return callback(data, endpoint).await;
         }
+        data.created_at = chrono::Utc::now();
         store(endpoint).create_jwk(data).await
     }
 }

@@ -3,12 +3,12 @@ use async_trait::async_trait;
 use better_auth_core::store::schema::resolve_field_name;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, ModelTrait, QueryFilter,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityName, EntityTrait, QueryFilter,
     QuerySelect,
 };
 
 use better_auth_core::store::UserStore;
-use better_auth_core::user_fields::{FieldOutputCapabilities, UserFieldConfig, UserFieldType};
+use better_auth_core::user_fields::{FieldOutputCapabilities, UserFieldType};
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::DatabaseHookUpdate;
@@ -16,67 +16,11 @@ use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
 
-use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
-
-fn column_value<E: EntityTrait>(model: &E::Model, column: E::Column) -> sea_orm::Value {
-    model.get(column)
-}
-
-fn sqlite_extra_output(
-    value: sea_orm::Value,
-    field: &UserFieldConfig,
-) -> AuthResult<Option<serde_json::Value>> {
-    use sea_orm::Value;
-    if matches!(field.field_type, UserFieldType::Boolean)
-        && let Value::Bool(Some(value)) = value
-    {
-        return Ok(Some(serde_json::Value::from(i64::from(value))));
-    }
-    if matches!(
-        field.field_type,
-        UserFieldType::Json | UserFieldType::StringArray | UserFieldType::NumberArray
-    ) {
-        match &value {
-            Value::Json(None) => return Ok(Some(serde_json::Value::Null)),
-            // SQL NULL and a stored JSON literal null must reach the callback differently.
-            Value::Json(Some(value)) => {
-                return better_auth_core::utils::json::stringify(value)
-                    .map(|text| Some(serde_json::Value::String(text)))
-                    .map_err(Into::into);
-            }
-            Value::Array(_, Some(_)) => {
-                return better_auth_core::utils::json::stringify(
-                    &sea_orm::sea_query::sea_value_to_json_value(&value),
-                )
-                .map(|text| Some(serde_json::Value::String(text)))
-                .map_err(Into::into);
-            }
-            _ => {}
-        }
-    }
-    if matches!(field.field_type, UserFieldType::Date) {
-        return match value {
-            Value::ChronoDateTimeUtc(value) => better_auth_core::utils::date::serialize_option(
-                &value,
-                serde_json::value::Serializer,
-            )
-            .map(Some)
-            .map_err(Into::into),
-            Value::ChronoDate(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoTime(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoDateTime(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoDateTimeWithTimeZone(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoDateTimeLocal(value) => Ok(Some(serde_json::to_value(value)?)),
-            // The SQL formatter changes these representations; retain their serialized source.
-            Value::TimeDate(_)
-            | Value::TimeTime(_)
-            | Value::TimeDateTime(_)
-            | Value::TimeDateTimeWithTimeZone(_) => Ok(None),
-            value => Ok(Some(sea_orm::sea_query::sea_value_to_json_value(&value))),
-        };
-    }
-    Ok(Some(sea_orm::sea_query::sea_value_to_json_value(&value)))
-}
+use super::{
+    SeaOrmStore, cancelled_by_hook,
+    field_output::{column_value, sqlite_extra_output},
+    map_db_err,
+};
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -610,6 +554,11 @@ where
         email: &str,
     ) -> AuthResult<Option<better_auth_core::store::UserAccounts>> {
         use better_auth_core::AuthUser;
+        better_auth_core::store::UserAccounts::validate_schema(
+            self.config(),
+            <S::User as SeaOrmUserModel>::Entity::default().table_name(),
+            <S::Account as SeaOrmAccountModel>::Entity::default().table_name(),
+        )?;
         let (record, native_accounts) = if self.config().advanced.database.joins == Some(true) {
             let query = super::joins::joined_query::<
                 <S::User as SeaOrmUserModel>::Entity,

@@ -1,0 +1,4335 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "models": [
+        {
+          "model": "apikey",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": 0,
+                "disabledFlag": 1,
+                "labels": "[\"changed\",\"third\"]",
+                "scores": "[4,5.5]",
+                "shortDate": "2030-02-03",
+                "invalidDate": "not-a-date",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "passkey",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": 0,
+                "disabledFlag": 1,
+                "labels": "[\"changed\",\"third\"]",
+                "scores": "[4,5.5]",
+                "shortDate": "2030-02-03",
+                "invalidDate": "not-a-date",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "deviceCode",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": 0,
+                "disabledFlag": 1,
+                "labels": "[\"changed\",\"third\"]",
+                "scores": "[4,5.5]",
+                "shortDate": "2030-02-03",
+                "invalidDate": "not-a-date",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "twoFactor",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": 0,
+                "disabledFlag": 1,
+                "labels": "[\"changed\",\"third\"]",
+                "scores": "[4,5.5]",
+                "shortDate": "2030-02-03",
+                "invalidDate": "not-a-date",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "jwks",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": 0,
+                "disabledFlag": 1,
+                "labels": "[\"changed\",\"third\"]",
+                "scores": "[4,5.5]",
+                "shortDate": "2030-02-03",
+                "invalidDate": "not-a-date",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "walletAddress",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "output",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": 0,
+                "disabledFlag": 1,
+                "labels": "[\"changed\",\"third\"]",
+                "scores": "[4,5.5]",
+                "shortDate": "2030-02-03",
+                "invalidDate": "not-a-date",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "output",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "models": [
+        {
+          "model": "apikey",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": false,
+                "disabledFlag": true,
+                "labels": [
+                  "changed",
+                  "third"
+                ],
+                "scores": [
+                  4,
+                  5.5
+                ],
+                "shortDate": "2030-02-03T00:00:00.000Z",
+                "invalidDate": null,
+                "id": "<model-id>"
+              },
+              "stored": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "configId": "default",
+                "name": "Desk",
+                "start": null,
+                "referenceId": "<owner-id>",
+                "prefix": null,
+                "key": "ordinary-stored-hash",
+                "refillInterval": 60000,
+                "refillAmount": 10,
+                "lastRefillAt": null,
+                "enabled": true,
+                "rateLimitEnabled": true,
+                "rateLimitTimeWindow": 60000,
+                "rateLimitMax": 3,
+                "requestCount": 0,
+                "remaining": 10,
+                "lastRequest": null,
+                "expiresAt": null,
+                "createdAt": "<created-at>",
+                "updatedAt": "<created-at>",
+                "permissions": null,
+                "metadata": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "invalid-date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "passkey",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": false,
+                "disabledFlag": true,
+                "labels": [
+                  "changed",
+                  "third"
+                ],
+                "scores": [
+                  4,
+                  5.5
+                ],
+                "shortDate": "2030-02-03T00:00:00.000Z",
+                "invalidDate": null,
+                "id": "<model-id>"
+              },
+              "stored": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "name": "Desk",
+                "publicKey": "ordinary-public-key",
+                "userId": "<owner-id>",
+                "credentialID": "ordinary-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "<created-at>",
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "invalid-date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "deviceCode",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": false,
+                "disabledFlag": true,
+                "labels": [
+                  "changed",
+                  "third"
+                ],
+                "scores": [
+                  4,
+                  5.5
+                ],
+                "shortDate": "2030-02-03T00:00:00.000Z",
+                "invalidDate": null,
+                "id": "<model-id>"
+              },
+              "stored": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "deviceCode": "ordinary-device",
+                "userCode": "ordinary-user",
+                "userId": "<owner-id>",
+                "expiresAt": "2032-01-02T03:04:05.000Z",
+                "status": "pending",
+                "lastPolledAt": null,
+                "pollingInterval": 5000,
+                "clientId": "ordinary-client",
+                "scope": "read",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "invalid-date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "twoFactor",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": false,
+                "disabledFlag": true,
+                "labels": [
+                  "changed",
+                  "third"
+                ],
+                "scores": [
+                  4,
+                  5.5
+                ],
+                "shortDate": "2030-02-03T00:00:00.000Z",
+                "invalidDate": null,
+                "id": "<model-id>"
+              },
+              "stored": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "secret": "ordinary-encrypted-secret",
+                "backupCodes": "ordinary-encrypted-codes",
+                "userId": "<owner-id>",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "lockedUntil": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "invalid-date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "jwks",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": false,
+                "disabledFlag": true,
+                "labels": [
+                  "changed",
+                  "third"
+                ],
+                "scores": [
+                  4,
+                  5.5
+                ],
+                "shortDate": "2030-02-03T00:00:00.000Z",
+                "invalidDate": null,
+                "id": "<model-id>"
+              },
+              "stored": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "publicKey": "public",
+                "privateKey": "private",
+                "createdAt": "<created-at>",
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "invalid-date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        },
+        {
+          "model": "walletAddress",
+          "observations": [
+            {
+              "name": "create",
+              "events": [
+                [
+                  "input",
+                  "enabledFlag",
+                  true
+                ],
+                [
+                  "input",
+                  "disabledFlag",
+                  false
+                ],
+                [
+                  "input",
+                  "labels",
+                  [
+                    "first",
+                    "second"
+                  ]
+                ],
+                [
+                  "input",
+                  "scores",
+                  [
+                    1,
+                    2.5
+                  ]
+                ],
+                [
+                  "input",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "input",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              },
+              "stored": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-rewrite",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ],
+                [
+                  "output",
+                  "scores",
+                  "[1,2.5]"
+                ],
+                [
+                  "output",
+                  "shortDate",
+                  "2029-01-02T03:04:05.000Z"
+                ],
+                [
+                  "output",
+                  "invalidDate",
+                  "2029-01-02T03:04:05.000Z"
+                ]
+              ],
+              "result": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": false,
+                "disabledFlag": true,
+                "labels": [
+                  "changed",
+                  "third"
+                ],
+                "scores": [
+                  4,
+                  5.5
+                ],
+                "shortDate": "2030-02-03T00:00:00.000Z",
+                "invalidDate": null,
+                "id": "<model-id>"
+              },
+              "stored": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            },
+            {
+              "name": "read-error",
+              "events": [
+                [
+                  "output",
+                  "enabledFlag",
+                  1
+                ],
+                [
+                  "output",
+                  "disabledFlag",
+                  0
+                ],
+                [
+                  "output",
+                  "labels",
+                  "[\"first\",\"second\"]"
+                ]
+              ],
+              "result": {
+                "sameError": true,
+                "message": "ordinary plugin output error"
+              },
+              "stored": {
+                "userId": "<owner-id>",
+                "address": "0x0000000000000000000000000000000000000001",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": "<created-at>",
+                "enabledFlag": true,
+                "disabledFlag": false,
+                "labels": [
+                  "first",
+                  "second"
+                ],
+                "scores": [
+                  1,
+                  2.5
+                ],
+                "shortDate": "2029-01-02T03:04:05.000Z",
+                "invalidDate": "2029-01-02T03:04:05.000Z",
+                "id": "<model-id>"
+              }
+            }
+          ],
+          "referenceDateKinds": [
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "input",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "create",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "shortDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "output",
+              "field": "invalidDate",
+              "kind": "string"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "result",
+              "field": "invalidDate",
+              "kind": "invalid-date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-rewrite",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "shortDate",
+              "kind": "date"
+            },
+            {
+              "operation": "read-error",
+              "phase": "stored",
+              "field": "invalidDate",
+              "kind": "date"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

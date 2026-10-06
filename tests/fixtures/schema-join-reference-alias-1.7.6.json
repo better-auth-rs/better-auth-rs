@@ -1,0 +1,1131 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "accounts"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "query",
+          "findMany",
+          "accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ],
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ]
+      ],
+      "result": {
+        "account": {
+          "id": "account",
+          "accountId": "external-owner",
+          "userId": "owner",
+          "accessToken": "original-access"
+        },
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "query",
+          "findMany",
+          "accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "accounts"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ]
+      ],
+      "result": {
+        "account": {
+          "id": "account",
+          "accountId": "external-owner",
+          "userId": "owner",
+          "accessToken": "original-access"
+        },
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "native_accounts"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "query",
+          "findMany",
+          "native_accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "alias",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "native_accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ],
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ]
+      ],
+      "result": {
+        "account": {
+          "id": "account",
+          "accountId": "external-owner",
+          "userId": "owner",
+          "accessToken": "original-access"
+        },
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "query",
+          "findMany",
+          "native_accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": false,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "native_accounts"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "alias",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findMany",
+          "native_accounts"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ]
+      ],
+      "result": {
+        "account": {
+          "id": "account",
+          "accountId": "external-owner",
+          "userId": "owner",
+          "accessToken": "original-access"
+        },
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model account and base model user while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "account-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ]
+      ],
+      "result": null
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": false,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "accounts",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [
+        [
+          "query",
+          "findOne",
+          "users"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "account.accountId",
+          "external-owner"
+        ]
+      ],
+      "result": {
+        "user": {
+          "id": "owner",
+          "name": "Owner",
+          "image": "owner-image"
+        },
+        "accounts": [
+          {
+            "id": "account",
+            "accountId": "external-owner",
+            "userId": "owner",
+            "accessToken": "original-access"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "joins": true,
+      "mode": "user-mixed-duplicate",
+      "populated": true,
+      "operation": "owner",
+      "tables": {
+        "user": "users",
+        "account": "native_accounts"
+      },
+      "events": [],
+      "result": {
+        "error": "Multiple foreign keys found for model user and base model account while performing join operation. Only one foreign key is supported."
+      }
+    }
+  ]
+}

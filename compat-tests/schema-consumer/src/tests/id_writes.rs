@@ -273,6 +273,7 @@ pub(super) async fn reference_writes<
     );
     let key = store
         .create_api_key(CreateApiKey {
+            additional_fields: Default::default(),
             reference_id: "0x10".into(),
             config_id: "default".into(),
             name: None,

@@ -24,6 +24,24 @@ pub mod model {
     pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
+        #[serde(rename = "stored_enabled_flag")]
+        #[sea_orm(column_name = "stored_enabled_flag")]
+        pub enabled_flag: Option<bool>,
+        #[serde(rename = "stored_disabled_flag")]
+        #[sea_orm(column_name = "stored_disabled_flag")]
+        pub disabled_flag: Option<bool>,
+        #[serde(rename = "stored_labels")]
+        #[sea_orm(column_name = "stored_labels")]
+        pub labels: Option<Json>,
+        #[serde(rename = "stored_scores")]
+        #[sea_orm(column_name = "stored_scores")]
+        pub scores: Option<Json>,
+        #[serde(rename = "stored_short_date")]
+        #[sea_orm(column_name = "stored_short_date")]
+        pub short_date: Option<DateTimeUtc>,
+        #[serde(rename = "stored_invalid_date")]
+        #[sea_orm(column_name = "stored_invalid_date")]
+        pub invalid_date: Option<DateTimeUtc>,
         pub name: Option<String>,
         pub public_key: String,
         #[serde(rename = "stored_owner")]

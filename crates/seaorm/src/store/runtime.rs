@@ -55,6 +55,7 @@ where
         let mut store = self.clone();
         store.config = config;
         store.model_fields = model_fields;
+        store.validate_api_key_fields()?;
         store.validate_session_fields()?;
         store.validate_device_code_fields()?;
         store.validate_passkey_fields()?;

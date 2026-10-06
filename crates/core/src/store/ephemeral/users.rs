@@ -439,6 +439,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Option<crate::store::UserAccounts>> {
+        crate::store::UserAccounts::validate_schema(&self.config, "user", "account")?;
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_user_accounts(email).await;
         }

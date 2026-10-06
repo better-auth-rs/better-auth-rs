@@ -580,6 +580,9 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
 /// over the wire (matches upstream TS behavior).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKeyView {
+    /// Declared application fields after adapter output projection.
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -641,6 +644,7 @@ pub fn serialize_optional_number<S: Serializer>(
 impl<T: AuthApiKey> From<&T> for ApiKeyView {
     fn from(ak: &T) -> Self {
         Self {
+            additional_fields: ak.additional_fields().cloned().unwrap_or_default(),
             id: ak.id().into_owned(),
             name: ak.name().clone(),
             start: ak.start().map(std::borrow::Cow::into_owned),

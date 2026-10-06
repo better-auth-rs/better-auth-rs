@@ -239,6 +239,10 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
 
 /// Trait representing an API key entity.
 pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Return application fields when the entity already contains an adapter projection.
+    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> &SchemaValue<Option<String>>;
     fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>>;

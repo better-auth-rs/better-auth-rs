@@ -1,3 +1,4 @@
+mod api_key;
 mod device;
 mod jwk;
 mod passkey;
@@ -6,7 +7,7 @@ mod wallet;
 
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
-use crate::{ApiKey, AuthConfig, AuthError, AuthResult, SchemaValue};
+use crate::{AuthConfig, AuthError, AuthResult, SchemaValue};
 use indexmap::{IndexMap, IndexSet};
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
@@ -19,8 +20,6 @@ pub struct ModelFields {
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
 }
-
-type StringFields<'a, const N: usize> = [(&'static str, &'a mut SchemaValue<Option<String>>); N];
 
 fn optional_string(
     fields: &mut Map<String, Value>,
@@ -36,6 +35,7 @@ fn optional_string(
 impl ModelFields {
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
+            EntityRole::ApiKey => api_key::validate_fields(&fields)?,
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
             EntityRole::Passkey => passkey::validate_fields(&fields)?,
@@ -47,19 +47,6 @@ impl ModelFields {
             | EntityRole::Verification
             | EntityRole::Organization
             | EntityRole::Team => {}
-            EntityRole::ApiKey => {
-                for (name, field) in fields.fields() {
-                    if name != "name"
-                        || !matches!(field.field_type, UserFieldType::String)
-                        || field.references.is_some()
-                        || resolve_field_name(field.field_name.as_deref(), name) != name
-                    {
-                        return Err(AuthError::config(format!(
-                            "{role:?} field registration supports only its ordinary string fields (Passkey name/aaguid, ApiKey name) without reference or field-name replacement",
-                        )));
-                    }
-                }
-            }
             _ => {
                 return Err(AuthError::config(format!(
                     "Plugin field registration does not support {role:?}"
@@ -74,6 +61,13 @@ impl ModelFields {
             fields.fields_mut().sort_by(|left, _, right, _| {
                 passkey::field_order(left).cmp(&passkey::field_order(right))
             });
+        }
+        if role == EntityRole::ApiKey
+            && let Some(fields) = self.models.get_mut(&role)
+        {
+            fields
+                .fields_mut()
+                .sort_by(|left, _, right, _| (left != "name").cmp(&(right != "name")));
         }
         Ok(())
     }
@@ -268,77 +262,5 @@ impl ModelFields {
             }
         }
         (adapter, endpoint, self)
-    }
-
-    /// Prepare an optional API Key name patch.
-    /// `None` omits the supplied name; defaults or `on_update` may still supply it.
-    /// `Some(None)` supplies a null value.
-    pub async fn api_key_name_for_storage(
-        &self,
-        name: Option<Option<String>>,
-        create: bool,
-    ) -> AuthResult<Option<Option<String>>> {
-        let core = name
-            .into_iter()
-            .map(|name| {
-                (
-                    "name".to_owned(),
-                    name.map(Value::String).unwrap_or(Value::Null),
-                )
-            })
-            .collect();
-        let mut fields = self
-            .fields(EntityRole::ApiKey)
-            .organization_storage_fields(core, Map::new(), create)
-            .await?;
-        optional_string(&mut fields, "name")
-    }
-
-    /// Project API Key names together while retaining credentials, owners, and counters.
-    pub async fn project_api_keys(&self, rows: Vec<ApiKey>) -> AuthResult<Vec<ApiKey>> {
-        self.project_strings(EntityRole::ApiKey, rows, |row| [("name", &mut row.name)])
-            .await
-    }
-
-    async fn project_strings<T: Send, const N: usize>(
-        &self,
-        role: EntityRole,
-        mut rows: Vec<T>,
-        columns: fn(&mut T) -> StringFields<'_, N>,
-    ) -> AuthResult<Vec<T>> {
-        let fields = self.fields(role);
-        if fields.fields().is_empty() {
-            return Ok(rows);
-        }
-        let records = rows
-            .iter_mut()
-            .map(|row| {
-                let mut core = Map::new();
-                for (name, value) in columns(row) {
-                    if let Some(value) = value.json()? {
-                        let _ = core.insert(name.into(), value);
-                    }
-                }
-                Ok(AdapterRecord::new(Map::new(), core))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        let output = fields.project_adapter_records(records, true, true).await?;
-        for (row, mut output) in rows.iter_mut().zip(output) {
-            for (name, value) in columns(row)
-                .into_iter()
-                .filter(|(name, _)| fields.fields().contains_key(*name))
-            {
-                *value = output
-                    .shift_remove(name)
-                    .map(|value| value.json())
-                    .transpose()?
-                    .flatten()
-                    .map(serde_json::from_value)
-                    .transpose()?
-                    .map(SchemaValue::Typed)
-                    .unwrap_or_default();
-            }
-        }
-        Ok(rows)
     }
 }

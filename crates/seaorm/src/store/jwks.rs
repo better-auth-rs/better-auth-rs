@@ -142,17 +142,23 @@ impl<
         let fields = self.model_fields.fields(EntityRole::Jwk);
         let records = models
             .iter()
-            .map(|model| model.record_fields(fields))
+            .map(|model| {
+                super::plugin_models::record_fields(
+                    model,
+                    fields,
+                    self.connection().get_database_backend(),
+                )
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         let mut rows = models
             .iter()
             .map(SeaOrmPluginModel::record)
             .collect::<AuthResult<Vec<_>>>()?;
         let output = fields
-            .project_adapter_records(
+            .project_adapter_records_with_capabilities(
                 records,
-                self.connection().get_database_backend() == DbBackend::Postgres,
-                true,
+                super::field_output::capabilities(self.connection().get_database_backend()),
+                self.connection().get_database_backend() != DbBackend::Sqlite,
             )
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {
@@ -175,7 +181,7 @@ impl<
         let native = Map::from_iter([
             ("public_key".to_owned(), json!(input.public_key)),
             ("private_key".to_owned(), json!(input.private_key)),
-            ("created_at".to_owned(), json!(Utc::now())),
+            ("created_at".to_owned(), json!(input.created_at)),
             ("expires_at".to_owned(), json!(input.expires_at)),
             ("alg".to_owned(), json!(Some(input.alg))),
             ("crv".to_owned(), json!(input.crv)),

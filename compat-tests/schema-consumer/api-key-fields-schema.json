@@ -1,0 +1,12 @@
+{
+  "apikey": {
+    "modelName": "ordinary_api_key_fields",
+    "fields": { "key": "stored_key", "referenceId": "stored_owner", "requestCount": "stored_count" },
+    "additionalFields": {
+      "label": { "type": "string", "fieldName": "stored_label", "required": false },
+      "activatedAt": { "type": "date", "fieldName": "stored_activation", "required": false },
+      "details": { "type": "json", "fieldName": "stored_details", "required": false },
+      "revision": { "type": "number", "fieldName": "stored_revision", "required": false }
+    }
+  }
+}

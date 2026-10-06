@@ -31,6 +31,8 @@ on:
           - provider-options
           - passkey
           - two-factor
+          - plugin-fields
+          - schema-joins
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string
@@ -168,3 +170,9 @@ jobs:
       - name: Check TwoFactor storage and authentication
         if: env.CHECK_STAGE == 'two-factor'
         run: devenv shell -- ./scripts/check.sh two-factor
+      - name: Check plugin fields and API Key storage
+        if: env.CHECK_STAGE == 'plugin-fields'
+        run: devenv shell -- ./scripts/check.sh plugin-fields
+      - name: Check schema join references
+        if: env.CHECK_STAGE == 'schema-joins'
+        run: devenv shell -- ./scripts/check.sh schema-joins

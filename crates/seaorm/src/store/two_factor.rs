@@ -51,17 +51,23 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let fields = self.model_fields.fields(EntityRole::TwoFactor);
         let records = models
             .iter()
-            .map(|model| model.record_fields(fields))
+            .map(|model| {
+                super::plugin_models::record_fields(
+                    model,
+                    fields,
+                    self.connection().get_database_backend(),
+                )
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         let mut rows = models
             .iter()
             .map(SeaOrmPluginModel::record)
             .collect::<AuthResult<Vec<_>>>()?;
         let output = fields
-            .project_adapter_records(
+            .project_adapter_records_with_capabilities(
                 records,
-                self.connection().get_database_backend() == DbBackend::Postgres,
-                true,
+                super::field_output::capabilities(self.connection().get_database_backend()),
+                self.connection().get_database_backend() != DbBackend::Sqlite,
             )
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {

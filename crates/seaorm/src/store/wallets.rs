@@ -175,13 +175,17 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     async fn project_wallet_model(&self, model: P::WalletAddress) -> AuthResult<WalletAddress> {
         let fields = self.model_fields.fields(EntityRole::WalletAddress);
-        let record = model.record_fields(fields)?;
+        let record = super::plugin_models::record_fields(
+            &model,
+            fields,
+            self.connection().get_database_backend(),
+        )?;
         let mut row = model.record()?;
         let output = fields
-            .project_adapter_records(
+            .project_adapter_records_with_capabilities(
                 vec![record],
-                self.connection().get_database_backend() == DbBackend::Postgres,
-                true,
+                super::field_output::capabilities(self.connection().get_database_backend()),
+                self.connection().get_database_backend() != DbBackend::Sqlite,
             )
             .await?
             .remove(0);

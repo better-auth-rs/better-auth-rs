@@ -286,6 +286,7 @@ async fn organization_key_verifies_without_emulating_a_user_session() {
     );
     ctx.database
         .create_api_key(better_auth_core::CreateApiKey {
+            additional_fields: Default::default(),
             // A colliding user ID must not turn an organization key into a user session.
             reference_id: user.id.typed().unwrap().clone(),
             config_id: "default".to_owned(),

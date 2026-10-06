@@ -1,0 +1,331 @@
+{
+  "version": "1.7.6",
+  "backends": [
+    {
+      "backend": "memory",
+      "cases": [
+        {
+          "failOutput": false,
+          "events": [
+            [
+              "name",
+              "Desk"
+            ],
+            [
+              "write",
+              {
+                "label": "Live",
+                "revision": 2.5,
+                "updatedAt": "2031-02-03T04:05:05.000Z"
+              }
+            ],
+            [
+              "output",
+              "label",
+              "Live"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              2.5
+            ]
+          ],
+          "result": {
+            "configId": "default",
+            "name": "Desk:out",
+            "start": null,
+            "referenceId": "ordinary-owner",
+            "prefix": null,
+            "key": "ordinary-stored-hash",
+            "refillInterval": 60000,
+            "refillAmount": 10,
+            "lastRefillAt": null,
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "rateLimitTimeWindow": 60000,
+            "rateLimitMax": 3,
+            "requestCount": 0,
+            "remaining": 10,
+            "lastRequest": null,
+            "expiresAt": null,
+            "createdAt": "<created-at>",
+            "updatedAt": "2031-02-03T04:05:05.000Z",
+            "permissions": null,
+            "metadata": null,
+            "label": "Live:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<api-key-id>"
+          },
+          "error": null,
+          "stored": {
+            "configId": "default",
+            "name": "Desk",
+            "start": null,
+            "referenceId": "ordinary-owner",
+            "prefix": null,
+            "key": "ordinary-stored-hash",
+            "refillInterval": 60000,
+            "refillAmount": 10,
+            "lastRefillAt": null,
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "rateLimitTimeWindow": 60000,
+            "rateLimitMax": 3,
+            "requestCount": 0,
+            "remaining": 10,
+            "lastRequest": null,
+            "expiresAt": null,
+            "createdAt": "<created-at>",
+            "updatedAt": "2031-02-03T04:05:05.000Z",
+            "permissions": null,
+            "metadata": null,
+            "label": "Live",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<api-key-id>"
+          }
+        },
+        {
+          "failOutput": true,
+          "events": [
+            [
+              "name",
+              "Desk"
+            ],
+            [
+              "write",
+              {
+                "label": "Live",
+                "revision": 2.5,
+                "updatedAt": "2031-02-03T04:05:05.000Z"
+              }
+            ],
+            [
+              "output",
+              "label",
+              "Live"
+            ]
+          ],
+          "result": null,
+          "error": {
+            "sameError": true,
+            "message": "ordinary live API Key output error"
+          },
+          "stored": {
+            "configId": "default",
+            "name": "Desk",
+            "start": null,
+            "referenceId": "ordinary-owner",
+            "prefix": null,
+            "key": "ordinary-stored-hash",
+            "refillInterval": 60000,
+            "refillAmount": 10,
+            "lastRefillAt": null,
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "rateLimitTimeWindow": 60000,
+            "rateLimitMax": 3,
+            "requestCount": 0,
+            "remaining": 10,
+            "lastRequest": null,
+            "expiresAt": null,
+            "createdAt": "<created-at>",
+            "updatedAt": "2031-02-03T04:05:05.000Z",
+            "permissions": null,
+            "metadata": null,
+            "label": "Live",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<api-key-id>"
+          }
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "cases": [
+        {
+          "failOutput": false,
+          "events": [
+            [
+              "name",
+              "Desk"
+            ],
+            [
+              "write",
+              {
+                "label": "Live",
+                "revision": 2.5,
+                "updatedAt": "2031-02-03T04:05:05.000Z"
+              }
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ],
+            [
+              "output",
+              "activatedAt",
+              "2029-01-02T03:04:05.000Z"
+            ],
+            [
+              "output",
+              "details",
+              "{\"channel\":\"ordinary\",\"enabled\":true}"
+            ],
+            [
+              "output",
+              "revision",
+              1.5
+            ]
+          ],
+          "result": {
+            "configId": "default",
+            "name": "Desk:out",
+            "start": null,
+            "referenceId": "ordinary-owner",
+            "prefix": null,
+            "key": "ordinary-stored-hash",
+            "refillInterval": 60000,
+            "refillAmount": 10,
+            "lastRefillAt": null,
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "rateLimitTimeWindow": 60000,
+            "rateLimitMax": 3,
+            "requestCount": 0,
+            "remaining": 10,
+            "lastRequest": null,
+            "expiresAt": null,
+            "createdAt": "<created-at>",
+            "updatedAt": "<created-at>",
+            "permissions": null,
+            "metadata": null,
+            "label": "Default:out",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 1.5,
+            "id": "<api-key-id>"
+          },
+          "error": null,
+          "stored": {
+            "configId": "default",
+            "name": "Desk",
+            "start": null,
+            "referenceId": "ordinary-owner",
+            "prefix": null,
+            "key": "ordinary-stored-hash",
+            "refillInterval": 60000,
+            "refillAmount": 10,
+            "lastRefillAt": null,
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "rateLimitTimeWindow": 60000,
+            "rateLimitMax": 3,
+            "requestCount": 0,
+            "remaining": 10,
+            "lastRequest": null,
+            "expiresAt": null,
+            "createdAt": "<created-at>",
+            "updatedAt": "2031-02-03T04:05:05.000Z",
+            "permissions": null,
+            "metadata": null,
+            "label": "Live",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<api-key-id>"
+          }
+        },
+        {
+          "failOutput": true,
+          "events": [
+            [
+              "name",
+              "Desk"
+            ],
+            [
+              "write",
+              {
+                "label": "Live",
+                "revision": 2.5,
+                "updatedAt": "2031-02-03T04:05:05.000Z"
+              }
+            ],
+            [
+              "output",
+              "label",
+              "Default"
+            ]
+          ],
+          "result": null,
+          "error": {
+            "sameError": true,
+            "message": "ordinary live API Key output error"
+          },
+          "stored": {
+            "configId": "default",
+            "name": "Desk",
+            "start": null,
+            "referenceId": "ordinary-owner",
+            "prefix": null,
+            "key": "ordinary-stored-hash",
+            "refillInterval": 60000,
+            "refillAmount": 10,
+            "lastRefillAt": null,
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "rateLimitTimeWindow": 60000,
+            "rateLimitMax": 3,
+            "requestCount": 0,
+            "remaining": 10,
+            "lastRequest": null,
+            "expiresAt": null,
+            "createdAt": "<created-at>",
+            "updatedAt": "2031-02-03T04:05:05.000Z",
+            "permissions": null,
+            "metadata": null,
+            "label": "Live",
+            "activatedAt": "2029-01-02T03:04:05.000Z",
+            "details": {
+              "channel": "ordinary",
+              "enabled": true
+            },
+            "revision": 2.5,
+            "id": "<api-key-id>"
+          }
+        }
+      ]
+    }
+  ]
+}

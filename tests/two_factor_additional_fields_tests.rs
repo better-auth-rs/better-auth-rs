@@ -1,5 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
+#[path = "support/ordinary_field_policies.rs"]
+mod ordinary_field_policies;
+
 #[path = "support/two_factor_field_contract.rs"]
 mod contract;
 #[path = "support/two_factor_fields.rs"]

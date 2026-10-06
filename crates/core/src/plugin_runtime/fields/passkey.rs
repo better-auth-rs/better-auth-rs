@@ -116,7 +116,13 @@ impl ModelFields {
                 Ok(AdapterRecord::new(Map::new(), storage))
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        self.project_passkey_records(rows, records, true).await
+        self.project_passkey_records(
+            rows,
+            records,
+            crate::user_fields::FieldOutputCapabilities::json_only(true),
+            true,
+        )
+        .await
     }
 
     /// Project extracted adapter fields without exposing undeclared model columns.
@@ -124,11 +130,12 @@ impl ModelFields {
         &self,
         mut rows: Vec<Passkey>,
         records: Vec<AdapterRecord>,
-        supports_native_json: bool,
+        capabilities: crate::user_fields::FieldOutputCapabilities,
+        supports_native_dates: bool,
     ) -> AuthResult<Vec<Passkey>> {
         let fields = self.fields(EntityRole::Passkey);
         let output = fields
-            .project_adapter_records(records, supports_native_json, true)
+            .project_adapter_records_with_capabilities(records, capabilities, supports_native_dates)
             .await?;
         for (row, mut output) in rows.iter_mut().zip(output) {
             for (name, value) in [("name", &mut row.name), ("aaguid", &mut row.aaguid)] {

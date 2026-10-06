@@ -1,5 +1,4 @@
-#[path = "ordinary_field_policies.rs"]
-mod ordinary;
+use crate::ordinary_field_policies as ordinary;
 
 pub(crate) use ordinary::{Trace, take};
 

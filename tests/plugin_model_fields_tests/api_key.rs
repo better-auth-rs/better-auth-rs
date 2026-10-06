@@ -35,6 +35,7 @@ pub(super) fn policy(events: Arc<Mutex<Vec<String>>>) -> UserFieldConfig {
 
 pub(super) fn input(name: Option<&str>, hash: &str) -> CreateApiKey {
     CreateApiKey {
+        additional_fields: Default::default(),
         reference_id: "ordinary-owner".into(),
         config_id: "default".into(),
         name: name.map(str::to_owned),

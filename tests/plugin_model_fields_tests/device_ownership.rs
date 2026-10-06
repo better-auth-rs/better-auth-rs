@@ -73,14 +73,14 @@ impl Observation {
         let mut value = serde_json::to_value(row)?;
         value["id"] = json!("<device-id>");
         value["userId"] = json!("<owner-id>");
-        value["lastPolledAt"] = match row.last_polled_at {
-            Some(polled) => {
-                assert!(polled.timestamp_millis() >= self.started_at.timestamp_millis());
-                assert!(polled.timestamp_millis() <= Utc::now().timestamp_millis());
-                json!("<polled-at>")
-            }
-            None => Value::Null,
-        };
+        if let Some(polled) = row.last_polled_at {
+            assert!(polled.timestamp_millis() >= self.started_at.timestamp_millis());
+            assert!(polled.timestamp_millis() <= Utc::now().timestamp_millis());
+            assert!(value.get("lastPolledAt").is_some_and(Value::is_string));
+            value["lastPolledAt"] = json!("<polled-at>");
+        } else {
+            assert_eq!(value.get("lastPolledAt"), Some(&Value::Null));
+        }
         if let Some(interval) = row.polling_interval {
             // JSON has one numeric type; preserve the value with JavaScript's integral spelling.
             value["pollingInterval"] = serde_json::from_str(&interval.to_string())?;

@@ -185,6 +185,8 @@ export BETTER_AUTH_TWO_FACTOR_MYSQL_CUSTOM_SCHEMA="$schema_dir/two_factor_mysql_
 export BETTER_AUTH_TWO_FACTOR_FIELDS_SCHEMA="$schema_dir/two_factor_fields.rs"
 "$consumer_cli" generate --plugins passkey --schema-config compat-tests/schema-consumer/passkey-fields-schema.json --output "$schema_dir/passkey_fields.rs"
 export BETTER_AUTH_PASSKEY_FIELDS_SCHEMA="$schema_dir/passkey_fields.rs"
+"$consumer_cli" generate --plugins api-key --schema-config compat-tests/schema-consumer/api-key-fields-schema.json --output "$schema_dir/api_key_fields.rs"
+export BETTER_AUTH_API_KEY_FIELDS_SCHEMA="$schema_dir/api_key_fields.rs"
 for case in default legacy custom; do
   "$consumer_cli" generate --plugins jwt --rate-limit-database --database sqlite --schema-config "$schema_dir/jwk_rate_limit_catalog_${case}.json" --output "$schema_dir/jwk_rate_limit_catalog_${case}.rs"
 done

@@ -17,7 +17,7 @@ Configure application user fields with `AuthConfig.user.fields_mut()` and matchi
 
 Adapter-created JSON text uses JavaScript property ordering and number formatting. See [JSON field bindings](docs/content/docs/concepts/database.mdx#json-field-bindings) for the fallible conversion API and native SQL JSON storage boundary.
 
-Account and Verification Memory fields store JSON as text and retain native arrays. See [field representation](docs/content/docs/concepts/account-verification-fields.mdx#memory-json-and-arrays) for callback values and reference conversion.
+Account and Verification Memory fields store JSON as text and retain native arrays. See [field representation](docs/content/docs/concepts/account-verification-fields.mdx#memory-json-and-arrays) for callback values and reference conversion. Account/User joins reject missing or ambiguous final references before database reads; see [database integration](docs/content/docs/concepts/database.mdx) for the supported relation boundary.
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 
@@ -31,7 +31,7 @@ Generate Passkey storage with `--plugins passkey` for the 11 standard columns, o
 
 Generate TwoFactor storage with `--plugins two-factor` for the seven upstream columns and nullable verification fields. Use `--two-factor-legacy-schema` when regenerating the previous schema. Declare application columns with `twoFactor.additionalFields` and register matching runtime policies; see [TwoFactor storage](docs/content/docs/plugins/two-factor.mdx#storage) for the public `additional_fields` maps.
 
-API Key expiration configuration accepts fractional seconds for its default and fractional days for its bounds; see [API Key configuration](docs/content/docs/plugins/api-key.mdx#expiration-configuration) for units and the floating-point field migration.
+API Key expiration configuration accepts fractional seconds for its default and fractional days for its bounds; see [API Key configuration](docs/content/docs/plugins/api-key.mdx#expiration-configuration) for units and the floating-point field migration. Declare application columns with `apikey.additionalFields` and register matching runtime policies; [API Key storage](docs/content/docs/plugins/api-key.mdx#storage) describes the `additional_fields` maps, guarded usage updates, and cache behavior.
 
 Configure Social Twitch with `OAuthProvider::twitch` and `TwitchOptions`, Social LINE with `OAuthProvider::line`, or Generic LINE with `GenericOAuthConfig::line` and resolved inputs through `GenericOAuthProfileContext`; see the [OAuth guide](docs/content/docs/plugins/oauth.mdx) for provider-specific PKCE options, the alpha callback migration, and the verification boundary. Use `OAuthProvider::gitlab_with_issuer` for self-hosted GitLab. `OAuthCallbacks` supplies custom ID-token verifiers with the typed endpoint context, runtime, and resolved session. Social refresh callbacks and legacy ID-token verifiers retain optional `NativeRequest` metadata. Social profile fields preserve omitted and null email/verification values; callbacks preserve application errors; the guide describes provider-specific missing-profile responses.
 

@@ -1,6 +1,11 @@
 #[cfg(test)]
+#[path = "../../../tests/support/ordinary_field_policies.rs"]
+mod ordinary_field_policies;
+
+#[cfg(test)]
 mod tests {
     mod account_verification;
+    mod api_key_additional_fields;
     mod device_additional_fields;
     mod device_code_catalog;
     mod device_intervals;

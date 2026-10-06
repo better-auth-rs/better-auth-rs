@@ -199,7 +199,7 @@ pub struct DeviceCode {
     #[serde(serialize_with = "crate::utils::date::serialize")]
     pub expires_at: DateTime<Utc>,
     pub status: String,
-    #[serde(rename = "lastPolledAt", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "lastPolledAt")]
     #[serde(serialize_with = "crate::utils::date::serialize_option")]
     pub last_polled_at: Option<DateTime<Utc>>,
     #[serde(rename = "pollingInterval", skip_serializing_if = "Option::is_none")]
@@ -270,6 +270,9 @@ pub struct UpdateDeviceCode {
 /// API key response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKey {
+    /// Declared application fields after adapter output projection.
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -315,6 +318,8 @@ pub struct ApiKey {
 /// API key creation data.
 #[derive(Debug, Clone)]
 pub struct CreateApiKey {
+    /// Declared application fields before adapter input policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     /// Owner of the key — a user id, or an organization id when the key's
     /// configuration references organizations.
     pub reference_id: String,
@@ -339,6 +344,8 @@ pub struct CreateApiKey {
 /// API key update data.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateApiKey {
+    /// Declared application field patch before adapter input policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub name: Option<String>,
     pub enabled: Option<bool>,
     pub remaining: Option<f64>,
@@ -411,6 +418,9 @@ impl<T: AuthTwoFactor> From<&T> for TwoFactor {
 }
 
 impl AuthApiKey for ApiKey {
+    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
@@ -482,6 +492,7 @@ impl AuthApiKey for ApiKey {
 impl<T: AuthApiKey> From<&T> for ApiKey {
     fn from(api_key: &T) -> Self {
         Self {
+            additional_fields: api_key.additional_fields().cloned().unwrap_or_default(),
             id: api_key.id().into_owned(),
             name: api_key.name().clone(),
             start: api_key.start().map(Cow::into_owned),

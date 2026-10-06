@@ -310,6 +310,7 @@ pub(super) async fn create(
     } else {
         let created_at = now();
         ApiKey {
+            additional_fields: Default::default(),
             id: ctx
                 .config
                 .advanced

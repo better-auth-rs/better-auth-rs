@@ -131,11 +131,12 @@ impl ModelFields {
         &self,
         mut rows: Vec<DeviceCode>,
         records: Vec<AdapterRecord>,
-        supports_native_json: bool,
+        capabilities: crate::user_fields::FieldOutputCapabilities,
+        supports_native_dates: bool,
     ) -> AuthResult<Vec<DeviceCode>> {
         let fields = self.fields(EntityRole::DeviceCode);
         let output = fields
-            .project_adapter_records(records, supports_native_json, true)
+            .project_adapter_records_with_capabilities(records, capabilities, supports_native_dates)
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {
             self.assign_device_code_output(row, output)?;

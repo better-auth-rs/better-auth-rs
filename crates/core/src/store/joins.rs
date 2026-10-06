@@ -1,7 +1,8 @@
 //! Runtime projections returned by the core adapter's ordinary joins.
 
 use crate::{
-    AuthError, AuthResult, SchemaValue,
+    AuthConfig, AuthError, AuthResult, SchemaValue,
+    user_fields::UserConfig,
     wire::{AccountView, UserView},
 };
 
@@ -13,6 +14,18 @@ pub struct AccountOwner {
 }
 
 impl AccountOwner {
+    /// Reject missing or ambiguous Account/User references before reading either model.
+    pub fn validate_schema(
+        config: &AuthConfig,
+        user_table: &str,
+        account_table: &str,
+    ) -> AuthResult<()> {
+        validate_references(
+            ("account", account_table, &config.account.field_schema()),
+            ("user", user_table, &config.user),
+        )
+    }
+
     /// Check projections against the canonical owner ID captured before output policies run.
     pub fn new(
         account: AccountView,
@@ -40,6 +53,18 @@ pub struct UserAccounts {
 }
 
 impl UserAccounts {
+    /// Reject missing or ambiguous User/Account references before reading either model.
+    pub fn validate_schema(
+        config: &AuthConfig,
+        user_table: &str,
+        account_table: &str,
+    ) -> AuthResult<()> {
+        validate_references(
+            ("user", user_table, &config.user),
+            ("account", account_table, &config.account.field_schema()),
+        )
+    }
+
     /// Check a stored user and its account page without trusting projected identity fields.
     pub fn new(
         user: UserView,
@@ -56,6 +81,39 @@ impl UserAccounts {
             ));
         }
         Ok(Self { user, accounts })
+    }
+}
+
+fn validate_references(
+    (base, base_table, base_fields): (&str, &str, &UserConfig),
+    (model, model_table, model_fields): (&str, &str, &UserConfig),
+) -> AuthResult<()> {
+    let references = |fields: &UserConfig, target: &str, table: &str| {
+        fields
+            .fields()
+            .values()
+            .filter(|field| {
+                field
+                    .references
+                    .as_ref()
+                    .is_some_and(|reference| reference.model == target || reference.model == table)
+            })
+            .count()
+    };
+    let forward = references(model_fields, base, base_table);
+    let count = if forward == 0 {
+        references(base_fields, model, model_table)
+    } else {
+        forward
+    };
+    match count {
+        0 => Err(AuthError::config(format!(
+            "No foreign key found for model {model} and base model {base} while performing join operation."
+        ))),
+        1 => Ok(()),
+        _ => Err(AuthError::config(format!(
+            "Multiple foreign keys found for model {model} and base model {base} while performing join operation. Only one foreign key is supported."
+        ))),
     }
 }
 

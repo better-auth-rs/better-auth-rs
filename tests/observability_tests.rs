@@ -1654,6 +1654,7 @@ mod admin_counts;
 
 fn api_key_input() -> better_auth_core::CreateApiKey {
     better_auth_core::CreateApiKey {
+        additional_fields: Default::default(),
         reference_id: "owner".into(),
         config_id: "default".into(),
         name: None,

@@ -1,4 +1,6 @@
-use super::{UserConfig, UserFieldConfig, UserFieldReference, UserFieldType};
+use super::{
+    FieldOutputCapabilities, UserConfig, UserFieldConfig, UserFieldReference, UserFieldType,
+};
 use crate::store::schema::resolve_field_name;
 use crate::{AuthResult, SchemaValue};
 use serde_json::{Map, Value};
@@ -20,6 +22,21 @@ impl AdapterRecord {
                 .collect(),
             storage,
         }
+    }
+
+    /// Restore adapter values before output policies. `None` retains the extracted value.
+    pub fn map_storage_fields(
+        &mut self,
+        fields: &UserConfig,
+        map: impl Fn(&str, &UserFieldConfig) -> AuthResult<Option<Value>>,
+    ) -> AuthResult<()> {
+        for (name, field) in fields.fields() {
+            let storage = resolve_field_name(field.field_name.as_deref(), name);
+            if let Some(value) = map(storage, field)? {
+                let _ = self.storage.insert(storage.to_owned(), value);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -483,6 +500,26 @@ impl UserConfig {
         .await
     }
 
+    /// Project adapter fields with the database's JSON, array, boolean, and date conversions.
+    pub async fn project_adapter_records_with_capabilities(
+        &self,
+        mut records: Vec<AdapterRecord>,
+        capabilities: FieldOutputCapabilities,
+        supports_native_dates: bool,
+    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        super::batch::project_fields(&mut records, self.fields(), |record, name, field| {
+            Box::pin(project_adapter_field_with_capabilities(
+                record,
+                name,
+                field,
+                capabilities,
+                supports_native_dates,
+            ))
+        })
+        .await?;
+        Ok(records.into_iter().map(|record| record.output).collect())
+    }
+
     /// Preserve Memory reference values until callbacks run, then decode ordinary JSON text.
     pub(crate) async fn project_memory_adapter_records(
         &self,
@@ -608,6 +645,23 @@ async fn project_adapter_field(
     supports_native_json: bool,
     supports_native_dates: bool,
 ) -> AuthResult<()> {
+    project_adapter_field_with_capabilities(
+        record,
+        name,
+        field,
+        FieldOutputCapabilities::json_only(supports_native_json),
+        supports_native_dates,
+    )
+    .await
+}
+
+async fn project_adapter_field_with_capabilities(
+    record: &mut AdapterRecord,
+    name: &str,
+    field: &UserFieldConfig,
+    capabilities: FieldOutputCapabilities,
+    supports_native_dates: bool,
+) -> AuthResult<()> {
     if name == "id" {
         return Ok(());
     }
@@ -615,8 +669,10 @@ async fn project_adapter_field(
         .storage
         .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned();
-    let value =
-        project_adapter_value(value, field, supports_native_json, supports_native_dates).await?;
+    let value = field
+        .adapter_output_with_capabilities(value, capabilities)
+        .await?;
+    let value = project_output_value(value, field, supports_native_dates);
     if value.is_undefined() {
         let _ = record.output.shift_remove(name);
     } else {
@@ -632,22 +688,28 @@ pub(crate) async fn project_adapter_value(
     supports_native_dates: bool,
 ) -> AuthResult<SchemaValue<Value>> {
     let value = field.adapter_output(value, supports_native_json).await?;
-    Ok(
-        if !supports_native_dates
-            && !field.references_id()
-            && matches!(field.field_type, UserFieldType::Date)
-        {
-            match value {
-                Some(Value::String(text)) => match crate::utils::date::parse_adapter_date(&text) {
-                    Some(date) => SchemaValue::Typed(Value::String(
-                        date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                    )),
-                    None => SchemaValue::InvalidDate,
-                },
-                value => SchemaValue::from_json(value),
-            }
-        } else {
-            SchemaValue::from_json(value)
-        },
-    )
+    Ok(project_output_value(value, field, supports_native_dates))
+}
+
+fn project_output_value(
+    value: Option<Value>,
+    field: &UserFieldConfig,
+    supports_native_dates: bool,
+) -> SchemaValue<Value> {
+    if !supports_native_dates
+        && !field.references_id()
+        && matches!(field.field_type, UserFieldType::Date)
+    {
+        match value {
+            Some(Value::String(text)) => match crate::utils::date::parse_adapter_date(&text) {
+                Some(date) => SchemaValue::Typed(Value::String(
+                    date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                )),
+                None => SchemaValue::InvalidDate,
+            },
+            value => SchemaValue::from_json(value),
+        }
+    } else {
+        SchemaValue::from_json(value)
+    }
 }

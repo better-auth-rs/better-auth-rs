@@ -9,6 +9,7 @@ mod device_code_fields;
 mod device_code_transactions;
 mod device_codes;
 pub mod entities;
+mod field_output;
 mod id_filter;
 mod identity_schema;
 mod instrumentation;

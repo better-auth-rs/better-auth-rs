@@ -7,6 +7,22 @@ use serde_json::Map;
 
 pub(super) type Entity<M> = <M as SeaOrmPluginModel>::Entity;
 
+pub(super) fn record_fields<M: SeaOrmPluginModel>(
+    model: &M,
+    fields: &UserConfig,
+    backend: DbBackend,
+) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
+    let mut record = model.record_fields(fields)?;
+    record.map_storage_fields(fields, |name, field| {
+        super::field_output::plugin_field_output(
+            super::field_output::column_value::<M::Entity>(model, M::column(name)?),
+            field,
+            backend,
+        )
+    })?;
+    Ok(record)
+}
+
 pub(super) fn set<M: SeaOrmPluginModel>(
     active: &mut M::ActiveModel,
     name: &str,
