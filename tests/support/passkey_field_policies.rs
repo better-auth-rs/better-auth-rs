@@ -18,7 +18,7 @@ pub(crate) struct Fields(pub(crate) UserConfig);
 #[async_trait]
 impl<S: AuthSchema> AuthPlugin<S> for Fields {
     fn name(&self) -> &'static str {
-        "ordinary-two-factor-additional-fields"
+        "ordinary-passkey-additional-fields"
     }
 
     fn routes(&self) -> Vec<AuthRoute> {
@@ -26,7 +26,7 @@ impl<S: AuthSchema> AuthPlugin<S> for Fields {
     }
 
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
-        context.register_model_fields(EntityRole::TwoFactor, self.0.clone())
+        context.register_model_fields(EntityRole::Passkey, self.0.clone())
     }
 
     async fn on_request(
@@ -39,13 +39,12 @@ impl<S: AuthSchema> AuthPlugin<S> for Fields {
 }
 
 pub(crate) fn config() -> AuthConfig {
-    let mut config =
-        AuthConfig::new("ordinary-two-factor-extra-fields-secret-at-least-32-characters")
-            .base_url("http://two-factor-fields.test");
+    let mut config = AuthConfig::new("ordinary-passkey-extra-fields-secret-at-least-32-characters")
+        .base_url("http://passkey-fields.test");
     config.telemetry.enabled = false;
     config
 }
 
 pub(crate) fn policies(events: Option<Trace>, failure: Arc<AtomicU8>) -> UserConfig {
-    ordinary::policies("TwoFactor", events, failure)
+    ordinary::policies("Passkey", events, failure)
 }

@@ -170,6 +170,7 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                 PasskeyCredentialState::Legacy(value) => value.into(),
             };
             let mut row = Passkey {
+                additional_fields: Default::default(),
                 id: "passkey-row".to_owned().into(),
                 user_id: String::from_utf8(OWNER.to_vec())?,
                 name: Some("Personal key".to_owned()).into(),

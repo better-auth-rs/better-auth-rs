@@ -1,7 +1,7 @@
 use crate::SeaOrmPluginModel;
 use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
 use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
-use sea_orm::{ColumnTrait, DbBackend, IdenStatic};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DbBackend, IdenStatic, Iterable};
 use serde::Serialize;
 use serde_json::Map;
 
@@ -32,6 +32,17 @@ pub(super) fn active<M: SeaOrmPluginModel>(
 ) -> AuthResult<M::ActiveModel> {
     crate::reference_id::prepare_fields(&mut fields, policy, None, M::column, M::is_id_reference)?;
     M::active(fields)
+}
+
+pub(super) fn apply_active_fields<M: SeaOrmPluginModel>(
+    active: &mut M::ActiveModel,
+    patch: M::ActiveModel,
+) {
+    for column in M::Column::iter() {
+        if let sea_orm::ActiveValue::Set(value) = patch.get(column) {
+            active.set(column, value);
+        }
+    }
 }
 
 pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
@@ -82,6 +93,9 @@ pub(super) fn validate_additional_field_columns<M: SeaOrmPluginModel>(
             !(role == EntityRole::TwoFactor
                 && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
                 && matches!(field.name, "created_at" | "updated_at"))
+                && !(role == EntityRole::Passkey
+                    && M::passkey_storage() == better_auth_core::PasskeyStorage::Native
+                    && matches!(field.name, "credential" | "updated_at"))
         }) {
             let column = M::column(core.name)?;
             if [name.as_str(), storage].contains(&column.as_str()) {

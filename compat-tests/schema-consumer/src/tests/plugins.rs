@@ -267,6 +267,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
     let passkey = auth
         .store()
         .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
             user_id: user_id.into(),
             name: Some("key".into()).into(),
             credential_id: "credential".into(),

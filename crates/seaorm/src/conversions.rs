@@ -108,6 +108,7 @@ impl From<&entities::api_key::Model> for ApiKey {
 impl From<&entities::passkey::Model> for Passkey {
     fn from(model: &entities::passkey::Model) -> Self {
         Self {
+            additional_fields: Default::default(),
             id: model.id.clone().into(),
             name: model.name.clone().into(),
             public_key: model.public_key.clone(),

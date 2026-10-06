@@ -1,0 +1,12 @@
+{
+  "passkey": {
+    "modelName": "ordinary_passkey_fields",
+    "fields": { "userId": "stored_owner", "counter": "stored_counter" },
+    "additionalFields": {
+      "label": { "type": "string", "fieldName": "stored_label", "required": false },
+      "activatedAt": { "type": "date", "fieldName": "stored_activation", "required": false },
+      "details": { "type": "json", "fieldName": "stored_details", "required": false },
+      "revision": { "type": "number", "fieldName": "stored_revision", "required": false }
+    }
+  }
+}

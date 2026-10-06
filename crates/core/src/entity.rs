@@ -269,6 +269,10 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
 
 /// Trait representing a passkey entity.
 pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+    /// Return application fields when the entity already contains an adapter projection.
+    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        None
+    }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> &SchemaValue<Option<String>>;
     fn public_key(&self) -> &str;

@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use chrono::Utc;
 
 use super::{EphemeralStore, rows::RowRef};
-use crate::store::{PasskeyStore, schema::EntityRole};
+use crate::store::{
+    PasskeyStore,
+    schema::{EntityRole, resolve_field_name},
+};
 use crate::user_fields::{project_adapter_value, project_source_fields_then};
 use crate::{
     AuthError, AuthResult, CreatePasskey, Passkey, PasskeyCredentialState,
@@ -16,7 +19,7 @@ impl EphemeralStore {
     ) -> AuthResult<Vec<Passkey>> {
         let configured = self.model_fields.fields(EntityRole::Passkey).fields();
         // Unconfigured display fields still read after earlier callbacks; credential fields retain their snapshot.
-        let fields = ["name", "aaguid"]
+        let mut fields: indexmap::IndexMap<_, _> = ["name", "aaguid"]
             .into_iter()
             .map(|name| {
                 (
@@ -25,27 +28,41 @@ impl EphemeralStore {
                 )
             })
             .collect();
+        fields.extend(configured.clone());
+        for (snapshot, _) in &mut rows {
+            snapshot.additional_fields.clear();
+        }
         project_source_fields_then(
             &mut rows,
             &fields,
-            |(_, source), name, _| {
+            |(_, source), name, field| {
                 source.read(|row| match name {
                     "name" => row.name.json(),
-                    _ => row.aaguid.json(),
+                    "aaguid" => row.aaguid.json(),
+                    _ => Ok(row
+                        .additional_fields
+                        .get(resolve_field_name(field.field_name.as_deref(), name))
+                        .cloned()),
                 })
             },
             |(snapshot, _), name, field, value| {
                 Box::pin(async move {
-                    let value = project_adapter_value(value, field, false, true)
+                    let value = project_adapter_value(value, field, field.references_id(), true)
                         .await?
-                        .json()?
-                        .map(serde_json::from_value)
-                        .transpose()?
-                        .map(crate::SchemaValue::Typed)
-                        .unwrap_or_default();
-                    match name {
-                        "name" => snapshot.name = value,
-                        _ => snapshot.aaguid = value,
+                        .json()?;
+                    if matches!(name, "name" | "aaguid") {
+                        let value = value
+                            .map(serde_json::from_value)
+                            .transpose()?
+                            .map(crate::SchemaValue::Typed)
+                            .unwrap_or_default();
+                        if name == "name" {
+                            snapshot.name = value;
+                        } else {
+                            snapshot.aaguid = value;
+                        }
+                    } else if let Some(value) = value {
+                        let _ = snapshot.additional_fields.insert(name.to_owned(), value);
                     }
                     Ok(())
                 })
@@ -89,9 +106,16 @@ impl PasskeyStore for EphemeralStore {
         let now = Utc::now();
         let fields = self
             .model_fields
-            .passkey_fields_for_storage(input.name, input.aaguid, true)
+            .passkey_fields_for_storage(
+                input.name,
+                input.aaguid,
+                input.additional_fields,
+                true,
+                |field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
         let mut passkey = Passkey {
+            additional_fields: fields.additional_fields,
             id: self
                 .generated_id("passkey", None, self.lock()?.passkeys.len())?
                 .map(crate::SchemaValue::Typed)
@@ -168,7 +192,13 @@ impl PasskeyStore for EphemeralStore {
         };
         let fields = self
             .model_fields
-            .passkey_fields_for_storage(Default::default(), Default::default(), false)
+            .passkey_fields_for_storage(
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                false,
+                |field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
         let selected = self
             .raw("passkey", "update", |state| {
@@ -194,7 +224,13 @@ impl PasskeyStore for EphemeralStore {
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
         let fields = self
             .model_fields
-            .passkey_fields_for_storage(Some(name.to_owned()).into(), Default::default(), false)
+            .passkey_fields_for_storage(
+                Some(name.to_owned()).into(),
+                Default::default(),
+                Default::default(),
+                false,
+                |field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
         let selected = self
             .raw("passkey", "update", |state| {

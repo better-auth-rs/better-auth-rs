@@ -64,6 +64,7 @@ async fn run<S: AuthSchema>(
     for (index, name) in ["first", "second", "third"].into_iter().enumerate() {
         let _ = store
             .create_passkey(CreatePasskey {
+                additional_fields: Default::default(),
                 user_id: user.id.typed()?.clone(),
                 name: Some(name.into()).into(),
                 credential_id: URL_SAFE_NO_PAD.encode(name),

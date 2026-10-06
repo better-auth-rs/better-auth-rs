@@ -233,6 +233,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
             },
         };
         let input = CreatePasskey {
+            additional_fields: Default::default(),
             user_id: state.user.id.clone(),
             name: body
                 .name

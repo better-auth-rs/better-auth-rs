@@ -115,6 +115,7 @@ fn memory() -> Arc<dyn AuthStore<StatelessSchema>> {
 
 fn input(owner: &str, name: &str) -> CreatePasskey {
     CreatePasskey {
+        additional_fields: Default::default(),
         user_id: owner.into(),
         name: Some(name.into()).into(),
         credential_id: format!("credential:{name}"),

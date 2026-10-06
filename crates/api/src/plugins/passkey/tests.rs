@@ -39,6 +39,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
 
     ctx.database
         .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
             user_id: user.id.typed().unwrap().clone(),
             name: Some("Existing Key".to_string()).into(),
             credential_id: credential_id("cred-existing"),
@@ -124,6 +125,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
 
     ctx.database
         .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
             user_id: user.id.typed().unwrap().clone(),
             name: Some("Authenticator".to_string()).into(),
             credential_id: credential_id("cred-auth"),
@@ -246,6 +248,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
 
     ctx.database
         .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
             user_id: user.id.typed().unwrap().clone(),
             name: None.into(),
             credential_id: credential_id("cred-list"),
@@ -296,6 +299,7 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
     let passkey = ctx
         .database
         .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
             user_id: other.id.typed().unwrap().clone(),
             name: Some("Other Key".to_string()).into(),
             credential_id: credential_id("cred-other-delete"),
@@ -343,6 +347,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
     let passkey = ctx
         .database
         .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
             user_id: other.id.typed().unwrap().clone(),
             name: Some("Other Key".to_string()).into(),
             credential_id: credential_id("cred-other-update"),

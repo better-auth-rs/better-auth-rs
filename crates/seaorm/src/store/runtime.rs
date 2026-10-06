@@ -57,6 +57,7 @@ where
         store.model_fields = model_fields;
         store.validate_session_fields()?;
         store.validate_device_code_fields()?;
+        store.validate_passkey_fields()?;
         store.validate_two_factor_fields()?;
         store.validate_jwk_fields()?;
         store.validate_wallet_fields()?;

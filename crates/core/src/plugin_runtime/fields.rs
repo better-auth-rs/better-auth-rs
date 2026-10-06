@@ -1,11 +1,12 @@
 mod device;
 mod jwk;
+mod passkey;
 mod two_factor;
 mod wallet;
 
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
-use crate::{ApiKey, AuthConfig, AuthError, AuthResult, Passkey, SchemaValue};
+use crate::{ApiKey, AuthConfig, AuthError, AuthResult, SchemaValue};
 use indexmap::{IndexMap, IndexSet};
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
@@ -20,22 +21,6 @@ pub struct ModelFields {
 }
 
 type StringFields<'a, const N: usize> = [(&'static str, &'a mut SchemaValue<Option<String>>); N];
-
-pub(crate) struct PasskeyFieldPatch {
-    pub name: Option<Option<String>>,
-    pub aaguid: Option<Option<String>>,
-}
-
-impl PasskeyFieldPatch {
-    pub(crate) fn apply(self, row: &mut Passkey) {
-        if let Some(name) = self.name {
-            row.name = name.into();
-        }
-        if let Some(aaguid) = self.aaguid {
-            row.aaguid = aaguid.into();
-        }
-    }
-}
 
 fn optional_string(
     fields: &mut Map<String, Value>,
@@ -53,6 +38,7 @@ impl ModelFields {
         match role {
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
+            EntityRole::Passkey => passkey::validate_fields(&fields)?,
             EntityRole::TwoFactor => two_factor::validate_fields(&fields)?,
             EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
             EntityRole::User
@@ -61,12 +47,10 @@ impl ModelFields {
             | EntityRole::Verification
             | EntityRole::Organization
             | EntityRole::Team => {}
-            EntityRole::Passkey | EntityRole::ApiKey => {
+            EntityRole::ApiKey => {
                 for (name, field) in fields.fields() {
-                    if !matches!(
-                        (role, name.as_str()),
-                        (EntityRole::Passkey, "name" | "aaguid") | (EntityRole::ApiKey, "name")
-                    ) || !matches!(field.field_type, UserFieldType::String)
+                    if name != "name"
+                        || !matches!(field.field_type, UserFieldType::String)
                         || field.references.is_some()
                         || resolve_field_name(field.field_name.as_deref(), name) != name
                     {
@@ -87,9 +71,9 @@ impl ModelFields {
             && let Some(fields) = self.models.get_mut(&role)
         {
             // Replacing an upstream field policy retains the field's schema position.
-            fields
-                .fields_mut()
-                .sort_by(|left, _, right, _| (left != "name").cmp(&(right != "name")));
+            fields.fields_mut().sort_by(|left, _, right, _| {
+                passkey::field_order(left).cmp(&passkey::field_order(right))
+            });
         }
         Ok(())
     }
@@ -308,36 +292,6 @@ impl ModelFields {
             .organization_storage_fields(core, Map::new(), create)
             .await?;
         optional_string(&mut fields, "name")
-    }
-
-    pub(crate) async fn passkey_fields_for_storage(
-        &self,
-        name: SchemaValue<Option<String>>,
-        aaguid: SchemaValue<Option<String>>,
-        create: bool,
-    ) -> AuthResult<PasskeyFieldPatch> {
-        let mut core = Map::new();
-        for (name, value) in [("name", name), ("aaguid", aaguid)] {
-            if let Some(value) = value.json()? {
-                let _ = core.insert(name.into(), value);
-            }
-        }
-        let mut fields = self
-            .fields(EntityRole::Passkey)
-            .organization_storage_fields(core, Map::new(), create)
-            .await?;
-        Ok(PasskeyFieldPatch {
-            name: optional_string(&mut fields, "name")?,
-            aaguid: optional_string(&mut fields, "aaguid")?,
-        })
-    }
-
-    /// Project passkey display fields together while retaining the other typed record fields.
-    pub async fn project_passkeys(&self, rows: Vec<Passkey>) -> AuthResult<Vec<Passkey>> {
-        self.project_strings(EntityRole::Passkey, rows, |row| {
-            [("name", &mut row.name), ("aaguid", &mut row.aaguid)]
-        })
-        .await
     }
 
     /// Project API Key names together while retaining credentials, owners, and counters.

@@ -234,6 +234,7 @@ impl SchemaConfig {
                     | "account"
                     | "verification"
                     | "deviceCode"
+                    | "passkey"
                     | "jwks"
                     | "walletAddress"
                     | "twoFactor"
@@ -458,6 +459,7 @@ impl Entity {
             for (name, field) in &config.additional_fields {
                 if let Some(
                     role @ (EntityRole::DeviceCode
+                    | EntityRole::Passkey
                     | EntityRole::Jwk
                     | EntityRole::WalletAddress
                     | EntityRole::TwoFactor),
@@ -475,14 +477,16 @@ impl Entity {
                         }
                     } else {
                         let storage = resolve_field_name(field.field_name.as_deref(), name);
-                        if role == EntityRole::TwoFactor
-                            && better_auth_schema_registry::core_field_names(role)
-                                .iter()
-                                .any(|core| {
-                                    [name.as_str(), storage].into_iter().any(|name| {
-                                        name == *core || name == core.to_lower_camel_case()
+                        if role == EntityRole::Passkey
+                            && [name.as_str(), storage].contains(&"credentialID")
+                            || matches!(role, EntityRole::TwoFactor | EntityRole::Passkey)
+                                && better_auth_schema_registry::core_field_names(role)
+                                    .iter()
+                                    .any(|core| {
+                                        [name.as_str(), storage].into_iter().any(|name| {
+                                            name == *core || name == core.to_lower_camel_case()
+                                        })
                                     })
-                                })
                             || entity
                                 .fields
                                 .iter()

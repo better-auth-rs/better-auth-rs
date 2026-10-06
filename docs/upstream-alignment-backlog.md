@@ -4,14 +4,18 @@
 
 These groups remain incomplete. Pending CI and untested database combinations are separate acceptance work. Historical results below do not establish complete parity.
 
-- **Plugin field policies:** Passkey and API Key still accept only their supported string fields. General additional fields and broader native-field replacements remain unsupported. DeviceCode, JWK, WalletAddress, and TwoFactor support additional fields but retain native-field replacement restrictions.
+- **Plugin field policies:** API Key still accepts only its supported name policy. Passkey general additional fields are implemented and await focused acceptance. DeviceCode, JWK, WalletAddress, TwoFactor, and Passkey retain native-field replacement restrictions.
 - **Schema-resolved joins:** Default native and fallback relations are implemented. Replaced or removed references, alternative relations, missing or multiple foreign-key errors, and native Memory raw-value equality remain open.
 - **Device ownership predicates:** `ClientId` and `FieldEquals` are implemented. Equality covers native `scope` and declared non-reference String, Number, and Boolean fields. Other operators, modes, and value types remain open. Reproducing the captured unsafe Memory OR behavior awaits the user's decision.
-- **Custom ID-token verifier context:** Rust supplies original request metadata through `NativeRequest`. Upstream supplies the authentication runtime through `GenericEndpointContext`. Complete verifier context remains unavailable. Refresh callbacks already match the upstream request-metadata context shape.
+- **Custom ID-token verifier context:** `OAuthCallbacks` now supplies the existing typed `EndpointContext` during actual sign-in and linking. Focused CI 37505419333 at `2728b1b` is pending. Legacy verifiers and refresh callbacks retain `NativeRequest` metadata.
 
 JavaScript-specific values and scheduling, numeric boundaries, and system telemetry retain the limitations documented in their sections. Do not reopen a completed capability without a concrete counterexample.
 
 ## Current focused validation
+
+Device CI 37504305329 at `9ddacdd` passed the full device-validation stage, including native scope ownership, complete internal User projection, and Memory transaction races. Passkey CI 37503865370 passed both new live-field contracts but failed on the older Device User mismatch; its retry at `3336dd0` is pending. Consumer CI 37504322429 remains pending. These runs do not establish full acceptance of the current integrated source.
+
+Passkey capture 37504866016 at `3336dd0` produced 24 additional-field observations across Memory and SQLite. Source SHA and fixture checksum match the imported artifact. The Rust contract compares declared fields, complete native values, stored rows, callback traces, and error timing. `transports: None` now serializes as null in both the record and public view; the comparison does not insert missing fields. The current `Option` API does not distinguish JavaScript undefined from explicit null. Focused Rust and generated-consumer acceptance remain pending.
 
 The latest local full gate passed both configured workspace Clippy variants and workspace test compilation. The user then directed acceptance to GitHub Actions, and the local run was interrupted during test execution. Neither interrupted local run establishes a complete-gate result. GitHub Actions now accepts `codex/` branch pushes and provides PostgreSQL for the existing live tests. A successful CI run for the final commit is required before merging into `master`.
 

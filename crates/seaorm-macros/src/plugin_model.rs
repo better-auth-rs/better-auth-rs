@@ -173,6 +173,7 @@ pub(super) fn generate(
     if matches!(
         role,
         EntityRole::DeviceCode
+            | EntityRole::Passkey
             | EntityRole::Jwk
             | EntityRole::WalletAddress
             | EntityRole::TwoFactor

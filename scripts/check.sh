@@ -39,10 +39,11 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-api --lib passkey
-      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests --test plugin_list_limits_tests --test compat_passkey_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests --test plugin_list_limits_tests --test compat_passkey_tests --test passkey_additional_fields_tests --test two_factor_additional_fields_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/passkey-aaguid-fields.test.ts \
-        ./compat-tests/reference-server/contracts/passkey-live-fields.test.ts
+        ./compat-tests/reference-server/contracts/passkey-live-fields.test.ts \
+        ./compat-tests/reference-server/contracts/passkey-fields.test.ts
       COMPAT_TEST_PROFILE=native-passkey cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 phase8_client_compat configuration_client_compat
       ;;

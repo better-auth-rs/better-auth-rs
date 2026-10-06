@@ -525,6 +525,9 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
 /// Public passkey response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PasskeyView {
+    /// Declared application fields after adapter output projection.
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -541,7 +544,6 @@ pub struct PasskeyView {
     pub device_type: String,
     #[serde(rename = "backedUp")]
     pub backed_up: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -554,6 +556,7 @@ pub struct PasskeyView {
 impl<T: AuthPasskey> From<&T> for PasskeyView {
     fn from(pk: &T) -> Self {
         Self {
+            additional_fields: pk.additional_fields().cloned().unwrap_or_default(),
             id: pk.id().into_owned(),
             name: pk.name().clone(),
             credential_id: pk.credential_id().to_owned(),

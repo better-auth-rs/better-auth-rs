@@ -1378,6 +1378,7 @@ async fn check_plugin_operations(
     async {
         let row = store
             .create_passkey(better_auth_core::CreatePasskey {
+                additional_fields: Default::default(),
                 user_id: "owner".into(),
                 name: None.into(),
                 credential_id: "credential".into(),

@@ -17,6 +17,7 @@ mod tests {
     mod organization;
     mod organization_role_server;
     mod organization_server_schema;
+    mod passkey_additional_fields;
     mod passkey_catalog;
     mod passkey_catalog_storage;
     mod plugins;

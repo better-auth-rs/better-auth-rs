@@ -110,6 +110,9 @@ impl From<&str> for PasskeyCredentialState {
 /// Passkey response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Passkey {
+    /// Declared application fields after adapter output projection.
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -126,7 +129,6 @@ pub struct Passkey {
     pub device_type: String,
     #[serde(rename = "backedUp")]
     pub backed_up: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -146,6 +148,8 @@ pub struct Passkey {
 /// Input for creating a new passkey.
 #[derive(Debug, Clone)]
 pub struct CreatePasskey {
+    /// Declared application fields before adapter input policies.
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
     pub user_id: String,
     /// Omission and explicit null remain distinct during field input transforms.
     pub name: SchemaValue<Option<String>>,
@@ -505,6 +509,9 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
 }
 
 impl AuthPasskey for Passkey {
+    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        Some(&self.additional_fields)
+    }
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
@@ -549,6 +556,7 @@ impl AuthPasskey for Passkey {
 impl<T: AuthPasskey> From<&T> for Passkey {
     fn from(passkey: &T) -> Self {
         Self {
+            additional_fields: passkey.additional_fields().cloned().unwrap_or_default(),
             id: passkey.id().into_owned(),
             name: passkey.name().clone(),
             public_key: passkey.public_key().to_owned(),
