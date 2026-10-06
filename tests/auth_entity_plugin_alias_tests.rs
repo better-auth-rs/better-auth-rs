@@ -52,7 +52,12 @@ async fn plugin_physical_columns_support_writes_and_projection_without_serde_ren
         last_request: 0,
     }
     .into_active_model();
-    mapped::Model::apply_fields(&mut active, [("stored_key".into(), json!("after"))].into())?;
+    mapped::Model::apply_fields(
+        &mut active,
+        [("stored_key".into(), json!("after"))]
+            .into_iter()
+            .collect(),
+    )?;
     assert_eq!(active.key, Set("after".into()));
     for alias in [
         "last_request",
@@ -64,7 +69,10 @@ async fn plugin_physical_columns_support_writes_and_projection_without_serde_ren
             mapped::Model::column(alias)?,
             mapped::Column::LastRequest
         ));
-        mapped::Model::apply_fields(&mut active, [(alias.into(), json!(42))].into())?;
+        mapped::Model::apply_fields(
+            &mut active,
+            [(alias.into(), json!(42))].into_iter().collect(),
+        )?;
         assert_eq!(active.last_request, Set(42));
     }
     let model = active.try_into_model()?;

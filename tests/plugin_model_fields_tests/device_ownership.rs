@@ -491,7 +491,7 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
                 }
             } else {
                 UpdateDeviceCode {
-                    additional_fields: [(logical.into(), json!(value))].into(),
+                    additional_fields: [(logical.into(), json!(value))].into_iter().collect(),
                     ..Default::default()
                 }
             }
