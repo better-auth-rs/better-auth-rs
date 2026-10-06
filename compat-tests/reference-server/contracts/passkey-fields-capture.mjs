@@ -24,6 +24,8 @@ const input = owner => ({
   transports: null, createdAt: new Date(createdAt), aaguid: "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
   activatedAt: "2029-01-02T03:04:05.000Z", details: { channel: "ordinary", enabled: true },
 });
+export const passkeyOperationNames = ["create", "get-id", "get-credential", "list", "update-name", "update-auth"];
+export const passkeyFailureOperations = ["create", "update-name", "update-auth"];
 
 async function withFixture(backend, run) {
   const memory = { user: [], session: [], account: [], verification: [], ordinary_passkey_fields: [] };
@@ -111,56 +113,65 @@ async function withFixture(backend, run) {
   }
 }
 
+export async function observePasskeyOperations({ execute, visible, stored, events }, verify) {
+  const operations = [];
+  let id;
+  for (const name of passkeyOperationNames) {
+    assert.equal(events.length, 0);
+    const result = await execute(name, id);
+    assert.equal(result.length, 1);
+    assert.ok(result[0]);
+    if (name === "create") id = result[0].id;
+    const observation = { name, events: events.splice(0), result: result.map(visible), stored: await stored() };
+    verify(observation);
+    operations.push(observation);
+  }
+  return operations;
+}
+
 async function captureOperations(backend) {
-  return await withFixture(backend, async ({ execute, visible, stored, events }) => {
-    const operations = [];
-    let id;
-    for (const name of ["create", "get-id", "get-credential", "list", "update-name", "update-auth"]) {
-      assert.equal(events.length, 0);
-      const result = await execute(name, id);
-      assert.equal(result.length, 1);
-      assert.ok(result[0]);
-      if (name === "create") id = result[0].id;
-      const observation = { name, events: events.splice(0), result: result.map(visible), stored: await stored() };
-      assert.equal(observation.result[0].label, "Default:out");
-      assert.equal(observation.stored[0].label, "Default");
-      assert.equal(observation.stored[0].revision, name.startsWith("update-") ? 2.5 : 1.5);
-      assert.equal(observation.stored[0].counter, name === "update-auth" ? 1 : 0);
-      operations.push(observation);
-    }
-    return operations;
-  });
+  return await withFixture(backend, fixture => observePasskeyOperations(fixture, observation => {
+    const { name } = observation;
+    assert.equal(observation.result[0].label, "Default:out");
+    assert.equal(observation.stored[0].label, "Default");
+    assert.equal(observation.stored[0].revision, name.startsWith("update-") ? 2.5 : 1.5);
+    assert.equal(observation.stored[0].counter, name === "update-auth" ? 1 : 0);
+  }));
+}
+
+export async function observePasskeyFailure({ execute, stored, events, errors, setFailure }, operation, phase, verifyOutput) {
+  let id;
+  if (operation !== "create") id = (await execute("create"))[0].id;
+  const before = await stored();
+  events.length = 0;
+  setFailure(phase);
+  let sameError = false;
+  try {
+    await execute(operation, id);
+  } catch (error) {
+    if (error !== errors[phase]) throw error;
+    sameError = true;
+  }
+  assert.equal(sameError, true, "The configured callback must reject the operation");
+  setFailure(undefined);
+  const persisted = await stored();
+  if (phase === "input") assert.deepEqual(persisted, before);
+  else {
+    assert.equal(persisted.length, 1);
+    verifyOutput(persisted);
+  }
+  return {
+    name: `${operation}-${phase}-error`, events: events.splice(0),
+    result: { sameError, message: errors[phase].message }, stored: persisted,
+  };
 }
 
 async function captureFailure(backend, operation, phase) {
-  return await withFixture(backend, async ({ execute, stored, events, errors, setFailure }) => {
-    let id;
-    if (operation !== "create") id = (await execute("create"))[0].id;
-    const before = await stored();
-    events.length = 0;
-    setFailure(phase);
-    let sameError = false;
-    try {
-      await execute(operation, id);
-    } catch (error) {
-      if (error !== errors[phase]) throw error;
-      sameError = true;
-    }
-    assert.equal(sameError, true, "The configured callback must reject the operation");
-    setFailure(undefined);
-    const persisted = await stored();
-    if (phase === "input") assert.deepEqual(persisted, before);
-    else {
-      assert.equal(persisted.length, 1);
-      assert.equal(persisted[0].name, operation === "update-name" ? "Desk-renamed" : "Desk");
-      assert.equal(persisted[0].counter, operation === "update-auth" ? 1 : 0);
-      assert.equal(persisted[0].revision, operation === "create" ? 1.5 : 2.5);
-    }
-    return {
-      name: `${operation}-${phase}-error`, events: events.splice(0),
-      result: { sameError, message: errors[phase].message }, stored: persisted,
-    };
-  });
+  return await withFixture(backend, fixture => observePasskeyFailure(fixture, operation, phase, persisted => {
+    assert.equal(persisted[0].name, operation === "update-name" ? "Desk-renamed" : "Desk");
+    assert.equal(persisted[0].counter, operation === "update-auth" ? 1 : 0);
+    assert.equal(persisted[0].revision, operation === "create" ? 1.5 : 2.5);
+  }));
 }
 
 export async function capturePasskeyFields() {
@@ -168,7 +179,7 @@ export async function capturePasskeyFields() {
   for (const backend of ["memory", "sqlite"]) {
     const operations = await captureOperations(backend);
     const failures = [];
-    for (const operation of ["create", "update-name", "update-auth"]) {
+    for (const operation of passkeyFailureOperations) {
       for (const phase of ["input", "output"]) failures.push(await captureFailure(backend, operation, phase));
     }
     backends.push({ backend, operations, failures });
