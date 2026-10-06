@@ -2,6 +2,12 @@ use std::sync::Arc;
 
 use axum::{Router, http::StatusCode};
 use better_auth::{
+    __private_core::{
+        AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
+        AuthSchema,
+        store::schema::EntityRole,
+        user_fields::{UserConfig, UserFieldConfig},
+    },
     AuthConfig, BetterAuth,
     integrations::axum::AxumIntegration,
     plugins::{
@@ -9,7 +15,7 @@ use better_auth::{
         SessionManagementPlugin, TwoFactorPlugin,
     },
     prelude::{
-        CreateDeviceCode, CreatePasskey, CreateWalletAddress, UpdateDeviceCode,
+        CreateDeviceCode, CreatePasskey, CreateWalletAddress, UpdateApiKey, UpdateDeviceCode,
         UpdatePasskeyAuthentication,
     },
     seaorm::{
@@ -23,6 +29,48 @@ use super::request;
 
 mod generated {
     include!(env!("BETTER_AUTH_PLUGIN_SCHEMA"));
+}
+
+struct DisplayFields;
+
+#[better_auth::__private_core::__private_async_trait::async_trait]
+impl<S: AuthSchema> AuthPlugin<S> for DisplayFields {
+    fn name(&self) -> &'static str {
+        "mapped-plugin-display-fields"
+    }
+
+    fn routes(&self) -> Vec<AuthRoute> {
+        Vec::new()
+    }
+
+    async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
+        for (role, names) in [
+            (EntityRole::ApiKey, &["name"][..]),
+            (EntityRole::Passkey, &["name", "aaguid"][..]),
+        ] {
+            let mut fields = UserConfig::default();
+            for name in names {
+                let _ = fields.fields_mut().insert(
+                    (*name).into(),
+                    UserFieldConfig {
+                        field_name: Some(format!("stored_{name}")),
+                        required: Some(false),
+                        ..Default::default()
+                    },
+                );
+            }
+            context.register_model_fields(role, fields)?;
+        }
+        Ok(())
+    }
+
+    async fn on_request(
+        &self,
+        _: &AuthRequest,
+        _: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
+    }
 }
 
 #[tokio::test]
@@ -47,6 +95,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             }))
             .plugin(SessionManagementPlugin::new())
             .plugin(ApiKeyPlugin::builder().build())
+            .plugin(DisplayFields)
             .plugin(TwoFactorPlugin::new())
             .plugin(JwtPlugin::new())
             .build()
@@ -127,6 +176,31 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             .remaining,
         Some(2.0)
     );
+    assert_eq!(key.api_key.name.typed().unwrap().as_deref(), Some("mapped"));
+    let renamed = auth
+        .store()
+        .update_api_key(
+            &key.api_key.id,
+            UpdateApiKey {
+                name: Some("renamed key".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        renamed.name.typed().unwrap().as_deref(),
+        Some("renamed key")
+    );
+    let raw_key = generated::api_key::Entity::find_by_id(key.api_key.id.typed().unwrap())
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(raw_key.name.as_deref(), Some("renamed key"));
+    let serialized_key = serde_json::to_value(&raw_key).unwrap();
+    assert_eq!(serialized_key.get("name"), Some(&json!("renamed key")));
+    assert!(serialized_key.get("stored_name").is_none());
     for remaining in [1.0, 0.0] {
         let verified = keys.verify(&key.key, Default::default()).await.unwrap();
         assert_eq!(verified.remaining, Some(remaining));
@@ -277,10 +351,41 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             backed_up: false,
             transports: Some("usb".into()),
             credential: "credential-state".into(),
-            aaguid: None.into(),
+            aaguid: Some("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4".into()).into(),
         })
         .await
         .unwrap();
+    assert_eq!(passkey.name.typed().unwrap().as_deref(), Some("key"));
+    assert_eq!(
+        passkey.aaguid.typed().unwrap().as_deref(),
+        Some("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4")
+    );
+    let renamed = auth
+        .store()
+        .update_passkey_name(&passkey.id, "renamed passkey")
+        .await
+        .unwrap();
+    assert_eq!(
+        renamed.name.typed().unwrap().as_deref(),
+        Some("renamed passkey")
+    );
+    let raw_passkey = generated::passkey::Entity::find_by_id(passkey.id.typed().unwrap())
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(raw_passkey.name.as_deref(), Some("renamed passkey"));
+    assert_eq!(
+        raw_passkey.aaguid.as_deref(),
+        Some("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4")
+    );
+    let serialized_passkey = serde_json::to_value(&raw_passkey).unwrap();
+    assert_eq!(
+        serialized_passkey.get("name"),
+        Some(&json!("renamed passkey"))
+    );
+    assert!(serialized_passkey.get("stored_name").is_none());
+    assert!(serialized_passkey.get("stored_aaguid").is_none());
     let updated = auth
         .store()
         .update_passkey_authentication(

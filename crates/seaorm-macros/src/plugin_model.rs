@@ -48,16 +48,12 @@ pub(super) fn generate(
             "{}",
             serde_rename_rule::RenameRule::PascalCase.apply_to_field(&name)
         );
-        let mut aliases = vec![
-            name.clone(),
-            serde_rename_rule::RenameRule::CamelCase.apply_to_field(&name),
-        ];
         let serialized = serde_serialized_name(&field.attrs, "rename")?.unwrap_or_else(|| {
             rename_all
                 .as_ref()
                 .map_or_else(|| name.clone(), |rule| rule.apply_to_field(&name))
         });
-        aliases.push(serialized);
+        let mut aliases = field_aliases::field_aliases(&name, &serialized, &field.attrs)?;
         if role == EntityRole::ApiKey && name == "key_hash" {
             aliases.push("key".to_owned());
         }

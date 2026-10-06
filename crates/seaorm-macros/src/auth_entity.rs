@@ -179,9 +179,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 "{}",
                 serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
             );
-            let mut column_aliases = field_aliases::field_aliases(&ident.to_string(), &name);
-            column_aliases.sort();
-            column_aliases.dedup();
+            let column_aliases =
+                field_aliases::field_aliases(&ident.to_string(), &name, &field.attrs)?;
             if row_presence && column_aliases.iter().any(|alias| alias == "active") {
                 return Err(syn::Error::new_spanned(
                     field,
@@ -223,7 +222,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             }
             let mut aliases =
                 if matches!(role, EntityRole::Session) || ident == "name" || ident == "image" {
-                    field_aliases::field_aliases(&ident.to_string(), &name)
+                    column_aliases
                 } else {
                     vec![name]
                 };

@@ -9,6 +9,10 @@ mod contract;
 mod fixture;
 #[path = "support/api_key_live_fields.rs"]
 mod live;
+#[path = "api_key_additional_fields_tests/name_mapping.rs"]
+mod name_mapping;
+#[path = "api_key_additional_fields_tests/name_mapping_conflicts.rs"]
+mod name_mapping_conflicts;
 
 use better_auth::{
     __private_core::{

@@ -5,9 +5,10 @@ import { apiKey } from "@better-auth/api-key";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 
-function fieldPlugin(trace: string[], inputError = new Error("ordinary input error"), outputError = new Error("ordinary output error")) {
+function fieldPlugin(trace: string[], inputError = new Error("ordinary input error"), outputError = new Error("ordinary output error"), fieldName?: string) {
   return { id: "ordinary-key-name", schema: { apikey: { fields: { name: {
     type: "string" as const, required: true, defaultValue: "Fallback", onUpdate: () => "Renewed",
+    ...(fieldName === undefined ? {} : { fieldName }),
     transform: {
       input(value: any) { trace.push(`input:${JSON.stringify(value)}`); if (value === "input-error") throw inputError; return value.trim(); },
       output(value: any) { trace.push(`output:${JSON.stringify(value)}`); if (value === "output-error") throw outputError; return `${value}:out`; },
@@ -15,7 +16,7 @@ function fieldPlugin(trace: string[], inputError = new Error("ordinary input err
   } } } } };
 }
 
-async function fixture(backend: "memory" | "sqlite", mode: "database" | "secondary" | "fallback", trace: string[], plugin = fieldPlugin(trace)) {
+async function fixture(backend: "memory" | "sqlite", mode: "database" | "secondary" | "fallback", trace: string[], plugin = fieldPlugin(trace), fieldName?: string) {
   const memory: Record<string, any[]> = {user: [], session: [], account: [], verification: [], apikey: []};
   const database = backend === "sqlite" ? new Database(":memory:") : undefined;
   const cache = new Map<string, string>();
@@ -33,7 +34,8 @@ async function fixture(backend: "memory" | "sqlite", mode: "database" | "seconda
   if (database) await (await getMigrations(options)).runMigrations();
   const auth = betterAuth(options);
   const context = await auth.$context;
-  const raw = (id: string) => database ? database.query<any, [string]>('SELECT name FROM apikey WHERE id=?').get(id) : memory.apikey.find(row => row.id === id);
+  const column = fieldName || "name";
+  const raw = (id: string) => database ? database.query<any, [string]>(`SELECT "${column}" FROM apikey WHERE id=?`).get(id) : memory.apikey.find(row => row.id === id);
   return { auth, adapter: context.adapter, raw, cache, close: () => database?.close() };
 }
 
@@ -82,16 +84,23 @@ test("ordinary API Key names preserve adapter write phases and legal counter exp
   }
 });
 
-test("ordinary API Key cache-only and fallback hits bypass adapter name policies", async () => {
-  for (const backend of ["memory", "sqlite"] as const) for (const mode of ["database", "secondary", "fallback"] as const) {
-    const trace: string[] = []; const f = await fixture(backend, mode, trace);
+test("ordinary and mapped API Key cache-only and fallback hits bypass adapter name policies", async () => {
+  for (const fieldName of [undefined, "", "stored_name"]) for (const backend of ["memory", "sqlite"] as const) for (const mode of ["database", "secondary", "fallback"] as const) {
+    const trace: string[] = []; const f = await fixture(backend, mode, trace, fieldPlugin(trace, undefined, undefined, fieldName), fieldName);
+    const cachedName = (id: string, expected: string) => {
+      const cached = JSON.parse(f.cache.get(`api-key:by-id:${id}`)!);
+      expect(cached.name).toBe(expected);
+      expect(Object.hasOwn(cached, "stored_name")).toBe(false);
+      expect(cached.id).toBe(id);
+    };
     const signup = await f.auth.api.signUpEmail({body: {name: "Owner", email: "owner@key-fields.test", password: "ordinary-fixture-password"}, returnHeaders: true});
     const headers = new Headers({cookie: signup.headers.getSetCookie().map(value => value.split(";", 1)[0]).join("; ")});
     const created: any = await f.auth.api.createApiKey({headers, body: {name: "  Desk  "}});
     const expected = mode === "secondary" ? "  Desk  " : "Desk:out";
     expect(created.name).toBe(expected);
     expect(trace).toStrictEqual(mode === "secondary" ? [] : ['input:"  Desk  "', 'output:"Desk"']);
-    expect(f.raw(created.id)?.name ?? null).toBe(mode === "secondary" ? null : "Desk");
+    expect(f.raw(created.id)?.[fieldName || "name"] ?? null).toBe(mode === "secondary" ? null : "Desk");
+    if (fieldName !== undefined && mode !== "database") cachedName(created.id, expected);
     trace.length = 0;
     expect((await f.auth.api.getApiKey({headers, query: {id: created.id}})).name).toBe(expected);
     expect(trace).toStrictEqual(mode === "database" ? ['output:"Desk"'] : []);
@@ -103,6 +112,7 @@ test("ordinary API Key cache-only and fallback hits bypass adapter name policies
     trace.length = 0;
     const updated: any = await f.auth.api.updateApiKey({headers, body: {keyId: created.id, name: "  Mobile  "}});
     expect(updated.name).toBe(mode === "secondary" ? "  Mobile  " : "Mobile:out");
+    if (fieldName !== undefined && mode !== "database") cachedName(created.id, mode === "secondary" ? "  Mobile  " : "Mobile:out");
     expect(trace).toStrictEqual(mode === "secondary" ? [] : [...(mode === "database" ? ['output:"Desk"'] : []), 'input:"  Mobile  "', 'output:"Mobile"']);
     if (mode === "fallback") {
       f.cache.delete(`api-key:by-id:${created.id}`);
@@ -110,6 +120,7 @@ test("ordinary API Key cache-only and fallback hits bypass adapter name policies
         trace.length = 0;
         expect((await f.auth.api.getApiKey({headers, query: {id: created.id}})).name).toBe("Mobile:out");
         expect(trace).toStrictEqual(turn === 0 ? ['output:"Mobile"'] : []);
+        if (fieldName !== undefined) cachedName(created.id, "Mobile:out");
       }
     }
     f.close();

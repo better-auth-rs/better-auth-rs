@@ -38,18 +38,20 @@ run_stage() {
     plugin-fields)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test auth_entity_plugin_alias_tests -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
         --test two_factor_additional_fields_tests --test device_additional_fields_tests \
         --test jwk_additional_fields_tests --test wallet_additional_fields_tests \
+        --test auth_entity_plugin_alias_tests \
         --test plugin_output_capabilities_tests --test sql_user_extra_output_tests \
         --test api_key_metadata_tests --test api_key_metadata_timing_tests --test jwt_transaction_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: device_ownership::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/api-key-field-policies.test.ts \
         ./compat-tests/reference-server/contracts/api-key-fields.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-name-mapping.test.ts \
         ./compat-tests/reference-server/contracts/api-key-live-fields.test.ts \
         ./compat-tests/reference-server/contracts/plugin-output-capabilities.test.ts \
         ./compat-tests/reference-server/contracts/api-key-expiration.test.ts \
@@ -62,6 +64,7 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test schema_join_reference_conflict_tests -- -D warnings
+      cargo test --locked -p better-auth-core store::joins::reference_fields_tests
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test schema_join_reference_tests --test join_binding_tests \
         --test schema_join_reference_conflict_tests --test schema_preflight_tests \
@@ -70,7 +73,8 @@ run_stage() {
       bun --no-install test \
         ./compat-tests/reference-server/contracts/schema-join-reference.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-conflict.test.ts \
-        ./compat-tests/reference-server/contracts/schema-join-reference-unknown.test.ts
+        ./compat-tests/reference-server/contracts/schema-join-reference-unknown.test.ts \
+        ./compat-tests/reference-server/contracts/schema-join-reference-field.test.ts
       ;;
     passkey)
       cargo fmt --all -- --check

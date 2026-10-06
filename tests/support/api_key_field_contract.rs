@@ -1,7 +1,7 @@
 #[path = "api_key_field_policies.rs"]
 mod policies;
 
-pub(crate) use policies::{Fields, Trace, config, policies, take};
+pub(crate) use policies::{Fields, NameMapping, Trace, config, policies, take};
 
 use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
@@ -17,7 +17,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
-const OPERATIONS: [&str; 16] = [
+pub(crate) const OPERATIONS: [&str; 16] = [
     "create",
     "get-id",
     "get-hash",
@@ -80,6 +80,7 @@ struct Fixture<S: AuthSchema> {
     update_phase: AtomicU8,
     events: Trace,
     failure: Arc<AtomicU8>,
+    mapped_name: bool,
 }
 
 #[expect(
@@ -181,17 +182,21 @@ pub(crate) fn input() -> CreateApiKey {
 }
 
 impl<S: AuthSchema> Fixture<S> {
-    async fn new(raw: Arc<dyn AuthStore<S>>) -> AuthResult<Self> {
+    async fn new(raw: Arc<dyn AuthStore<S>>, mapping: Option<NameMapping>) -> AuthResult<Self> {
         let failure = Arc::new(AtomicU8::new(0));
+        let fields = |events| match mapping {
+            Some(mapping) => policies::name_mapping_policies(mapping, events, failure.clone()),
+            None => policies(events, failure.clone()),
+        };
         let reader = BetterAuth::new(config())
             .store_arc(raw.clone())
-            .plugin(Fields(policies(None, failure.clone())))
+            .plugin(Fields(fields(None)))
             .build()
             .await?;
         let events = Trace::default();
         let auth = BetterAuth::new(config())
             .store_arc(raw)
-            .plugin(Fields(policies(Some(events.clone()), failure.clone())))
+            .plugin(Fields(fields(Some(events.clone()))))
             .build()
             .await?;
         Ok(Self {
@@ -202,6 +207,7 @@ impl<S: AuthSchema> Fixture<S> {
             update_phase: AtomicU8::new(0),
             events,
             failure,
+            mapped_name: mapping.is_some(),
         })
     }
 
@@ -281,11 +287,11 @@ impl<S: AuthSchema> Fixture<S> {
     )]
     async fn execute(&self, operation: &str, seeded: Option<&ApiKey>) -> AuthResult<Vec<ApiKey>> {
         if operation == "create" {
-            return self
-                .store
-                .create_api_key(input())
-                .await
-                .map(|row| vec![row]);
+            let mut input = input();
+            if self.mapped_name {
+                input.name = Some(" Desk ".into());
+            }
+            return self.store.create_api_key(input).await.map(|row| vec![row]);
         }
         let seed =
             seeded.ok_or_else(|| AuthError::internal("API Key operation requires a seed"))?;
@@ -314,7 +320,14 @@ impl<S: AuthSchema> Fixture<S> {
                         .update_api_key(
                             &seed.id,
                             UpdateApiKey {
-                                name: Some("Desk-renamed".into()),
+                                name: Some(
+                                    if self.mapped_name {
+                                        " Desk-renamed "
+                                    } else {
+                                        "Desk-renamed"
+                                    }
+                                    .into(),
+                                ),
                                 additional_fields: [("label".into(), json!(" Revised "))]
                                     .into_iter()
                                     .collect(),
@@ -396,7 +409,11 @@ impl<S: AuthSchema> Fixture<S> {
         let seed = if operation == "create" {
             None
         } else {
-            Some(self.store.create_api_key(input()).await?)
+            let mut input = input();
+            if self.mapped_name {
+                input.name = Some(" Desk ".into());
+            }
+            Some(self.store.create_api_key(input).await?)
         };
         if operation == "increment-window" {
             let _ = self.execute("start-window", seed.as_ref()).await?;
@@ -475,7 +492,7 @@ pub(crate) async fn contract<S: AuthSchema>(
         .and_then(Value::as_array)
         .expect("captured failures");
     assert_eq!(failures.len(), 15);
-    let fixture = Fixture::new(raw).await?;
+    let fixture = Fixture::new(raw, None).await?;
     match scenario {
         Scenario::Operations => assert_eq!(&fixture.operations().await?, operations),
         Scenario::Failure { operation, phase } => {
@@ -489,4 +506,16 @@ pub(crate) async fn contract<S: AuthSchema>(
         }
     }
     Ok(())
+}
+
+pub(crate) async fn observe_name_mapping<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    mapping: NameMapping,
+    scenario: Scenario,
+) -> AuthResult<Value> {
+    let fixture = Fixture::new(raw, Some(mapping)).await?;
+    match scenario {
+        Scenario::Operations => fixture.operations().await,
+        Scenario::Failure { operation, phase } => fixture.error(operation, phase).await,
+    }
 }

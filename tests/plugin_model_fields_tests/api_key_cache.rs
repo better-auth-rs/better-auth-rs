@@ -7,6 +7,9 @@ use better_auth_core::{
     store::{MemoryCacheAdapter, SecondaryStorage},
 };
 
+#[path = "../support/api_key_fields.rs"]
+mod mapped_fixture;
+
 async fn read<S: AuthSchema>(
     auth: &BetterAuth<S>,
     token: &str,
@@ -28,7 +31,23 @@ async fn read<S: AuthSchema>(
     Ok(serde_json::from_slice(&response.body)?)
 }
 
-async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
+async fn cached_name(cache: &dyn SecondaryStorage, id: &str, expected: &str) -> AuthResult<()> {
+    let Some(Value::String(stored)) = cache.get(&format!("api-key:by-id:{id}")).await? else {
+        return Err(AuthError::internal(
+            "API Key cache must contain a serialized record",
+        ));
+    };
+    let value: Value = serde_json::from_str(&stored)?;
+    assert_eq!(value.get("name"), Some(&json!(expected)));
+    assert!(value.get("stored_name").is_none());
+    assert_eq!(value.get("id"), Some(&json!(id)));
+    Ok(())
+}
+
+async fn contract<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    column: Option<&str>,
+) -> AuthResult<()> {
     for mode in ["database", "secondary", "fallback"] {
         let cache = Arc::new(MemoryCacheAdapter::new());
         let events = Arc::new(Mutex::new(Vec::new()));
@@ -45,13 +64,12 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             defer_updates: false,
             ..Default::default()
         });
+        let mut policy = super::api_key::policy(events.clone());
+        policy.field_name = column.map(str::to_owned);
         let auth = BetterAuth::new(cfg)
             .store_arc(raw.clone())
             .plugin(plugin)
-            .plugin(Fields(vec![(
-                EntityRole::ApiKey,
-                fields("name", super::api_key::policy(events.clone())),
-            )]))
+            .plugin(Fields(vec![(EntityRole::ApiKey, fields("name", policy))]))
             .build()
             .await?;
         let owner = owner(raw.as_ref(), &format!("cache-{mode}")).await?;
@@ -81,6 +99,9 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         let id = created.api_key.id.typed()?;
         let cached_only = mode == "secondary";
         let expected = if cached_only { "  Desk  " } else { "Desk:out" };
+        if column.is_some() && mode != "database" {
+            cached_name(cache.as_ref(), id, expected).await?;
+        }
         assert_eq!(
             created.api_key.name.typed().unwrap().as_deref(),
             Some(expected)
@@ -147,6 +168,9 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             "Mobile:out"
         };
         assert_eq!(updated.name.typed().unwrap().as_deref(), Some(expected));
+        if column.is_some() && mode != "database" {
+            cached_name(cache.as_ref(), id, expected).await?;
+        }
         let expected_events: Vec<String> = match mode {
             "database" => vec![
                 "output:\"Desk\"",
@@ -166,6 +190,9 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
             assert_eq!(found["name"], expected);
             assert_eq!(*events.lock().unwrap(), ["output:\"Mobile\""]);
+            if column.is_some() {
+                cached_name(cache.as_ref(), id, expected).await?;
+            }
             events.lock().unwrap().clear();
             let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
             assert_eq!(found["name"], expected);
@@ -177,9 +204,30 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
 
 #[tokio::test]
 async fn memory_api_key_cache_paths_only_transform_database_operations() -> AuthResult<()> {
-    contract(memory()).await
+    contract(memory(), None).await
 }
 #[tokio::test]
 async fn sqlite_api_key_cache_paths_only_transform_database_operations() -> AuthResult<()> {
-    contract(sqlite().await?).await
+    contract(sqlite().await?, None).await
+}
+
+#[tokio::test]
+async fn memory_mapped_api_key_names_keep_cache_hits_untransformed() -> AuthResult<()> {
+    for column in ["", "stored_name"] {
+        contract(memory(), Some(column)).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn sqlite_mapped_api_key_names_keep_cache_hits_untransformed()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (store, database) = mapped_fixture::sqlite(config()).await;
+    contract(Arc::new(store), Some("")).await?;
+    database.close().await?;
+    let (store, database) =
+        mapped_fixture::sqlite_for::<mapped_fixture::renamed::Model>(config()).await;
+    contract(Arc::new(store), Some("stored_name")).await?;
+    database.close().await?;
+    Ok(())
 }

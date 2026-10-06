@@ -33,10 +33,10 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
         if name == "name" {
             if !matches!(field.field_type, UserFieldType::String)
                 || field.references.is_some()
-                || storage != name
+                || (native_name(storage) && storage != name)
             {
                 return Err(AuthError::config(
-                    "ApiKey name requires its ordinary string column without reference or field-name replacement",
+                    "ApiKey name requires a string column without a reference or a different native field",
                 ));
             }
         } else if native_name(name) || native_name(storage) {
@@ -44,8 +44,24 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
                 "ApiKey additional field {name} cannot replace native field {storage}"
             )));
         }
+        let column = storage_name(fields);
+        if name != "name" && (name == column || storage == column) {
+            return Err(AuthError::config(format!(
+                "ApiKey field {name} conflicts with name storage column {column}"
+            )));
+        }
     }
     Ok(())
+}
+
+fn storage_name(fields: &UserConfig) -> &str {
+    resolve_field_name(
+        fields
+            .fields()
+            .get("name")
+            .and_then(|field| field.field_name.as_deref()),
+        "name",
+    )
 }
 
 #[derive(Default)]
@@ -85,7 +101,7 @@ impl ModelFields {
         let mut fields = config
             .organization_storage_fields(core, extras, create)
             .await?;
-        let name = optional_string(&mut fields, "name")?;
+        let name = optional_string(&mut fields, storage_name(config))?;
         for (name, field) in config.fields() {
             let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = fields.get_mut(storage) {

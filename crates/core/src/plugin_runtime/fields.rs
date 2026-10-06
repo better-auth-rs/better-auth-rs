@@ -65,7 +65,11 @@ impl ModelFields {
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
-            EntityRole::ApiKey => api_key::validate_fields(&fields)?,
+            EntityRole::ApiKey => {
+                let mut combined = self.fields(role).clone();
+                combined.fields_mut().extend(fields.fields().clone());
+                api_key::validate_fields(&combined)?;
+            }
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
             EntityRole::Passkey => {

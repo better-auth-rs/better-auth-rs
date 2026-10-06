@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, FieldsNamed};
+use syn::{Attribute, DeriveInput, Expr, FieldsNamed, Lit, Meta, Token, punctuated::Punctuated};
 
 pub(super) fn generate(
     input: &DeriveInput,
@@ -26,7 +26,7 @@ pub(super) fn generate(
             })
         };
         if !known.contains(&rust_name.as_str()) {
-            let aliases = field_aliases(&rust_name, &name);
+            let aliases = field_aliases(&rust_name, &name, &field.attrs)?;
             serialized_names.push(quote!(#(#aliases)|* => #name,));
         }
     }
@@ -37,13 +37,28 @@ pub(super) fn generate(
     })
 }
 
-pub(super) fn field_aliases(rust_name: &str, serialized: &str) -> Vec<String> {
+pub(super) fn field_aliases(
+    rust_name: &str,
+    serialized: &str,
+    attrs: &[Attribute],
+) -> syn::Result<Vec<String>> {
     let mut aliases = vec![
         rust_name.to_owned(),
         serialized.to_owned(),
         serde_rename_rule::RenameRule::CamelCase.apply_to_field(rust_name),
     ];
+    for attr in attrs.iter().filter(|attr| attr.path().is_ident("sea_orm")) {
+        for meta in attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)? {
+            if let Meta::NameValue(value) = meta
+                && value.path.is_ident("column_name")
+                && let Expr::Lit(value) = value.value
+                && let Lit::Str(value) = value.lit
+            {
+                aliases.push(value.value());
+            }
+        }
+    }
     aliases.sort();
     aliases.dedup();
-    aliases
+    Ok(aliases)
 }
