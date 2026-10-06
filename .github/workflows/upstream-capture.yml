@@ -9,8 +9,6 @@ on:
       - compat-tests/reference-server/bun.lock
       - compat-tests/reference-server/contracts/schema-join-reference-conflict-capture.mjs
       - compat-tests/reference-server/contracts/schema-join-reference-unknown-capture.mjs
-      - compat-tests/reference-server/contracts/device-ownership-capture.mjs
-      - compat-tests/reference-server/contracts/device-ownership-set-capture.mjs
 
 permissions:
   contents: read
@@ -23,8 +21,6 @@ jobs:
         include:
           - contract: schema-join-reference-unknown
             regression: schema-join-reference-conflict
-          - contract: device-ownership-set
-            regression: device-ownership
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

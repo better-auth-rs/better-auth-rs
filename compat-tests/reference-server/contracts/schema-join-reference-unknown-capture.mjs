@@ -47,17 +47,27 @@ const scenarios = [
     secondaryStorage: true,
     unknownModel: "auth_sessions",
   },
+  {
+    name: "native-user-reference-order",
+    userReferences: [["image", "missingImage"], ["name", "missingName"]],
+    referenceFieldsFirst: true,
+    unknownModel: "missingName",
+    errorOperation: "owner",
+  },
 ];
 
 async function observe(scenario, joins, operation) {
   const events = [];
   const output = field => value => { events.push(["output", field, value]); return value; };
   const fields = (model, references, first) => {
-    const fields = { [first]: { type: "string", transform: { output: output(`${model}.${first}`) } } };
+    const fields = {};
+    const addFirst = () => fields[first] ??= { type: "string", transform: { output: output(`${model}.${first}`) } };
+    if (!scenario.referenceFieldsFirst) addFirst();
     for (const [name, reference] of references ?? []) fields[name] = {
       type: "string", references: { model: reference, field: "id" },
       transform: { output: output(`${model}.${name}`) },
     };
+    addFirst();
     return fields;
   };
   const options = {
@@ -71,6 +81,9 @@ async function observe(scenario, joins, operation) {
       async get() { return null; }, async set() {}, async delete() {},
     } } : {}),
   };
+  if (scenario.referenceFieldsFirst) {
+    assert.deepEqual(Object.keys(options.user.additionalFields), ["image", "name"]);
+  }
   const result = await observeSchemaJoinReferenceBoundary(options, operation, events);
   const invalid = scenario.unknownModel && (!scenario.errorOperation || scenario.errorOperation === operation);
   if (invalid) {
@@ -89,7 +102,7 @@ export async function captureSchemaJoinReferenceUnknowns() {
   for (const scenario of scenarios) for (const joins of [false, true]) for (const operation of ["accounts", "owner"]) {
     cases.push(await observe(scenario, joins, operation));
   }
-  assert.equal(cases.length, 32);
+  assert.equal(cases.length, 36);
   return { version, cases };
 }
 
