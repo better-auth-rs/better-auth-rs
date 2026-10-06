@@ -7,7 +7,7 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/two-factor-fields-capture.mjs
+      - compat-tests/reference-server/contracts/device-ownership-capture.mjs
 
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun --no-install ./compat-tests/reference-server/contracts/two-factor-fields-capture.mjs "$capture_dir/two-factor-fields-1.7.6.json" 2>&1 | tee "$capture_dir/two-factor-fields.log"
+          bun --no-install ./compat-tests/reference-server/contracts/device-ownership-capture.mjs "$capture_dir/device-ownership-1.7.6.json" 2>&1 | tee "$capture_dir/device-ownership.log"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: upstream-two-factor-fields-${{ github.sha }}-${{ github.run_attempt }}
+          name: upstream-device-ownership-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/upstream-fixtures/
           if-no-files-found: error
           retention-days: 14
