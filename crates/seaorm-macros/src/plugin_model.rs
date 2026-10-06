@@ -111,12 +111,12 @@ pub(super) fn generate(
             } else {
                 quote!(#core_root::SchemaValue::Typed(Some(self.#ident)))
             }
-        } else if role == EntityRole::Passkey
-            && matches!(name.as_str(), "credential" | "updated_at")
-        {
-            quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::ApiKey && name == "name"
-            || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
+            || role == EntityRole::Passkey
+                && matches!(
+                    name.as_str(),
+                    "name" | "aaguid" | "credential" | "updated_at"
+                )
         {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::ApiKey && name == "start" {
