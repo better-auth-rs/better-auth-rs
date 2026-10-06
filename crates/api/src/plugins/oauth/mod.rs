@@ -16,6 +16,8 @@ mod apple_tests;
 pub use providers::apple::AppleOptions;
 mod authorization;
 mod callback;
+mod callbacks;
+pub use callbacks::{OAuthCallbacks, OAuthVerifierFuture};
 mod cognito;
 #[cfg(test)]
 mod cognito_contract_tests;
@@ -221,8 +223,18 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OAuthPlugin {
     }
 
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        let resolved = self.resolved_config().await?;
+        if let Some(callbacks) = ctx.extensions.get::<Arc<OAuthCallbacks<S>>>() {
+            for name in callbacks.verifiers.keys() {
+                if !resolved.providers.contains_key(name) {
+                    return Err(better_auth_core::AuthError::config(format!(
+                        "OAuth verifier provider {name} is not registered"
+                    )));
+                }
+            }
+        }
         ctx.extensions.insert(self.config.clone());
-        ctx.extensions.insert(self.resolved_config().await?.clone());
+        ctx.extensions.insert(resolved.clone());
         Ok(())
     }
 

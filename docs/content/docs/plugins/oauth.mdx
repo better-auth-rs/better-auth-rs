@@ -103,7 +103,28 @@ To migrate a handler, use `AuthResult<Option<OAuthUserInfoResponse>>`, wrap succ
 
 `OAuthRefreshTokenHandler::refresh_access_token` receives `(&self, refresh_token: &str, context: Option<NativeRequest<'_>>)`. Import `NativeRequest` from `better_auth::plugins::oauth`. Endpoint calls provide `Some(context)`: `context.headers` contains the endpoint headers, and `context.request` contains the original HTTP request or an explicitly supplied native Request. A native call with only headers leaves `context.request` absent. Standalone callers may pass `None`. Existing implementations that do not read request metadata can name the parameter `_`. The return type remains `Result<OAuthTokenSet, String>`, with the existing endpoint error mapping.
 
-`OAuthIdTokenVerifier::verify_id_token` receives `(&self, token: &str, nonce: Option<&str>, context: Option<NativeRequest<'_>>)`. Direct ID-token sign-in and linking supply the same request metadata described above. Standalone callers may pass `None`; implementations that do not read metadata can name the parameter `_`. This interface exposes request metadata, not the complete upstream `GenericEndpointContext`. The return type remains `Result<bool, String>`; false and errors retain the existing invalid-token result. Built-in signature verification and account binding retain their existing behavior.
+Use `OAuthCallbacks::<AppAuthSchema>::verify_id_token` for a custom verifier that needs the active authentication runtime. Register the callback by provider name and attach the callbacks after configuring the providers. Initialization rejects callback names without a registered provider. The callback takes precedence over the same provider's `OAuthProvider::verify_id_token` configuration.
+
+```rust
+use better_auth::plugins::oauth::{OAuthCallbacks, OAuthProvider};
+
+let oauth = OAuthPlugin::new()
+    .add_provider("google", OAuthProvider::google("CLIENT_ID", "CLIENT_SECRET"))
+    .callbacks(
+        OAuthCallbacks::<AppAuthSchema>::default().verify_id_token(
+            "google",
+            |token, nonce, endpoint| {
+                Box::pin(verify_google_id_token(token, nonce, endpoint))
+            },
+        ),
+    );
+```
+
+The example assumes an application function `verify_google_id_token` that returns `AuthResult<bool>` and verifies the signature, issuer, audience, expiration, and nonce. Custom verifiers replace built-in token verification; they must perform the required verification before returning true.
+
+The callback receives `(&str, Option<&str>, &EndpointContext<'_, AppAuthSchema>)`. The endpoint exposes the validated body, path, parameters, query, headers, original Request, typed `AuthContext`, resolved session, and response-header methods. Access configured options, extensions, and the typed store through `endpoint.auth`. Use `endpoint.input_request()` for shared server context even when a native caller supplies no original Request. `endpoint.query()` preserves omitted, null, and object inputs. Linking resolves its session before verification; sign-in exposes only a session already resolved in the endpoint. Verification runs before the user-creation transaction, so `endpoint.transaction` is `None` during these calls.
+
+False and callback errors produce `INVALID_TOKEN`. Setting `disable_id_token_sign_in` rejects the request before invoking either verifier. Existing `OAuthIdTokenVerifier` implementations remain supported: the legacy method receives `(&self, token: &str, nonce: Option<&str>, context: Option<NativeRequest<'_>>)` and returns `Result<bool, String>`. Direct sign-in and linking supply the request metadata described above; standalone callers may pass `None`. Providers without a custom verifier retain built-in signature verification. Account binding follows the existing sign-in or linking flow after verification succeeds.
 
 Social and Generic sign-in normalize an omitted or null mapped name to an empty string before user creation, profile updates, and admission callbacks. Empty and nonempty strings are retained. Profile results, account-info responses, and the raw profile supplied to admission callbacks preserve their original name values. Explicit account linking retains its separate profile behavior.
 

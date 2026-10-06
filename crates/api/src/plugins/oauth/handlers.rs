@@ -376,15 +376,16 @@ async fn sign_in_with_id_token_core(
     meta: &better_auth_core::RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let claims = super::id_token::verify(
-        provider,
-        id_token,
-        Some(super::NativeRequest {
-            request: req.original_request(),
-            headers: req.endpoint_headers(),
-        }),
-    )
-    .await?;
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        req.input_body()?.unwrap_or_default(),
+        ctx,
+    );
+    endpoint.session = req
+        .session_snapshot()?
+        .map(|data| (data.user, data.session));
+    let claims =
+        super::id_token::verify_in_endpoint(&body.provider, provider, id_token, &endpoint).await?;
 
     let user_info = super::social_profile::fetch_user_info_with_claims(
         provider,
@@ -458,15 +459,16 @@ async fn link_with_id_token_core(
     current_user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
-    let claims = super::id_token::verify(
-        provider,
-        id_token,
-        Some(super::NativeRequest {
-            request: req.original_request(),
-            headers: req.endpoint_headers(),
-        }),
-    )
-    .await?;
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        req.input_body()?.unwrap_or_default(),
+        ctx,
+    );
+    endpoint.session = req
+        .session_snapshot()?
+        .map(|data| (data.user, data.session));
+    let claims =
+        super::id_token::verify_in_endpoint(&body.provider, provider, id_token, &endpoint).await?;
 
     let response = super::social_profile::fetch_user_info_with_claims(
         provider,

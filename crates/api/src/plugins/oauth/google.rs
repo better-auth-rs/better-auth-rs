@@ -37,11 +37,11 @@ impl AcceptedIdToken {
         context: Option<NativeRequest<'_>>,
     ) -> Option<Self> {
         // The configured verifier owns this application's token trust policy.
-        verifier
-            .verify_id_token(token, nonce, context)
-            .await
-            .unwrap_or(false)
-            .then(|| Self(token.to_owned()))
+        Self::from_result(token, verifier.verify_id_token(token, nonce, context).await)
+    }
+
+    pub(super) fn from_result<E>(token: &str, result: Result<bool, E>) -> Option<Self> {
+        result.unwrap_or(false).then(|| Self(token.to_owned()))
     }
 
     pub(super) fn claims(self) -> AuthResult<VerifiedGoogleClaims> {

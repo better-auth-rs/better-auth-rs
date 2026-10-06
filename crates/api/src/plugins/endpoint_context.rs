@@ -44,6 +44,17 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
         self.input_request.and_then(AuthRequest::endpoint_headers)
     }
 
+    /// Endpoint query, preserving native omission separately from null and an empty object.
+    pub fn query(&self) -> Option<&Value> {
+        self.input_request
+            .and_then(|request| request.query.as_ref())
+    }
+
+    /// Active endpoint input and shared server state, independent of the original Request.
+    pub fn input_request(&self) -> Option<&'a AuthRequest> {
+        self.input_request
+    }
+
     /// Set a response header without replacing other header names.
     pub fn set_header(&self, name: &str, value: impl Into<String>) -> AuthResult<()> {
         self.input_request
@@ -164,6 +175,11 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
             callbacks.downcast_ref::<super::user_management::UserManagementCallbacks<S>>()
         {
             options.send_change_email_confirmation |= callbacks.has_confirmation_sender();
+        }
+        if let Some(callbacks) = callbacks.downcast_ref::<super::oauth::OAuthCallbacks<S>>() {
+            for provider in &mut options.social_providers {
+                provider.verify_id_token |= callbacks.verifiers.contains_key(&provider.id);
+            }
         }
     }
     fn rate_limits(&self) -> AuthResult<Vec<better_auth_core::middleware::PluginRateLimit>> {
