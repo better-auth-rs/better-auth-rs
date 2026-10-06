@@ -1,6 +1,7 @@
 use super::apple_tests::{Mapper, TestResult, configured, fixture, rows, text};
 use super::google_test_support::GoogleFixture;
 use super::*;
+use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 use serde_json::{Value, json};
 use std::sync::mpsc;
 
@@ -68,6 +69,12 @@ async fn apple_direct_and_form_post_success_persist_user_account_and_session() -
                     .finish()
                     .into_bytes(),
             );
+            let route = <OAuthPlugin as AuthPlugin<BundledSchema>>::routes(&plugin)
+                .into_iter()
+                .find(|route| route.matches(callback.method(), callback.path()))
+                .ok_or("Missing Apple callback route")?;
+            // Direct plugin dispatch requires the HTTP parser's decoded form input.
+            callback.parse_http_body(&route.allowed_media_types)?;
             let redirect = plugin
                 .on_request(&callback, &ctx)
                 .await?
