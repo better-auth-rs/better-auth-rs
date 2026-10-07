@@ -178,11 +178,11 @@ fn date_millis(value: &Value) -> TestResult<i64> {
     Ok(text.parse::<DateTime<Utc>>()?.timestamp_millis())
 }
 
-fn normalize_expiries(value: &mut Value, anchors: &HashMap<&str, (i64, Value)>) -> TestResult {
+fn normalize_timestamps(value: &mut Value, anchors: &HashMap<&str, (i64, Value)>) -> TestResult {
     match value {
         Value::Array(values) => {
             for value in values {
-                normalize_expiries(value, anchors)?;
+                normalize_timestamps(value, anchors)?;
             }
         }
         Value::Object(fields) => {
@@ -198,7 +198,7 @@ fn normalize_expiries(value: &mut Value, anchors: &HashMap<&str, (i64, Value)>) 
                         };
                     }
                 } else {
-                    normalize_expiries(value, anchors)?;
+                    normalize_timestamps(value, anchors)?;
                 }
             }
         }
@@ -311,22 +311,69 @@ async fn contract<S: AuthSchema>(
         .await?
         .ok_or("Missing refreshed Account")?;
     let mut observed_account = values::observe(&account.internal_fields()?.into())?;
-    let mut anchors = HashMap::new();
+    let stored_account = after["account"]
+        .as_array()
+        .and_then(|rows| rows.first())
+        .ok_or("Missing stored Account")?;
+    let after_hook = observed_events
+        .iter()
+        .find(|event| {
+            event["kind"] == "hook"
+                && event["model"] == "account"
+                && event["operation"] == "update"
+                && event["phase"] == "after"
+        })
+        .ok_or("Missing Account after-update hook")?;
+    let updated_at = date_millis(&stored_account["updatedAt"])?;
+    assert!(
+        (start..=end).contains(&updated_at),
+        "Account.updatedAt must fall within the observed refresh interval"
+    );
+    assert_eq!(date_millis(&observed_account["updatedAt"])?, updated_at);
+    assert_eq!(date_millis(&after_hook["data"]["updatedAt"])?, updated_at);
+    let mut anchors = HashMap::from([(
+        "updatedAt",
+        (updated_at, case["refresh"]["account"]["updatedAt"].clone()),
+    )]);
     if scenario == "negative-submillisecond" {
+        let before_hook = observed_events
+            .iter()
+            .find(|event| {
+                event["kind"] == "hook"
+                    && event["model"] == "account"
+                    && event["operation"] == "update"
+                    && event["phase"] == "before"
+            })
+            .ok_or("Missing Account before-update hook")?;
         for field in ["accessTokenExpiresAt", "refreshTokenExpiresAt"] {
             let actual = date_millis(&observed_account[field])?;
             assert!(
                 (start - 1..=end - 1).contains(&actual),
                 "{field} must expire within the observed refresh interval minus one millisecond"
             );
+            for (source, value) in [
+                ("storage", &stored_account[field]),
+                ("before-update hook", &before_hook["data"][field]),
+                ("after-update hook", &after_hook["data"][field]),
+                ("HTTP response", &response_body[field]),
+            ] {
+                assert_eq!(
+                    date_millis(value)?,
+                    actual,
+                    "{source} must retain the same {field} as the Account projection"
+                );
+            }
             let _ = anchors.insert(field, (actual, case["refresh"]["account"][field].clone()));
         }
     }
-    normalize_expiries(&mut response_body, &anchors)?;
-    normalize_expiries(&mut after, &anchors)?;
-    normalize_expiries(&mut observed_account, &anchors)?;
+    normalize_timestamps(&mut response_body, &anchors)?;
+    // Only Account timestamps change; other model timestamps remain part of the exact snapshot.
+    normalize_timestamps(&mut after["account"], &anchors)?;
+    normalize_timestamps(&mut observed_account, &anchors)?;
     for event in &mut observed_events {
-        normalize_expiries(event, &anchors)?;
+        if event["kind"] == "hook" && event["model"] == "account" {
+            normalize_timestamps(&mut event["data"], &anchors)?;
+        }
     }
     let mut response_headers: Vec<_> = response
         .headers
