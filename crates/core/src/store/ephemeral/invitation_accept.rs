@@ -398,7 +398,7 @@ mod tests {
                 "first@example.com",
                 "member",
                 "3",
-                Utc::now() + chrono::Duration::days(1),
+                (Utc::now() + chrono::Duration::days(1)).into(),
             ))
             .await?;
         let second = store
@@ -407,7 +407,7 @@ mod tests {
                 "second@example.com",
                 "member",
                 "3",
-                Utc::now() + chrono::Duration::days(1),
+                (Utc::now() + chrono::Duration::days(1)).into(),
             ))
             .await?;
         let calls = Arc::new(AtomicUsize::new(0));

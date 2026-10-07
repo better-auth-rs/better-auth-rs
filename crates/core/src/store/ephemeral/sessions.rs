@@ -533,7 +533,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         "member@example.com",
         "member",
         "owner",
-        Utc::now() + chrono::Duration::days(1),
+        (Utc::now() + chrono::Duration::days(1)).into(),
     );
     input.team_id = Some(team.id.typed().unwrap().clone());
     let invitation = store.create_invitation(input).await.unwrap();
