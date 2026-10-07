@@ -21,7 +21,7 @@ impl From<Model> for better_auth_core::TeamMember {
         Self {
             id: model.id.into(),
             team_id: model.team_id.into(),
-            user_id: model.user_id,
+            user_id: model.user_id.into(),
             created_at: model.created_at.into(),
         }
     }

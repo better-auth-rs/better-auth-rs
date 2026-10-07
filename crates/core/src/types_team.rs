@@ -54,7 +54,8 @@ pub struct TeamMember {
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub team_id: SchemaValue<String>,
-    pub user_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
     #[serde(with = "crate::field_value::serde::date")]
     pub created_at: crate::FieldDate,
 }

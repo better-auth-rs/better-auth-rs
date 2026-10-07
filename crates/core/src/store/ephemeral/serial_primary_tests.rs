@@ -5,6 +5,7 @@ mod fixture;
 mod organization;
 mod plugin_credentials;
 mod session_plugins;
+mod team_members;
 
 fn serial_store() -> EphemeralStore {
     let mut config = AuthConfig::default();

@@ -5,7 +5,7 @@ use crate::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, U
 use crate::{CreateOrganizationRole, CreateTeam, SchemaValue, UpdateOrganizationRole};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn invitation() -> CreateInvitation {
+pub(super) fn invitation() -> CreateInvitation {
     CreateInvitation::new(
         "001",
         "recipient@example.com",
@@ -88,6 +88,12 @@ async fn serial_organization_lifecycle_binds_numbers_and_projects_public_ids() -
                 .field_value(),
             Value::Number(1.0)
         );
+        assert_eq!(
+            required(state.team_members.snapshot()?.first())?
+                .user_id
+                .field_value(),
+            Value::Number(1.0)
+        );
     }
     assert_eq!(
         required(store.get_organization_by_id("001").await?)?.id,
@@ -100,6 +106,7 @@ async fn serial_organization_lifecycle_binds_numbers_and_projects_public_ids() -
     let repeated = required(store.add_team_member(&"001".into(), "001", Some(1)).await?)?;
     assert_eq!(repeated.id.field_value(), Value::from("1"));
     assert_eq!(repeated.team_id.field_value(), Value::from("1"));
+    assert_eq!(repeated.user_id.field_value(), Value::from("1"));
     assert_eq!(store.count_team_members("001").await?, 1);
     store.delete_member("001").await?;
     assert!(store.list_team_members("001").await?.is_empty());
@@ -433,6 +440,7 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
         let membership = required(memberships.first())?;
         assert_eq!(membership.id.field_value(), Value::Number(1.0));
         assert_eq!(membership.team_id.field_value(), Value::Number(1.0));
+        assert_eq!(membership.user_id.field_value(), Value::Number(1.0));
     }
     Ok(())
 }

@@ -388,13 +388,7 @@ impl EphemeralStore {
     }
 
     pub(super) async fn joined_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>> {
-        let user_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(user_id)?;
-        let user_id = user_id.as_ref();
+        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
         let teams = {
             let state = self.lock()?;
             let rows = crate::query::paginate_memory(
@@ -402,7 +396,7 @@ impl EphemeralStore {
                     .team_members
                     .snapshot()?
                     .into_iter()
-                    .filter(|row| row.user_id == user_id)
+                    .filter(|row| row.user_id.field_value().strict_equals(&user_id))
                     .collect(),
                 Some(self.config.advanced.database.find_many_limit()),
                 None,

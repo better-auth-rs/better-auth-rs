@@ -86,10 +86,8 @@ pub(super) fn generate(
                 continue;
             }
             if role == EntityRole::TeamMember {
-                output.push(if matches!(name.as_str(), "id" | "team_id") {
+                output.push(if matches!(name.as_str(), "id" | "team_id" | "user_id") {
                     quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
-                } else if name == "user_id" {
-                    quote!(#ident: self.#ident.to_string())
                 } else if name == "created_at" {
                     quote!(#ident: self.#ident.into())
                 } else {

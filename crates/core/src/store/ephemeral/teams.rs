@@ -263,22 +263,16 @@ impl TeamStore for EphemeralStore {
             .count() as u64)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
-        let user_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(user_id)?;
-        let user_id = user_id.as_ref();
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_user_teams(user_id).await;
         }
+        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
         let rows = self
             .lock()?
             .team_members
             .snapshot()?
             .into_iter()
-            .filter(|row| row.user_id == user_id)
+            .filter(|row| row.user_id.field_value().strict_equals(&user_id))
             .collect();
         let rows = crate::query::paginate_memory(
             rows,
@@ -302,19 +296,15 @@ impl TeamStore for EphemeralStore {
         team_id: &str,
         user_id: &str,
     ) -> AuthResult<Option<TeamMember>> {
-        let user_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(user_id)?;
-        let user_id = user_id.as_ref();
+        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
         let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
         self.lock()?
             .team_members
             .snapshot()?
             .iter()
-            .find(|member| member.team_id == team_id && member.user_id == user_id)
+            .find(|member| {
+                member.team_id == team_id && member.user_id.field_value().strict_equals(&user_id)
+            })
             .cloned()
             .map(Self::output_team_member)
             .transpose()
@@ -353,13 +343,7 @@ impl TeamStore for EphemeralStore {
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
-        let user_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(user_id)?;
-        let user_id = user_id.as_ref();
+        let user_id = self.memory_reference_id_input(Value::from(user_id))?;
         let team_id = self.organization_primary_id(team_id)?;
         let team_id = &team_id;
         let (team, actual, row_count) = {
@@ -422,7 +406,7 @@ impl TeamStore for EphemeralStore {
         let mut member = TeamMember {
             id,
             team_id: team_id.to_owned(),
-            user_id: user_id.to_owned(),
+            user_id,
             created_at: Utc::now().into(),
         };
         if let Some(id) = self.next_serial_id(state.team_members.len()) {
@@ -432,13 +416,7 @@ impl TeamStore for EphemeralStore {
         Self::output_team_member(member).map(Some)
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
-        let user_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(user_id)?;
-        let user_id = user_id.as_ref();
+        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
         let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
         let team_id = &team_id;
         let (team, members) = {
@@ -449,7 +427,10 @@ impl TeamStore for EphemeralStore {
             .into_iter()
             .filter(|row| row.team_id == *team_id)
             .collect();
-        let deleted = selected.iter().filter(|row| row.user_id == user_id).count();
+        let deleted = selected
+            .iter()
+            .filter(|row| row.user_id.field_value().strict_equals(&user_id))
+            .count();
         let prepared = if let Some(team) = team {
             Some(
                 self.prepare_team_release(team, selected.len(), deleted)
@@ -465,7 +446,18 @@ impl TeamStore for EphemeralStore {
             .into_iter()
             .filter(|row| row.team_id == *team_id)
             .collect();
-        if current != selected {
+        // Serial conversion can store NaN; an unchanged owner must not invalidate the prepared snapshot.
+        let unchanged = current.len() == selected.len()
+            && current.iter().zip(&selected).all(|(current, selected)| {
+                current.id == selected.id
+                    && current.team_id == selected.team_id
+                    && current.created_at == selected.created_at
+                    && current
+                        .user_id
+                        .field_value()
+                        .same_value_zero(&selected.user_id.field_value())
+            });
+        if !unchanged {
             return Err(AuthError::conflict(
                 "Team membership changed while field transforms were pending",
             ));
@@ -478,9 +470,9 @@ impl TeamStore for EphemeralStore {
             let team = prepared.apply(team, current.len())?;
             let _ = state.teams.replace(team_id, team)?;
         }
-        state
-            .team_members
-            .retain(|member| member.team_id != *team_id || member.user_id != user_id)?;
+        state.team_members.retain(|member| {
+            member.team_id != *team_id || !member.user_id.field_value().strict_equals(&user_id)
+        })?;
         Ok(())
     }
 }

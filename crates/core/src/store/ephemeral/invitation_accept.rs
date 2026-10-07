@@ -105,13 +105,7 @@ impl EphemeralStore {
             "organizationId",
             &invitation.organization_id,
         )?;
-        let team_user = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(user_id)?;
-        let team_user = team_user.as_ref();
+        let team_user = self.memory_reference_id_input(Value::from(user_id))?;
         let team_ids: Vec<_> = invitation
             .team_id
             .typed()?
@@ -244,7 +238,7 @@ impl EphemeralStore {
                     "id",
                     Value::from(team_id.as_str()),
                 )?,
-                user_id: team_user.to_owned(),
+                user_id: team_user.clone(),
                 created_at: Utc::now().into(),
             });
         }

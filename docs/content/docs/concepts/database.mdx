@@ -143,6 +143,8 @@ Runtime records use `SchemaValue<String>` for IDs so `Undefined` remains distinc
 
 `Passkey`, `PasskeyView`, and `TwoFactor` also use `SchemaValue<String>` for `user_id`. Their entity traits return `SchemaValue<Cow<'_, str>>`; `CreatePasskey.user_id` and `CreateTwoFactor.user_id` remain `String`. Memory Serial mode stores numeric user references, returns canonical string references, and binds owner queries such as `"001"` to user `1`. These models still reject additional-field policies that replace `userId`. API Key `referenceId` has no schema reference metadata and remains a literal `String`.
 
+`TeamMember.user_id` uses `SchemaValue<String>` for the default user reference. Team store inputs remain string references. Memory Serial mode binds membership lookups, user team lists, invitations, and member removal to numeric owners. Public TeamMember records return canonical string owners. Invitation acceptance retains its staged capacity checks and rejects a conflicting membership change before publishing member or session updates.
+
 The opt-in PostgreSQL identity regressions use application-owned integer models. They check `Serial` and `Database` modes, session/account foreign keys, public string IDs, transaction commit and rollback, numeric aliases, and reference conversion after an input transform. A separate text-ID table checks forced UUID omission against a `gen_random_uuid()::text` default. Set `BETTER_AUTH_TEST_POSTGRES_URL` to a test database whose role can create schemas, then run:
 
 ```sh

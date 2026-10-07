@@ -280,7 +280,7 @@ impl EphemeralStore {
         ) && let Some(id) = fields.remove("id")
         {
             let number = crate::query::field_number(&id)?;
-            if id.truthy() && !number.is_nan() {
+            if id.is_truthy() && !number.is_nan() {
                 let _ = fields.insert("id".into(), Value::Number(number));
             }
         }
@@ -501,6 +501,7 @@ impl EphemeralStore {
     pub(super) fn output_team_member(mut row: crate::TeamMember) -> AuthResult<crate::TeamMember> {
         row.id = Self::project_id(&row.id)?;
         row.team_id = Self::project_id(&row.team_id)?;
+        row.user_id = Self::project_id(&row.user_id)?;
         Ok(row)
     }
 }

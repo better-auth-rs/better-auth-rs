@@ -318,18 +318,19 @@ async fn team_capacity_deduplication_and_scoped_cleanup() {
         1
     );
     let winner = first.unwrap().or(second.unwrap()).unwrap();
+    let winner_user_id = winner.user_id.typed().unwrap();
     let (duplicate_a, duplicate_b) = tokio::join!(
-        store.add_team_member(&a.id, &winner.user_id, Some(1)),
-        store.add_team_member(&a.id, &winner.user_id, Some(1))
+        store.add_team_member(&a.id, winner_user_id, Some(1)),
+        store.add_team_member(&a.id, winner_user_id, Some(1))
     );
     assert_eq!(duplicate_a.unwrap().unwrap().id, winner.id);
     assert_eq!(duplicate_b.unwrap().unwrap().id, winner.id);
     store
-        .add_team_member(&b.id, &winner.user_id, None)
+        .add_team_member(&b.id, winner_user_id, None)
         .await
         .unwrap();
     let member = store
-        .create_member(CreateMember::new("org-a", &winner.user_id, "member"))
+        .create_member(CreateMember::new("org-a", winner_user_id, "member"))
         .await
         .unwrap();
     store
