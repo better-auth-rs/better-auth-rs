@@ -2,7 +2,7 @@ use better_auth::{
     __private_core::store::UserStore,
     AuthConfig,
     prelude::CreateUser,
-    seaorm::{Database, DatabaseConnection, SeaOrmStore},
+    seaorm::{Database, DatabaseConnection, SeaOrmStore, sea_orm::prelude::DateTimeUtc},
     wire::UserView,
 };
 use serde_json::{Map, Value, json};
@@ -49,8 +49,8 @@ async fn operate(database: &DatabaseConnection, ids: Option<&[String]>) -> Resul
             .with_email("rust@user-timestamp-interchange.test")
             .with_email_verified(false);
         input.id = Some("timestamp-rust".into());
-        input.created_at = Some("2030-01-02T03:04:05.000Z".parse()?);
-        input.updated_at = Some("2030-01-02T03:04:06.123Z".parse()?);
+        input.created_at = Some("2030-01-02T03:04:05.000Z".parse::<DateTimeUtc>()?.into());
+        input.updated_at = Some("2030-01-02T03:04:06.123Z".parse::<DateTimeUtc>()?.into());
         let user = store.create_user(input).await?;
         Ok(json!({"id": user.id.typed()?}))
     }

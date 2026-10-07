@@ -80,7 +80,11 @@ where
         .with_email("owner@two-factor-catalog.test")
         .with_email_verified(false);
     owner_input.image = Option::<String>::None.into();
-    owner_input.created_at = Some("2030-01-02T03:04:05.123Z".parse()?);
+    owner_input.created_at = Some(
+        "2030-01-02T03:04:05.123Z"
+            .parse::<chrono::DateTime<chrono::Utc>>()?
+            .into(),
+    );
     owner_input.updated_at = owner_input.created_at.clone();
     let owner = store.create_user(owner_input).await?;
     let owner_id = owner.id.typed()?.clone();
