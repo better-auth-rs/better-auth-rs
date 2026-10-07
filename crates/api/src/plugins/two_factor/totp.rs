@@ -7,24 +7,26 @@ pub(super) struct Totp {
 }
 
 impl Totp {
-    pub(super) fn new(mut inner: TOTP, period: f64) -> AuthResult<Self> {
-        let period = if period == 0.0 {
-            DEFAULT_TOTP_PERIOD_SECS
-        } else {
-            period
-        };
-        let milliseconds = period * 1000.0;
+    pub(super) fn new(mut inner: TOTP, period: f64) -> Self {
+        inner.step = 1;
+        Self { inner, period }
+    }
+
+    pub(super) fn with_default_period(mut self) -> Self {
+        if self.period == 0.0 || self.period.is_nan() {
+            self.period = DEFAULT_TOTP_PERIOD_SECS;
+        }
+        self
+    }
+
+    fn counter(&self, time_millis: i64) -> AuthResult<u64> {
+        let milliseconds = self.period * 1000.0;
         if !milliseconds.is_finite() || milliseconds <= 0.0 {
             return Err(AuthError::config(
                 "TOTP period must resolve to positive finite milliseconds",
             ));
         }
-        inner.step = 1;
-        Ok(Self { inner, period })
-    }
-
-    fn counter(&self, time_millis: i64) -> AuthResult<u64> {
-        let counter = (time_millis as f64 / (self.period * 1000.0)).floor();
+        let counter = (time_millis as f64 / milliseconds).floor();
         if !(0.0..u64::MAX as f64).contains(&counter) {
             return Err(AuthError::config("TOTP counter is out of range"));
         }
@@ -46,9 +48,11 @@ impl Totp {
     }
 
     pub(super) fn check_current(&self, token: &str) -> AuthResult<bool> {
-        Ok(self
-            .inner
-            .check(token, self.counter(Utc::now().timestamp_millis())?))
+        self.check_at(token, Utc::now().timestamp_millis())
+    }
+
+    fn check_at(&self, token: &str, time_millis: i64) -> AuthResult<bool> {
+        Ok(self.inner.check(token, self.counter(time_millis)?))
     }
 
     pub(super) fn get_url(&self) -> AuthResult<String> {

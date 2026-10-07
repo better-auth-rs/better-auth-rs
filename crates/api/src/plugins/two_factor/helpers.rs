@@ -24,7 +24,7 @@ pub(super) fn build_totp(
         account_name,
     )
     .map_err(|error| AuthError::internal(format!("Failed to create TOTP: {}", error)))
-    .and_then(|inner| totp::Totp::new(inner, config.totp_period))
+    .map(|inner| totp::Totp::new(inner, config.totp_period))
 }
 
 pub(super) async fn verify_user_password(

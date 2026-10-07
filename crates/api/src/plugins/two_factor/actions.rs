@@ -263,7 +263,9 @@ pub(super) async fn get_totp_uri_core(
     )
     .await?;
     Ok(TotpUriResponse {
-        totp_uri: build_totp(config, &secret, None, user, ctx)?.get_url()?,
+        totp_uri: build_totp(config, &secret, None, user, ctx)?
+            .with_default_period()
+            .get_url()?,
     })
 }
 
@@ -283,7 +285,9 @@ pub(super) async fn verify_totp_core(
     let attempt = begin_attempt(&state, req, ctx).await?;
     let valid = (|| {
         let secret = decrypt_value(ctx.config.encryption_secret(), two_factor.secret())?;
-        build_totp(config, &secret, None, state.user(), ctx)?.check_current(&body.code)
+        build_totp(config, &secret, None, state.user(), ctx)?
+            .with_default_period()
+            .check_current(&body.code)
     })();
     let valid = match valid {
         Ok(valid) => valid,

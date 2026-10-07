@@ -121,7 +121,8 @@ pub struct TwoFactorConfig {
     /// Trusted-device cookie lifetime in seconds, including fractions. Zero is preserved.
     #[config(default = DEFAULT_TRUST_DEVICE_MAX_AGE_SECS)]
     pub trust_device_max_age: f64,
-    /// TOTP period in fractional seconds. Zero uses 30 seconds.
+    /// TOTP period in fractional seconds. Enrollment URIs preserve the configured value.
+    /// Generation, verification, and URI retrieval use 30 seconds for zero or NaN.
     #[config(default = DEFAULT_TOTP_PERIOD_SECS)]
     pub totp_period: f64,
     /// TOTP digit count.
@@ -456,7 +457,9 @@ impl TwoFactorPlugin {
             None,
             String::new(),
         );
-        totp::Totp::new(inner, self.config.totp_period)?.generate_current()
+        totp::Totp::new(inner, self.config.totp_period)
+            .with_default_period()
+            .generate_current()
     }
 
     /// Install a custom OTP sender.

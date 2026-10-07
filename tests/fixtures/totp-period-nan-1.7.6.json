@@ -1,0 +1,1877 @@
+{
+  "version": "1.7.6",
+  "utilsVersion": "0.4.2",
+  "secret": "ordinary-totp-period-fixture",
+  "issuer": "Ordinary TOTP",
+  "account": "ordinary@totp-period.test",
+  "timestampMillis": 1700000025125,
+  "scope": {
+    "helper": "Raw createOTP uses nullish defaults; NaN reaches the counter conversion and remains in the URI",
+    "server": "generateTOTP, getTOTPURI, and verifyTOTP use the plugin's 30-second default",
+    "enrollment": "enableTwoFactor retains the configured NaN period in its URI",
+    "normalization": "Replace ciphertext only after decryption; replace the enrollment secret only after complete URI and Base32 checks",
+    "storage": "Capture every Memory table before and after each operation; capture core lifecycle hooks and the backup-code callback"
+  },
+  "cases": [
+    {
+      "options": {
+        "period": {
+          "type": "number",
+          "value": "NaN"
+        },
+        "digits": 6
+      },
+      "helper": {
+        "initialization": {
+          "kind": "returned",
+          "value": {
+            "type": "undefined"
+          }
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=NaN"
+        },
+        "generation": {
+          "kind": "thrown",
+          "error": {
+            "name": "RangeError",
+            "message": "Not an integer",
+            "keys": [
+              "message",
+              "originalLine",
+              "originalColumn",
+              "line",
+              "column",
+              "sourceURL"
+            ],
+            "properties": {
+              "message": "Not an integer",
+              "originalLine": 23,
+              "originalColumn": 46,
+              "line": 26,
+              "column": 40,
+              "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+            }
+          }
+        },
+        "verification": {
+          "kind": "thrown",
+          "error": {
+            "name": "RangeError",
+            "message": "Not an integer",
+            "keys": [
+              "message",
+              "originalLine",
+              "originalColumn",
+              "line",
+              "column",
+              "sourceURL"
+            ],
+            "properties": {
+              "message": "Not an integer",
+              "originalLine": 23,
+              "originalColumn": 46,
+              "line": 26,
+              "column": 40,
+              "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+            }
+          }
+        }
+      },
+      "server": {
+        "initialization": {
+          "kind": "returned",
+          "value": {
+            "type": "undefined"
+          }
+        },
+        "generation": {
+          "name": "generateTOTP",
+          "input": {
+            "body": {
+              "secret": "ordinary-totp-period-fixture"
+            }
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "code": "991428"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        },
+        "uri": {
+          "name": "/two-factor/get-totp-uri",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/get-totp-uri",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"totpURI\":\"otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30\"}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        },
+        "verification": {
+          "name": "/two-factor/verify-totp",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/verify-totp",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{\"code\":\"991428\"}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"token\":\"nan-owner-session-token\",\"user\":{\"name\":\"NaN TOTP Owner\",\"email\":\"ordinary@totp-period.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2023-11-14T22:13:45.125Z\",\"updatedAt\":\"2023-11-14T22:13:45.125Z\",\"twoFactorEnabled\":true,\"id\":\"nan-owner\"}}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        },
+        "invalid": {
+          "name": "/two-factor/verify-totp",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/verify-totp",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{\"code\":\"not-a-totp\"}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 401,
+              "statusText": "UNAUTHORIZED",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"message\":\"Invalid code\",\"code\":\"INVALID_CODE\"}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        }
+      },
+      "enrollment": {
+        "initialization": {
+          "kind": "returned",
+          "value": {
+            "type": "undefined"
+          }
+        },
+        "enable": {
+          "name": "/two-factor/enable",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/enable",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{\"method\":\"totp\"}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"method\":\"totp\",\"totpURI\":\"otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=<enrollment-secret-base32>&issuer=Ordinary+TOTP&digits=6&period=NaN\",\"backupCodes\":[\"ordinary-backup-one\",\"ordinary-backup-two\"]}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": []
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<enrollment-secret-ciphertext>",
+                "backupCodes": "<enrollment-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "id": "nan-6-enrollment-twoFactor-1"
+              }
+            ]
+          },
+          "events": [
+            {
+              "kind": "backup-codes",
+              "codes": [
+                "ordinary-backup-one",
+                "ordinary-backup-two"
+              ]
+            },
+            {
+              "kind": "generate-id",
+              "input": {
+                "model": "twoFactor"
+              },
+              "id": "nan-6-enrollment-twoFactor-1"
+            }
+          ]
+        },
+        "uri": {
+          "name": "/two-factor/get-totp-uri",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/get-totp-uri",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"totpURI\":\"otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=<enrollment-secret-base32>&issuer=Ordinary+TOTP&digits=6&period=30\"}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<enrollment-secret-ciphertext>",
+                "backupCodes": "<enrollment-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "id": "nan-6-enrollment-twoFactor-1"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<enrollment-secret-ciphertext>",
+                "backupCodes": "<enrollment-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "id": "nan-6-enrollment-twoFactor-1"
+              }
+            ]
+          },
+          "events": []
+        }
+      }
+    },
+    {
+      "options": {
+        "period": {
+          "type": "number",
+          "value": "NaN"
+        },
+        "digits": 8
+      },
+      "helper": {
+        "initialization": {
+          "kind": "returned",
+          "value": {
+            "type": "undefined"
+          }
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=8&period=NaN"
+        },
+        "generation": {
+          "kind": "thrown",
+          "error": {
+            "name": "RangeError",
+            "message": "Not an integer",
+            "keys": [
+              "message",
+              "originalLine",
+              "originalColumn",
+              "line",
+              "column",
+              "sourceURL"
+            ],
+            "properties": {
+              "message": "Not an integer",
+              "originalLine": 23,
+              "originalColumn": 46,
+              "line": 26,
+              "column": 40,
+              "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+            }
+          }
+        },
+        "verification": {
+          "kind": "thrown",
+          "error": {
+            "name": "RangeError",
+            "message": "Not an integer",
+            "keys": [
+              "message",
+              "originalLine",
+              "originalColumn",
+              "line",
+              "column",
+              "sourceURL"
+            ],
+            "properties": {
+              "message": "Not an integer",
+              "originalLine": 23,
+              "originalColumn": 46,
+              "line": 26,
+              "column": 40,
+              "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+            }
+          }
+        }
+      },
+      "server": {
+        "initialization": {
+          "kind": "returned",
+          "value": {
+            "type": "undefined"
+          }
+        },
+        "generation": {
+          "name": "generateTOTP",
+          "input": {
+            "body": {
+              "secret": "ordinary-totp-period-fixture"
+            }
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "code": "33991428"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        },
+        "uri": {
+          "name": "/two-factor/get-totp-uri",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/get-totp-uri",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"totpURI\":\"otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=8&period=30\"}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        },
+        "verification": {
+          "name": "/two-factor/verify-totp",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/verify-totp",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{\"code\":\"33991428\"}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"token\":\"nan-owner-session-token\",\"user\":{\"name\":\"NaN TOTP Owner\",\"email\":\"ordinary@totp-period.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2023-11-14T22:13:45.125Z\",\"updatedAt\":\"2023-11-14T22:13:45.125Z\",\"twoFactorEnabled\":true,\"id\":\"nan-owner\"}}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        },
+        "invalid": {
+          "name": "/two-factor/verify-totp",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/verify-totp",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{\"code\":\"not-a-totp\"}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 401,
+              "statusText": "UNAUTHORIZED",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"message\":\"Invalid code\",\"code\":\"INVALID_CODE\"}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": true,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<stored-secret-ciphertext>",
+                "backupCodes": "<stored-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": true,
+                "failedVerificationCount": 0,
+                "id": "nan-factor"
+              }
+            ]
+          },
+          "events": []
+        }
+      },
+      "enrollment": {
+        "initialization": {
+          "kind": "returned",
+          "value": {
+            "type": "undefined"
+          }
+        },
+        "enable": {
+          "name": "/two-factor/enable",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/enable",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{\"method\":\"totp\"}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"method\":\"totp\",\"totpURI\":\"otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=<enrollment-secret-base32>&issuer=Ordinary+TOTP&digits=8&period=NaN\",\"backupCodes\":[\"ordinary-backup-one\",\"ordinary-backup-two\"]}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": []
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<enrollment-secret-ciphertext>",
+                "backupCodes": "<enrollment-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "id": "nan-8-enrollment-twoFactor-1"
+              }
+            ]
+          },
+          "events": [
+            {
+              "kind": "backup-codes",
+              "codes": [
+                "ordinary-backup-one",
+                "ordinary-backup-two"
+              ]
+            },
+            {
+              "kind": "generate-id",
+              "input": {
+                "model": "twoFactor"
+              },
+              "id": "nan-8-enrollment-twoFactor-1"
+            }
+          ]
+        },
+        "uri": {
+          "name": "/two-factor/get-totp-uri",
+          "input": {
+            "url": "http://totp-period-nan.test/api/auth/two-factor/get-totp-uri",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=nan-owner-session-token.qZW7O6bdWgcYF2BH6YPB8XT5e0j3KolQ2aRGkoXKaZU%3D"
+              ],
+              [
+                "origin",
+                "http://totp-period-nan.test"
+              ]
+            ],
+            "body": "{}"
+          },
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"totpURI\":\"otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=<enrollment-secret-base32>&issuer=Ordinary+TOTP&digits=8&period=30\"}"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<enrollment-secret-ciphertext>",
+                "backupCodes": "<enrollment-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "id": "nan-8-enrollment-twoFactor-1"
+              }
+            ]
+          },
+          "after": {
+            "user": [
+              {
+                "name": "NaN TOTP Owner",
+                "email": "ordinary@totp-period.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "twoFactorEnabled": false,
+                "id": "nan-owner"
+              }
+            ],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2023-11-14T23:13:45.125Z"
+                },
+                "token": "nan-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2023-11-14T22:13:45.125Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "nan-owner",
+                "id": "nan-session"
+              }
+            ],
+            "account": [],
+            "verification": [],
+            "twoFactor": [
+              {
+                "secret": "<enrollment-secret-ciphertext>",
+                "backupCodes": "<enrollment-backup-ciphertext>",
+                "userId": "nan-owner",
+                "verified": false,
+                "failedVerificationCount": 0,
+                "id": "nan-8-enrollment-twoFactor-1"
+              }
+            ]
+          },
+          "events": []
+        }
+      }
+    }
+  ]
+}
