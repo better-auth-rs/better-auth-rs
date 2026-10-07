@@ -14,12 +14,7 @@ use better_auth::{
 };
 use better_auth_core::{
     AuthError, AuthRequest, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
-    CreateUser, FieldDate, FieldMap, FieldValue, HttpMethod, UpdateAccount,
-    store::{
-        EphemeralStore,
-        database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
-    },
-    wire::AccountView,
+    CreateUser, FieldDate, FieldMap, FieldValue, HttpMethod, store::EphemeralStore,
 };
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -35,12 +30,16 @@ use std::{
     },
 };
 
+#[path = "oauth_token_duration_tests/hooks.rs"]
+mod hooks;
 #[path = "account_user_auth_boundary_reference_tests/models.rs"]
 mod models;
 #[path = "oauth_token_duration_tests/storage.rs"]
 mod storage;
 #[path = "support/device_where_values.rs"]
 mod values;
+
+use hooks::Hooks;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 const ORIGIN: &str = "http://oauth-token-duration.test";
@@ -62,47 +61,6 @@ impl Events {
         Ok(std::mem::take(&mut *self.0.lock().map_err(|_| {
             AuthError::internal("OAuth event lock poisoned")
         })?))
-    }
-}
-
-struct Hooks {
-    events: Events,
-    recording: Arc<AtomicBool>,
-}
-
-#[better_auth_core::database_hooks()]
-impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
-    async fn before_create_session(
-        &self,
-        data: &mut FieldMap,
-        _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
-        if self.recording.load(Ordering::SeqCst) {
-            return Err(AuthError::internal("Refresh must not create a Session"));
-        }
-        let _ = data.insert("id".into(), "duration-session".into());
-        Ok(DatabaseHookUpdate::Continue)
-    }
-
-    async fn before_update_account(
-        &self,
-        data: &UpdateAccount,
-        _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
-        self.events.push(json!({"kind": "hook", "model": "account", "operation": "update", "phase": "before", "data": values::observe(&data.fields()?.into())?}))?;
-        Ok(DatabaseHookUpdate::Continue)
-    }
-
-    async fn after_update_account(
-        &self,
-        data: Option<&AccountView>,
-        _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<()> {
-        let fields = data
-            .map(AccountView::internal_fields)
-            .transpose()?
-            .map_or(FieldValue::Null, Into::into);
-        self.events.push(json!({"kind": "hook", "model": "account", "operation": "update", "phase": "after", "data": values::observe(&fields)?}))
     }
 }
 
