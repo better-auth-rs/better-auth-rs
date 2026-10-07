@@ -109,12 +109,22 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let count = tokens.len();
         let mut fields = FieldMap::from(user);
         let mut ordered = FieldMap::new();
-        for name in self.config.user.user_adapter_fields().fields().keys() {
+        let configured = self.config.user.user_adapter_fields();
+        // Runtime configuration omits unchanged native fields; emit their slots first and append only an implicit ID after other fields.
+        for name in crate::user_fields::USER_FIELDS
+            .iter()
+            .copied()
+            .chain(configured.fields().keys().map(String::as_str))
+        {
             if let Some(value) = fields.remove(name) {
-                let _ = ordered.insert(name.clone(), value);
+                let _ = ordered.insert(name.to_owned(), value);
             }
         }
+        let id = fields.remove("id");
         ordered.extend(fields);
+        if let Some(id) = id {
+            let _ = ordered.insert("id".into(), id);
+        }
         let user = FieldValue::from(ordered);
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let runtime = self.clone();
