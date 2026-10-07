@@ -2,7 +2,7 @@ use super::*;
 use better_auth_core::ListUsersParams;
 
 enum Probe {
-    List(ListUsersParams),
+    List(Box<ListUsersParams>),
     Verify,
 }
 
@@ -22,49 +22,49 @@ fn cases() -> Vec<Case> {
     vec![
         Case {
             name: "valid-search-before-invalid-filter",
-            probe: Probe::List(ListUsersParams {
+            probe: Probe::List(Box::new(ListUsersParams {
                 search_field: Some("email".into()),
                 search_value: Some("missing".into()),
                 ..invalid_filter.clone()
-            }),
+            })),
             warmed: true,
             fails: true,
         },
         Case {
             name: "empty-search-before-invalid-filter",
-            probe: Probe::List(ListUsersParams {
+            probe: Probe::List(Box::new(ListUsersParams {
                 search_value: Some(String::new()),
                 ..invalid_filter
-            }),
+            })),
             warmed: false,
             fails: true,
         },
         Case {
             name: "empty-search-without-filter",
-            probe: Probe::List(ListUsersParams {
+            probe: Probe::List(Box::new(ListUsersParams {
                 search_value: Some(String::new()),
                 ..Default::default()
-            }),
+            })),
             warmed: false,
             fails: false,
         },
         Case {
             name: "empty-search-field-uses-email",
-            probe: Probe::List(ListUsersParams {
+            probe: Probe::List(Box::new(ListUsersParams {
                 search_field: Some(String::new()),
                 search_value: Some("missing".into()),
                 ..Default::default()
-            }),
+            })),
             warmed: true,
             fails: false,
         },
         Case {
             name: "empty-filter-field-uses-email",
-            probe: Probe::List(ListUsersParams {
+            probe: Probe::List(Box::new(ListUsersParams {
                 filter_field: Some(String::new()),
                 filter_value: Some(json!("missing")),
                 ..Default::default()
-            }),
+            })),
             warmed: true,
             fails: false,
         },
@@ -116,7 +116,7 @@ async fn check<S: AuthSchema>(
 
     match &case.probe {
         Probe::List(params) => {
-            let actual = match store.list_users(params.clone()).await {
+            let actual = match store.list_users(params.as_ref().clone()).await {
                 Ok((users, total)) => json!({"users":users, "total":total}),
                 Err(error) => json!({"error":error.instrumentation_message()}),
             };

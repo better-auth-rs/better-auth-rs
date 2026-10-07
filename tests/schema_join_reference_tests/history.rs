@@ -159,9 +159,7 @@ async fn verify<S: AuthSchema>(
     Ok(())
 }
 
-#[tokio::test]
-async fn join_schema_history_survives_reads_and_errors_but_resets_with_the_adapter()
--> AuthResult<()> {
+async fn contract() -> AuthResult<()> {
     let fixture: History = serde_json::from_str(include_str!(
         "../fixtures/schema-join-reference-history-1.7.6.json"
     ))?;
@@ -233,4 +231,10 @@ async fn join_schema_history_survives_reads_and_errors_but_resets_with_the_adapt
         );
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn join_schema_history_survives_reads_and_errors_but_resets_with_the_adapter()
+-> AuthResult<()> {
+    contract().await
 }
