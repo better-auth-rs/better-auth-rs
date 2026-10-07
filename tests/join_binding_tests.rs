@@ -44,6 +44,7 @@ async fn verify<S: AuthSchema>(store: &impl AuthStore<S>) -> AuthResult<()> {
         .get_account_owner("fixture", "normal-account")
         .await?
         .ok_or_else(|| AuthError::internal("Expected account owner join"))?;
+    assert_eq!(owner.account.id, account.id);
     assert_eq!(owner.account.user_id, user.id);
     assert_eq!(
         owner
@@ -58,9 +59,12 @@ async fn verify<S: AuthSchema>(store: &impl AuthStore<S>) -> AuthResult<()> {
 #[tokio::test]
 async fn ordinary_serial_and_uuid_relationships_use_canonical_stored_ids() -> AuthResult<()> {
     for mode in [IdGeneration::Serial, IdGeneration::Uuid] {
-        let mut config = AuthConfig::default();
-        config.advanced.database.generate_id = Some(mode);
-        verify(&EphemeralStore::new(Arc::new(config))).await?;
+        for joins in [false, true] {
+            let mut config = AuthConfig::default();
+            config.advanced.database.generate_id = Some(mode.clone());
+            config.advanced.database.joins = Some(joins);
+            verify(&EphemeralStore::new(Arc::new(config))).await?;
+        }
     }
     let database = Database::connect("sqlite::memory:")
         .await

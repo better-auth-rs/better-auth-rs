@@ -110,7 +110,8 @@ impl EphemeralStore {
             let _ = fields.insert(name.clone(), value);
         }
         if let Some(id) = source.read(|row| Ok(row.get("id").cloned()))? {
-            let _ = fields.insert("id".into(), id);
+            let id = Self::project_id(&crate::SchemaValue::from_field(id))?;
+            let _ = fields.insert("id".into(), id.into_field_value());
         }
         Ok(AccountView::from_adapter_fields(fields))
     }

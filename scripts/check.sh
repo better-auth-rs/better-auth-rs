@@ -131,6 +131,7 @@ run_stage() {
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml
       cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache \
         --test user_id_generation_order_tests --test plugin_id_slot_tests --test session_id_policy_tests \
+        --test join_binding_tests \
         --test session_initial_defaults_tests --test session_create_payload_tests --test legacy_schema_integration_tests \
         --test background_transaction_tests --test email_otp_override_transaction_tests \
         --test email_otp_scheduled_override_tests --test secondary_storage_hooks_tests \
@@ -142,6 +143,7 @@ run_stage() {
         --test user_sort_field_tests --test schema_join_reference_tests \
         --test memory_serial_reference_tests --test organization_serial_reference_tests \
         --test fallback_join_tests --test native_core_join_tests --test plugin_id_slot_tests \
+        --test join_binding_tests \
         --test native_memory_join_tests --test account_owner_batch_tests --test session_id_policy_tests \
         --test session_initial_defaults_tests --test session_create_payload_tests \
         --test background_transaction_tests --test email_otp_override_transaction_tests \
