@@ -154,8 +154,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             matches!(field.field_type, UserFieldType::Number),
             backend,
         )?;
+        let id = P::DeviceCode::column("id")?.eq_id(expected.id.typed()?, policy)?;
         let filter = Condition::all()
-            .add(P::DeviceCode::column("id")?.eq_id(expected.id.typed()?, policy)?)
+            .add(id.clone())
             .add(P::DeviceCode::column("device_code")?.eq(&expected.device_code))
             .add(super::value_filter::equals(
                 client,
@@ -173,9 +174,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .add(P::DeviceCode::column("status")?.eq("approved"))
             .add(ownership);
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "consumeOne", async {
-            let query = Entity::<P::DeviceCode>::delete_many().filter(filter.clone());
             if connection.support_returning() {
-                return query
+                return Entity::<P::DeviceCode>::delete_many()
+                    .filter(filter)
                     .exec_with_returning(connection)
                     .await
                     .map(|rows| rows.into_iter().next())
@@ -191,7 +192,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             if row.is_none() {
                 return Ok(None);
             }
-            let deleted = query.exec(connection).await.map_err(map_db_err)?;
+            // Repeating the predicate in DELETE can turn MySQL SELECT coercion warnings into errors.
+            let deleted = Entity::<P::DeviceCode>::delete_many()
+                .filter(id)
+                .exec(connection)
+                .await
+                .map_err(map_db_err)?;
             Ok(if deleted.rows_affected == 1 {
                 row
             } else {
