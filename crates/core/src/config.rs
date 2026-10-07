@@ -559,7 +559,7 @@ pub struct CrossSubDomainConfig {
 pub struct CookieAttributes {
     /// Override `Secure` flag.
     pub secure: Option<bool>,
-    /// Enable partitioned storage. Partitioned cookies always include `Secure`.
+    /// Enable partitioned storage. The writer applies the upstream attribute mutation order.
     pub partitioned: Option<bool>,
     /// Override `HttpOnly` flag.
     pub http_only: Option<bool>,

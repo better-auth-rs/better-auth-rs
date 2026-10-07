@@ -202,8 +202,26 @@ pub fn create_session_like_cookie(
 }
 
 /// Validate and render a cookie from its resolved attributes and encoded value.
-/// Lifetime limits use the original precision before HTTP formatting.
+/// Preserve the caller's attributes; writer mutations apply to a local copy.
 pub fn render_cookie(value: &str, resolved: &ResolvedCookie) -> AuthResult<String> {
+    render_cookie_mut(value, &mut resolved.clone())
+}
+
+fn render_cookie_mut(value: &str, resolved: &mut ResolvedCookie) -> AuthResult<String> {
+    if resolved.name.starts_with("__Secure-") || resolved.name.starts_with("__Host-") {
+        resolved.attributes.secure = Some(true);
+    }
+    if resolved.name.starts_with("__Host-") {
+        resolved.attributes.path = Some("/".into());
+        if resolved
+            .attributes
+            .domain
+            .as_ref()
+            .is_some_and(|domain| !domain.is_empty())
+        {
+            resolved.attributes.domain = None;
+        }
+    }
     validate_lifetime(&resolved.attributes, chrono::Utc::now().timestamp_millis())?;
     let cookie = resolved_template(resolved)?;
     let mut rendered = format!("{}={value}", cookie.name());
@@ -239,17 +257,15 @@ pub fn render_cookie(value: &str, resolved: &ResolvedCookie) -> AuthResult<Strin
     if cookie.http_only() == Some(true) {
         rendered.push_str("; HttpOnly");
     }
-    // Preserve the cookie crate's Secure policy while using Better Call's attribute order.
-    if cookie.secure() == Some(true)
-        || cookie.partitioned() == Some(true)
-        || cookie.secure().is_none() && cookie.same_site() == Some(CookieSameSite::None)
-    {
+    if cookie.secure() == Some(true) {
         rendered.push_str("; Secure");
     }
     if let Some(same_site) = cookie.same_site() {
         rendered.push_str(&format!("; SameSite={same_site}"));
     }
     if cookie.partitioned() == Some(true) {
+        // Better Call mutates Secure after rendering it, affecting later writes with shared attributes.
+        resolved.attributes.secure = Some(true);
         rendered.push_str("; Partitioned");
     }
     Ok(rendered)
@@ -400,3 +416,7 @@ mod expires_tests;
 #[cfg(test)]
 #[path = "cookie_utils/cache_cleanup_tests.rs"]
 mod cache_cleanup_tests;
+
+#[cfg(test)]
+#[path = "cookie_utils/mutation_tests.rs"]
+mod mutation_tests;

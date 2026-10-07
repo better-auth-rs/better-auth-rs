@@ -23,7 +23,7 @@ For database persistence, add the mapped optional string column to the applicati
 
 The CLI option `--plugins last-login-method` generates `last_login_method: Option<String>` on the user model. Use this schema option when `store_in_database` is true. Cookie-only tracking needs no database column. Set `user.fields.lastLoginMethod` in the CLI schema configuration and the plugin's `field_name` to the same storage name when mapping the column.
 
-`cookie_name` is a literal name. Names starting with `__Secure-` force `Secure`; `__Host-` also forces path `/` and removes the domain. `max_age` is measured in seconds and floors fractional values; zero expires the cookie and a negative value omits `Max-Age`. The cookie copies the resolved session cookie attributes and overrides `HttpOnly` to false. A response that sets or clears a session cookie can also set the last-login cookie when the resolver returns a method.
+`cookie_name` is a literal name. Names starting with `__Secure-` force `Secure`; `__Host-` also forces path `/` and removes the domain. `max_age` is measured in seconds and floors fractional values; zero expires the cookie and a negative value omits `Max-Age`. The cookie copies the original resolved session attributes and overrides `HttpOnly` to false. Prefix constraints from the session cookie name do not transfer to an unprefixed last-login name. A response that sets or clears a session cookie can also set the last-login cookie when the resolver returns a method.
 
 ## Callbacks
 

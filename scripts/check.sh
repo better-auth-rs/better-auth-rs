@@ -39,6 +39,28 @@ run_stage() {
       cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 configuration_client_compat
       ;;
+    cookie-attributes)
+      cargo fmt --all -- --check
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/cookie-attribute-mutation.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-partitioned.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-http-errors.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-expires.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-cleanup.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-cache-cleanup.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-lifetime.test.ts \
+        ./compat-tests/reference-server/contracts/cookie-session-precision.test.ts
+      cargo clippy --locked -p better-auth-core -p better-auth-api --lib --tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache \
+        --test cookie_attribute_mutation_tests --test cookie_http_errors_tests \
+        --test cookie_expires_tests --test cookie_cleanup_tests \
+        --test cookie_lifetime_tests --test cookie_session_precision_tests -- -D warnings
+      cargo test --locked -p better-auth-core --lib utils::cookie_utils::
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test cookie_attribute_mutation_tests --test cookie_http_errors_tests \
+        --test cookie_expires_tests --test cookie_cleanup_tests \
+        --test cookie_lifetime_tests --test cookie_session_precision_tests
+      ;;
     plugin-display-values)
       cargo fmt --all -- --check
       bun --no-install test \
@@ -50,6 +72,7 @@ run_stage() {
         --test api_key_number_name_tests --test passkey_additional_fields_tests \
         --test plugin_display_json_tests --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-cli -p better-auth-seaorm-macros
+      cargo test --locked -p better-auth-api --lib plugins::api_key::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test api_key_number_name_tests --test passkey_additional_fields_tests \
         --test plugin_display_json_tests --test plugin_model_fields_tests
@@ -213,19 +236,22 @@ run_stage() {
         --test account_user_auth_boundary_reference_tests --test compat_consistency_tests \
         --test wire_compat_smoke_tests --test two_factor_cookie_duration_tests \
         --test plugin_model_fields_tests --test session_create_payload_tests \
+        --test session_user_join_reference_tests \
         --test secondary_storage_hooks_tests --test background_transaction_tests \
         --test missing_user_transaction_tests -- -D warnings
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test account_user_auth_boundary_reference_tests --test compat_consistency_tests \
         --test wire_compat_smoke_tests --test two_factor_cookie_duration_tests \
         --test plugin_model_fields_tests --test session_create_payload_tests \
+        --test session_user_join_reference_tests \
         --test secondary_storage_hooks_tests --test background_transaction_tests \
         --test missing_user_transaction_tests
       cargo test --locked -p better-auth-api --lib plugins::two_factor::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
-        ./compat-tests/reference-server/contracts/account-user-auth-secondary.test.ts
+        ./compat-tests/reference-server/contracts/account-user-auth-secondary.test.ts \
+        ./compat-tests/reference-server/contracts/session-user-join-reference.test.ts
       ;;
     schema-joins)
       cargo fmt --all -- --check
@@ -279,14 +305,24 @@ run_stage() {
         --ignored --nocapture --exact --test-threads=1 phase11_client_compat phase12_client_compat configuration_client_compat
       ;;
     device-storage)
+      cargo fmt --all -- --check
       bun --no-install test \
         ./compat-tests/reference-server/contracts/native-json-driver.test.ts \
-        ./compat-tests/reference-server/consumer-contracts/native-json-driver.test.ts
+        ./compat-tests/reference-server/consumer-contracts/native-json-driver.test.ts \
+        ./compat-tests/reference-server/contracts/device-where.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-where.test.ts \
+        ./compat-tests/reference-server/contracts/device-where-transactions.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-where-transactions.test.ts \
+        ./compat-tests/reference-server/contracts/device-where-references.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-where-references.test.ts
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test device_where_tests --test sql_user_extra_output_tests \
-        --test plugin_output_capabilities_tests --test native_json_driver_tests -- -D warnings
+        --test plugin_output_capabilities_tests --test native_json_driver_tests \
+        --test plugin_model_fields_tests -- -D warnings
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test device_where_tests --test native_json_driver_tests -- --include-ignored
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
+        device_ownership:: device_ownership_sets:: device_consumption::
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test sql_user_extra_output_tests --test plugin_output_capabilities_tests
       ;;

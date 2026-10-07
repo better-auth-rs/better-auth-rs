@@ -11,6 +11,8 @@ The reference contract gate includes `contracts/telemetry-options.test.ts`. The 
 
 The `Upstream fixture capture` workflow runs each selected capture twice and requires byte-identical JSON before generating `SHA256SUMS`. Artifacts retain both documents and logs, including failed comparisons. Import a fixture only after the workflow succeeds and the source commit and checksum match.
 
+Run `./scripts/check.sh cookie-attributes` inside devenv for focused cookie checks. The stage replays the complete `cookie-attribute-mutation-1.7.6.json` document and runs the related Rust serializer, chunk, LastLogin, expiration, lifetime, and cleanup regressions. The replay compares serialized JSON bytes without rewriting the fixture. Rust compares all captured wire headers in order and checks attribute values before and after writes. JavaScript object identity, property order, own-undefined distinctions, and HTTP `statusText` remain upstream observations; see the [alignment inventory](../docs/upstream-alignment-backlog.md) for the exact boundaries.
+
 ## Model
 
 The compatibility system has two layers:

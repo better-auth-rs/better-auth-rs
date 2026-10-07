@@ -317,12 +317,6 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
                         }
                     }
                 }
-                if cookie.name.starts_with("__Secure-") || cookie.name.starts_with("__Host-") {
-                    cookie.attributes.secure = Some(true);
-                }
-                if cookie.name.starts_with("__Host-") {
-                    cookie.attributes.path = Some("/".into());
-                }
                 cookie.name = self.config.cookie_name.clone();
                 cookie.attributes.http_only = Some(false);
                 cookie.attributes.max_age = Some(self.config.max_age);

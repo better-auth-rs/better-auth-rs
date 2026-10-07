@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
 
-use super::{get_cookie, render_cookie};
+use indexmap::IndexMap;
+
+use super::{get_cookie, render_cookie, render_cookie_mut};
 use crate::{AuthError, AuthRequest, AuthResult, request_runtime::ResolvedCookie};
 
 fn chunk_index(name: &str, cookie_name: &str) -> Option<usize> {
@@ -111,33 +113,27 @@ pub fn create_chunked_cookies(
     value: &str,
 ) -> AuthResult<Vec<String>> {
     let name = &cookie.name;
-    let write = |name: String, value: &str| {
-        let mut chunk = cookie.clone();
-        chunk.name = name;
-        render_cookie(value, &chunk)
-    };
-    let overhead = write(format!("{name}.99"), "")?.len();
+    let mut probe = cookie.clone();
+    probe.name = format!("{name}.99");
+    let overhead = render_cookie("", &probe)?.len();
     let count_and_size = 4050_usize
         .checked_sub(overhead)
         .filter(|size| *size > 0)
         .map(|size| (value.len().div_ceil(size), size));
-    let mut cookies: BTreeMap<String, String> = existing_names(req, name)
+    let mut cookies: IndexMap<String, Option<&str>> = existing_names(req, name)
         .into_iter()
-        .map(|chunk| {
-            let header = clear_chunk(&chunk, cookie)?;
-            Ok((chunk, header))
-        })
-        .collect::<AuthResult<_>>()?;
+        .map(|chunk| (chunk, None))
+        .collect();
     if let Some((count, chunk_size)) = count_and_size.filter(|(count, _)| *count <= 100) {
         if count <= 1 {
-            let _ = cookies.insert(name.to_owned(), write(name.to_owned(), value)?);
+            let _ = cookies.insert(name.to_owned(), Some(value));
         } else {
             for (index, chunk) in value.as_bytes().chunks(chunk_size).enumerate() {
                 let chunk_name = format!("{name}.{index}");
                 let value = std::str::from_utf8(chunk).map_err(|error| {
                     AuthError::internal(format!("Encoding cookie chunk: {error}"))
                 })?;
-                let _ = cookies.insert(chunk_name.to_owned(), write(chunk_name, value)?);
+                let _ = cookies.insert(chunk_name, Some(value));
             }
         }
     } else {
@@ -148,5 +144,15 @@ pub fn create_chunked_cookies(
             )],
         );
     }
-    Ok(cookies.into_values().collect())
+    let mut payload = cookie.clone();
+    cookies
+        .into_iter()
+        .map(|(name, value)| match value {
+            Some(value) => {
+                payload.name = name;
+                render_cookie_mut(value, &mut payload)
+            }
+            None => clear_chunk(&name, cookie),
+        })
+        .collect()
 }
