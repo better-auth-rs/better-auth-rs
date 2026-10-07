@@ -1,4 +1,7 @@
-use super::server_catalog_support::{self as server_catalog, TestResult};
+use super::{
+    server_catalog::{mysql, postgres},
+    server_catalog_support::{self as server_catalog, TestResult},
+};
 use better_auth::seaorm::{
     DatabaseConnection,
     sea_orm::{DbBackend, EntityName},
@@ -56,10 +59,8 @@ async fn check(database: &DatabaseConnection, backend: DbBackend, case: &Value) 
         .ok_or("Missing Verification catalog case name")?;
     let table = match (backend, name) {
         (DbBackend::Postgres, "default") => {
-            server_catalog::postgres::create_auth_tables(database).await?;
-            server_catalog::postgres::verification::Entity
-                .table_name()
-                .to_owned()
+            postgres::create_auth_tables(database).await?;
+            postgres::verification::Entity.table_name().to_owned()
         }
         (DbBackend::Postgres, "legacy") => {
             let _schema = postgres_legacy::AppAuthSchema;
@@ -69,10 +70,8 @@ async fn check(database: &DatabaseConnection, backend: DbBackend, case: &Value) 
                 .to_owned()
         }
         (DbBackend::MySql, "default") => {
-            server_catalog::mysql::create_auth_tables(database).await?;
-            server_catalog::mysql::verification::Entity
-                .table_name()
-                .to_owned()
+            mysql::create_auth_tables(database).await?;
+            mysql::verification::Entity.table_name().to_owned()
         }
         (DbBackend::MySql, "legacy") => {
             let _schema = mysql_legacy::AppAuthSchema;
