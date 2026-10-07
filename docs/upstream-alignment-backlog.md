@@ -12,6 +12,10 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+User-fields CI 37611599609 at `39266e8` passed production-library Clippy, then stopped at an unfulfilled `panic_in_result_fn` expectation in the new SQL ID-slot test. The unnecessary expectation is removed; all assertions remain unchanged. Rust behavior acceptance for the ID-slot implementation remains pending.
+
+Runtime-values CI 37611694835 at `0f977cf` stopped during strict Bun replay before Rust checks. The new ID-slot capture omitted explicit User/Session update timestamps, so upstream `updatedAt.onUpdate` introduced twelve real-clock values across four cases. The original capture, fixture, and assertions remain unchanged pending permission to supply a fixed timestamp in the actual update request and recapture all sixteen cases. The capture workflow now repeats the complete capture and compares both JSON documents before issuing checksums.
+
 User-fields CI 37609927617 at `901a026` passed the complete focused stage. This accepts the current Serial owner, ID projection, reference, join, and User field regressions through that commit. The subsequent explicit-ID runtime-policy work is not included in this result.
 
 Runtime-values CI 37609922505 at `901a026` passed scoped Clippy and 40 core tests, including every new TeamMember owner regression. The Session live-output test stopped at its native-join observation: upstream `internalAdapter.findSession` applies `parseUserOutput`, while the new Rust test observed the Store snapshot before the production SessionManager's User projection. With explicit user approval, the test now calls the existing projector before observing that User. The complete fixture and every assertion remain unchanged. The stored User observation represents this fixture's declared logical schema, not every field in the Rust model. The list trace contract has not yet executed past this failure, and the later integration targets remain pending.

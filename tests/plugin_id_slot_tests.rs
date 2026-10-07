@@ -98,10 +98,6 @@ fn policies(events: &Events, before_label: bool, reject: bool) -> UserConfig {
     }
 }
 
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The SQL contract asserts callback rejection and unchanged storage while propagating setup and database errors"
-)]
 async fn check(role: EntityRole, before_label: bool, reject: bool) -> AuthResult<()> {
     let model = match role {
         EntityRole::Jwk => "jwks",

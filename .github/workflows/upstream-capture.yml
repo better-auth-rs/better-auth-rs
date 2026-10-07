@@ -87,6 +87,9 @@ jobs:
             capture_suffix="-$CAPTURE_BACKEND"
           fi
           bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "${capture_args[@]}" "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
+          mkdir -p "$capture_dir/replay"
+          bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "${capture_args[@]}" "$capture_dir/replay/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/replay.log"
+          cmp "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" "$capture_dir/replay/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json"
           (
             cd "$capture_dir"
             sha256sum *.json > SHA256SUMS
