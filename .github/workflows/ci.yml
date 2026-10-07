@@ -23,6 +23,7 @@ on:
           - rustls
           - rustdoc
           - consumer
+          - consumer-schema
           - fullstack
           - quick-start
           - alignment
@@ -161,7 +162,7 @@ jobs:
           if [[ "$CHECK_STAGE" == "client-configuration" && -n "$CHECK_COMPAT_PROFILE" ]]; then
             export COMPAT_TEST_PROFILE="$CHECK_COMPAT_PROFILE"
           fi
-          if [[ "$CHECK_STAGE" == "consumer" ]]; then
+          if [[ "$CHECK_STAGE" == "consumer" || "$CHECK_STAGE" == "consumer-schema" ]]; then
             # Record runner resources before shutdown can skip post-job diagnostics.
             (
               while true; do

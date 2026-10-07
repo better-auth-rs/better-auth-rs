@@ -3,7 +3,7 @@ use super::{
         mysql as invitation_mysql_default, mysql as team_mysql_default,
         postgres as invitation_postgres_default, postgres as team_postgres_default,
     },
-    server_catalog::{self, TestResult},
+    server_catalog_support::{self as server_catalog, TestResult},
 };
 use axum::{Router, body::Body, http::Request};
 use better_auth::{

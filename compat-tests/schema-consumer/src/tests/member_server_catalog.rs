@@ -1,6 +1,6 @@
 use super::{
     organization_server_schema::{mysql as mysql_default, postgres as postgres_default},
-    server_catalog::{self, TestResult},
+    server_catalog_support::{self as server_catalog, TestResult},
 };
 use better_auth::seaorm::{
     DatabaseConnection,

@@ -31,6 +31,7 @@ run_stage() {
       cargo test --locked --features axum,seaorm2,redis-cache --test session_additional_fields_tests --test wallet_additional_fields_tests
       ./scripts/consumer-check.sh
       ;;
+    consumer-schema) ./scripts/consumer-check.sh ;;
     fullstack) cargo check --locked --manifest-path examples/fullstack/backend/Cargo.toml ;;
     quick-start) bun scripts/quick-start-check.ts ;;
     alignment) ./scripts/alignment-check.sh --skip-build ;;

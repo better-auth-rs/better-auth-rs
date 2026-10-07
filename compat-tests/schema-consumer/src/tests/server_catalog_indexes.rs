@@ -1,4 +1,4 @@
-use super::server_catalog::TestResult;
+use super::server_catalog_support::TestResult;
 use better_auth::seaorm::{
     DatabaseConnection,
     sea_orm::{ConnectionTrait, DbBackend, Statement},

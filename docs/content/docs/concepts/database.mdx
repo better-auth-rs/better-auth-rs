@@ -485,6 +485,8 @@ Account schemas permit duplicate `(provider_id, account_id)` pairs, matching ups
 
 Run `devenv shell -- ./scripts/consumer-check.sh` to generate fresh schemas and test an independent consumer against the public package. The check creates SQLite tables, registers and signs in a user, protects an Axum route, creates an API key, and enables TOTP. A second schema verifies all six Organization model mappings, additional field storage types, partial updates, and organization deletion. A third schema renames every field in all six plugin tables and maps user, session, account, and verification columns. Tests exercise authentication, TOTP, API key quota consumption, device claims, passkey updates, JWT keys, and wallet chain lookup. Database constraint checks cover uniqueness and foreign keys.
 
+Generated catalog tests use separate SQLite, server, and plugin test targets. The check compiles test targets one at a time to bound compiler memory. GitHub Actions exposes the same check as the `consumer-schema` stage; the `consumer` and `all` stages retain the broader checks.
+
 Internal behavior tests also use a bundled schema. Dual-server and client SDK compatibility checks compare behavior with the TypeScript reference server.
 
 ## JSON field bindings

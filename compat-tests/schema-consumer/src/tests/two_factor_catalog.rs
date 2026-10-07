@@ -1,6 +1,7 @@
 use super::{
-    server_catalog::{self, TestResult},
-    server_catalog_indexes, two_factor_catalog_storage,
+    server_catalog_indexes,
+    server_catalog_support::{self as server_catalog, TestResult},
+    two_factor_catalog_storage,
 };
 use better_auth::seaorm::{
     Database, DatabaseConnection,

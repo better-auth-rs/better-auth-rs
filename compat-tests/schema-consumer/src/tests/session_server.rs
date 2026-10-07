@@ -1,5 +1,6 @@
-use super::server_catalog::{
-    self, TestResult, mysql as mysql_default, postgres as postgres_default,
+use super::{
+    server_catalog::{mysql as mysql_default, postgres as postgres_default},
+    server_catalog_support::{self as server_catalog, TestResult},
 };
 use better_auth::{
     AuthConfig, AuthSchema, BetterAuth,

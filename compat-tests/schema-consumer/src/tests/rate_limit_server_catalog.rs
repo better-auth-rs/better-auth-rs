@@ -1,4 +1,4 @@
-use super::server_catalog::{self, TestResult};
+use super::server_catalog_support::{self as server_catalog, TestResult};
 use better_auth::seaorm::{
     __private_chrono as chrono, DatabaseConnection, SeaOrmPluginModel, SeaOrmPluginSchema,
     SeaOrmStore,
