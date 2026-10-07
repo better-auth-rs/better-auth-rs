@@ -102,7 +102,7 @@ impl EphemeralStore {
         }
     }
 
-    pub(super) fn memory_session_user_id_input(
+    pub(super) fn memory_reference_id_input(
         &self,
         value: Value,
     ) -> AuthResult<crate::SchemaValue<String>> {

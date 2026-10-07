@@ -431,6 +431,53 @@ async fn serial_jwk_padded_lookup_matches_upstream_lifecycle_prefix() -> AuthRes
 }
 
 #[tokio::test]
+async fn serial_wallet_owner_binding_matches_complete_upstream_rows() -> AuthResult<()> {
+    let fixture = fixture()?;
+    let case = required(
+        required(fixture.get("cases").and_then(JsonValue::as_array))?
+            .iter()
+            .find(|case| {
+                case.get("model").and_then(JsonValue::as_str) == Some("walletAddress")
+                    && case.get("operation").and_then(JsonValue::as_str) == Some("lifecycle")
+            }),
+    )?;
+    let store = configured_store(Model::Wallet, "lifecycle", Events::default())?;
+    let created = store
+        .create_wallet_address(crate::CreateWalletAddress {
+            user_id: "001".into(),
+            address: "serial-first".into(),
+            chain_id: 1,
+            is_primary: false,
+            created_at: fixed_date("2030-01-02T03:04:05.000Z")?,
+            additional_fields: [("label".into(), "first".into())].into(),
+        })
+        .await?;
+    let observe_row = |row: &crate::WalletAddress| -> AuthResult<JsonValue> {
+        row.field_values()?
+            .iter()
+            .map(|(name, value)| Ok((name.clone(), observe(value)?)))
+            .collect::<AuthResult<serde_json::Map<_, _>>>()
+            .map(JsonValue::Object)
+    };
+    let first = required(required(case.get("operations"))?.get(0))?;
+    assert_eq!(observe_row(&created)?, *required(first.get("result"))?);
+    let raw = store
+        .lock()?
+        .wallets
+        .snapshot()?
+        .iter()
+        .map(observe_row)
+        .collect::<AuthResult<Vec<_>>>()?;
+    assert_eq!(
+        json!(raw),
+        *required(required(first.get("after"))?.get("walletAddress"))?
+    );
+    let read = required(store.get_wallet_address("serial-first", Some(1)).await?)?;
+    assert_eq!(observe_row(&read)?, observe_row(&created)?);
+    Ok(())
+}
+
+#[tokio::test]
 async fn serial_rate_limit_consumption_keeps_numeric_ids_and_reuses_existing_records()
 -> AuthResult<()> {
     let store = serial_store();

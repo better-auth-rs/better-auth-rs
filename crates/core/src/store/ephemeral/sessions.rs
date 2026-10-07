@@ -188,7 +188,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         let mut user_id = if configured_user_id {
             create_session.user_id
         } else {
-            self.memory_session_user_id_input(create_session.user_id.into_field_value())?
+            self.memory_reference_id_input(create_session.user_id.into_field_value())?
         };
         let mut additional_fields = schema
             .storage_fields_with_binding(fields, true, |_, field, value| {

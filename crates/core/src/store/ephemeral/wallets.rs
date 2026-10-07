@@ -28,6 +28,7 @@ impl EphemeralStore {
         }
         snapshot.additional_fields = output;
         snapshot.id = Self::project_id(&snapshot.id)?;
+        snapshot.user_id = Self::project_id(&snapshot.user_id)?;
         Ok(snapshot)
     }
 }
@@ -76,7 +77,7 @@ impl crate::store::WalletStore for EphemeralStore {
                 .generated_id("walletAddress", None, self.lock()?.wallets.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            user_id: value.user_id,
+            user_id: self.memory_reference_id_input(value.user_id.into())?,
             address: value.address,
             chain_id: value.chain_id,
             is_primary: value.is_primary,

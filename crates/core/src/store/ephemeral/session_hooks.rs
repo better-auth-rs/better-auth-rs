@@ -124,7 +124,7 @@ impl EphemeralStore {
             update
                 .user_id
                 .take()
-                .map(|user_id| self.memory_session_user_id_input(user_id.into()))
+                .map(|user_id| self.memory_reference_id_input(user_id.into()))
                 .transpose()?
         };
         update.additional_fields = schema

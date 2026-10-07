@@ -212,7 +212,7 @@ impl SiwePlugin {
             None => ctx.database.get_wallet_address(&address, None).await?,
         };
         let user = match wallet {
-            Some(wallet) => ctx.database.get_user_by_id(&wallet.user_id).await?,
+            Some(wallet) => ctx.database.get_user_by_id_field(&wallet.user_id).await?,
             None => None,
         };
         let new_user = user.is_none();

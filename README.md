@@ -125,7 +125,7 @@ Generic raw-profile handlers return `AuthResult<Option<serde_json::Value>>`: `So
 
 The [organization plugin](docs/content/docs/plugins/organization.mdx) supports optional teams, team membership limits, active teams, and persisted roles scoped to an organization. Enable teams through `OrganizationTeamsConfig` and dynamic roles through `dynamic_access_control(true)` with access-control statements. Use `auth.organization()?.add_member(Some(body)).await` for server-only member creation through the native hook pipeline.
 
-Memory Serial mode stores numeric primary IDs for User, Session, Account, Verification, JWK, WalletAddress, and RateLimit, and returns string IDs through public record APIs. Memory Serial mode applies Organization reference conversion to stored fields, queries, and internal relation keys. See [Organization field policies](docs/content/docs/plugins/organization.mdx#additional-fields) for typed storage boundaries.
+Memory Serial mode stores numeric primary IDs for User, Session, Account, Verification, JWK, WalletAddress, and RateLimit, and returns string IDs through public record APIs. Wallet owner values use `SchemaValue<String>` and preserve numeric references in storage. Memory Serial mode applies Organization reference conversion to stored fields, queries, and internal relation keys. See [Organization field policies](docs/content/docs/plugins/organization.mdx#additional-fields) for typed storage boundaries.
 
 The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence. Default device codes contain ASCII letters and digits; verification links replace any existing user-code query parameter.
 

@@ -154,6 +154,11 @@ pub(super) fn generate(
         } else {
             quote!(self.#ident.to_owned())
         };
+        let value = if role == EntityRole::WalletAddress && name == "user_id" {
+            quote!(#core_root::SchemaValue::from_field(#core_root::SchemaField::into_field(#value)))
+        } else {
+            value
+        };
         output.push(quote!(#ident: #value,));
     }
     let passkey_storage = options.native_passkey.then(|| {

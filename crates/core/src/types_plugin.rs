@@ -678,7 +678,8 @@ impl<T: AuthPasskey> From<&T> for Passkey {
 pub struct WalletAddress {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
-    pub user_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
     pub address: String,
     pub chain_id: i64,
     pub is_primary: bool,
