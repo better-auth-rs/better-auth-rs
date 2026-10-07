@@ -289,10 +289,21 @@ async fn assert_http_metadata(
             },
         )
         .await
-        .unwrap();
-    assert_eq!(response.status, 200);
+        .unwrap_or_else(|error| error.to_auth_response());
     let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
-    assert_eq!(body.get("metadata"), Some(&expected));
+    if expected.is_null() {
+        assert_eq!(response.status, 400);
+        assert_eq!(
+            body,
+            json!({
+                "code": "VALIDATION_ERROR",
+                "message": "[body.data.metadata] Invalid input: expected record, received null"
+            })
+        );
+    } else {
+        assert_eq!(response.status, 200);
+        assert_eq!(body.get("metadata"), Some(&expected));
+    }
 }
 
 #[tokio::test]

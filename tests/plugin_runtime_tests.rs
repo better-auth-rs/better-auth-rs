@@ -144,15 +144,15 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
         two.additional_fields["lastLoginMethod"],
         FieldValue::from("http://second.example:out")
     );
-    assert!(
+    assert_eq!(
         first
             .store()
             .get_user_by_id(two.id().typed().unwrap())
             .await
             .unwrap()
             .unwrap()
-            .additional_fields
-            .is_empty()
+            .additional_fields,
+        better_auth::FieldMap::from([("lastLoginMethod".into(), FieldValue::Undefined)])
     );
 }
 

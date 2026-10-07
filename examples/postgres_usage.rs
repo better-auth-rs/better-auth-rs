@@ -33,7 +33,7 @@ fn model_fields<M: ModelTrait>(model: &M) -> AuthResult<FieldMap> {
         .map(|column| {
             Ok((
                 column.to_string(),
-                better_auth::seaorm::__private_field_value(model.get(column))?,
+                better_auth::seaorm::field_value::from_column(model.get(column))?,
             ))
         })
         .collect()
@@ -223,7 +223,7 @@ mod user {
                 banned: Set(create_user.banned.unwrap_or(false)),
                 ban_reason: Set(create_user.ban_reason),
                 ban_expires: Set(create_user.ban_expires.map(stored_date).transpose()?),
-                metadata: Set(better_auth::seaorm::__private_field_decode(
+                metadata: Set(better_auth::seaorm::field_value::decode_column(
                     create_user
                         .metadata
                         .unwrap_or_else(|| FieldValue::from(FieldMap::new())),
@@ -267,7 +267,7 @@ mod user {
                 active.two_factor_enabled = Set(two_factor_enabled);
             }
             if let Some(metadata) = update.metadata {
-                active.metadata = Set(better_auth::seaorm::__private_field_decode(metadata)?);
+                active.metadata = Set(better_auth::seaorm::field_value::decode_column(metadata)?);
             }
             if let Some(banned) = update.banned {
                 active.banned = Set(banned);
@@ -702,8 +702,9 @@ mod account {
                     continue;
                 }
                 let key = field.field_name.as_deref().unwrap_or(logical);
-                let value =
-                    better_auth::seaorm::__private_field_value(self.get(Self::field_column(key)?))?;
+                let value = better_auth::seaorm::field_value::from_column(
+                    self.get(Self::field_column(key)?),
+                )?;
                 let _ = storage.insert(key.to_owned(), value);
             }
             let core = FieldMap::from([("id".into(), FieldValue::String(self.id.to_string()))]);
@@ -840,8 +841,9 @@ mod verification {
                     continue;
                 }
                 let key = field.field_name.as_deref().unwrap_or(logical);
-                let value =
-                    better_auth::seaorm::__private_field_value(self.get(Self::field_column(key)?))?;
+                let value = better_auth::seaorm::field_value::from_column(
+                    self.get(Self::field_column(key)?),
+                )?;
                 let _ = storage.insert(key.to_owned(), value);
             }
             let core = FieldMap::from([("id".into(), FieldValue::String(self.id.to_string()))]);

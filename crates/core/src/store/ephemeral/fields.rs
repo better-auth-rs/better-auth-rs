@@ -179,7 +179,7 @@ fn record_input<T: MemoryOrganizationRecord>(role: EntityRole, value: &T) -> Aut
         .collect();
     let mut core: FieldMap = record
         .into_iter()
-        .filter(|(name, _)| core_names.contains(name))
+        .filter(|(name, value)| core_names.contains(name) && !value.is_undefined())
         .collect();
     for name in ["logo", "updatedAt"] {
         if core.get(name) == Some(&Value::Null) {

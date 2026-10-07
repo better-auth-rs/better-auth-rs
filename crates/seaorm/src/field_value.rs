@@ -3,6 +3,8 @@
 use better_auth_core::{AuthError, AuthResult, FieldValue};
 use sea_orm::sea_query::{ArrayType, ColumnType, Value, ValueType};
 
+/// Convert a SQL column value while preserving native dates, arrays, and SQL NULL.
+/// Return a configuration error for an unsupported column type.
 pub fn from_column(value: Value) -> AuthResult<FieldValue> {
     if value == value.as_null() {
         return Ok(FieldValue::Null);
@@ -42,6 +44,8 @@ pub fn from_column(value: Value) -> AuthResult<FieldValue> {
     })
 }
 
+/// Decode an adapter field into the model's declared SQL column type.
+/// Return an error if the field cannot be represented by that type.
 pub fn decode_column<T: ValueType>(value: FieldValue) -> AuthResult<T> {
     let value = if matches!(T::column_type(), ColumnType::Json | ColumnType::JsonBinary) {
         Value::Json(Some(Box::new(value.json()?.ok_or_else(|| {

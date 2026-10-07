@@ -418,6 +418,8 @@ API Key creation without a name retains its explicit null default. Database fiel
 
 For manual `AuthUser` and `AuthSession` implementations, declare `const PLUGIN_FIELDS: &'static [&'static str]` with the supported Rust field names. Declare a field only when the entity getter and store writes support that field. The default empty list supports core fields only.
 
+Manual SeaORM implementations can use `better_auth::seaorm::field_value::from_column` in `AuthRecordFields` and `decode_column` for typed writes. These conversions preserve native dates, arrays, and SQL NULL without serializing the model through JSON. Both functions return errors for unsupported conversions; propagate those errors.
+
 Run the application database migrations before starting the server. Capability validation checks Rust entities; capability validation does not inspect database tables or replace migrations.
 
 ## Existing Databases
@@ -469,7 +471,7 @@ Internal behavior tests also use a bundled schema. Dual-server and client SDK co
 
 ## JSON field bindings
 
-Custom adapters can use `FieldValue` and `FieldMap` to retain undefined, non-finite numbers, Date objects, arrays, and object identity before serialization. Ordinary clones retain object handles. Use one `StructuredCloneContext` for an entire transaction snapshot to copy identities while preserving aliases across records. Use `strict_equals` for JavaScript strict equality and `same_value_zero` for array membership; Rust `PartialEq` compares structure. Call `json` or `stringify` only at a JSON boundary. Top-level undefined returns `None`, object properties omit undefined, and array elements encode undefined as null. Non-finite numbers and invalid dates serialize as null. Valid dates outside Chrono's supported range return a conversion error. Built-in field configuration, model records, and store bindings still use their existing types; exporting these primitives does not add non-JSON support to those paths.
+Custom adapters can use `FieldValue` and `FieldMap` to retain undefined, non-finite numbers, Date objects, arrays, and object identity before serialization. Ordinary clones retain object handles. Use one `StructuredCloneContext` for an entire transaction snapshot to copy identities while preserving aliases across records. Use `strict_equals` for JavaScript strict equality and `same_value_zero` for array membership; Rust `PartialEq` compares structure. Call `json` or `stringify` only at a JSON boundary. Top-level undefined returns `None`, object properties omit undefined, and array elements encode undefined as null. Non-finite numbers and invalid dates serialize as null. Valid dates retain the ECMAScript TimeClip range. Conversion to a Chrono model still requires Chrono's supported range. Built-in callbacks, runtime records, and adapter bindings preserve these native values until an explicit conversion boundary.
 
 Fresh PostgreSQL and MySQL OrganizationRole schemas store native `permission` as JSON text in a TEXT column. The generated SeaORM field is `String`; public `OrganizationRole.permission` remains `SchemaValue<serde_json::Value>`. Native create and update writes encode the final permission value once, and reads parse the stored text before returning the public record. Parse errors propagate. Explicit permission field policies keep their existing transform order and output representation. Physical field renaming alone does not enable a replacement policy.
 
@@ -487,7 +489,7 @@ When a field binding requires JSON text, the adapter uses the shared JavaScript-
 
 `UserFieldConfig::adapter_input(value, supports_native_json, native_json_field)` returns `AuthResult<Value>`. Custom adapter callers must propagate or handle this result. `storage_fields_for_adapter`, `record_storage_fields_for_adapter`, and `adapter_output` retain their existing fallible signatures. Serialization errors propagate before the corresponding write or output callback; no fallback serializer runs.
 
-This conversion applies where the existing field and adapter flags require text. It does not change reference conversion or native JSON capabilities. Native SQL JSON columns still use the database driver's serialization and normalization. Callback text equivalence does not establish identical raw native-column bytes. Application-owned column types and existing stored values remain unchanged.
+This conversion applies where the existing field and adapter flags require text. It does not change reference conversion or native JSON capabilities. Native SQL JSON columns still use the database driver's serialization and normalization. PostgreSQL JSON fields retain native driver parameter encoding: an empty native array stores `{}`, while Date inputs and nonempty arrays can fail database JSON parsing. Declared StringArray and NumberArray fields encode JSON text before binding, including native JSON columns. Text JSON output decoding restores recognized ISO date strings as native Date values after output callbacks. Callback text equivalence does not establish identical raw native-column bytes. Application-owned column types and existing stored values remain unchanged.
 
 ## Notes
 

@@ -64,13 +64,27 @@ run_stage() {
         ./compat-tests/reference-server/api-key-metadata-pages.test.ts
       ;;
     runtime-values)
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/plugin-display-presence.test.ts \
+        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test custom_session_fields_tests --test organization_native_fields_tests \
-        --test device_runtime_transaction_tests --test device_where_tests -- -D warnings
-      cargo test --locked -p better-auth-core --lib -- field_value::
-      cargo test --locked --features axum,seaorm2,redis-cache \
+        --test device_runtime_transaction_tests --test device_where_tests \
+        --test auth_entity_extra_fields_tests --test legacy_schema_integration_tests \
+        --test plugin_model_fields_tests --test user_record_values_tests \
+        --test organization_additional_fields_tests --test plugin_runtime_tests \
+        --example postgres_usage -- -D warnings
+      cargo test --locked -p better-auth-core --lib -- field_value:: \
+        store::ephemeral::serial_primary_tests:: \
+        store::ephemeral::fields::builtin_policies_transform_typed_records_once_and_preserve_adapter_id \
+        types::tests::nullable_user_updates_preserve_omission_null_and_values
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test custom_session_fields_tests --test organization_native_fields_tests \
-        --test device_runtime_transaction_tests --test native_endpoint_tests --test test_utils_tests
+        --test device_runtime_transaction_tests --test native_endpoint_tests --test test_utils_tests \
+        --test architecture_guard_tests --test auth_entity_extra_fields_tests \
+        --test legacy_schema_integration_tests --test plugin_model_fields_tests \
+        --test user_record_values_tests --test organization_additional_fields_tests \
+        --test plugin_runtime_tests --test user_id_generation_order_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests -- \
         --exact memory_device_where_matches_upstream_rows_callbacks_and_consumption
       ;;
@@ -89,6 +103,7 @@ run_stage() {
       bun --no-install test \
         ./compat-tests/reference-server/contracts/user-id-generation-order.test.ts \
         ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
+        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
         ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
         ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
         ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \
@@ -134,10 +149,14 @@ run_stage() {
         --ignored --nocapture --exact --test-threads=1 phase11_client_compat phase12_client_compat configuration_client_compat
       ;;
     device-storage)
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/native-json-driver.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/native-json-driver.test.ts
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test device_where_tests --test sql_user_extra_output_tests \
-        --test plugin_output_capabilities_tests -- -D warnings
-      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests -- --include-ignored
+        --test plugin_output_capabilities_tests --test native_json_driver_tests -- -D warnings
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test device_where_tests --test native_json_driver_tests -- --include-ignored
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test sql_user_extra_output_tests --test plugin_output_capabilities_tests
       ;;
