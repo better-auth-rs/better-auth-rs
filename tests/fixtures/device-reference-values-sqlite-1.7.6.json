@@ -1,0 +1,6199 @@
+{
+  "version": "1.7.6",
+  "backend": "sqlite",
+  "groups": [
+    {
+      "ownerRefType": "json",
+      "serial": true,
+      "cases": [
+        {
+          "name": "serial-json-reference-eq-number",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-eq-date",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": {
+                "type": "date",
+                "value": "1970-01-01T00:00:00.001Z"
+              }
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-ne-date",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "ne",
+              "value": {
+                "type": "date",
+                "value": "1970-01-01T00:00:00.001Z"
+              }
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-eq-object",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": {
+                "value": 1
+              }
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-in-string-null",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "in",
+              "value": [
+                "1",
+                null
+              ]
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-id-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "2"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-deviceCode-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "deviceCode-mismatch"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-clientId-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "clientId-mismatch"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-userId-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "2"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-status-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "status-mismatch"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-transaction-commit",
+          "transaction": true,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-json-reference-transaction-rollback",
+          "transaction": true,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": null,
+          "error": {
+            "name": "Error",
+            "message": "Rollback device reference consumption"
+          },
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "rollback": {
+            "result": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "label": null,
+              "quantity": null,
+              "flag": null,
+              "moment": null,
+              "labels": null,
+              "payload": null,
+              "ownerRef": "1",
+              "id": "<device-id>"
+            },
+            "afterConsume": [],
+            "originalError": true
+          },
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "ownerRefType": "date",
+      "serial": true,
+      "cases": [
+        {
+          "name": "serial-date-reference-eq-number",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-eq-date",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": {
+                "type": "date",
+                "value": "1970-01-01T00:00:00.001Z"
+              }
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-ne-date",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "ne",
+              "value": {
+                "type": "date",
+                "value": "1970-01-01T00:00:00.001Z"
+              }
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-in-date",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "in",
+              "value": [
+                {
+                  "type": "date",
+                  "value": "1970-01-01T00:00:00.001Z"
+                }
+              ]
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-eq-invalid-date",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": {
+                "type": "date",
+                "value": "Invalid Date"
+              }
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": {
+            "name": "RangeError",
+            "message": "Invalid Date"
+          },
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-id-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "2"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-deviceCode-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "deviceCode-mismatch"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-clientId-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "clientId-mismatch"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-userId-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "2"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-status-mismatch",
+          "transaction": false,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "status-mismatch"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [],
+          "result": null,
+          "error": null,
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-transaction-commit",
+          "transaction": true,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "error": null,
+          "after": [],
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": []
+            }
+          }
+        },
+        {
+          "name": "serial-date-reference-transaction-rollback",
+          "transaction": true,
+          "where": [
+            {
+              "field": "id",
+              "value": "<device-id>"
+            },
+            {
+              "field": "stored_ownerRef",
+              "operator": "eq",
+              "value": 1
+            },
+            {
+              "field": "deviceCode",
+              "value": "ordinary-device"
+            },
+            {
+              "field": "clientId",
+              "value": "ordinary-client"
+            },
+            {
+              "field": "userId",
+              "value": "1"
+            },
+            {
+              "field": "status",
+              "value": "approved"
+            }
+          ],
+          "seeded": {
+            "deviceCode": "ordinary-device",
+            "userCode": "ordinary-user",
+            "userId": "<owner-id>",
+            "expiresAt": {
+              "type": "date",
+              "value": "2032-01-02T03:04:05.000Z"
+            },
+            "status": "approved",
+            "lastPolledAt": null,
+            "pollingInterval": 5000,
+            "clientId": "ordinary-client",
+            "scope": "read",
+            "label": null,
+            "quantity": null,
+            "flag": null,
+            "moment": null,
+            "labels": null,
+            "payload": null,
+            "ownerRef": "1",
+            "id": "<device-id>"
+          },
+          "seedEvents": [
+            {
+              "phase": "input",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "payload",
+              "value": null
+            },
+            {
+              "phase": "input",
+              "field": "ownerRef",
+              "value": 1
+            },
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "before": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "field": "label",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "quantity",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "flag",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "moment",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "labels",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "field": "payload",
+              "value": "null"
+            },
+            {
+              "phase": "output",
+              "field": "ownerRef",
+              "value": 1
+            }
+          ],
+          "result": null,
+          "error": {
+            "name": "Error",
+            "message": "Rollback device reference consumption"
+          },
+          "after": [
+            {
+              "id": "<device-id>",
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": "2032-01-02T03:04:05.000Z",
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "stored_label": null,
+              "stored_quantity": null,
+              "stored_flag": null,
+              "stored_moment": null,
+              "stored_labels": null,
+              "stored_payload": "null",
+              "stored_ownerRef": 1
+            }
+          ],
+          "rollback": {
+            "result": {
+              "deviceCode": "ordinary-device",
+              "userCode": "ordinary-user",
+              "userId": "<owner-id>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "approved",
+              "lastPolledAt": null,
+              "pollingInterval": 5000,
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "label": null,
+              "quantity": null,
+              "flag": null,
+              "moment": null,
+              "labels": null,
+              "payload": null,
+              "ownerRef": "1",
+              "id": "<device-id>"
+            },
+            "afterConsume": [],
+            "originalError": true
+          },
+          "storage": {
+            "before": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            },
+            "after": {
+              "user": [
+                {
+                  "id": "<owner-id>",
+                  "name": "Where owner",
+                  "email": "owner@device-where.test",
+                  "emailVerified": 0,
+                  "image": null,
+                  "createdAt": "2030-01-02T03:04:05.000Z",
+                  "updatedAt": "2030-01-02T03:04:05.000Z"
+                }
+              ],
+              "session": [],
+              "account": [],
+              "verification": [],
+              "deviceCode": [
+                {
+                  "id": "<device-id>",
+                  "deviceCode": "ordinary-device",
+                  "userCode": "ordinary-user",
+                  "userId": "<owner-id>",
+                  "expiresAt": "2032-01-02T03:04:05.000Z",
+                  "status": "approved",
+                  "lastPolledAt": null,
+                  "pollingInterval": 5000,
+                  "clientId": "ordinary-client",
+                  "scope": "read",
+                  "stored_label": null,
+                  "stored_quantity": null,
+                  "stored_flag": null,
+                  "stored_moment": null,
+                  "stored_labels": null,
+                  "stored_payload": "null",
+                  "stored_ownerRef": 1
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

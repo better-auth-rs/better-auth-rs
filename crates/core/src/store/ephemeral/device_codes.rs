@@ -334,20 +334,11 @@ impl DeviceCodeStore for EphemeralStore {
         expected: &DeviceCode,
         ownership: &crate::DeviceCodeOwnership,
     ) -> AuthResult<Option<DeviceCode>> {
-        let (mut query, field) = self
+        let (mut query, field, original) = self
             .model_fields
             .device_code_ownership_query(ownership, self.config.advanced.database.generate_id())?;
-        if matches!(field.field_type, crate::user_fields::UserFieldType::Json)
-            && matches!(
-                query.value,
-                Value::Object(_) | Value::Array(_) | Value::Date(_) | Value::Null
-            )
-        {
-            query.value = query
-                .value
-                .stringify()?
-                .map(Value::String)
-                .unwrap_or_default();
+        if matches!(field.field_type, crate::user_fields::UserFieldType::Json) {
+            query.value = super::field_bindings::memory_json_query_value(query.value, &original)?;
         }
         let mut expected = expected.clone();
         expected.id = crate::SchemaValue::from_field(

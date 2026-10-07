@@ -187,7 +187,7 @@ fn expected_bindings(case: &Case, seeded: &DeviceCode) -> AuthResult<DeviceCode>
                 .get("operator")
                 .and_then(Value::as_str)
                 .ok_or_else(|| AuthError::internal("The captured ownership operator must exist"))?;
-            assert!(matches!(operator, "eq" | "in" | "not_in"));
+            assert!(matches!(operator, "eq" | "ne" | "in" | "not_in"));
             let value = query
                 .get("value")
                 .ok_or_else(|| AuthError::internal("The captured ownership operand must exist"))?;

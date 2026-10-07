@@ -109,7 +109,7 @@ Set `EndpointContext.transaction` when the caller runs inside an active transact
 
 Use `DeviceCodeOwnership::Where(DeviceCodeWhere)` to add one `AND` condition to consumption. Every condition retains the original ID, device code, client, user, and approved-status bindings. The condition cannot select a different code or replace those bindings. Configured grant callbacks and direct transaction calls use the same consumption path.
 
-`DeviceCodeWhere` accepts native `scope` without registration. Other fields must be declared through a custom plugin or grant. Use the logical name or the configured physical column name. Supported field types are String, Number, Boolean, Date, Enum, StringArray, NumberArray, and Json, without references. String fields that reference `id` also support default String IDs and Serial ID generation. Use `DeviceCodeOwnership::ClientId` for the native client binding.
+`DeviceCodeWhere` accepts native `scope` without registration. Other fields must be declared through a custom plugin or grant. Use the logical name or the configured physical column name. Supported field types are String, Number, Boolean, Date, Enum, StringArray, NumberArray, and Json, without references. String, Json, and Date fields that reference `id` also use the configured ID policy. Use `DeviceCodeOwnership::ClientId` for the native client binding.
 
 For a declared String field named `tenantKey`, return this ownership condition from the redemption authorization callback:
 
@@ -139,14 +139,16 @@ let ownership = DeviceCodeOwnership::Where(DeviceCodeWhere {
 
 Query conversion does not invoke field input or output callbacks. A Number candidate set of numeric strings converts only when every candidate parses as a number. Matching consumption awaits the consumed row's output callbacks. A query error or a condition that matches no row leaves the stored row intact. Rust preserves `AuthError` and database-driver diagnostics; JavaScript `Error.name` identity is not reproduced.
 
-With Serial ID generation, a String reference to `id` uses the shared numeric reference conversion. Query null converts to zero, while stored null remains null. Candidate arrays convert each value independently. Reference declarations do not authorize the caller or change the native DeviceCode user binding.
+With Serial ID generation, a reference to `id` uses the shared numeric reference conversion. Query null converts to zero, while stored null remains null. Candidate arrays convert each value independently. Json binding on Memory, SQLite, and MySQL retains the original object, array, Date, or null operand for serialization after reference conversion. SQLite Date binding likewise uses the original top-level Date; dates inside candidate arrays retain numeric reference conversion. Reference declarations do not authorize the caller or change the native DeviceCode user binding.
+
+Custom adapters calling `ModelFields::device_code_ownership_query` must consume its three-item result: the bound condition, field policy, and original operand. Apply adapter-specific Json and Date conversion with that original operand.
 
 The following predicates remain unsupported:
 
-- Reference fields outside String references to `id`.
+- Reference fields outside String, Json, and Date references to `id`.
 - Undeclared fields, other native DeviceCode fields through `Where`, and `OR` or multiple caller-supplied conditions.
 
-The accepted Memory, SQLite, PostgreSQL, and MySQL contracts include 90 ordinary and 23 transaction observations per backend, including Date, non-finite-number, and array-identity cases. Database binding errors and coercion remain specific to each backend. An additional 18 default String-ID reference observations per backend cover logical and physical field names, owner mismatch, every native binding, commit, and rollback. Rust runs each reference observation through both `Where` and `FieldEquals`; CI 37680167423 accepted this addition. Capture CI 37691993093 adds 30 candidate-set observations per backend with default and Serial IDs. Rust pairing through `Where` and the corresponding set variant remains pending.
+The accepted Memory, SQLite, PostgreSQL, and MySQL contracts include 90 ordinary and 23 transaction observations per backend, including Date, non-finite-number, and array-identity cases. Database binding errors and coercion remain specific to each backend. An additional 18 default String-ID reference observations per backend cover logical and physical field names, owner mismatch, every native binding, commit, and rollback. Rust runs each reference observation through both `Where` and `FieldEquals`; CI 37680167423 accepted this addition. CI 37693670658 accepted 30 candidate-set observations per backend with default and Serial IDs, each through `Where` and the corresponding set variant. Capture CI 37693956363 adds 24 Json/Date reference observations per backend with Serial IDs, all five native guards, commit, and rollback. Rust pairing for this last addition awaits CI acceptance; default-ID Json/Date reference values remain unpaired.
 
 The reference contract compares complete Device values, field callbacks, consumed records, rollback restoration, and the original rollback error allocation. Rust also checks that the complete owner view remains unchanged. Raw User, Session, Account, and Verification table snapshots, plus complete Device table enumeration inside the transaction, remain upstream-only observations because the public Rust Store does not expose those reads. MySQL syntax errors retain both complete driver messages in CI. Their SQL excerpts differ because SQLx and mysql2 use different statement forms; the exact excerpts remain unpaired.
 

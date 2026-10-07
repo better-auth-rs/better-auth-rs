@@ -369,6 +369,7 @@ server_catalog_tests=(
   ./compat-tests/reference-server/consumer-contracts/device-where-transactions.test.ts
   ./compat-tests/reference-server/consumer-contracts/device-where-references.test.ts
   ./compat-tests/reference-server/consumer-contracts/device-reference-sets.test.ts
+  ./compat-tests/reference-server/consumer-contracts/device-reference-values.test.ts
   ./compat-tests/reference-server/consumer-contracts/native-json-driver.test.ts
   ./compat-tests/reference-server/consumer-contracts/device-code-catalog.test.ts
   ./compat-tests/reference-server/consumer-contracts/wallet-address-catalog.test.ts

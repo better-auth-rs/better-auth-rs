@@ -130,11 +130,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let policy = self.config().advanced.database.generate_id();
         let user = P::DeviceCode::column("user_id")?;
         let client = P::DeviceCode::column("client_id")?;
-        let (mut query, field) = self
+        let (mut query, field, original) = self
             .model_fields
             .device_code_ownership_query(ownership, policy)?;
         let backend = connection.get_database_backend();
-        let original = query.value.clone();
         query.value =
             super::value_filter::adapter_query_value(query.value, &original, field, backend)?;
         let ownership = ownership_predicate(P::DeviceCode::column(&query.field)?, query, backend)?;

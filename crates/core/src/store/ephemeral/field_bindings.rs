@@ -2,6 +2,19 @@ use super::*;
 use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth_schema_registry::EntityRole;
 
+pub(super) fn memory_json_query_value(value: Value, original: &Value) -> AuthResult<Value> {
+    if matches!(
+        original,
+        Value::Object(_) | Value::Array(_) | Value::Date(_) | Value::Null
+    ) {
+        original
+            .stringify()
+            .map(|value| value.map(Value::String).unwrap_or_default())
+    } else {
+        Ok(value)
+    }
+}
+
 impl EphemeralStore {
     pub(super) fn organization_query(
         &self,
@@ -64,13 +77,7 @@ impl EphemeralStore {
         let field = schema.fields().get(name);
         let original_json = field
             .is_some_and(|field| matches!(field.field_type, UserFieldType::Json))
-            .then(|| value.clone())
-            .filter(|value| {
-                value.is_object()
-                    || value.is_array()
-                    || value.is_null()
-                    || value.as_date().is_some()
-            });
+            .then(|| value.clone());
         let value = if field.is_some_and(|field| self.uses_serial_reference(field)) {
             crate::id::serial_reference_query_value(value)?
         } else {
@@ -78,7 +85,7 @@ impl EphemeralStore {
         };
         // Query JSON conversion follows reference conversion and uses the original query value.
         match original_json {
-            Some(value) => Ok(value.stringify()?.map(Value::String).unwrap_or_default()),
+            Some(original) => memory_json_query_value(value, &original),
             None => Ok(value),
         }
     }

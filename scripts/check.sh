@@ -342,7 +342,9 @@ run_stage() {
         ./compat-tests/reference-server/contracts/device-where-references.test.ts \
         ./compat-tests/reference-server/consumer-contracts/device-where-references.test.ts \
         ./compat-tests/reference-server/contracts/device-reference-sets.test.ts \
-        ./compat-tests/reference-server/consumer-contracts/device-reference-sets.test.ts
+        ./compat-tests/reference-server/consumer-contracts/device-reference-sets.test.ts \
+        ./compat-tests/reference-server/contracts/device-reference-values.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-reference-values.test.ts
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test device_where_tests --test sql_user_extra_output_tests \
         --test plugin_output_capabilities_tests --test native_json_driver_tests \

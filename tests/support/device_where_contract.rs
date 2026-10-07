@@ -25,6 +25,9 @@ pub(crate) use references::load_references;
 #[path = "device_where_reference_sets.rs"]
 mod reference_sets;
 pub(crate) use reference_sets::load_reference_sets;
+#[path = "device_where_reference_values.rs"]
+mod reference_values;
+pub(crate) use reference_values::load_reference_values;
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 const FIELDS: [(&str, UserFieldType); 7] = [
@@ -116,7 +119,7 @@ pub(crate) fn config(serial: bool) -> AuthConfig {
     clippy::expect_used,
     reason = "The fixture must retain every callback in declaration order"
 )]
-fn policies(trace: &Trace) -> UserConfig {
+fn policies(trace: &Trace, owner_ref_type: &UserFieldType) -> UserConfig {
     UserConfig {
         additional_fields: Some(
             FIELDS
@@ -136,7 +139,11 @@ fn policies(trace: &Trace) -> UserConfig {
                     (
                         name.into(),
                         UserFieldConfig {
-                            field_type,
+                            field_type: if name == "ownerRef" {
+                                owner_ref_type.clone()
+                            } else {
+                                field_type
+                            },
                             field_name: Some(format!("stored_{name}")),
                             required: Some(false),
                             references: (name == "ownerRef").then(|| UserFieldReference {
@@ -386,6 +393,7 @@ pub(crate) async fn run<S: AuthSchema>(
     backend: &str,
     cases: &[&Case],
     config: AuthConfig,
+    owner_ref_type: UserFieldType,
 ) -> AuthResult<()> {
     let serial = matches!(config.advanced.database.generate_id(), IdGeneration::Serial);
     let trace = Trace::default();
@@ -393,13 +401,13 @@ pub(crate) async fn run<S: AuthSchema>(
     let auth = BetterAuth::new(config.clone())
         .store_arc(raw.clone())
         .plugin(DeviceAuthorizationPlugin::new())
-        .plugin(Fields(policies(&trace)))
+        .plugin(Fields(policies(&trace, &owner_ref_type)))
         .build()
         .await?;
     let reader = BetterAuth::new(config)
         .store_arc(raw)
         .plugin(DeviceAuthorizationPlugin::new())
-        .plugin(Fields(policies(&storage_trace)))
+        .plugin(Fields(policies(&storage_trace, &owner_ref_type)))
         .build()
         .await?;
     let mut owner_input = CreateUser::new()
@@ -504,6 +512,13 @@ pub(crate) async fn run<S: AuthSchema>(
         let result = match (&case.error, consumed) {
             (None, result) => result?,
             (Some(expected), Err(AuthError::Internal(message))) if case.rollback.is_some() => {
+                assert_eq!(expected.name, "Error");
+                assert_eq!(message, expected.message);
+                None
+            }
+            (Some(expected), Err(AuthError::Internal(message)))
+                if backend == "memory" && message == "Value must be an array" =>
+            {
                 assert_eq!(expected.name, "Error");
                 assert_eq!(message, expected.message);
                 None

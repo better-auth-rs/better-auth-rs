@@ -7,7 +7,7 @@ mod fixture;
 #[path = "support/device_where_inventory.rs"]
 mod inventory;
 
-use better_auth_core::store::EphemeralStore;
+use better_auth_core::{store::EphemeralStore, user_fields::UserFieldType};
 use better_auth_seaorm::sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 use std::sync::Arc;
 
@@ -38,6 +38,18 @@ async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -
             "memory",
             &cases,
             config,
+            UserFieldType::String,
+        )
+        .await?;
+    }
+    for group in contract::load_reference_values("memory")? {
+        let config = contract::config(group.serial);
+        contract::run(
+            Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
+            "memory",
+            &group.cases.iter().collect::<Vec<_>>(),
+            config,
+            group.owner_ref_type.field_type(),
         )
         .await?;
     }
@@ -65,11 +77,39 @@ async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult
         let config = contract::config(serial);
         if serial {
             let store = fixture::setup_serial(config.clone(), database.clone()).await?;
-            contract::run(Arc::new(store), backend, &cases, config).await?;
+            contract::run(
+                Arc::new(store),
+                backend,
+                &cases,
+                config,
+                UserFieldType::String,
+            )
+            .await?;
+            fixture::drop_serial(&database).await?;
         } else {
             let store = fixture::setup(config.clone(), database.clone()).await?;
-            contract::run(Arc::new(store), backend, &cases, config).await?;
+            contract::run(
+                Arc::new(store),
+                backend,
+                &cases,
+                config,
+                UserFieldType::String,
+            )
+            .await?;
         }
+    }
+    for group in contract::load_reference_values(backend)? {
+        let config = contract::config(group.serial);
+        let store = fixture::setup_serial(config.clone(), database.clone()).await?;
+        contract::run(
+            Arc::new(store),
+            backend,
+            &group.cases.iter().collect::<Vec<_>>(),
+            config,
+            group.owner_ref_type.field_type(),
+        )
+        .await?;
+        fixture::drop_serial(&database).await?;
     }
     Ok(())
 }

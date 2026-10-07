@@ -43,11 +43,12 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
 impl ModelFields {
     /// Bind one ownership condition without invoking application field callbacks.
     /// The returned condition uses its physical storage field name.
+    /// The third tuple item retains the original operand for adapter-specific conversion.
     pub fn device_code_ownership_query(
         &self,
         ownership: &DeviceCodeOwnership,
         policy: &IdGeneration,
-    ) -> AuthResult<(DeviceCodeWhere, &UserFieldConfig)> {
+    ) -> AuthResult<(DeviceCodeWhere, &UserFieldConfig, Value)> {
         static CLIENT_ID: LazyLock<UserFieldConfig> = LazyLock::new(UserFieldConfig::default);
         let (mut query, logical, field) = match ownership {
             DeviceCodeOwnership::ClientId(client) => (
@@ -79,16 +80,27 @@ impl ModelFields {
             }
             DeviceCodeOwnership::Where(query) => {
                 let (logical, field) = self.declared_device_code_ownership_field(&query.field)?;
-                validate_reference(field)?;
+                if field.references.is_some()
+                    && !(field.references_id()
+                        && matches!(
+                            field.field_type,
+                            UserFieldType::String | UserFieldType::Json | UserFieldType::Date
+                        ))
+                {
+                    return Err(AuthError::config(
+                        "DeviceCode Where reference fields require the String, Json, or Date type and an id target",
+                    ));
+                }
                 (query.clone(), logical, field)
             }
         };
+        let original = query.value.clone();
         if field.references_id() && matches!(policy, IdGeneration::Serial) {
             query.value = crate::id::serial_reference_query_value(query.value)?;
         }
         query.value = crate::user_query::bind_filter(field, &query.value)?;
         query.field = resolve_field_name(field.field_name.as_deref(), logical).to_owned();
-        Ok((query, field))
+        Ok((query, field, original))
     }
 
     fn declared_device_code_ownership_field(

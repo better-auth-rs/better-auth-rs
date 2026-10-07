@@ -194,3 +194,15 @@ pub(crate) async fn setup_serial(
     let _ = database.execute_raw(backend.build(&device)).await?;
     Ok(SeaOrmStore::<SerialSchema>::new(config, database).with_plugin_schema())
 }
+
+pub(crate) async fn drop_serial(database: &DatabaseConnection) -> Result<(), DbErr> {
+    let backend = database.get_database_backend();
+    for table in [
+        serial_device::Entity.table_ref(),
+        serial_user::Entity.table_ref(),
+    ] {
+        let statement = sea_query::Table::drop().table(table).to_owned();
+        let _ = database.execute_raw(backend.build(&statement)).await?;
+    }
+    Ok(())
+}
