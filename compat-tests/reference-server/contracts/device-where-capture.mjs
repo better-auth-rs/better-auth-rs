@@ -24,7 +24,7 @@ export const observeValue = value => {
   return value;
 };
 
-async function captureGroup(backend, serial, scenarios = deviceWhereScenarios()) {
+export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios()) {
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const events = [];
@@ -70,6 +70,11 @@ async function captureGroup(backend, serial, scenarios = deviceWhereScenarios())
         return observeValue({ ...value, id: "<device-id>", userId: "<owner-id>" });
       };
       const raw = async () => (await readRaw()).map(row);
+      const storage = async () => Object.fromEntries(await Promise.all(Object.keys(memory).map(async model => [model,
+        (await readRaw(model)).map(value => model === "deviceCode" ? row(value) : observeValue(
+          model === "user" && String(value.id) === owner.id ? { ...value, id: "<owner-id>" } : value,
+        )),
+      ])));
       let value = scenario.value;
       if (scenario.sourceValue === "returned") value = seeded[scenario.field];
       if (scenario.sourceValue === "returned-array") value = [seeded[scenario.field]];
@@ -78,12 +83,22 @@ async function captureGroup(backend, serial, scenarios = deviceWhereScenarios())
       const where = [
         { field: "id", value: seeded.id },
         { field: scenario.physical ? `stored_${scenario.field}` : scenario.field, operator: scenario.operator, value, ...(scenario.mode ? { mode: scenario.mode } : {}) },
+        ...(scenario.guardBindings ? ["deviceCode", "clientId", "userId"].map(field => ({ field, value: native[field] })) : []),
         { field: "status", value: "approved" },
       ];
+      if (scenario.guardMismatch) {
+        const guard = where.find(condition => condition.field === scenario.guardMismatch);
+        assert.ok(guard, "The mismatch must replace an existing native binding");
+        guard.value = `${scenario.guardMismatch}-mismatch`;
+      }
       const before = await raw();
+      const storageBefore = scenario.observeStorage ? await storage() : undefined;
       const seedEvents = events.splice(0);
       let result = null;
       let error = null;
+      let rollbackResult = null;
+      let transactionAfterConsume = null;
+      const rollbackError = new Error("Rollback device reference consumption");
       try {
         const consume = async current => {
           if (scenario.sourceValue === "transaction-returned" || scenario.sourceValue === "transaction-returned-array") {
@@ -91,12 +106,22 @@ async function captureGroup(backend, serial, scenarios = deviceWhereScenarios())
             assert.ok(selected);
             where[1].value = scenario.sourceValue === "transaction-returned-array" ? [selected[scenario.field]] : selected[scenario.field];
           }
-          return row(await current.consumeOne({ model: "deviceCode", where }));
+          const consumed = row(await current.consumeOne({ model: "deviceCode", where }));
+          if (scenario.rollback) {
+            assert.ok(scenario.transaction, "Rollback requires a transaction");
+            assert.ok(consumed, "Rollback must follow a successful consumption");
+            rollbackResult = consumed;
+            transactionAfterConsume = (await current.findMany({ model: "deviceCode", where: [] })).map(row);
+            assert.deepEqual(transactionAfterConsume, []);
+            throw rollbackError;
+          }
+          return consumed;
         };
         result = scenario.transaction ? await adapter.transaction(consume) : await consume(adapter);
       } catch (caught) {
         if (caught instanceof assert.AssertionError) throw caught;
         assert.ok(caught instanceof Error);
+        if (scenario.rollback) assert.equal(caught, rollbackError, "Preserve the original rollback error");
         error = { name: caught.name, message: caught.message };
       }
       const after = await raw();
@@ -105,21 +130,24 @@ async function captureGroup(backend, serial, scenarios = deviceWhereScenarios())
       assert.ok(events.every(event => event.phase === "output"), "Where conversion must not call field input transforms");
       cases.push({
         name: scenario.name, transaction: Boolean(scenario.transaction),
-        where: observeValue([{ ...where[0], value: "<device-id>" }, ...where.slice(1)]),
+        where: observeValue(where.map(condition => condition.field === "id" && condition.value === seeded.id
+          ? { ...condition, value: "<device-id>" } : condition)),
         seeded: row(seeded), seedEvents, before, events: events.splice(0), result, error, after,
+        ...(scenario.rollback ? { rollback: { result: rollbackResult, afterConsume: transactionAfterConsume, originalError: true } } : {}),
+        ...(scenario.observeStorage ? { storage: { before: storageBefore, after: await storage() } } : {}),
       });
     }
     return { serial, cases };
   };
   try {
-    if (backend === "memory") return await capture({ ...configuration, database: memoryAdapter(memory) }, async () => memory.deviceCode);
+    if (backend === "memory") return await capture({ ...configuration, database: memoryAdapter(memory) }, async (model = "deviceCode") => memory[model]);
     if (sqlite) {
       const options = { ...configuration, database: sqlite };
       await (await getMigrations(options)).runMigrations();
-      return await capture(options, async () => sqlite.query('SELECT * FROM "deviceCode" ORDER BY "deviceCode"').all());
+      return await capture(options, async (model = "deviceCode") => sqlite.query(`SELECT * FROM "${model}" ORDER BY "${model === "deviceCode" ? "deviceCode" : "id"}"`).all());
     }
-    const captured = await captureFreshServerCatalog(backend, ["deviceCode"], configuration, ({ options, query }) => capture(options, () => query(
-      backend === "postgres" ? 'SELECT * FROM "deviceCode" ORDER BY "deviceCode"' : 'SELECT * FROM `deviceCode` ORDER BY `deviceCode`', [],
+    const captured = await captureFreshServerCatalog(backend, ["deviceCode"], configuration, ({ options, query }) => capture(options, (model = "deviceCode") => query(
+      backend === "postgres" ? `SELECT * FROM "${model}" ORDER BY "${model === "deviceCode" ? "deviceCode" : "id"}"` : `SELECT * FROM \`${model}\` ORDER BY \`${model === "deviceCode" ? "deviceCode" : "id"}\``, [],
     )));
     return captured.observation;
   } finally {
@@ -133,7 +161,7 @@ export async function captureDeviceWhere(backend) {
   assert.equal(new Set(scenarios.map(scenario => scenario.name)).size, scenarios.length);
   assert.deepEqual([...new Set(scenarios.map(scenario => scenario.operator))].sort(), ["contains", "ends_with", "eq", "gt", "gte", "in", "lt", "lte", "ne", "not_in", "starts_with"]);
   const groups = [];
-  for (const serial of [false, true]) groups.push(await captureGroup(backend, serial));
+  for (const serial of [false, true]) groups.push(await captureDeviceWhereGroup(backend, serial));
   return { version, backend, groups };
 }
 
@@ -148,7 +176,7 @@ export async function captureDeviceWhereTransactions(backend) {
   }
   assert.equal(scenarios.length, 23);
   assert.equal(new Set(scenarios.map(scenario => scenario.name)).size, scenarios.length);
-  return { version, backend, groups: [await captureGroup(backend, false, scenarios)] };
+  return { version, backend, groups: [await captureDeviceWhereGroup(backend, false, scenarios)] };
 }
 
 if (import.meta.main) {

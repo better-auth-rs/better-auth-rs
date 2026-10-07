@@ -34,6 +34,9 @@ on:
       - compat-tests/reference-server/contracts/telemetry-fields-unique-capture.mjs
       - compat-tests/reference-server/contracts/email-verification-duration-capture.mjs
       - compat-tests/reference-server/contracts/passkey-shared-display-capture.mjs
+      - compat-tests/reference-server/contracts/cookie-attribute-mutation-capture.mjs
+      - compat-tests/reference-server/contracts/session-user-join-reference-capture.mjs
+      - compat-tests/reference-server/contracts/device-where-references-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
@@ -45,9 +48,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: api-key-number-name-order
-            regressions: [api-key-number-name, passkey-shared-display]
+          - contract: cookie-attribute-mutation
+            regressions: [cookie-partitioned, response-cookies]
             backend: ''
+          - contract: session-user-join-reference
+            regressions: [schema-join-reference]
+            backend: ''
+          - contract: device-where-references
+            regressions: [device-where, device-where-transactions]
+            backend: memory
+          - contract: device-where-references
+            regressions: [device-where, device-where-transactions]
+            backend: sqlite
+          - contract: device-where-references
+            regressions: [device-where, device-where-transactions]
+            backend: postgres
+          - contract: device-where-references
+            regressions: [device-where, device-where-transactions]
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
