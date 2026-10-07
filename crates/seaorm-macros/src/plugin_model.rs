@@ -122,9 +122,10 @@ pub(super) fn generate(
                 quote!(#core_root::SchemaValue::Typed(Some(self.#ident.into())))
             }
         } else if role == EntityRole::ApiKey && name == "name"
-            || role == EntityRole::Passkey
-                && matches!(name.as_str(), "name" | "aaguid" | "credential")
+            || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
         {
+            quote!(#core_root::SchemaValue::from_field(#stored_value))
+        } else if role == EntityRole::Passkey && name == "credential" {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
         } else if role == EntityRole::Passkey && name == "updated_at" {
             quote!(#core_root::SchemaValue::Typed(self.#ident.into()))

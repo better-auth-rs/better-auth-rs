@@ -18,7 +18,7 @@ impl ApiKeyStore for EphemeralStore {
         let fields = self
             .model_fields
             .api_key_fields_for_storage(
-                Some(input.name.into()),
+                Some(input.name),
                 input.additional_fields,
                 true,
                 |field, value| self.memory_plugin_field_input(field, value),
@@ -378,7 +378,7 @@ mod tests {
             additional_fields: Default::default(),
             reference_id: "owner".into(),
             config_id: "default".into(),
-            name: None,
+            name: None.into(),
             prefix: None,
             key_hash: "stored-hash".into(),
             start: None,

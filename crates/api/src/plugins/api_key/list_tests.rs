@@ -11,7 +11,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
                 additional_fields: Default::default(),
                 reference_id: "list-owner".into(),
                 config_id: "default".into(),
-                name: Some(name.into()),
+                name: Some(name.into()).into(),
                 key_hash: format!("stored-{index}"),
                 prefix: None,
                 start: None,

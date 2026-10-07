@@ -133,6 +133,16 @@ impl IdGeneration {
         self.adapter_id_input(value, policy)
     }
 
+    /// Bind a primary-key query without converting runtime values to strings.
+    #[doc(hidden)]
+    pub fn adapter_id_query(&self, value: crate::FieldValue) -> AuthResult<crate::FieldValue> {
+        if matches!(self, Self::Serial) {
+            serial_reference_query_value(value)
+        } else {
+            Ok(value)
+        }
+    }
+
     /// Apply the current adapter ID input policy without converting runtime values to strings.
     #[doc(hidden)]
     pub fn adapter_id_input(

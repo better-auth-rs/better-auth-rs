@@ -38,8 +38,8 @@ fn field(
     UserFieldConfig {
         field_name: Some(storage.into()),
         default_value_fn: Some(Arc::new(move || {
-            assert!(events.send(FieldEvent::Default(source)).is_ok());
-            value.into()
+            record(&events, FieldEvent::Default(source))?;
+            Ok(value.into())
         })),
         ..Default::default()
     }

@@ -7,7 +7,7 @@ fn api_key(label: &str) -> CreateApiKey {
         additional_fields: FieldMap::new(),
         reference_id: "owner".into(),
         config_id: "default".into(),
-        name: Some(label.into()),
+        name: Some(label.into()).into(),
         prefix: None,
         key_hash: label.into(),
         start: None,

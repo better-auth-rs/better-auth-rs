@@ -312,7 +312,7 @@ pub(super) async fn create(
                 .filter(|id| !id.is_empty())
                 .unwrap_or_else(|| better_auth_core::id::random_id(None))
                 .into(),
-            name: input.name.into(),
+            name: input.name,
             start: input.start,
             prefix: input.prefix,
             key_hash: input.key_hash,

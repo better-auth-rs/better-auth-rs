@@ -4,6 +4,8 @@ mod device_code_catalog;
 mod passkey_catalog;
 #[path = "tests/passkey_catalog_storage.rs"]
 mod passkey_catalog_storage;
+#[path = "tests/plugin_display_json.rs"]
+mod plugin_display_json;
 #[path = "tests/server_catalog_indexes.rs"]
 mod server_catalog_indexes;
 #[path = "tests/server_catalog_support.rs"]

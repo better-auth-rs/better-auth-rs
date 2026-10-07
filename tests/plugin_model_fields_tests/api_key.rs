@@ -6,7 +6,7 @@ pub(super) fn policy(events: Arc<Mutex<Vec<String>>>) -> UserFieldConfig {
     UserFieldConfig {
         required: Some(true),
         default_value: Some("Fallback".into()),
-        on_update: Some(Arc::new(|| "Renewed".into())),
+        on_update: Some(Arc::new(|| Ok("Renewed".into()))),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 trace_lock(&events)?.push(format!(
@@ -50,7 +50,7 @@ pub(super) fn input(name: Option<&str>, hash: &str) -> CreateApiKey {
         additional_fields: Default::default(),
         reference_id: "ordinary-owner".into(),
         config_id: "default".into(),
-        name: name.map(str::to_owned),
+        name: name.map(str::to_owned).into(),
         key_hash: hash.into(),
         start: None,
         prefix: None,

@@ -98,8 +98,8 @@ fn configure(
             token.default_value_fn = Some(Arc::new(move || {
                 let value =
                     FieldValue::from(format!("D{}", calls.fetch_add(1, Ordering::SeqCst) + 1));
-                assert!(events.send(Event::Default("token", value.clone())).is_ok());
-                value
+                emit(&events, Event::Default("token", value.clone()))?;
+                Ok(value)
             }));
         }
         Scenario::OutputToken => {
@@ -158,12 +158,8 @@ fn configure(
                         UserFieldType::String
                     },
                     default_value_fn: Some(Arc::new(move || {
-                        assert!(
-                            events
-                                .send(Event::Default(event_name, value.clone()))
-                                .is_ok()
-                        );
-                        value.clone()
+                        emit(&events, Event::Default(event_name, value.clone()))?;
+                        Ok(value.clone())
                     })),
                     ..Default::default()
                 };
@@ -177,6 +173,10 @@ fn configure(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions compare complete session and storage contracts; Result propagates fixture setup errors."
+)]
 async fn memory_native_declarations_preserve_storage_and_public_values() -> TestResult {
     for scenario in SCENARIOS {
         let mode = if matches!(
@@ -398,7 +398,10 @@ async fn memory_native_declarations_preserve_storage_and_public_values() -> Test
             raw.get_session(stored_token).await?.map(FieldMap::from),
             Some(expected)
         );
-        assert_eq!(raw.get_user_sessions("owner").await?, [created.clone()]);
+        assert_eq!(
+            raw.get_user_sessions("owner").await?.as_slice(),
+            std::slice::from_ref(&created)
+        );
         match scenario {
             Scenario::DeletedToken | Scenario::NativeCollision => {
                 assert_eq!(raw.get_session(initial_token).await?, None);

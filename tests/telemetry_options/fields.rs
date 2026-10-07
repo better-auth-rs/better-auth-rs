@@ -166,15 +166,17 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
         }
         "factories" => {
             let count = calls.clone();
-            let default_value_fn: Arc<dyn Fn() -> FieldValue + Send + Sync> = Arc::new(move || {
-                let _ = count.fetch_add(1, Ordering::SeqCst);
-                "hello".into()
-            });
+            let default_value_fn: Arc<dyn Fn() -> AuthResult<FieldValue> + Send + Sync> =
+                Arc::new(move || {
+                    let _ = count.fetch_add(1, Ordering::SeqCst);
+                    Ok("hello".into())
+                });
             let count = calls.clone();
-            let on_update: Arc<dyn Fn() -> FieldValue + Send + Sync> = Arc::new(move || {
-                let _ = count.fetch_add(1, Ordering::SeqCst);
-                "updated".into()
-            });
+            let on_update: Arc<dyn Fn() -> AuthResult<FieldValue> + Send + Sync> =
+                Arc::new(move || {
+                    let _ = count.fetch_add(1, Ordering::SeqCst);
+                    Ok("updated".into())
+                });
             let _ = fields.fields_mut().insert(
                 "label".into(),
                 UserFieldConfig {

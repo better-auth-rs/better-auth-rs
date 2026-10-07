@@ -61,9 +61,10 @@ enum Case {
     LiteralUndefinedId,
     FactoryUndefinedId,
     GeneratorFailure,
+    DefaultFailure,
 }
 
-const CASES: [Case; 11] = [
+const CASES: [Case; 12] = [
     Case::Missing,
     Case::Caller,
     Case::Undefined,
@@ -75,6 +76,7 @@ const CASES: [Case; 11] = [
     Case::LiteralUndefinedId,
     Case::FactoryUndefinedId,
     Case::GeneratorFailure,
+    Case::DefaultFailure,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,8 +173,8 @@ fn config(case: Case, pure: bool, events: &Sender<Event>) -> AuthConfig {
                 } else {
                     "C".into()
                 };
-                assert!(id_events.send(Event::Default("id", value.clone())).is_ok());
-                value
+                emit(&id_events, Event::Default("id", value.clone()))?;
+                Ok(value)
             })),
             ..Default::default()
         }
@@ -184,12 +186,14 @@ fn config(case: Case, pure: bool, events: &Sender<Event>) -> AuthConfig {
         required: Some(case == Case::RequiredNull),
         default_value_fn: Some(Arc::new(move || {
             let value = FieldValue::from(format!("D{}", calls.fetch_add(1, Ordering::SeqCst) + 1));
-            assert!(
-                label_events
-                    .send(Event::Default("label", value.clone()))
-                    .is_ok()
-            );
-            value
+            emit(&label_events, Event::Default("label", value.clone()))?;
+            if case == Case::DefaultFailure {
+                return Err(AuthError::FieldInput {
+                    code: "SESSION_DEFAULT_REJECTED",
+                    message: "session default failure".into(),
+                });
+            }
+            Ok(value)
         })),
         ..Default::default()
     };
@@ -238,6 +242,9 @@ fn expected_events(case: Case, pure: bool) -> Vec<Event> {
         let _ = before.insert("id".into(), id);
     }
     events.push(Event::Default("label", "D1".into()));
+    if case == Case::DefaultFailure {
+        return events;
+    }
     let _ = before.insert(
         "label".into(),
         if case == Case::Caller { "caller" } else { "D1" }.into(),
@@ -278,6 +285,38 @@ struct Run {
     events: mpsc::Receiver<Event>,
 }
 
+#[derive(Default)]
+struct ObservedCache {
+    inner: MemoryCacheAdapter,
+    writes: AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl SecondaryStorage for ObservedCache {
+    async fn get(&self, key: &str) -> AuthResult<Option<JsonValue>> {
+        self.inner.get(key).await
+    }
+
+    async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
+        let _ = self.writes.fetch_add(1, Ordering::SeqCst);
+        self.inner.set(key, value, ttl_seconds).await
+    }
+
+    async fn delete(&self, key: &str) -> AuthResult<()> {
+        let _ = self.writes.fetch_add(1, Ordering::SeqCst);
+        self.inner.delete(key).await
+    }
+
+    async fn get_and_delete(&self, key: &str) -> AuthResult<Option<JsonValue>> {
+        let _ = self.writes.fetch_add(1, Ordering::SeqCst);
+        self.inner.get_and_delete(key).await
+    }
+}
+
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract propagates store errors and asserts complete Session values, callback order, and persistence."
+)]
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestResult {
     let _ = raw
         .create_user(CreateUser {
@@ -287,7 +326,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
             ..Default::default()
         })
         .await?;
-    let cache = Arc::new(MemoryCacheAdapter::new());
+    let cache = Arc::new(ObservedCache::default());
     let store: Arc<dyn AuthStore<S>> = if run.pure {
         Arc::new(SecondaryStore::new(
             raw.clone(),
@@ -320,6 +359,9 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         }
     };
     let ended = chrono::Utc::now().timestamp_millis() as f64;
+    if run.case == Case::DefaultFailure {
+        assert_eq!(cache.writes.load(Ordering::SeqCst), 0);
+    }
     let expected = expected_events(run.case, run.pure);
     assert_eq!(
         run.events.try_iter().collect::<Vec<_>>(),
@@ -329,13 +371,26 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         run.call,
         run.pure
     );
-    let failed = run.case == Case::Failure || (run.pure && run.case == Case::GeneratorFailure);
+    let failed = matches!(run.case, Case::Failure | Case::DefaultFailure)
+        || (run.pure && run.case == Case::GeneratorFailure);
     if failed || (run.case == Case::Cancel && run.call == Call::Deferred) {
         let error = result
             .err()
             .ok_or("Session creation unexpectedly succeeded")?;
         let expected_error = if run.case == Case::Failure {
             AuthError::bad_request("session hook failure")
+        } else if run.case == Case::DefaultFailure {
+            assert!(matches!(
+                &error,
+                AuthError::FieldInput {
+                    code: "SESSION_DEFAULT_REJECTED",
+                    ..
+                }
+            ));
+            AuthError::FieldInput {
+                code: "SESSION_DEFAULT_REJECTED",
+                message: "session default failure".into(),
+            }
         } else if run.case == Case::GeneratorFailure {
             AuthError::bad_request("session generator failure")
         } else {

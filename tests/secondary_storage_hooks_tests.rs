@@ -323,8 +323,18 @@ async fn default_transaction_session_mirrors_the_uncommitted_user_without_deferr
                     let encoded = cache.get(session.token()).await?.unwrap();
                     let cached: serde_json::Value =
                         serde_json::from_str(encoded.as_str().unwrap())?;
-                    assert_eq!(cached["user"]["id"], user.id.typed().unwrap().as_str());
-                    assert_eq!(cached["user"]["email"], email);
+                    assert_eq!(
+                        cached
+                            .pointer("/user/id")
+                            .and_then(serde_json::Value::as_str),
+                        Some(user.id.typed().unwrap().as_str())
+                    );
+                    assert_eq!(
+                        cached
+                            .pointer("/user/email")
+                            .and_then(serde_json::Value::as_str),
+                        Some(email)
+                    );
                     if commit {
                         Ok(())
                     } else {
@@ -428,8 +438,8 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
         let _ = auth
             .store()
             .create_account(CreateAccount {
-                user_id: (user.id.clone()).into(),
-                account_id: (user.id.clone()).into(),
+                user_id: user.id.clone(),
+                account_id: user.id.clone(),
                 provider_id: "credential".into(),
                 password: (Some("unproven".into())).into(),
                 access_token: Default::default(),
@@ -721,8 +731,8 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     let _ = auth
         .store()
         .create_account(CreateAccount {
-            user_id: (user.id.clone()).into(),
-            account_id: (user.id.clone()).into(),
+            user_id: user.id.clone(),
+            account_id: user.id.clone(),
             provider_id: "credential".into(),
             password: (Some("unproven".into())).into(),
             access_token: Default::default(),

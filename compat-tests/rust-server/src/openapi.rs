@@ -278,7 +278,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                     required: Some(true),
                     default_value_fn: Some(Arc::new(move || {
                         let _ = counter.fetch_add(1, Ordering::SeqCst);
-                        "factory".into()
+                        Ok("factory".into())
                     })),
                     ..Default::default()
                 },
@@ -383,7 +383,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                             UserFieldConfig {
                                 default_value_fn: Some(Arc::new(move || {
                                     let _ = counter.fetch_add(1, Ordering::SeqCst);
-                                    "factory".into()
+                                    Ok("factory".into())
                                 })),
                                 ..Default::default()
                             },

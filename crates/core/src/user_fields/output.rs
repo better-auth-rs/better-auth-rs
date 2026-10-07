@@ -24,7 +24,7 @@ impl UserView {
         data: FieldMap,
         config: &super::UserConfig,
         metadata: &MetadataMap,
-    ) -> FieldMap {
+    ) -> AuthResult<FieldMap> {
         let mut output = FieldMap::new();
         for name in [
             "id",
@@ -59,16 +59,16 @@ impl UserView {
                 let _ = output.remove(name);
                 continue;
             }
-            let value = data
-                .get(name)
-                .cloned()
-                .or_else(|| field.default_value())
-                .or_else(|| (field.required != Some(true)).then_some(Value::Null));
+            let value = match data.get(name) {
+                Some(value) => Some(value.clone()),
+                None => field.default_value()?,
+            }
+            .or_else(|| (field.required != Some(true)).then_some(Value::Null));
             if let Some(value) = value {
                 let _ = output.insert(name.clone(), value);
             }
         }
-        output
+        Ok(output)
     }
 
     /// Apply current `returned` restrictions to cached fields without repeating adapter transforms.

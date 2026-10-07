@@ -14,8 +14,9 @@ fn policy(
     UserFieldConfig {
         required: Some(true),
         default_value: (field == "aaguid").then(|| FIRST.into()),
-        on_update: (field == "aaguid")
-            .then(|| Arc::new(|| UPDATED.into()) as Arc<dyn Fn() -> FieldValue + Send + Sync>),
+        on_update: (field == "aaguid").then(|| {
+            Arc::new(|| Ok(UPDATED.into())) as Arc<dyn Fn() -> AuthResult<FieldValue> + Send + Sync>
+        }),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 trace_lock(&trace)?.push(format!("input:{field}"));

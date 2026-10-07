@@ -604,7 +604,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         returned: Some(false),
         field_name: Some("stored_marker".into()),
         default_value: Some(Value::from("created")),
-        on_update: Some(Arc::new(|| Value::from("updated"))),
+        on_update: Some(Arc::new(|| Ok(Value::from("updated")))),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 if rejection.load(Ordering::SeqCst) && value == Value::from("updated") {

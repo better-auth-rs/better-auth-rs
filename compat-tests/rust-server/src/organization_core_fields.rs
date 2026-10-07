@@ -85,7 +85,7 @@ pub fn configure(config: &mut OrganizationConfig) {
                         field_type: UserFieldType::Date,
                         required: Some(false),
                         input: Some(false),
-                        on_update: Some(Arc::new(|| "2020-01-02T03:04:05.000Z".into())),
+                        on_update: Some(Arc::new(|| Ok("2020-01-02T03:04:05.000Z".into()))),
                         ..Default::default()
                     },
                 ),

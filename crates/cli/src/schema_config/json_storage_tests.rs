@@ -6,7 +6,7 @@ use serde_json::json;
     clippy::expect_used,
     reason = "Fixture and generated-model structure is a test precondition; absence must fail the test."
 )]
-fn model_fields(source: &str, name: &str) -> BTreeMap<String, syn::Field> {
+pub(super) fn model_fields(source: &str, name: &str) -> BTreeMap<String, syn::Field> {
     syn::parse_file(source)
         .expect("generated source parses")
         .items

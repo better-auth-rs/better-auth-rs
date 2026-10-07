@@ -39,6 +39,19 @@ run_stage() {
       cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 configuration_client_compat
       ;;
+    plugin-display-json)
+      cargo fmt --all -- --check
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/plugin-display-json.test.ts \
+        ./compat-tests/reference-server/contracts/plugin-display-presence.test.ts
+      cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-cli -p better-auth-seaorm -p better-auth-seaorm-macros -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_display_json_tests --test plugin_model_fields_tests -- -D warnings
+      cargo test --locked -p better-auth-cli plugin_display_field_tests
+      cargo test --locked -p better-auth-core --lib -- plugin_display_json_tests factory_tests passkey
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_display_json_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests passkey_update_ids
+      ./scripts/consumer-check.sh --test generated_plugin_catalog plugin_display_json -- --include-ignored
+      ;;
     plugin-fields)
       cargo fmt --all -- --check
       bun --no-install test \

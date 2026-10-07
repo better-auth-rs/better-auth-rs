@@ -29,7 +29,7 @@ use crate::types::{
     CreateOrganization, CreatePasskey, CreateSession, CreateTwoFactor, CreateUser,
     CreateVerification, DeviceCode, Invitation, InvitationStatus, ListUsersParams, Member,
     Organization, Passkey, TwoFactor, UpdateAccount, UpdateApiKey, UpdateDeviceCode,
-    UpdateOrganization, UpdatePasskeyAuthentication, UpdateUser,
+    UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication, UpdateUser,
 };
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
@@ -1190,7 +1190,23 @@ pub trait PasskeyStore: Send + Sync {
         id: &crate::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey>;
-    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey>;
+    /// Apply display fields and the optional counter in one adapter write.
+    async fn update_passkey(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdatePasskey,
+    ) -> AuthResult<Passkey>;
+    /// Update a string name through the shared passkey field policies.
+    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
+        self.update_passkey(
+            &id.to_owned().into(),
+            UpdatePasskey {
+                name: Some(name.to_owned()).into(),
+                ..Default::default()
+            },
+        )
+        .await
+    }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()>;
 }
 

@@ -157,10 +157,17 @@ pub struct CreatePasskey {
     pub aaguid: SchemaValue<Option<String>>,
 }
 
-/// Input for updating a passkey.
-#[derive(Debug, Clone)]
+/// Display fields and counter changed by one passkey adapter update.
+#[derive(Debug, Clone, Default)]
 pub struct UpdatePasskey {
-    pub name: Option<String>,
+    /// Omitted values retain the stored name unless an update policy supplies a value.
+    pub name: SchemaValue<Option<String>>,
+    /// Omitted values retain the stored AAGUID unless an update policy supplies a value.
+    pub aaguid: SchemaValue<Option<String>>,
+    /// Declared application fields before adapter input policies.
+    pub additional_fields: crate::FieldMap,
+    /// Replace the stored authenticator counter when supplied.
+    pub counter: Option<u64>,
 }
 
 /// Input for updating stored passkey credential state after authentication.
@@ -406,7 +413,8 @@ pub struct CreateApiKey {
     pub reference_id: String,
     /// Name of the API-key configuration this key belongs to.
     pub config_id: String,
-    pub name: Option<String>,
+    /// Display name before adapter input policies, including JSON values or omission.
+    pub name: SchemaValue<Option<String>>,
     pub prefix: Option<String>,
     pub key_hash: String,
     pub start: Option<crate::ApiKeyStart>,

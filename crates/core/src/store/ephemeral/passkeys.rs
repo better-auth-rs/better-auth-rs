@@ -8,7 +8,7 @@ use crate::store::{
 };
 use crate::user_fields::{project_adapter_value, project_source_fields_then};
 use crate::{
-    AuthError, AuthResult, CreatePasskey, Passkey, PasskeyCredentialState,
+    AuthError, AuthResult, CreatePasskey, Passkey, PasskeyCredentialState, UpdatePasskey,
     UpdatePasskeyAuthentication,
 };
 
@@ -232,18 +232,22 @@ impl PasskeyStore for EphemeralStore {
         Ok(self.project_passkey_refs(vec![selected]).await?.remove(0))
     }
 
-    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
+    async fn update_passkey(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: UpdatePasskey,
+    ) -> AuthResult<Passkey> {
         let fields = self
             .model_fields
             .passkey_fields_for_storage(
-                Some(name.to_owned()).into(),
-                Default::default(),
-                Default::default(),
+                update.name,
+                update.aaguid,
+                update.additional_fields,
                 false,
                 |field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
-        let id = self.memory_primary_id_query(&crate::FieldValue::from(id))?;
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let selected = self
             .raw("passkey", "update", |state| {
                 let Some(source) = state
@@ -254,6 +258,9 @@ impl PasskeyStore for EphemeralStore {
                 };
                 let snapshot = source.write(|passkey| {
                     fields.apply(passkey);
+                    if let Some(counter) = update.counter {
+                        passkey.counter = counter;
+                    }
                     passkey.updated_at = Utc::now().into();
                     Ok(passkey.clone())
                 })?;

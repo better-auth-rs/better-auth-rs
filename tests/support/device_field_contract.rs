@@ -111,7 +111,7 @@ pub(crate) fn policies(failure: Arc<AtomicU8>) -> UserConfig {
                         field_name: Some("stored_revision".into()),
                         required: Some(false),
                         default_value: Some(FieldValue::from(1.5)),
-                        on_update: Some(Arc::new(|| FieldValue::from(2.5))),
+                        on_update: Some(Arc::new(|| Ok(FieldValue::from(2.5)))),
                         ..Default::default()
                     },
                 ),

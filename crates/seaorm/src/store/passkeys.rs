@@ -8,7 +8,7 @@ use chrono::Utc;
 use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::{PasskeyStore, schema::EntityRole};
-use better_auth_core::{PasskeyCredentialState, PasskeyStorage};
+use better_auth_core::{PasskeyCredentialState, PasskeyStorage, UpdatePasskey};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -161,8 +161,17 @@ where
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
         Ok(self.project_passkey_models(vec![model]).await?.remove(0))
     }
-    async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
-        let mut fields = FieldMap::from_iter([("name".into(), name.to_owned().into_field())]);
+    async fn update_passkey(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+        update: UpdatePasskey,
+    ) -> AuthResult<Passkey> {
+        let mut fields = FieldMap::new();
+        for (name, value) in [("name", update.name), ("aaguid", update.aaguid)] {
+            if !value.is_undefined() {
+                let _ = fields.insert(name.into(), value.into_field_value());
+            }
+        }
         if P::Passkey::passkey_storage() == PasskeyStorage::Legacy {
             let _ = fields.insert(
                 "updated_at".into(),
@@ -170,23 +179,35 @@ where
             );
         }
         let patch = self
-            .prepare_passkey_fields(fields, FieldMap::new(), false)
+            .prepare_passkey_fields(fields, update.additional_fields, false)
             .await?;
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+            let policy = self.config().advanced.database.generate_id();
+            let filter = super::value_filter::equals_id(
+                P::Passkey::column("id")?,
+                &policy.adapter_id_query(id.field_value())?,
+                policy,
+                self.connection().get_database_backend(),
+            )?;
             let Some(_model) = Entity::<P::Passkey>::find()
-                .filter(
-                    P::Passkey::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
-                )
+                .filter(filter.clone())
                 .one(self.connection())
                 .await
                 .map_err(map_db_err)?
             else {
                 return Ok(None);
             };
-            let active = patch;
-            let filter = P::Passkey::column("id")?
-                .eq_id(id, self.config().advanced.database.generate_id())?;
+            let mut active = patch;
+            if let Some(counter) = update.counter {
+                let counter = i64::try_from(counter)
+                    .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
+                super::plugin_models::set::<P::Passkey>(
+                    &mut active,
+                    "counter",
+                    counter,
+                    self.config().advanced.database.generate_id(),
+                )?;
+            }
             super::updates::update_record_returning_one(
                 self.connection(),
                 active,

@@ -293,7 +293,7 @@ async fn organization_key_verifies_without_emulating_a_user_session() {
             key_hash,
             start: Some(start),
             enabled: true,
-            name: None,
+            name: None.into(),
             prefix: None,
             expires_at: None,
             remaining: None,

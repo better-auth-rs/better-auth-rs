@@ -61,7 +61,7 @@ fn name_mapping_policies(
                 .lock()
                 .expect("mapped name trace lock")
                 .push(json!(["onUpdate", "name"]));
-            " Renewed ".into()
+            Ok(" Renewed ".into())
         }));
         let inputs = events.clone();
         let input_failure = failure.clone();

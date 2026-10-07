@@ -72,7 +72,7 @@ fn policies(mapping: &str, events: Option<&Trace>, failure: &Arc<AtomicU8>) -> U
                 let events = events.clone();
                 field.on_update = Some(Arc::new(move || {
                     push(&events, json!(["onUpdate", "aaguid"]));
-                    format!(" {UPDATED} ").into()
+                    Ok(format!(" {UPDATED} ").into())
                 }));
             }
             let input_events = events.clone();

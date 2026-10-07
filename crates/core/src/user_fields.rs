@@ -7,6 +7,8 @@ use indexmap::IndexMap;
 use std::sync::{Arc, LazyLock};
 mod adapter;
 #[cfg(test)]
+mod factory_tests;
+#[cfg(test)]
 mod input_binding_tests;
 pub use adapter::FieldOutputCapabilities;
 mod batch;
@@ -27,6 +29,9 @@ pub(crate) use user_record::USER_FIELDS;
 
 /// Synchronous public input validator. Return the validated value or a public validation message.
 pub type UserFieldValidator = Arc<dyn Fn(Value) -> AuthResult<Value> + Send + Sync>;
+
+/// Synchronous default or update factory. Errors stop field processing before persistence.
+pub type UserFieldFactory = Arc<dyn Fn() -> AuthResult<Value> + Send + Sync>;
 
 /// Referenced model and logical field, shared with the application's migration configuration.
 #[derive(Clone, Debug)]
@@ -87,9 +92,9 @@ pub struct UserFieldConfig {
     /// Constant creation default.
     pub default_value: Option<Value>,
     /// Creation default factory.
-    pub default_value_fn: Option<Arc<dyn Fn() -> Value + Send + Sync>>,
+    pub default_value_fn: Option<UserFieldFactory>,
     /// Produce a stored value when an update omits this field.
-    pub on_update: Option<Arc<dyn Fn() -> Value + Send + Sync>>,
+    pub on_update: Option<UserFieldFactory>,
     /// Validate public input before persistence; takes precedence over the route input transform.
     pub validator: Option<UserFieldValidator>,
     /// Field callbacks. `None` preserves omission; `Some(Default::default())` is an empty container.
@@ -154,11 +159,11 @@ impl UserFieldConfig {
         Ok(())
     }
 
-    pub(crate) fn default_value(&self) -> Option<Value> {
-        self.default_value_fn
-            .as_ref()
-            .map(|factory| factory())
-            .or_else(|| self.default_value.clone())
+    pub(crate) fn default_value(&self) -> AuthResult<Option<Value>> {
+        match &self.default_value_fn {
+            Some(factory) => factory().map(Some),
+            None => Ok(self.default_value.clone()),
+        }
     }
 }
 
@@ -191,7 +196,7 @@ impl UserConfig {
         for (name, field) in self.fields() {
             let value = if let Some(value) = input.get(name) {
                 if !field.input() {
-                    if create && let Some(default) = field.default_value() {
+                    if create && let Some(default) = field.default_value()? {
                         let _ = parsed.insert(name.clone(), default);
                         continue;
                     }
@@ -216,7 +221,7 @@ impl UserConfig {
                     Some(value.clone())
                 }
             } else if create {
-                if let Some(default) = field.default_value() {
+                if let Some(default) = field.default_value()? {
                     Some(default)
                 } else if field.required == Some(true) {
                     return Err(AuthError::FieldInput {
@@ -309,7 +314,7 @@ impl UserFieldConfig {
         if create
             && (value.is_undefined() || (self.required == Some(true) && value.is_null()))
             && self.has_storage_default()
-            && let Some(default) = self.default_value()
+            && let Some(default) = self.default_value()?
         {
             value = default;
         }
@@ -317,12 +322,12 @@ impl UserFieldConfig {
             && value.is_undefined()
             && let Some(update) = &self.on_update
         {
-            value = update();
+            value = update()?;
         }
         Ok(Some(value))
     }
 
-    fn has_storage_default(&self) -> bool {
+    pub(crate) fn has_storage_default(&self) -> bool {
         self.default_value_fn.is_some()
             || self
                 .default_value

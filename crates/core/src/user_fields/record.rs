@@ -1,5 +1,6 @@
 use super::{
-    FieldOutputCapabilities, UserConfig, UserFieldConfig, UserFieldReference, UserFieldType,
+    FieldOutputCapabilities, UserConfig, UserFieldConfig, UserFieldFactory, UserFieldReference,
+    UserFieldType,
 };
 use crate::AuthResult;
 use crate::store::schema::resolve_field_name;
@@ -70,7 +71,7 @@ fn field(field_type: UserFieldType, required: bool) -> UserFieldConfig {
 }
 
 fn timestamp(default: bool, update: bool) -> UserFieldConfig {
-    let now: Arc<dyn Fn() -> Value + Send + Sync> = Arc::new(|| chrono::Utc::now().into());
+    let now: UserFieldFactory = Arc::new(|| Ok(chrono::Utc::now().into()));
     UserFieldConfig {
         default_value_fn: default.then(|| now.clone()),
         on_update: update.then_some(now),

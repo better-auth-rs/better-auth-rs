@@ -155,7 +155,7 @@ pub(crate) fn input() -> CreateApiKey {
     CreateApiKey {
         reference_id: "ordinary-owner".into(),
         config_id: "default".into(),
-        name: Some("Desk".into()),
+        name: Some("Desk".into()).into(),
         prefix: None,
         key_hash: "ordinary-stored-hash".into(),
         start: None,
@@ -299,7 +299,7 @@ impl<S: AuthSchema> Fixture<S> {
         if operation == "create" {
             let mut input = input();
             if self.mapped_name {
-                input.name = Some(" Desk ".into());
+                input.name = Some(" Desk ".into()).into();
             }
             return self.store.create_api_key(input).await.map(|row| vec![row]);
         }
@@ -424,7 +424,7 @@ impl<S: AuthSchema> Fixture<S> {
         } else {
             let mut input = input();
             if self.mapped_name {
-                input.name = Some(" Desk ".into());
+                input.name = Some(" Desk ".into()).into();
             }
             Some(self.store.create_api_key(input).await?)
         };

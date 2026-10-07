@@ -34,12 +34,12 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
         if matches!(name.as_str(), "name" | "aaguid") {
             if !matches!(
                 field.field_type,
-                UserFieldType::String | UserFieldType::Enum(_)
+                UserFieldType::String | UserFieldType::Enum(_) | UserFieldType::Json
             ) || field.references.is_some()
                 || (native_name(storage) && storage != name)
             {
                 return Err(AuthError::config(format!(
-                    "Passkey {name} requires a string or enum declaration without a reference or a different native field"
+                    "Passkey {name} requires a string, enum, or JSON declaration without a reference or a different native field"
                 )));
             }
         } else if native_name(name) || native_name(storage) {

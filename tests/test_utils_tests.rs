@@ -405,6 +405,10 @@ async fn hook_cancellation_and_errors_preserve_nullable_and_committed_results() 
     failures(sql).await
 }
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions verify partial cleanup after a database failure; Result propagates fixture setup errors."
+)]
 async fn raw_organization_cleanup_retains_earlier_deletes_when_parent_delete_fails()
 -> AuthResult<()> {
     let c = config(Default::default());
@@ -551,6 +555,10 @@ impl<S: AuthSchema> better_auth::plugins::user_admission::ValidateUserInfo<S> fo
     }
 }
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions verify admission and transaction outcomes; Result propagates fixture setup errors."
+)]
 async fn admission_requires_endpoint_and_transactional_helpers_commit_or_roll_back_together()
 -> AuthResult<()> {
     let c = config(Default::default());
@@ -627,6 +635,10 @@ async fn admission_requires_endpoint_and_transactional_helpers_commit_or_roll_ba
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions verify capture isolation; Result propagates setup and secondary-storage helper errors."
+)]
 async fn shared_plugin_instances_keep_capture_isolated_and_secondary_helpers_publish_sessions()
 -> AuthResult<()> {
     let plugin = TestUtilsPlugin { capture_otp: true };
@@ -667,6 +679,10 @@ async fn shared_plugin_instances_keep_capture_isolated_and_secondary_helpers_pub
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions verify the outer adapter survives rollback; Result propagates fixture setup errors."
+)]
 async fn organization_helpers_keep_the_outer_adapter_inside_a_transaction() -> AuthResult<()> {
     let c = config(Default::default());
     let auth = Arc::new(

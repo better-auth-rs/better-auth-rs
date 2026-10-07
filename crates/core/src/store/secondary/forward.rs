@@ -409,6 +409,13 @@ impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
         self.inner.update_passkey_name(id, name).await
     }
+    async fn update_passkey(
+        &self,
+        id: &crate::SchemaValue<String>,
+        update: crate::UpdatePasskey,
+    ) -> AuthResult<Passkey> {
+        self.inner.update_passkey(id, update).await
+    }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_passkey(id).await
     }

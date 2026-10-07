@@ -13,10 +13,10 @@ mod secrets;
 mod storage;
 mod verification;
 use crate::email::EmailProvider;
-use crate::error::AuthError;
+use crate::error::{AuthError, AuthResult};
 pub use crate::user_fields::{
-    FieldTransforms, UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform,
-    UserFieldType, UserFieldValidator,
+    FieldTransforms, UserConfig, UserFieldConfig, UserFieldFactory, UserFieldReference,
+    UserFieldTransform, UserFieldType, UserFieldValidator,
 };
 use chrono::Duration;
 pub use cookie_cache::{CookieCacheVersion, CookieCacheVersionCallback};
@@ -260,24 +260,23 @@ impl SessionConfig {
     }
 
     /// Evaluate creation defaults without validating or transforming session input.
-    pub fn default_fields(&self) -> crate::FieldMap {
+    pub fn default_fields(&self) -> AuthResult<crate::FieldMap> {
         session_defaults(&self.field_schema())
     }
 }
 
-fn session_defaults(schema: &UserConfig) -> crate::FieldMap {
-    schema
+fn session_defaults(schema: &UserConfig) -> AuthResult<crate::FieldMap> {
+    let mut defaults = crate::FieldMap::new();
+    for (name, field) in schema
         .ordered_fields(&[])
         .into_iter()
-        .filter(|(_, field)| {
-            field.default_value_fn.is_some()
-                || field
-                    .default_value
-                    .as_ref()
-                    .is_some_and(|value| !value.is_undefined())
-        })
-        .filter_map(|(name, field)| field.default_value().map(|value| (name.to_owned(), value)))
-        .collect()
+        .filter(|(_, field)| field.has_storage_default())
+    {
+        if let Some(value) = field.default_value()? {
+            let _ = defaults.insert(name.to_owned(), value);
+        }
+    }
+    Ok(defaults)
 }
 
 /// Options for authenticating sessions through the Authorization header.
@@ -685,7 +684,7 @@ impl Default for Argon2Config {
 impl AuthConfig {
     /// Evaluate Session creation defaults with plugin input precedence.
     #[doc(hidden)]
-    pub fn session_default_fields(&self) -> crate::FieldMap {
+    pub fn session_default_fields(&self) -> AuthResult<crate::FieldMap> {
         self.session_input_fields
             .as_ref()
             .map_or_else(|| self.session.default_fields(), session_defaults)

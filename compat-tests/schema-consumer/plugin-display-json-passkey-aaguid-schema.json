@@ -1,0 +1,8 @@
+{
+  "passkey": {
+    "modelName": "display_json_passkey_aaguid",
+    "additionalFields": {
+      "aaguid": { "type": "json", "required": false, "fieldName": "stored_display" }
+    }
+  }
+}

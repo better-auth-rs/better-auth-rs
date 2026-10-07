@@ -75,7 +75,7 @@ pub(crate) fn policies(
                                 if let Some(events) = &events {
                                     push(events, json!(["default", "revision"]));
                                 }
-                                1.5.into()
+                                Ok(1.5.into())
                             }
                         })),
                         on_update: Some(Arc::new({
@@ -84,7 +84,7 @@ pub(crate) fn policies(
                                 if let Some(events) = &events {
                                     push(events, json!(["onUpdate", "revision"]));
                                 }
-                                2.5.into()
+                                Ok(2.5.into())
                             }
                         })),
                         ..Default::default()

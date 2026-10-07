@@ -78,7 +78,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
                 UserFieldConfig {
                     required: Some(false),
                     default_value: Some("created".into()),
-                    on_update: Some(Arc::new(|| "updated".into())),
+                    on_update: Some(Arc::new(|| Ok("updated".into()))),
                     ..Default::default()
                 },
             ),
@@ -185,7 +185,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         "cohort".into(),
         UserFieldConfig {
             required: Some(false),
-            default_value_fn: Some(Arc::new(|| "factory".into())),
+            default_value_fn: Some(Arc::new(|| Ok("factory".into()))),
             ..Default::default()
         },
     );
@@ -194,7 +194,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         UserFieldConfig {
             field_type: UserFieldType::Date,
             required: Some(false),
-            default_value_fn: Some(Arc::new(|| "2020-01-02T03:04:05.000Z".into())),
+            default_value_fn: Some(Arc::new(|| Ok("2020-01-02T03:04:05.000Z".into()))),
             ..Default::default()
         },
     );

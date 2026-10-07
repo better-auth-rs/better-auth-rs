@@ -116,7 +116,7 @@ impl<S: AuthSchema> AuthPlugin<S> for RegisteredFields {
                     field_name: Some("stored_wallet_label".into()),
                     default_value_fn: Some(Arc::new(move || {
                         let _ = defaults.default.fetch_add(1, Ordering::SeqCst);
-                        "wallet-default".into()
+                        Ok("wallet-default".into())
                     })),
                     transform: Some(FieldTransforms {
                         input: Some(UserFieldTransform::new(move |value| {

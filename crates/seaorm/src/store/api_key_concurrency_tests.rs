@@ -31,7 +31,7 @@ async fn file_sqlite_connections_consume_quota_without_lock_upgrade_errors()
                     additional_fields: Default::default(),
                     reference_id: "owner".to_string(),
                     config_id: "default".to_string(),
-                    name: None,
+                    name: None.into(),
                     prefix: None,
                     key_hash: "concurrent-key-hash".to_string(),
                     start: None,

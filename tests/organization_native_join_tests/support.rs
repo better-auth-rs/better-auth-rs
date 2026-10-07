@@ -226,7 +226,7 @@ pub fn organization_fields<S: AuthSchema, T: AuthStore<S> + 'static>(
             .fields_mut()
             .get_mut("detail")
             .unwrap()
-            .on_update = Some(Arc::new(move || value.into()));
+            .on_update = Some(Arc::new(move || Ok(value.into())));
     }
     fields
 }

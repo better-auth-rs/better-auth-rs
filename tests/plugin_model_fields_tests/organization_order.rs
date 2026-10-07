@@ -87,13 +87,13 @@ fn declared(model: &str, events: &Events) -> AuthResult<UserConfig> {
                 trace_lock(&default)
                     .expect("Label default trace lock must remain available")
                     .push(json!(["label", "default"]));
-                " Label ".into()
+                Ok(" Label ".into())
             })),
             on_update: Some(Arc::new(move || {
                 trace_lock(&update)
                     .expect("Label update trace lock must remain available")
                     .push(json!(["label", "onUpdate"]));
-                " Updated ".into()
+                Ok(" Updated ".into())
             })),
             ..policy("label", events)
         },
@@ -113,14 +113,14 @@ fn declared(model: &str, events: &Events) -> AuthResult<UserConfig> {
             trace_lock(&default)
                 .expect("Logo default trace lock must remain available")
                 .push(json!(["logo", "default"]));
-            " Logo ".into()
+            Ok(" Logo ".into())
         }));
         let update = events.clone();
         logo.on_update = Some(Arc::new(move || {
             trace_lock(&update)
                 .expect("Logo update trace lock must remain available")
                 .push(json!(["logo", "onUpdate"]));
-            " Next Logo ".into()
+            Ok(" Next Logo ".into())
         }));
     }
     Ok(result)

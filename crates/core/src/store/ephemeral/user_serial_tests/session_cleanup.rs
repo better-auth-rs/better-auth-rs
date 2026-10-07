@@ -287,7 +287,7 @@ async fn preserved_serial_sessions_apply_owner_on_update_once_per_batch() -> Aut
                 }),
                 on_update: Some(Arc::new(move || {
                     let _ = callback_calls.fetch_add(1, Ordering::Relaxed);
-                    Value::Number(2.0)
+                    Ok(Value::Number(2.0))
                 })),
                 ..Default::default()
             },
@@ -351,7 +351,7 @@ async fn serial_session_creation_defaults_override_core_before_explicit_fields()
                 }),
                 default_value_fn: Some(Arc::new(move || {
                     let _ = callback_calls.fetch_add(1, Ordering::Relaxed);
-                    Value::from("2")
+                    Ok(Value::from("2"))
                 })),
                 ..Default::default()
             },

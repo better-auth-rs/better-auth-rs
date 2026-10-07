@@ -141,7 +141,7 @@ where
             ("metadata".to_owned(), (input.metadata).into_field()),
         ]);
         let mut active = self
-            .prepare_api_key_fields(Some(input.name.into()), input.additional_fields, true)
+            .prepare_api_key_fields(Some(input.name), input.additional_fields, true)
             .await?;
         let fields = self.create_fields("apikey", None, fields)?;
         super::plugin_models::apply::<P::ApiKey>(

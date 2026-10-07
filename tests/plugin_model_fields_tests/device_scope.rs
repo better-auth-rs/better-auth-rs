@@ -14,7 +14,7 @@ fn describe(value: &Option<Value>) -> String {
 
 #[expect(
     clippy::expect_used,
-    reason = "The infallible onUpdate callback requires the test trace mutex to remain unpoisoned"
+    reason = "The onUpdate trace must remain unpoisoned so the contract retains every callback event"
 )]
 fn policy(trace: Arc<Mutex<Trace>>, failure: Arc<AtomicU8>) -> UserFieldConfig {
     let update_trace = trace.clone();
@@ -29,7 +29,7 @@ fn policy(trace: Arc<Mutex<Trace>>, failure: Arc<AtomicU8>) -> UserFieldConfig {
                 .expect("Device scope update trace lock poisoned")
                 .events
                 .push("onUpdate".into());
-            " Renewed ".into()
+            Ok(" Renewed ".into())
         })),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
@@ -251,7 +251,7 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     let (sender, mut calls) = mpsc::unbounded_channel();
     let policy = UserFieldConfig {
         required: Some(false),
-        on_update: Some(Arc::new(|| "Renewed".into())),
+        on_update: Some(Arc::new(|| Ok("Renewed".into()))),
         transform: Some(FieldTransforms {
             input: Some(awaited(sender.clone(), "input")),
             output: Some(awaited(sender, "output")),

@@ -1,0 +1,8 @@
+{
+  "passkey": {
+    "modelName": "display_json_passkey_name",
+    "additionalFields": {
+      "name": { "type": "json", "required": false, "fieldName": "stored_display" }
+    }
+  }
+}

@@ -282,7 +282,7 @@ pub(super) async fn reference_writes<
             additional_fields: Default::default(),
             reference_id: "0x10".into(),
             config_id: "default".into(),
-            name: None,
+            name: None.into(),
             prefix: None,
             key_hash: "literal-owner-key".into(),
             start: None,

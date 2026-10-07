@@ -1,0 +1,8 @@
+{
+  "apikey": {
+    "modelName": "display_json_apikey_name",
+    "additionalFields": {
+      "name": { "type": "json", "required": false, "fieldName": "stored_display" }
+    }
+  }
+}

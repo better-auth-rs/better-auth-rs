@@ -84,14 +84,11 @@ impl EphemeralStore {
     }
 
     pub(super) fn memory_primary_id_query(&self, value: &Value) -> AuthResult<Value> {
-        if matches!(
-            self.config.advanced.database.generate_id(),
-            crate::id::IdGeneration::Serial
-        ) {
-            crate::id::serial_reference_query_value(value.clone())
-        } else {
-            Ok(value.clone())
-        }
+        self.config
+            .advanced
+            .database
+            .generate_id()
+            .adapter_id_query(value.clone())
     }
 
     pub(super) fn memory_reference_id_input(

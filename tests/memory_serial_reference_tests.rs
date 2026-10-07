@@ -100,7 +100,7 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
                 "defaulted".into(),
                 UserFieldConfig {
                     default_value: Some("003".into()),
-                    on_update: Some(Arc::new(|| "004".into())),
+                    on_update: Some(Arc::new(|| Ok("004".into()))),
                     ..reference()
                 },
             ),

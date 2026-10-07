@@ -289,11 +289,11 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
                 field_name: Some("stored_label".into()),
                 default_value_fn: Some(Arc::new(move || {
                     event(&defaults, format!("{model}.default"), json!("<undefined>")).unwrap();
-                    "default".into()
+                    Ok("default".into())
                 })),
                 on_update: Some(Arc::new(move || {
                     event(&updates, format!("{model}.onUpdate"), json!("<undefined>")).unwrap();
-                    "updated".into()
+                    Ok("updated".into())
                 })),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| {

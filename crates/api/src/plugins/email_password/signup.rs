@@ -83,7 +83,7 @@ pub(super) fn synthetic_response<S: AuthSchema>(
     };
     Ok(SignUpResponse {
         token: None,
-        user: UserView::synthetic_output(data, &ctx.config.user, &ctx.metadata),
+        user: UserView::synthetic_output(data, &ctx.config.user, &ctx.metadata)?,
     })
 }
 

@@ -34,6 +34,7 @@ on:
           - passkey
           - two-factor
           - plugin-fields
+          - plugin-display-json
           - schema-joins
           - user-fields
           - runtime-values

@@ -58,7 +58,7 @@ impl<S: AuthSchema> AuthPlugin<S> for RateLimitModel {
                             input: Some(false),
                             default_value_fn: Some(Arc::new(move || {
                                 let _ = calls.fetch_add(1, Ordering::SeqCst);
-                                "plugin-label".into()
+                                Ok("plugin-label".into())
                             })),
                             ..Default::default()
                         },

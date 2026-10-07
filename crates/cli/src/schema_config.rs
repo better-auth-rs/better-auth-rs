@@ -13,6 +13,8 @@ mod empty_model_name_tests;
 mod json_storage_tests;
 #[cfg(test)]
 mod native_empty_field_mapping_tests;
+#[cfg(test)]
+mod plugin_display_field_tests;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub(crate) enum IdGeneration {
@@ -129,6 +131,17 @@ pub(crate) enum OnDelete {
 }
 
 impl AdditionalField {
+    fn storage_type(&self, database: Database) -> Result<&'static str, String> {
+        if database == Database::Sqlite
+            && matches!(&self.field_type, FieldType::Name(name) if name == "json")
+            && self.references.is_none()
+        {
+            Ok("better_auth::seaorm::SqlText")
+        } else {
+            self.rust_type()
+        }
+    }
+
     fn rust_type(&self) -> Result<&'static str, String> {
         let field_type = self.field_type.rust_type()?;
         Ok(
@@ -151,6 +164,13 @@ impl AdditionalField {
 pub(crate) enum FieldType {
     Name(String),
     Enum(Vec<String>),
+}
+
+fn native_display_field(role: EntityRole, name: &str) -> bool {
+    matches!(
+        (role, name),
+        (EntityRole::ApiKey, "name") | (EntityRole::Passkey, "name" | "aaguid")
+    )
 }
 
 impl FieldType {
@@ -476,6 +496,18 @@ impl Entity {
                         }
                     } else {
                         let storage = resolve_field_name(field.field_name.as_deref(), name);
+                        let display = native_display_field(role, name);
+                        if display {
+                            let supported = match &field.field_type {
+                                FieldType::Name(kind) => matches!(kind.as_str(), "string" | "json"),
+                                FieldType::Enum(_) => true,
+                            };
+                            if !supported || field.references.is_some() {
+                                return Err(format!(
+                                    "{role:?} {name} requires a string, enum, or JSON declaration without a reference"
+                                ));
+                            }
+                        }
                         if role == EntityRole::ApiKey && [name.as_str(), storage].contains(&"key")
                             || role == EntityRole::Passkey
                                 && [name.as_str(), storage].contains(&"credentialID")
@@ -484,6 +516,7 @@ impl Entity {
                                 EntityRole::ApiKey | EntityRole::TwoFactor | EntityRole::Passkey
                             ) && better_auth_schema_registry::core_field_names(role)
                                 .iter()
+                                .filter(|core| !display || **core != name.as_str())
                                 .any(|core| {
                                     [name.as_str(), storage].into_iter().any(|name| {
                                         name == *core || name == core.to_lower_camel_case()
@@ -492,7 +525,10 @@ impl Entity {
                             || entity
                                 .fields
                                 .iter()
-                                .filter(|core| core.registry_column.is_some())
+                                .filter(|core| {
+                                    core.registry_column.is_some()
+                                        && !(display && core.logical_name == *name)
+                                })
                                 .any(|core| {
                                     let rust = core.ident.to_string();
                                     [name.as_str(), storage].into_iter().any(|name| {
@@ -506,6 +542,23 @@ impl Entity {
                                 "{role:?} additional field {name} cannot replace native field {storage}"
                             ));
                         }
+                        for native in ["name", "aaguid"]
+                            .into_iter()
+                            .filter(|native| native_display_field(role, native))
+                        {
+                            let column = resolve_field_name(
+                                config
+                                    .additional_fields
+                                    .get(native)
+                                    .and_then(|field| field.field_name.as_deref()),
+                                native,
+                            );
+                            if name != native && (name == column || storage == column) {
+                                return Err(format!(
+                                    "{role:?} field {name} conflicts with {native} storage column {column}"
+                                ));
+                            }
+                        }
                     }
                 }
                 if let Some((definition, existing)) = fields
@@ -513,21 +566,14 @@ impl Entity {
                     .zip(&mut entity.fields)
                     .find(|(definition, _)| definition.name.to_lower_camel_case() == *name)
                 {
-                    existing.apply_builtin_override(definition, field, entity.name)?;
+                    existing.apply_builtin_override(definition, field, entity.role, database)?;
                     continue;
                 }
                 let rust_name = name.to_snake_case();
                 let ident = syn::parse_str(&rust_name)
                     .or_else(|_| syn::parse_str(&format!("{rust_name}_")))
                     .map_err(|error| format!("invalid additional field `{name}`: {error}"))?;
-                let ty = if matches!(database, Database::Sqlite)
-                    && matches!(&field.field_type, FieldType::Name(name) if name == "json")
-                    && field.references.is_none()
-                {
-                    "better_auth::seaorm::SqlText"
-                } else {
-                    field.rust_type()?
-                };
+                let ty = field.storage_type(database)?;
                 // Upstream makes organization role fields optional while constructing update-role.
                 let ty = if field.required != Some(false)
                     && entity.role != Some(EntityRole::OrganizationRole)
@@ -650,13 +696,18 @@ impl Field {
         &mut self,
         definition: &FieldDef,
         config: &AdditionalField,
-        model: &str,
+        role: Option<EntityRole>,
+        database: Database,
     ) -> Result<(), String> {
         if definition.is_primary_key {
             return Ok(());
         }
-        let kind = config.rust_type()?;
-        let kind = if config.required != Some(false) && model != "organization_role" {
+        let kind = if role.is_some_and(|role| native_display_field(role, definition.name)) {
+            config.storage_type(database)?
+        } else {
+            config.rust_type()?
+        };
+        let kind = if config.required != Some(false) && role != Some(EntityRole::OrganizationRole) {
             kind.to_owned()
         } else {
             format!("Option<{kind}>")

@@ -297,7 +297,7 @@ pub(super) async fn create_key_for_user(
         additional_fields: Default::default(),
         reference_id,
         config_id: config.config_id.clone(),
-        name: body.name.clone(),
+        name: body.name.clone().into(),
         prefix: body.prefix.clone().or_else(|| config.prefix.clone()),
         key_hash: hash,
         start,

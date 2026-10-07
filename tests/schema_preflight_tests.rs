@@ -448,7 +448,7 @@ async fn physical_aliases_and_field_policies_do_not_hide_unconfigured_required_c
             required: Some(false),
             default_value_fn: Some(Arc::new(move || {
                 let _ = calls.fetch_add(1, Ordering::SeqCst);
-                "default".into()
+                Ok("default".into())
             })),
             ..Default::default()
         },

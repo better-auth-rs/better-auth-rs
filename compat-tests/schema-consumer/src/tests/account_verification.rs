@@ -21,7 +21,7 @@ fn label(column: &str) -> UserFieldConfig {
         required: Some(false),
         field_name: Some(column.into()),
         default_value: Some("default".into()),
-        on_update: Some(Arc::new(|| "updated".into())),
+        on_update: Some(Arc::new(|| Ok("updated".into()))),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|value| {
                 if value.is_undefined() {

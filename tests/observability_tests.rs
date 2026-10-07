@@ -1657,7 +1657,7 @@ fn api_key_input() -> better_auth_core::CreateApiKey {
         additional_fields: Default::default(),
         reference_id: "owner".into(),
         config_id: "default".into(),
-        name: None,
+        name: None.into(),
         prefix: None,
         key_hash: "stored-secret".into(),
         start: None,
@@ -1776,7 +1776,7 @@ async fn check_api_key_list(
 ) -> AuthResult<()> {
     for (index, name) in ["D", "A", "E", "C", "B"].into_iter().enumerate() {
         let mut input = api_key_input();
-        input.name = Some(name.into());
+        input.name = Some(name.into()).into();
         input.key_hash = format!("secret-{index}");
         let _ = store.create_api_key(input).await?;
     }

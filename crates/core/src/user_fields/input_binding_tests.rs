@@ -138,9 +138,8 @@ async fn literal_undefined_default_skips_binding_but_default_factory_runs() {
                             field: "id".into(),
                         }),
                         default_value: Some(Value::Undefined),
-                        default_value_fn: factory.then(|| {
-                            Arc::new(|| Value::Undefined) as Arc<dyn Fn() -> Value + Send + Sync>
-                        }),
+                        default_value_fn: factory
+                            .then(|| Arc::new(|| Ok(Value::Undefined)) as UserFieldFactory),
                         ..Default::default()
                     },
                 )]

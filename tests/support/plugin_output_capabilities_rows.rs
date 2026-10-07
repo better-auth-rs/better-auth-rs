@@ -113,7 +113,7 @@ pub(super) async fn create<S: AuthSchema>(
                 .create_api_key(CreateApiKey {
                     reference_id: owner.into(),
                     config_id: "default".into(),
-                    name: Some("Desk".into()),
+                    name: Some("Desk".into()).into(),
                     prefix: None,
                     key_hash: "ordinary-stored-hash".into(),
                     start: None,

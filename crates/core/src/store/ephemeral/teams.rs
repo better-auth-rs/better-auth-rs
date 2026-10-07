@@ -913,10 +913,10 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
         let mut failing = config.clone();
         let marker = failing.invitation.fields_mut().get_mut("marker").unwrap();
         marker.on_update = Some(Arc::new(move || {
-            Value::from(format!(
+            Ok(Value::from(format!(
                 "updated-{}",
                 count.fetch_add(1, Ordering::SeqCst) + 1
-            ))
+            )))
         }));
         let output = |value| {
             if value == Value::from("read-fail") || value == Value::from("updated-2") {

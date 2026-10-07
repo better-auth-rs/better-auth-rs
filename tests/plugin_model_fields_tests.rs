@@ -56,6 +56,9 @@ mod organization;
 #[path = "plugin_model_fields_tests/organization_order.rs"]
 mod organization_order;
 
+#[path = "plugin_model_fields_tests/passkey_update_ids.rs"]
+mod passkey_update_ids;
+
 #[path = "plugin_model_fields_tests/presence.rs"]
 mod presence;
 #[path = "plugin_model_fields_tests/presence_cache.rs"]
@@ -165,7 +168,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     let input_events = events.clone();
     let output_events = events.clone();
     let policy = UserFieldConfig {
-        on_update: Some(Arc::new(|| "Renewed".into())),
+        on_update: Some(Arc::new(|| Ok("Renewed".into()))),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 trace_lock(&input_events)?.push(format!(

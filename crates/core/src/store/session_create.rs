@@ -35,7 +35,7 @@ impl PreparedSessionCreate {
                 let _ = fields.insert("id".into(), id.into());
             }
         }
-        let defaults = config.session_default_fields();
+        let defaults = config.session_default_fields()?;
         let _ = fields.insert(
             "ipAddress".into(),
             input.ip_address.unwrap_or_default().into(),
@@ -114,7 +114,7 @@ pub fn session_create_schema(
         (
             "createdAt".into(),
             UserFieldConfig {
-                default_value_fn: Some(std::sync::Arc::new(|| chrono::Utc::now().into())),
+                default_value_fn: Some(std::sync::Arc::new(|| Ok(chrono::Utc::now().into()))),
                 ..field(UserFieldType::Date, true)
             },
         ),

@@ -37,6 +37,18 @@ export BETTER_AUTH_ORGANIZATION_SCHEMA="$schema_dir/organization_schema.rs"
 export BETTER_AUTH_SQLITE_JSON_SCHEMA="$schema_dir/sqlite_json_schema.rs"
 "$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
+for backend in sqlite postgres mysql; do
+  for display in api-key-name passkey-name passkey-aaguid; do
+    plugin=passkey
+    if [[ "$display" == api-key-name ]]; then
+      plugin=api-key
+    fi
+    schema="$schema_dir/display_json_${backend}_${display//-/_}.rs"
+    "$consumer_cli" generate --plugins "$plugin" --database "$backend" --schema-config "compat-tests/schema-consumer/plugin-display-json-${display}-schema.json" --output "$schema"
+    variable="BETTER_AUTH_DISPLAY_JSON_${backend^^}_${display^^}_SCHEMA"
+    export "${variable//-/_}=$schema"
+  done
+done
 "$consumer_cli" generate --plugins jwt --schema-config compat-tests/schema-consumer/jwk-fields-schema.json --output "$schema_dir/jwk_fields_schema.rs"
 export BETTER_AUTH_JWK_FIELDS_SCHEMA="$schema_dir/jwk_fields_schema.rs"
 "$consumer_cli" generate --plugins siwe --schema-config compat-tests/schema-consumer/wallet-fields-schema.json --output "$schema_dir/wallet_fields_schema.rs"
@@ -358,11 +370,13 @@ server_catalog_tests=(
   ./compat-tests/reference-server/consumer-contracts/team-invitation-server.test.ts
 )
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_POSTGRES_URL:-}" ]]; then
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --test generated_plugin_catalog live_postgres_plugin_display_json -- --ignored
   bun --no-install test "${server_catalog_tests[@]}" --test-name-pattern postgres
   cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::ids::live_postgres_generated_ids tests::server_catalog::live_postgres_user_account_catalog_matches_upstream tests::device_code_catalog::live_postgres_device_code_catalog_matches_upstream tests::wallet_catalog::live_postgres_wallet_catalog_and_storage_match_upstream tests::passkey_catalog::live_postgres_passkey_catalog_and_native_storage tests::two_factor_catalog::live_postgres_two_factor_catalog_and_native_storage tests::session_server::live_postgres_session_storage_matches_upstream tests::verification_server_catalog::live_postgres_verification_catalog_matches_upstream tests::jwk_server_catalog::live_postgres_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_postgres_rate_limit_counter_matches_upstream tests::member_server_catalog::live_postgres_member_catalog_matches_upstream tests::organization_role_server::live_postgres_organization_role_storage_matches_upstream tests::team_invitation_server::live_postgres_team_invitation_storage_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests --test schema_preflight_tests --test plugin_model_fields_tests --test device_additional_fields_tests --test device_where_tests --test native_json_driver_tests --test default_find_many_limit_tests --test native_core_join_tests --test organization_native_join_tests --test session_id_policy_tests live_postgres -- --ignored
 fi
 if [[ $# -eq 0 && -n "${BETTER_AUTH_TEST_MYSQL_URL:-}" ]]; then
+  cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --test generated_plugin_catalog live_mysql_plugin_display_json -- --ignored
   bun --no-install test "${server_catalog_tests[@]}" --test-name-pattern mysql
   cargo test --locked --manifest-path compat-tests/schema-consumer/Cargo.toml -- --ignored --exact tests::server_catalog::live_mysql_user_account_catalog_matches_upstream tests::device_code_catalog::live_mysql_device_code_catalog_matches_upstream tests::wallet_catalog::live_mysql_wallet_catalog_and_storage_match_upstream tests::passkey_catalog::live_mysql_passkey_catalog_and_native_storage tests::two_factor_catalog::live_mysql_two_factor_catalog_and_native_storage tests::session_server::live_mysql_session_storage_matches_upstream tests::verification_server_catalog::live_mysql_verification_catalog_matches_upstream tests::jwk_server_catalog::live_mysql_jwk_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_catalog_matches_upstream tests::rate_limit_server_catalog::live_mysql_rate_limit_counter_matches_upstream tests::member_server_catalog::live_mysql_member_catalog_matches_upstream tests::organization_role_server::live_mysql_organization_role_storage_matches_upstream tests::team_invitation_server::live_mysql_team_invitation_storage_matches_upstream
   cargo test --locked --features axum,seaorm2,redis-cache --test schema_preflight_tests mysql::live_mysql_preflight_tracks_migrations_defaults_and_auto_increment -- --ignored --exact

@@ -287,7 +287,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         .fields_mut()
         .get_mut("updatedAt")
         .unwrap()
-        .on_update = Some(Arc::new(move || Value::from(date)));
+        .on_update = Some(Arc::new(move || Ok(Value::from(date))));
     store.configure_organization_fields(config.schema).unwrap();
     assert_eq!(
         store
