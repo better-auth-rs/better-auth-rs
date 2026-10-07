@@ -1,5 +1,7 @@
 use super::*;
 
+mod fixture;
+
 fn serial_store() -> EphemeralStore {
     let mut config = AuthConfig::default();
     config.advanced.database.generate_id = Some(crate::id::IdGeneration::Serial);
