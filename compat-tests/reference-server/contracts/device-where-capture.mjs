@@ -24,7 +24,7 @@ const observeValue = value => {
   return value;
 };
 
-async function captureGroup(backend, serial) {
+async function captureGroup(backend, serial, scenarios = deviceWhereScenarios()) {
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const events = [];
@@ -51,7 +51,7 @@ async function captureGroup(backend, serial) {
     assert.equal(typeof owner.id, "string");
     assert.ok(owner.id.length > 0);
     const cases = [];
-    for (const scenario of deviceWhereScenarios().filter(scenario => Boolean(scenario.serial) === serial)) {
+    for (const scenario of scenarios.filter(scenario => Boolean(scenario.serial) === serial)) {
       await adapter.deleteMany({ model: "deviceCode", where: [] });
       const native = {
         deviceCode: "ordinary-device", userCode: "ordinary-user", userId: owner.id,
@@ -85,7 +85,14 @@ async function captureGroup(backend, serial) {
       let result = null;
       let error = null;
       try {
-        const consume = async current => row(await current.consumeOne({ model: "deviceCode", where }));
+        const consume = async current => {
+          if (scenario.sourceValue === "transaction-returned" || scenario.sourceValue === "transaction-returned-array") {
+            const selected = await current.findOne({ model: "deviceCode", where: [where[0]] });
+            assert.ok(selected);
+            where[1].value = scenario.sourceValue === "transaction-returned-array" ? [selected[scenario.field]] : selected[scenario.field];
+          }
+          return row(await current.consumeOne({ model: "deviceCode", where }));
+        };
         result = scenario.transaction ? await adapter.transaction(consume) : await consume(adapter);
       } catch (caught) {
         if (caught instanceof assert.AssertionError) throw caught;
@@ -128,6 +135,20 @@ export async function captureDeviceWhere(backend) {
   const groups = [];
   for (const serial of [false, true]) groups.push(await captureGroup(backend, serial));
   return { version, backend, groups };
+}
+
+export async function captureDeviceWhereTransactions(backend) {
+  assert.ok(["memory", "sqlite", "postgres", "mysql"].includes(backend));
+  const values = deviceWhereScenarios().filter(scenario =>
+    scenario.name.startsWith("date-") || /^(array|json)-eq-/.test(scenario.name) ||
+    ["number-nan", "number-infinity"].includes(scenario.name));
+  const scenarios = values.map(scenario => ({ ...scenario, name: `transaction-existing-${scenario.name}`, transaction: true }));
+  for (const scenario of values.filter(scenario => ["returned", "returned-array"].includes(scenario.sourceValue))) {
+    scenarios.push({ ...scenario, name: `transaction-selected-${scenario.name}`, transaction: true, sourceValue: `transaction-${scenario.sourceValue}` });
+  }
+  assert.equal(scenarios.length, 23);
+  assert.equal(new Set(scenarios.map(scenario => scenario.name)).size, scenarios.length);
+  return { version, backend, groups: [await captureGroup(backend, false, scenarios)] };
 }
 
 if (import.meta.main) {

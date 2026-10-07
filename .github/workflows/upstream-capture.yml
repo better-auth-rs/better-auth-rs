@@ -7,7 +7,9 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/user-id-generation-order-capture.mjs
+      - compat-tests/reference-server/contracts/device-where-capture.mjs
+      - compat-tests/reference-server/contracts/device-where-scenarios.mjs
+      - compat-tests/reference-server/contracts/device-where-transactions-capture.mjs
 
 permissions:
   contents: read
@@ -18,9 +20,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: user-id-generation-order
-            regression: schema-join-reference-history
-            backend: ''
+          - contract: device-where-transactions
+            regression: device-where
+            backend: memory
+          - contract: device-where-transactions
+            regression: device-where
+            backend: sqlite
+          - contract: device-where-transactions
+            regression: device-where
+            backend: postgres
+          - contract: device-where-transactions
+            regression: device-where
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
