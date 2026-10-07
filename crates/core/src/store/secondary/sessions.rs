@@ -91,7 +91,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         deferred: bool,
         transaction: Option<std::sync::Arc<dyn crate::store::AuthTransaction<S>>>,
     ) -> Option<crate::store::SessionCreateWriter> {
-        self.storage.as_ref()?;
+        let _ = self.storage.as_ref()?;
         let runtime = self.clone();
         Some(crate::store::SessionCreateWriter {
             write_database: self.database_sessions(),
