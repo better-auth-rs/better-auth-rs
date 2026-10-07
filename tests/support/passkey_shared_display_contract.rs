@@ -169,7 +169,7 @@ pub(crate) async fn run<S: AuthSchema>(
         .store()
         .create_session(CreateSession {
             user_id: OWNER.into(),
-            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
+            expires_at: (chrono::Utc::now() + auth.config().session.expires_in()).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

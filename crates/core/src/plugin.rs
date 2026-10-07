@@ -596,7 +596,6 @@ impl<S: AuthSchema> AuthContext<S> {
     /// Create a `SessionManager` from this context's config and database.
     pub fn session_manager(&self) -> crate::session::SessionManager<S> {
         crate::session::SessionManager::new(self.config.clone(), self.database.clone())
-            .with_secondary_storage(self.secondary_storage.is_some())
             .with_store_capabilities(self.store_capabilities())
             .with_user_metadata(self.metadata.clone())
             .with_adapter_user_fields(self.adapter_user_fields().clone())

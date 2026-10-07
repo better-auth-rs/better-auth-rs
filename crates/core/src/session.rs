@@ -55,7 +55,6 @@ pub enum SessionRead {
 /// Session manager handles session creation, validation, and cleanup
 pub struct SessionManager<S: AuthSchema> {
     capabilities: crate::store::StoreCapabilities,
-    secondary_storage: bool,
     user_metadata: crate::plugin::MetadataMap,
     adapter_user_fields: crate::user_fields::UserConfig,
     config: Arc<AuthConfig>,
@@ -67,7 +66,6 @@ impl<S: AuthSchema> Clone for SessionManager<S> {
     fn clone(&self) -> Self {
         Self {
             capabilities: self.capabilities,
-            secondary_storage: self.secondary_storage,
             user_metadata: self.user_metadata.clone(),
             adapter_user_fields: self.adapter_user_fields.clone(),
             config: self.config.clone(),
@@ -81,7 +79,6 @@ impl<S: AuthSchema> SessionManager<S> {
     pub fn new(config: Arc<AuthConfig>, database: Arc<dyn AuthStore<S>>) -> Self {
         Self {
             capabilities: Default::default(),
-            secondary_storage: false,
             adapter_user_fields: config.user.clone(),
             config,
             database,
@@ -110,11 +107,6 @@ impl<S: AuthSchema> SessionManager<S> {
         self
     }
 
-    pub(crate) fn with_secondary_storage(mut self, enabled: bool) -> Self {
-        self.secondary_storage = enabled;
-        self
-    }
-
     async fn user_view(&self, user: &impl AuthUser) -> AuthResult<UserView> {
         UserView::with_field_policies(
             user,
@@ -137,13 +129,6 @@ impl<S: AuthSchema> SessionManager<S> {
         &self,
         session: &impl AuthSession,
     ) -> AuthResult<SessionView> {
-        if self.secondary_storage
-            && !self.config.session.store_session_in_database()
-            && let Some((_, Some(data))) =
-                self.database.get_session_snapshot(session.token()).await?
-        {
-            return Ok(data.session);
-        }
         let mut view = SessionView::with_internal_fields_for_adapter(
             session,
             &self.config.session,

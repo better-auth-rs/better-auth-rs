@@ -37,6 +37,8 @@ on:
       - compat-tests/reference-server/contracts/cookie-attribute-mutation-capture.mjs
       - compat-tests/reference-server/contracts/session-user-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/device-where-references-capture.mjs
+      - compat-tests/reference-server/contracts/email-verification-payload-capture.mjs
+      - compat-tests/reference-server/contracts/oauth-token-duration-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
@@ -48,24 +50,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: cookie-attribute-mutation
-            regressions: [cookie-partitioned, response-cookies]
+          - contract: email-verification-payload
+            regressions: [email-verification-duration]
             backend: ''
-          - contract: session-user-join-reference
-            regressions: [schema-join-reference]
+          - contract: oauth-token-duration
+            regressions: [email-verification-duration, duration-options]
             backend: ''
-          - contract: device-where-references
-            regressions: [device-where, device-where-transactions]
-            backend: memory
-          - contract: device-where-references
-            regressions: [device-where, device-where-transactions]
-            backend: sqlite
-          - contract: device-where-references
-            regressions: [device-where, device-where-transactions]
-            backend: postgres
-          - contract: device-where-references
-            regressions: [device-where, device-where-transactions]
-            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:

@@ -26,7 +26,7 @@ const scenarios = [
   { name: "zero-immediate", expiresIn: 0, readOffset: 123, accepted: false },
 ];
 
-async function withClock(operation) {
+export async function withClock(operation) {
   const OriginalDate = globalThis.Date;
   let milliseconds = issuedAt;
   // jose reads new Date() for iat and verification; Date.now alone cannot fix those clocks.

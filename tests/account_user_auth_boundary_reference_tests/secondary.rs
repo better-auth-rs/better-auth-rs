@@ -112,7 +112,7 @@ fn verify_cache(
                 .is_some_and(|kind| kind.starts_with("secondary."))
         })
         .collect();
-    assert_eq!(calls.len(), 3);
+    assert_eq!(calls.len(), 3, "Complete secondary calls: {calls:#?}");
     assert_eq!(
         calls[0],
         &json!({"kind":"secondary.get","key":"active-sessions-undefined","value":null})

@@ -317,11 +317,13 @@ pub(super) async fn create_key_for_user(
             .or(config.default_permissions.as_ref())
             .map(serde_json::to_string)
             .transpose()?,
-        metadata: body
-            .metadata
-            .as_ref()
-            .filter(|value| json_truthy(value))
-            .map(ToString::to_string),
+        metadata: Some(
+            body.metadata
+                .as_ref()
+                .filter(|value| json_truthy(value))
+                .unwrap_or(&serde_json::Value::Null)
+                .to_string(),
+        ),
         enabled: true,
     };
     let api_key = super::storage::create(config, ctx, input).await?;
