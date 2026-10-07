@@ -1,12 +1,6 @@
-#![expect(
-    clippy::unwrap_used,
-    reason = "Read the captured ordinary Cookie fixture and report complete header differences"
-)]
-
 use super::*;
 use crate::{AuthRequest, CookieAttributes, HttpMethod, SameSite};
 use serde::Deserialize;
-use serde_json::{Value, json};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,19 +22,6 @@ struct Input {
 struct Case {
     input: Input,
     headers: Vec<String>,
-}
-
-fn ordered_headers(headers: impl IntoIterator<Item = String>) -> Vec<Value> {
-    headers
-        .into_iter()
-        .map(|header| {
-            let mut parts = header.split(';').map(str::trim);
-            let pair = parts.next().unwrap();
-            let mut attributes: Vec<_> = parts.collect();
-            attributes.sort_unstable();
-            json!({ "pair": pair, "attributes": attributes })
-        })
-        .collect()
 }
 
 #[test]
@@ -88,8 +69,8 @@ fn direct_cache_actions_match_ordered_display_cookie_capture() -> AuthResult<()>
         }
         let actual = request.take_response_headers()?;
         assert_eq!(
-            ordered_headers(actual.get_all("set-cookie").cloned()),
-            ordered_headers(case.headers),
+            actual.get_all("set-cookie").cloned().collect::<Vec<_>>(),
+            case.headers,
             "{:?}, incoming={:?}",
             case.input.action,
             case.input.incoming,

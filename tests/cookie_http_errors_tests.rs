@@ -111,13 +111,9 @@ fn cookie_configuration_errors_and_chunk_overhead_match_pinned_writer() {
                     actual["name"] = json!("ordinary");
                     assert_eq!(actual, expected[mode]["shape"], "{name}/{mode}");
                     assert_eq!(
-                        header
-                            .split(';')
-                            .next()
-                            .unwrap()
-                            .strip_prefix("better-auth."),
-                        expected[mode]["raw"].as_str().unwrap().split(';').next(),
-                        "{name}/{mode} value"
+                        header.strip_prefix("better-auth."),
+                        expected[mode]["raw"].as_str(),
+                        "{name}/{mode} complete header"
                     );
                 }
                 Err(error) => assert_eq!(

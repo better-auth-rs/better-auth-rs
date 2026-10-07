@@ -70,15 +70,7 @@ fn normalize(value: &Value, anchor: i64) -> Value {
         Value::Object(object) => Value::Object(
             object
                 .iter()
-                .map(|(key, value)| {
-                    let mut result = normalize(value, anchor);
-                    if key == "attributes" {
-                        if let Value::Array(attributes) = &mut result {
-                            attributes.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
-                        }
-                    }
-                    (key.clone(), result)
-                })
+                .map(|(key, value)| (key.clone(), normalize(value, anchor)))
                 .collect(),
         ),
         _ => value.clone(),

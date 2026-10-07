@@ -1,5 +1,4 @@
 #![expect(
-    clippy::unwrap_used,
     clippy::indexing_slicing,
     reason = "Read the captured ordinary Cookie fixture and report complete header differences"
 )]
@@ -89,19 +88,6 @@ impl AuthPlugin<S> for CleanupEndpoint {
     }
 }
 
-fn ordered_headers(headers: impl IntoIterator<Item = String>) -> Vec<Value> {
-    headers
-        .into_iter()
-        .map(|header| {
-            let mut parts = header.split(';').map(str::trim);
-            let pair = parts.next().unwrap();
-            let mut attributes: Vec<_> = parts.collect();
-            attributes.sort_unstable();
-            json!({ "pair": pair, "attributes": attributes })
-        })
-        .collect()
-}
-
 #[tokio::test]
 async fn aggregate_cleanup_preserves_ordered_complete_headers() -> AuthResult<()> {
     let cases: Vec<Case> =
@@ -165,8 +151,12 @@ async fn aggregate_cleanup_preserves_ordered_complete_headers() -> AuthResult<()
             );
             let expected: Vec<String> = serde_json::from_value(case.response["headers"].clone())?;
             assert_eq!(
-                ordered_headers(actual.headers.get_all("set-cookie").cloned()),
-                ordered_headers(expected),
+                actual
+                    .headers
+                    .get_all("set-cookie")
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                expected,
                 "{entry:?}: account={}, state={}, skip={}",
                 case.input.account,
                 case.input.state,

@@ -130,8 +130,7 @@ pub fn create_cookie(
     create_session_like_cookie(name, value, Some(max_age_seconds), config)
 }
 
-/// Build a `Set-Cookie` header value for a session token using the `cookie`
-/// crate for correct formatting and escaping.
+/// Build a signed session-token header with the upstream attribute order.
 pub fn create_session_cookie(token: &str, config: &AuthConfig) -> AuthResult<String> {
     create_session_cookie_with_max_age(
         Some(token),
@@ -206,18 +205,48 @@ pub fn create_session_like_cookie(
 /// Lifetime limits use the original precision before HTTP formatting.
 pub fn render_cookie(value: &str, resolved: &ResolvedCookie) -> AuthResult<String> {
     validate_lifetime(&resolved.attributes, chrono::Utc::now().timestamp_millis())?;
-    let mut cookie = resolved_template(resolved)?;
-    cookie.set_value(value.to_owned());
+    let cookie = resolved_template(resolved)?;
+    let mut rendered = format!("{}={value}", cookie.name());
+    if let Some(age) = cookie.max_age() {
+        rendered.push_str(&format!("; Max-Age={}", age.whole_seconds()));
+    }
     // cookie::Cookie strips a leading dot from Domain; Better Call preserves it on the wire.
     let domain = (!cookie.name().starts_with("__Host-"))
         .then_some(resolved.attributes.domain.as_deref())
         .flatten()
         .filter(|domain| !domain.is_empty());
-    cookie.unset_domain();
-    let mut rendered = cookie.to_string();
     if let Some(domain) = domain {
         rendered.push_str("; Domain=");
         rendered.push_str(domain);
+    }
+    if let Some(path) = cookie.path() {
+        rendered.push_str("; Path=");
+        rendered.push_str(path);
+    }
+    if let Some(expires) = cookie.expires_datetime() {
+        let expires = expires
+            .to_offset(cookie::time::UtcOffset::UTC)
+            .format(cookie::time::macros::format_description!(
+                "; Expires=[weekday repr:short], [day] [month repr:short] [year padding:none] [hour]:[minute]:[second] GMT"
+            ))
+            .map_err(|error| AuthError::internal(format!("Formatting cookie expiration: {error}")))?;
+        rendered.push_str(&expires);
+    }
+    if cookie.http_only() == Some(true) {
+        rendered.push_str("; HttpOnly");
+    }
+    // Preserve the cookie crate's Secure policy while using Better Call's attribute order.
+    if cookie.secure() == Some(true)
+        || cookie.partitioned() == Some(true)
+        || cookie.secure().is_none() && cookie.same_site() == Some(CookieSameSite::None)
+    {
+        rendered.push_str("; Secure");
+    }
+    if let Some(same_site) = cookie.same_site() {
+        rendered.push_str(&format!("; SameSite={same_site}"));
+    }
+    if cookie.partitioned() == Some(true) {
+        rendered.push_str("; Partitioned");
     }
     Ok(rendered)
 }
