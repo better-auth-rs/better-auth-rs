@@ -290,7 +290,15 @@ async fn capture(path: &str) -> AuthResult<JsonValue> {
                 "Native join must find the Session",
             )?;
             let joined = required(joined, "Native join must find the owner")?;
-            json!({"session":observe_session(&joined.session, &trace)?, "user":observe_user(&joined.user, false)?})
+            let user = UserView::with_field_policies(
+                &joined.user,
+                &reader.config.user,
+                &reader.config.user,
+                &Default::default(),
+                true,
+            )
+            .await?;
+            json!({"session":observe_session(&joined.session, &trace)?, "user":observe_user(&user, false)?})
         }
         "list" => JsonValue::Array(
             reader
