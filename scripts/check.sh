@@ -18,7 +18,7 @@ run_stage() {
     format) cargo fmt --all -- --check ;;
     lint-default) cargo clippy --workspace --locked -- -D warnings ;;
     lint-features) cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings ;;
-    workspace-tests) cargo test --workspace --locked --features axum,seaorm2,redis-cache --no-fail-fast ;;
+    workspace-tests) cargo test --workspace --locked --features axum,seaorm2,redis-cache --keep-going --no-fail-fast ;;
     rustls) cargo check -p better-auth --locked --no-default-features --features rustls,axum,seaorm2,redis-cache ;;
     rustdoc) RUSTDOCFLAGS="-D warnings" cargo doc --workspace --locked --no-deps --features axum,seaorm2,redis-cache ;;
     consumer)
