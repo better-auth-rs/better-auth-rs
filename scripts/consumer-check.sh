@@ -330,7 +330,7 @@ if [[ $# -eq 0 ]]; then
 fi
 # Forward Cargo arguments. Focused runs omit all-target Clippy and external runtime checks.
 # Compile generated test targets one at a time to bound aggregate rustc memory.
-cargo test --locked --jobs 1 --manifest-path compat-tests/schema-consumer/Cargo.toml "$@"
+cargo test --locked --jobs 1 --no-fail-fast --manifest-path compat-tests/schema-consumer/Cargo.toml "$@"
 if [[ $# -eq 0 ]]; then
   cargo build --locked --manifest-path compat-tests/schema-consumer/Cargo.toml --example user_timestamp_interchange --message-format=json > "$schema_dir/user_timestamp_artifacts.jsonl"
   BETTER_AUTH_TIMESTAMP_ARTIFACTS="$schema_dir/user_timestamp_artifacts.jsonl" bun --no-install test ./compat-tests/reference-server/consumer-contracts/user-timestamp-interchange.test.ts

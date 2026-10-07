@@ -92,9 +92,13 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         .build()
         .await
         .unwrap();
-    for (index, name) in [json!(7.0), json!(null), json!(99.0)]
-        .into_iter()
-        .enumerate()
+    for (index, (name, wire_name)) in [
+        (json!(7.0), Some(json!(7))),
+        (json!(null), Some(json!(null))),
+        (json!(99.0), None),
+    ]
+    .into_iter()
+    .enumerate()
     {
         let mut input = CreateOrganization::new("ignored", "ignored");
         input.name = SchemaValue::Dynamic(FieldValue::from_json(name.clone()).unwrap());
@@ -102,11 +106,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         input.logo = SchemaValue::Dynamic(true.into());
         let organization = auth.store().create_organization(input).await.unwrap();
         let wire = serde_json::to_value(&organization).unwrap();
-        if name == json!(99.0) {
-            assert!(wire.get("name").is_none());
-        } else {
-            assert_eq!(wire["name"], name);
-        }
+        assert_eq!(wire.get("name"), wire_name.as_ref());
         assert_eq!(wire["createdAt"], "2000-01-02T03:04:05+02:00");
         assert_eq!(wire["logo"], true);
         assert_eq!(wire["updatedAt"], "public");
