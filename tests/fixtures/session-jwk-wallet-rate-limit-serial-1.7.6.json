@@ -6239,7 +6239,10 @@
       "operation": "id-update",
       "name": "negative-zero",
       "input": {
-        "id": 0,
+        "id": {
+          "type": "number",
+          "value": "-0"
+        },
         "updatedAt": {
           "type": "date",
           "value": "2030-01-02T03:04:05.000Z"
@@ -6327,7 +6330,10 @@
         [
           "update-before",
           {
-            "id": 0,
+            "id": {
+              "type": "number",
+              "value": "-0"
+            },
             "updatedAt": {
               "type": "date",
               "value": "2030-01-02T03:04:05.000Z"

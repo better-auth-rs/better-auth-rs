@@ -12,6 +12,8 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+Capture 37614179685 at `f1a4f21` passed both complete captures and their byte-identical replays. The imported ID-slot fixture retains all 16 cases with SHA-256 `5a38937cb34f5369b9862c3a2fc683f4b624fdde28f1ce9d749e12301c5394a6`; only four explicit update timestamps and twelve resulting dates changed. The Serial fixture retains all 53 cases with SHA-256 `e006c438f192fba33a3bd1f35170e60f1cd6add81984992c5b8cd67c34f8a976`; only two negative-zero observations changed from zero to the tagged value. Every other value remains unchanged. Rust acceptance remains pending.
+
 The Serial capture now preserves negative zero with a contract-local number tag in the complete input and hook observations. All 53 cases and strict whole-document comparison remain required; CI must regenerate the fixture. The native JSON MySQL check now uses the observed SeaORM `Execution Error` prefix while retaining the complete database diagnostic and every other assertion. These corrections await focused CI.
 
 SQL Session updates now resolve supplied IDs at their schema slot and build MySQL reselect predicates from the final bound writes. The shared traversal retains ID and physical-column alias order without a second typed-ID parse. Regression coverage targets Serial conversion and omission, nested policy changes, aliases, extension-field precedence, and changed tokens. These source-supported checks have not run in CI and do not establish a new upstream golden pairing. Runtime `forceAllowId` history and generic creation alias collisions remain separate work.
