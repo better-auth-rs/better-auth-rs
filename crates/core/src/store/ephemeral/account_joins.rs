@@ -68,6 +68,11 @@ impl EphemeralStore {
                         .iter()
                         .map(|name| (*name).to_owned()),
                 )
+                .filter(|name| {
+                    user.visible_fields
+                        .as_ref()
+                        .is_none_or(|fields| fields.contains(name))
+                })
                 .chain(self.config.user.fields().keys().cloned())
                 .collect(),
         );
