@@ -45,7 +45,11 @@ async function observe(backend, slot, operation) {
   };
   const stored = () => sqlite ? sqlite.query('SELECT * FROM "user" ORDER BY "id"').all() : structuredClone(memory.user);
   try {
-    if (sqlite) await (await getMigrations(options)).runMigrations();
+    if (sqlite) {
+      // A runtime ID policy must not add a second physical primary-key column.
+      const migrationFields = Object.fromEntries(Object.entries(fields).filter(([name]) => name !== "id"));
+      await (await getMigrations({ ...options, user: { additionalFields: migrationFields } })).runMigrations();
+    }
     const adapter = (await betterAuth(options).$context).adapter;
     const before = stored();
     events.length = 0;
