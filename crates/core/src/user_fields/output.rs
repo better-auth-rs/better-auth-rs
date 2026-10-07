@@ -249,6 +249,7 @@ impl UserView {
                 Box::pin(async move {
                     let value = if let Some(projected) = user.projected_fields() {
                         match name {
+                            "id" => Some(view.id.field_value()),
                             "name" => Some(view.name.field_value()),
                             "image" => Some(view.image.field_value()),
                             _ => projected.get(name).cloned(),

@@ -110,6 +110,7 @@ impl EphemeralStore {
         mut fields: FieldMap,
     ) -> AuthResult<()> {
         user.id = Self::project_user_id(&user.id)?;
+        let _ = fields.remove("id");
         if self.config.user.fields().contains_key("name") {
             user.name = crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default());
         }
