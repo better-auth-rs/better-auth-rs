@@ -4,7 +4,7 @@ use better_auth_core::{AuthError, AuthResult, FieldValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, Iden, Iterable,
     PrimaryKeyToColumn, QueryFilter,
-    sea_query::{Query, Value},
+    sea_query::{ExprTrait, Query, Value},
 };
 
 use super::{map_db_err, record_bindings::Binding};
@@ -159,7 +159,11 @@ impl<E: EntityTrait> RecordWrite<E> {
             .await
             .map_err(map_db_err)?;
         E::find()
-            .filter(primary.eq(id.unwrap_or_else(|| result.last_insert_id().into())))
+            .filter(
+                primary
+                    .into_expr()
+                    .eq(primary.save_as(id.unwrap_or_else(|| result.last_insert_id().into()))),
+            )
             .one(db)
             .await
             .map_err(map_db_err)?

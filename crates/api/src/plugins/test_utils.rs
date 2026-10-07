@@ -64,20 +64,14 @@ impl<S: AuthSchema> DatabaseHooks<S> for CaptureHook {
         verification: &VerificationView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
-        let Some(value) = verification
-            .value
-            .json()?
-            .filter(better_auth_core::user_fields::is_truthy)
-        else {
+        let value = verification.value.field_value();
+        if !value.is_truthy() {
             return Ok(());
-        };
-        let Some(identifier) = verification
-            .identifier
-            .json()?
-            .filter(better_auth_core::user_fields::is_truthy)
-        else {
+        }
+        let identifier = verification.identifier.field_value();
+        if !identifier.is_truthy() {
             return Ok(());
-        };
+        }
         let value = value
             .as_str()
             .ok_or_else(|| AuthError::internal("verification.value.split is not a function"))?;
@@ -191,7 +185,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
     /// Build a user without persisting it. The configured ID generator still runs for explicit IDs.
     pub fn create_user(&self, mut overrides: CreateUser) -> AuthResult<CreateUser> {
         let id = self.generate_id("user")?;
-        let now = Utc::now();
+        let now = better_auth_core::FieldDate::from(Utc::now());
         let _ = overrides.id.get_or_insert(id);
         let _ = overrides
             .email
@@ -203,7 +197,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         if overrides.image.is_undefined() {
             overrides.image = None.into();
         }
-        let _ = overrides.created_at.get_or_insert(now);
+        let _ = overrides.created_at.get_or_insert(now.clone());
         let _ = overrides.updated_at.get_or_insert(now);
         Ok(overrides)
     }

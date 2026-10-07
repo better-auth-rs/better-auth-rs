@@ -71,7 +71,7 @@ impl JwtPlugin {
             ["sub", "aud"].iter().all(|claim| {
                 payload
                     .get(*claim)
-                    .is_some_and(better_auth_core::user_fields::is_truthy)
+                    .is_some_and(crate::plugins::json_body::is_truthy)
             })
         }))
     }
@@ -106,7 +106,7 @@ impl Header {
                 Some(b'"') => kid.get() != "\"\"",
                 Some(b'[' | b'{') => true,
                 _ => serde_json::from_str::<Value>(kid.get())
-                    .is_ok_and(|value| better_auth_core::user_fields::is_truthy(&value)),
+                    .is_ok_and(|value| crate::plugins::json_body::is_truthy(&value)),
             })
     }
 

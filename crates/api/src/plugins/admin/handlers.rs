@@ -410,7 +410,7 @@ pub(crate) async fn update_user_core(
         .get("metadata")
         .and_then(|value| value.as_object())
     {
-        update.metadata = Some(serde_json::Value::Object(value.clone()));
+        update.metadata = Some(better_auth_core::FieldMap::from_json(value.clone())?.into());
     }
 
     let updated_user = ctx
@@ -439,7 +439,11 @@ pub(crate) async fn list_users_core(
         sort_by: query.sort_by.clone(),
         sort_direction: query.sort_direction.clone(),
         filter_field: query.filter_field.clone(),
-        filter_value: query.filter_value.clone(),
+        filter_value: query
+            .filter_value
+            .clone()
+            .map(better_auth_core::FieldValue::from_json)
+            .transpose()?,
         filter_operator: query.filter_operator.clone(),
     };
 

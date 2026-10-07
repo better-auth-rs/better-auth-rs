@@ -1,5 +1,6 @@
 use super::*;
-use better_auth_core::{SchemaValue, user_fields::is_truthy};
+use crate::plugins::json_body::is_truthy;
+use better_auth_core::SchemaValue;
 use std::sync::LazyLock;
 
 pub(super) fn default_expiration(

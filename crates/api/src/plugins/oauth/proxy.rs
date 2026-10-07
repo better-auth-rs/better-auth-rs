@@ -56,7 +56,7 @@ pub(super) fn validate_callback_url<S: AuthSchema>(
     if req
         .server_context(CALLBACK_CONTEXT)?
         .as_ref()
-        .and_then(Value::as_str)
+        .and_then(better_auth_core::FieldValue::as_str)
         == Some(callback)
     {
         return Ok(());

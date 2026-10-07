@@ -143,8 +143,8 @@ fn make_test_user(email: &str, verified: bool) -> UserView {
         email: Some(email.into()),
         email_verified: verified,
         image: Default::default(),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        created_at: Utc::now().into(),
+        updated_at: Utc::now().into(),
         is_anonymous: None,
         phone_number: None,
         phone_number_verified: None,
@@ -155,7 +155,7 @@ fn make_test_user(email: &str, verified: bool) -> UserView {
         banned: false,
         ban_reason: None,
         ban_expires: None,
-        metadata: serde_json::Value::Null,
+        metadata: better_auth_core::FieldValue::Null,
     }
 }
 
@@ -230,8 +230,8 @@ fn test_to_user_preserves_fields() {
         email: Some("test@example.com".into()),
         email_verified: true,
         image: Some("https://img.example.com/a.png".into()).into(),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        created_at: Utc::now().into(),
+        updated_at: Utc::now().into(),
         is_anonymous: None,
         phone_number: None,
         phone_number_verified: None,
@@ -242,7 +242,7 @@ fn test_to_user_preserves_fields() {
         banned: true,
         ban_reason: Some("spam".into()),
         ban_expires: None,
-        metadata: serde_json::Value::Null,
+        metadata: better_auth_core::FieldValue::Null,
     };
     let converted = UserView::from(&user);
     assert_eq!(converted.id, "test-id");

@@ -97,7 +97,7 @@ pub(super) fn parameter(value: FieldValue, backend: DbBackend) -> AuthResult<Sim
             } else {
                 "-Infinity"
             };
-            return Ok(SimpleExpr::Custom(token.to_owned()));
+            return Ok(SimpleExpr::Custom(token.into()));
         }
         FieldValue::Number(value) => {
             crate::reference_id::binding(Value::Double(Some(value)), backend)?

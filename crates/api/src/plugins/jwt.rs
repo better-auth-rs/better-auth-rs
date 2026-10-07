@@ -349,7 +349,7 @@ impl JwtPlugin {
                     .config
                     .rotation_interval
                     .filter(|interval| !interval.is_zero())
-                    .map(|interval| Utc::now() + interval),
+                    .map(|interval| (Utc::now() + interval).into()),
                 alg: parameters.algorithm.name().to_owned(),
                 crv: parameters.algorithm.curve().map(str::to_owned),
             },

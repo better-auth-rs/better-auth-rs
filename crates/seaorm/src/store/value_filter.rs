@@ -1,5 +1,8 @@
 use better_auth_core::{AuthResult, FieldValue};
-use sea_orm::{ColumnTrait, DbBackend, sea_query::SimpleExpr};
+use sea_orm::{
+    ColumnTrait, DbBackend,
+    sea_query::{ExprTrait, SimpleExpr},
+};
 
 use super::id_filter::IdColumn;
 
@@ -34,5 +37,5 @@ pub(super) fn equals(
     } else {
         super::record_bindings::parameter(value.clone(), backend)?
     };
-    Ok(column.eq(value))
+    Ok(column.into_expr().eq(column.save_as(value)))
 }

@@ -2,12 +2,13 @@
 
 mod path;
 
+use super::json_body::is_truthy;
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use better_auth_core::{
     AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, user_fields::is_truthy,
+    AuthSchema,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

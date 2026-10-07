@@ -40,12 +40,9 @@ impl<S: AuthSchema> TestOrganizationApi<'_, S> {
         if overrides.logo.is_undefined() {
             overrides.logo = SchemaValue::Typed(None);
         }
-        overrides.metadata = SchemaValue::Dynamic(
-            overrides
-                .metadata
-                .json()?
-                .unwrap_or(serde_json::Value::Null),
-        );
+        if overrides.metadata.is_undefined() {
+            overrides.metadata = better_auth_core::FieldValue::Null.into();
+        }
         if overrides.created_at.is_undefined() {
             overrides.created_at = Utc::now().into();
         }

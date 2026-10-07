@@ -87,7 +87,7 @@ async fn test_custom_admin_role_can_use_permission_engine() {
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: admin.id.clone(),
-            expires_at: Utc::now() + Duration::hours(24),
+            expires_at: (Utc::now() + Duration::hours(24)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

@@ -229,8 +229,8 @@ async fn request_reset_persists_omitted_zero_and_explicit_lifetimes() -> AuthRes
         let expected = Duration::seconds(if configured == Some(90.0) { 90 } else { 3600 });
         let expires_at = stored.expires_at.typed()?;
         // Adapter dates retain the upstream millisecond precision.
-        assert!(expires_at.timestamp_millis() >= (before + expected).timestamp_millis());
-        assert!(expires_at.timestamp_millis() <= (after + expected).timestamp_millis());
+        assert!(expires_at.milliseconds() >= (before + expected).timestamp_millis() as f64);
+        assert!(expires_at.milliseconds() <= (after + expected).timestamp_millis() as f64);
     }
     Ok(())
 }

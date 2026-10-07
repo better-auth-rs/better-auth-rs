@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    SqliteTransactionMode, TransactionOptions, TransactionTrait,
+    SqliteTransactionMode, TransactionOptions, TransactionTrait, sea_query::ExprTrait,
 };
 
 use better_auth_core::store::VerificationStore;
@@ -522,8 +522,12 @@ where
             active.expression(S::Verification::id_column(), backend)?,
             active.expression(S::Verification::identifier_column(), backend)?,
         ) {
-            (Some(value), _) => S::Verification::id_column().eq(value),
-            (_, Some(value)) => S::Verification::identifier_column().eq(value),
+            (Some(value), _) => S::Verification::id_column()
+                .into_expr()
+                .eq(S::Verification::id_column().save_as(value)),
+            (_, Some(value)) => S::Verification::identifier_column()
+                .into_expr()
+                .eq(S::Verification::identifier_column().save_as(value)),
             _ => S::Verification::identifier_column().eq(identifier),
         };
         let row =

@@ -3,7 +3,7 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
-use better_auth_core::{FieldMap, FieldValue, SchemaField};
+use better_auth_core::{FieldMap, SchemaField};
 use chrono::Utc;
 use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
 

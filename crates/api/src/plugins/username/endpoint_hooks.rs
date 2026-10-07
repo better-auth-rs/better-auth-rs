@@ -131,10 +131,10 @@ impl UsernamePlugin {
                     if self.config.display_username
                         && !body
                             .get("displayUsername")
-                            .is_some_and(better_auth_core::user_fields::is_truthy)
+                            .is_some_and(crate::plugins::json_body::is_truthy)
                         && let Some(value) = body
                             .get("username")
-                            .filter(|value| better_auth_core::user_fields::is_truthy(value))
+                            .filter(|value| crate::plugins::json_body::is_truthy(value))
                             .cloned()
                     {
                         let _ = body.insert("displayUsername".into(), value);

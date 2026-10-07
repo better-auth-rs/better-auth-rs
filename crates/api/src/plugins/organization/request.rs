@@ -294,10 +294,27 @@ pub(super) fn validate(
             selector(body, &mut output, &mut errors);
             output
         }
-        "/organization/update-role" => Ok(ValidatedBody::new(
-            Some(projection),
-            roles::UpdateRole::validated(output, &schema.organization_role)?,
-        )),
+        "/organization/update-role" => {
+            let mut output =
+                static_fields(body, &[("organizationId", String, false)], &mut errors)?;
+            if let Some(data) = input::object(body.get("data"), "body.data", &mut errors) {
+                // The upstream role update endpoint makes configured fields nullish at initialization.
+                let data = schema_fields(
+                    &schema.organization_role,
+                    data,
+                    &[
+                        ("permission", Permissions, false),
+                        ("roleName", String, false),
+                    ],
+                    "body.data",
+                    false,
+                    &mut errors,
+                )?;
+                let _ = output.insert("data".into(), data.into());
+            }
+            selector(body, &mut output, &mut errors);
+            output
+        }
         "/organization/has-permission" => {
             let mut output =
                 static_fields(body, &[("organizationId", String, false)], &mut errors)?;
@@ -333,7 +350,6 @@ pub(super) fn validate(
         }
     };
     input::finish(errors)?;
-    let projection = Value::Object(output.json()?);
     match req.path() {
         "/organization/create" => typed::<CreateOrganizationRequest>(output),
         "/organization/update" => typed::<UpdateOrganizationRequest>(output),
@@ -356,21 +372,10 @@ pub(super) fn validate(
         }
         "/organization/create-role" => typed::<roles::CreateRole>(output),
         "/organization/delete-role" => typed::<roles::RoleSelector>(output),
-        "/organization/update-role" => {
-            if schema
-                .organization_role
-                .fields()
-                .get("permission")
-                .is_some_and(|field| field.input())
-                && let Some(FieldValue::Object(data)) = output.get_mut("data")
-            {
-                let _ = std::sync::Arc::make_mut(data).remove("permission");
-            }
-            Ok(ValidatedBody::new(
-                Some(projection),
-                roles::UpdateRole::from_field_values(output)?,
-            ))
-        }
+        "/organization/update-role" => Ok(ValidatedBody::new(
+            Some(Value::Object(output.json()?)),
+            roles::UpdateRole::validated(output, &schema.organization_role)?,
+        )),
         "/organization/has-permission" => typed::<HasPermissionRequest>(output),
         _ => Err(AuthError::internal(
             "Organization endpoint has no typed body",

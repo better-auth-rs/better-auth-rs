@@ -92,7 +92,7 @@ fn serial_reference(
         if value.is_null() {
             return Ok(FieldValue::Null);
         }
-        let number = better_auth_core::query::number(&value)?;
+        let number = better_auth_core::query::field_number(&value)?;
         let text = better_auth_core::schema_value::number_string(number);
         if text_column {
             Ok(FieldValue::String(text))

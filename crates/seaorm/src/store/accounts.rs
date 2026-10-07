@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    QuerySelect,
+    QuerySelect, sea_query::ExprTrait,
 };
 
 use better_auth_core::store::AccountStore;
@@ -501,7 +501,9 @@ where
             .await?;
         let active = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
         let reselect = match active.expression(S::Account::id_column(), backend)? {
-            Some(value) => S::Account::id_column().eq(value),
+            Some(value) => S::Account::id_column()
+                .into_expr()
+                .eq(S::Account::id_column().save_as(value)),
             None => S::Account::id_column().eq(account_id.clone()),
         };
         let account = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(

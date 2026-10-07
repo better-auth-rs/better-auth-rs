@@ -240,10 +240,10 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         let _ = user.insert("metadata".into(), value.clone());
     }
     let now = chrono::Utc::now();
-    let _ = user.entry("createdAt").or_insert(FieldValue::Date(
+    let _ = user.entry("createdAt".into()).or_insert(FieldValue::Date(
         input.created_at.clone().unwrap_or_else(|| now.into()),
     ));
-    let _ = user.entry("updatedAt").or_insert(FieldValue::Date(
+    let _ = user.entry("updatedAt".into()).or_insert(FieldValue::Date(
         input.updated_at.clone().unwrap_or_else(|| now.into()),
     ));
     validate(UserValidationData { user, source }, endpoint).await

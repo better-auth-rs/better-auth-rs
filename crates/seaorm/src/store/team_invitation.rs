@@ -175,7 +175,7 @@ where
                             "teamMember",
                             None,
                             values([
-                                ("team_id", (team_id).to_owned().into_field()),
+                                ("team_id", (*team_id).to_owned().into_field()),
                                 ("user_id", (user_id).to_owned().into_field()),
                                 (
                                     "membership_key",

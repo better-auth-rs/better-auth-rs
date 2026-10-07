@@ -300,7 +300,7 @@ impl SiwePlugin {
                     address: address.clone(),
                     chain_id,
                     is_primary: new_user,
-                    created_at: Utc::now(),
+                    created_at: Utc::now().into(),
                 })
                 .await?;
             let _ = ctx

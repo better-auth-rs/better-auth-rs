@@ -2,7 +2,7 @@ use better_auth_core::{AuthResult, SchemaValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, Iden, Iterable,
     QueryFilter,
-    sea_query::{Query, Value},
+    sea_query::{ExprTrait, Query, Value},
 };
 
 use super::{
@@ -116,7 +116,11 @@ pub(super) async fn insert<M: SeaOrmUserModel>(
         .await
         .map_err(map_db_err)?;
     M::Entity::find()
-        .filter(M::id_column().eq(id.unwrap_or_else(|| result.last_insert_id().into())))
+        .filter(
+            M::id_column()
+                .into_expr()
+                .eq(M::id_column().save_as(id.unwrap_or_else(|| result.last_insert_id().into()))),
+        )
         .one(db)
         .await
         .map_err(map_db_err)?

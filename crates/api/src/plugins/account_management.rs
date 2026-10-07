@@ -35,7 +35,7 @@ fn unlink_account_body(
     ))
 }
 
-pub(crate) type AccountResponse = serde_json::Map<String, serde_json::Value>;
+pub(crate) type AccountResponse = better_auth_core::FieldMap;
 
 better_auth_core::impl_auth_plugin! {
     AccountManagementPlugin, "account-management";
@@ -89,7 +89,14 @@ pub(crate) async fn list_accounts_core(
             ] {
                 let _ = fields.remove(name);
             }
-            let _ = fields.insert("scopes".into(), serde_json::to_value(scopes)?);
+            let _ = fields.insert(
+                "scopes".into(),
+                scopes
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<better_auth_core::FieldValue>>()
+                    .into(),
+            );
             Ok(fields)
         })
         .collect()
@@ -124,7 +131,11 @@ impl AccountManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let filtered = list_accounts_core(&user, ctx).await?;
-        Ok(AuthResponse::json(200, &filtered)?)
+        let response = filtered
+            .iter()
+            .map(better_auth_core::FieldMap::json)
+            .collect::<AuthResult<Vec<_>>>()?;
+        Ok(AuthResponse::json(200, &response)?)
     }
 
     async fn handle_unlink_account(

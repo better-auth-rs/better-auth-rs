@@ -188,7 +188,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         }
         for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
             if let Some(value) = input.additional_fields.remove(name) {
-                let _ = core.entry(name).or_insert(value);
+                let _ = core.entry(name.to_owned()).or_insert(value);
             }
         }
         let updated_id = core
