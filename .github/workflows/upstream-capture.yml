@@ -46,6 +46,7 @@ on:
       - compat-tests/reference-server/contracts/custom-model-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
       - compat-tests/reference-server/contracts/totp-period-nan-capture.mjs
+      - compat-tests/reference-server/contracts/totp-counter-capture.mjs
       - compat-tests/reference-server/contracts/oauth-proxy-max-age-capture.mjs
       - tests/fixtures/cookie-cache-cleanup.capture.mjs
 
@@ -58,18 +59,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: device-reference-defaults
-            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets, device-reference-values]
-            backend: memory
-          - contract: device-reference-defaults
-            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets, device-reference-values]
-            backend: sqlite
-          - contract: device-reference-defaults
-            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets, device-reference-values]
-            backend: postgres
-          - contract: device-reference-defaults
-            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets, device-reference-values]
-            backend: mysql
+          - contract: totp-counter
+            regressions: [totp-period, totp-period-nan]
+            backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
