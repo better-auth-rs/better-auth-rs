@@ -107,6 +107,8 @@ fn json_boundary_preserves_omission_and_applies_javascript_value_conversion() {
         .expect("JSON string import");
     assert!(matches!(imported, FieldValue::String(_)));
     for (year, expected) in [
+        (0, r#""0000-01-01T00:00:00.000Z""#),
+        (9999, r#""9999-01-01T00:00:00.000Z""#),
         (10_000, r#""+010000-01-01T00:00:00.000Z""#),
         (-1, r#""-000001-01-01T00:00:00.000Z""#),
     ] {
@@ -154,16 +156,60 @@ fn structural_equality_does_not_replace_stringify_change_detection() {
 }
 
 #[test]
-fn valid_timeclip_values_outside_chrono_are_not_invalid_dates() {
+fn valid_timeclip_values_outside_chrono_are_not_invalid_dates() -> AuthResult<()> {
     let date = FieldDate::from_milliseconds(8_640_000_000_000_000.0);
     assert_eq!(date.milliseconds(), 8_640_000_000_000_000.0);
     assert!(date.to_datetime().is_err());
-    assert!(FieldValue::from(date).json().is_err());
-    for milliseconds in [f64::NAN, f64::INFINITY, 8_640_000_000_000_001.0] {
-        assert!(
-            FieldDate::from_milliseconds(milliseconds)
-                .milliseconds()
-                .is_nan()
+    assert_eq!(
+        FieldValue::from(date).json()?,
+        Some(serde_json::json!("+275760-09-13T00:00:00.000Z"))
+    );
+    for milliseconds in [
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        8_640_000_000_000_001.0,
+        -8_640_000_000_000_001.0,
+    ] {
+        let date = FieldDate::from_milliseconds(milliseconds);
+        assert!(date.milliseconds().is_nan());
+        let value = FieldValue::from(date);
+        assert_eq!(value.json()?, Some(JsonValue::Null));
+        assert_eq!(value.stringify()?.as_deref(), Some("null"));
+    }
+    Ok(())
+}
+
+#[test]
+fn timeclip_json_preserves_calendar_boundaries_and_millisecond_precision() -> AuthResult<()> {
+    for (milliseconds, expected) in [
+        (8_639_999_999_999_999.0, "+275760-09-12T23:59:59.999Z"),
+        (8_640_000_000_000_000.0, "+275760-09-13T00:00:00.000Z"),
+        (-8_640_000_000_000_000.0, "-271821-04-20T00:00:00.000Z"),
+        (-8_639_999_999_999_999.0, "-271821-04-20T00:00:00.001Z"),
+        (8_458_214_918_399_999.0, "+270000-02-28T23:59:59.999Z"),
+        (8_458_214_918_400_000.0, "+270000-02-29T00:00:00.000Z"),
+        (8_458_215_004_799_999.0, "+270000-02-29T23:59:59.999Z"),
+        (8_458_215_004_800_000.0, "+270000-03-01T00:00:00.000Z"),
+        (-8_582_539_161_600_001.0, "-270000-02-28T23:59:59.999Z"),
+        (-8_582_539_161_600_000.0, "-270000-02-29T00:00:00.000Z"),
+    ] {
+        let date = FieldDate::from_milliseconds(milliseconds);
+        assert!(date.to_datetime().is_err());
+        let value = FieldValue::from(date);
+        assert_eq!(value.json()?, Some(serde_json::json!(expected)));
+        assert_eq!(value.stringify()?, Some(format!("\"{expected}\"")));
+    }
+    for (milliseconds, expected) in [
+        (-1.9, "1969-12-31T23:59:59.999Z"),
+        (-0.9, "1970-01-01T00:00:00.000Z"),
+        (0.9, "1970-01-01T00:00:00.000Z"),
+        (1.9, "1970-01-01T00:00:00.001Z"),
+    ] {
+        assert_eq!(
+            FieldValue::from(FieldDate::from_milliseconds(milliseconds)).json()?,
+            Some(serde_json::json!(expected))
         );
     }
+    Ok(())
 }

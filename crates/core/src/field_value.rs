@@ -1,7 +1,7 @@
 //! Adapter values retain JavaScript numbers and object identity until an explicit JSON boundary.
 
 use crate::{AuthError, AuthResult};
-use chrono::{DateTime, Datelike, SecondsFormat, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use indexmap::IndexMap;
 use serde_json::Value as JsonValue;
 use std::{
@@ -45,6 +45,30 @@ impl FieldDate {
                 })
             })
             .transpose()
+    }
+
+    fn iso_string(&self) -> AuthResult<Option<String>> {
+        let Some(milliseconds) = *self.0 else {
+            return Ok(None);
+        };
+        const YEAR_2000: i64 = 946_684_800_000;
+        const CYCLE_MILLISECONDS: i64 = 146_097 * 86_400_000;
+        let offset = milliseconds - YEAR_2000;
+        // Gregorian dates repeat every 400 years. Euclidean division keeps negative dates in 2000..2399.
+        let date = DateTime::<Utc>::from_timestamp_millis(
+            YEAR_2000 + offset.rem_euclid(CYCLE_MILLISECONDS),
+        )
+        .ok_or_else(|| AuthError::internal("Cannot construct a Date within the Gregorian cycle"))?;
+        let year = i64::from(date.year()) + 400 * offset.div_euclid(CYCLE_MILLISECONDS);
+        let year = if (0..=9999).contains(&year) {
+            format!("{year:04}")
+        } else {
+            format!("{year:+07}")
+        };
+        Ok(Some(format!(
+            "{year}{}",
+            date.format("-%m-%dT%H:%M:%S%.3fZ")
+        )))
     }
 
     /// Compare Date object identity without comparing timestamps.
@@ -317,18 +341,9 @@ impl FieldValue {
                     "JSON value cannot represent unpaired UTF-16 surrogates: {error}"
                 ))
             })?),
-            Self::Date(value) => value.to_datetime()?.map_or(JsonValue::Null, |value| {
-                let text = if (0..=9999).contains(&value.year()) {
-                    value.to_rfc3339_opts(SecondsFormat::Millis, true)
-                } else {
-                    format!(
-                        "{:+07}{}",
-                        value.year(),
-                        value.format("-%m-%dT%H:%M:%S%.3fZ")
-                    )
-                };
-                JsonValue::String(text)
-            }),
+            Self::Date(value) => value
+                .iso_string()?
+                .map_or(JsonValue::Null, JsonValue::String),
             Self::Array(values) => JsonValue::Array(
                 values
                     .iter()
