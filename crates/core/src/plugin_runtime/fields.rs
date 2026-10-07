@@ -1,6 +1,7 @@
 mod api_key;
 mod device;
 mod jwk;
+mod models;
 mod passkey;
 mod two_factor;
 mod wallet;
@@ -17,6 +18,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
     schema_models: Option<Vec<(EntityRole, &'static str)>>,
+    custom_models: IndexMap<String, (String, UserConfig)>,
     user_plugin_fields: Vec<&'static str>,
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
@@ -159,30 +161,6 @@ impl ModelFields {
             });
         }
         schema
-    }
-
-    pub(crate) fn resolve_model_name(
-        &self,
-        candidate: &str,
-        table_matches: &impl Fn(EntityRole, &str) -> bool,
-    ) -> AuthResult<&'static str> {
-        let models = self.schema_models.as_deref().unwrap_or(&[
-            (EntityRole::User, "user"),
-            (EntityRole::Session, "session"),
-            (EntityRole::Account, "account"),
-            (EntityRole::Verification, "verification"),
-        ]);
-        // Logical model names take precedence over every physical table alias.
-        models
-            .iter()
-            .find(|(_, name)| *name == candidate)
-            .or_else(|| {
-                models
-                    .iter()
-                    .find(|(role, _)| table_matches(*role, candidate))
-            })
-            .map(|(_, name)| *name)
-            .ok_or_else(|| AuthError::config(format!("Model \"{candidate}\" not found in schema")))
     }
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {

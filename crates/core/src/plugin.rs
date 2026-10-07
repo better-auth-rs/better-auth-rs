@@ -476,6 +476,20 @@ impl<S: AuthSchema> AuthInitContext<S> {
         Ok(())
     }
 
+    /// Declare a custom model for runtime reference resolution and adapter schema metadata.
+    /// Repeated declarations merge field policies and replace the physical model name.
+    /// Omitted or empty physical names use the logical name. Native logical names are reserved.
+    /// The application's storage adapter must provide custom model operations and migrations.
+    pub fn register_custom_model(
+        &mut self,
+        name: impl Into<String>,
+        model_name: Option<&str>,
+        fields: crate::user_fields::UserConfig,
+    ) -> AuthResult<()> {
+        self.plugin_fields
+            .register_custom_model(name.into(), model_name, fields)
+    }
+
     /// Take successful declarations after one plugin initializes, before the next plugin runs.
     /// Each role group retains explicit empty declarations and its field insertion order.
     #[doc(hidden)]
