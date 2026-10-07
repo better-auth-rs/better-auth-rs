@@ -34,13 +34,14 @@ impl<S: AuthSchema> LastLoginMethodResolver<S> for RuntimeResolver {
 }
 
 #[tokio::test]
-async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_auth_instance() {
+async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_auth_instance()
+-> AuthResult<()> {
     let store = Arc::new(EphemeralStore::default());
     async fn build(
         store: Arc<EphemeralStore>,
         host: &str,
         field: &str,
-    ) -> BetterAuth<StatelessSchema> {
+    ) -> AuthResult<BetterAuth<StatelessSchema>> {
         let mut config =
             AuthConfig::new("plugin-runtime-secret-with-at-least-32-characters").base_url(host);
         let _ = config.user.fields_mut().insert(
@@ -52,7 +53,10 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
                         Ok(if value.is_undefined() {
                             value
                         } else {
-                            FieldValue::from(format!("{}:out", value.as_str().unwrap()))
+                            let value = value.as_str().ok_or_else(|| {
+                                AuthError::internal("Expected a stored login method string")
+                            })?;
+                            FieldValue::from(format!("{value}:out"))
                         })
                     })),
                     ..Default::default()
@@ -71,10 +75,9 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
             )
             .build()
             .await
-            .unwrap()
     }
-    let first = build(store.clone(), "http://first.example", "first_column").await;
-    let second = build(store.clone(), "http://second.example", "second_column").await;
+    let first = build(store.clone(), "http://first.example", "first_column").await?;
+    let second = build(store.clone(), "http://second.example", "second_column").await?;
     let request = AuthRequest::new(HttpMethod::Post, "/sign-up/email");
     let one = with_request_hook_context(
         &request,
@@ -82,35 +85,33 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
             .store()
             .create_user(CreateUser::new().with_email("one@example.com")),
     )
-    .await
-    .unwrap();
+    .await?;
     let two = with_request_hook_context(
         &request,
         second
             .store()
             .create_user(CreateUser::new().with_email("two@example.com")),
     )
-    .await
-    .unwrap();
+    .await?;
     assert_eq!(
         first
             .context()
             .user_view(&one)
-            .await
-            .unwrap()
-            .additional_fields["lastLoginMethod"],
-        FieldValue::from("http://first.example:out")
+            .await?
+            .additional_fields
+            .get("lastLoginMethod"),
+        Some(&FieldValue::from("http://first.example:out"))
     );
     assert_eq!(
         second
             .context()
             .user_view(&two)
-            .await
-            .unwrap()
-            .additional_fields["lastLoginMethod"],
-        FieldValue::from("http://second.example:out")
+            .await?
+            .additional_fields
+            .get("lastLoginMethod"),
+        Some(&FieldValue::from("http://second.example:out"))
     );
-    assert_eq!(store.list_users(Default::default()).await.unwrap().1, 2);
+    assert_eq!(store.list_users(Default::default()).await?.1, 2);
 
     let session = CreateSession {
         additional_fields: Default::default(),
@@ -121,39 +122,37 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
         impersonated_by: None,
         active_organization_id: None,
     };
-    let _ = with_request_hook_context(&request, first.store().create_session(session))
-        .await
-        .unwrap();
+    let _ = with_request_hook_context(&request, first.store().create_session(session)).await?;
     let one = first
         .store()
-        .get_user_by_id(one.id().typed().unwrap())
-        .await
-        .unwrap()
-        .unwrap();
+        .get_user_by_id(one.id().typed()?)
+        .await?
+        .ok_or_else(|| AuthError::internal("First instance user must remain stored"))?;
     let two = second
         .store()
-        .get_user_by_id(two.id().typed().unwrap())
-        .await
-        .unwrap()
-        .unwrap();
+        .get_user_by_id(two.id().typed()?)
+        .await?
+        .ok_or_else(|| AuthError::internal("Second instance user must remain stored"))?;
     assert_eq!(
-        one.additional_fields["lastLoginMethod"],
-        FieldValue::from("http://first.example:out")
+        one.additional_fields.get("lastLoginMethod"),
+        Some(&FieldValue::from("http://first.example:out"))
     );
     assert_eq!(
-        two.additional_fields["lastLoginMethod"],
-        FieldValue::from("http://second.example:out")
+        two.additional_fields.get("lastLoginMethod"),
+        Some(&FieldValue::from("http://second.example:out"))
     );
     assert_eq!(
         first
             .store()
-            .get_user_by_id(two.id().typed().unwrap())
-            .await
-            .unwrap()
-            .unwrap()
+            .get_user_by_id(two.id().typed()?)
+            .await?
+            .ok_or_else(|| AuthError::internal(
+                "Shared user must remain visible to the first instance"
+            ))?
             .additional_fields,
         better_auth::FieldMap::from([("lastLoginMethod".into(), FieldValue::Undefined)])
     );
+    Ok(())
 }
 
 type Schema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
@@ -168,8 +167,13 @@ impl DatabaseHooks<Schema> for NestedHook {
     ) -> AuthResult<DatabaseHookControl> {
         self.0
             .lock()
-            .unwrap()
-            .push(format!("plugin.before:{}", user.email.as_deref().unwrap()));
+            .map_err(|_| AuthError::internal("Plugin hook event lock poisoned"))?
+            .push(format!(
+                "plugin.before:{}",
+                user.email.as_deref().ok_or_else(|| AuthError::internal(
+                    "Created fixture user must have an email"
+                ))?
+            ));
         if user.email.as_deref() == Some("parent@example.com") {
             let _ = context
                 .transaction
@@ -191,8 +195,13 @@ impl DatabaseHooks<Schema> for NestedHook {
         assert!(context.transaction.is_none());
         self.0
             .lock()
-            .unwrap()
-            .push(format!("plugin.after:{}", user.email().unwrap()));
+            .map_err(|_| AuthError::internal("Plugin hook event lock poisoned"))?
+            .push(format!(
+                "plugin.after:{}",
+                user.email().ok_or_else(|| AuthError::internal(
+                    "Created fixture user must have an email"
+                ))?
+            ));
         Ok(())
     }
 }
@@ -208,8 +217,13 @@ impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
         assert!(context.tx.is_some());
         self.0
             .lock()
-            .unwrap()
-            .push(format!("app.before:{}", user.email.as_deref().unwrap()));
+            .map_err(|_| AuthError::internal("Application hook event lock poisoned"))?
+            .push(format!(
+                "app.before:{}",
+                user.email.as_deref().ok_or_else(|| AuthError::internal(
+                    "Created fixture user must have an email"
+                ))?
+            ));
         Ok(better_auth_seaorm::hooks::HookControl::Continue)
     }
     async fn after_create_user(
@@ -220,8 +234,13 @@ impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
         assert!(context.tx.is_none());
         self.0
             .lock()
-            .unwrap()
-            .push(format!("app.after:{}", user.email().unwrap()));
+            .map_err(|_| AuthError::internal("Application hook event lock poisoned"))?
+            .push(format!(
+                "app.after:{}",
+                user.email().ok_or_else(|| AuthError::internal(
+                    "Created fixture user must have an email"
+                ))?
+            ));
         Ok(())
     }
 }
@@ -249,14 +268,11 @@ impl AuthPlugin<Schema> for HookPlugin {
 }
 
 #[tokio::test]
-async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_application_hooks() {
+async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_application_hooks()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = AuthConfig::new("plugin-runtime-secret-with-at-least-32-characters");
-    let database = better_auth_seaorm::sea_orm::Database::connect("sqlite::memory:")
-        .await
-        .unwrap();
-    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
-        .await
-        .unwrap();
+    let database = better_auth_seaorm::sea_orm::Database::connect("sqlite::memory:").await?;
+    better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database).await?;
     let events = Arc::new(Mutex::new(Vec::new()));
     let store = better_auth_seaorm::SeaOrmStore::<Schema>::new(config.clone(), database)
         .hook(ApplicationHook(events.clone()));
@@ -264,10 +280,12 @@ async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_applica
         .store(store)
         .plugin(HookPlugin(events.clone()))
         .build()
-        .await
-        .unwrap();
+        .await?;
     for rollback in [true, false] {
-        events.lock().unwrap().clear();
+        events
+            .lock()
+            .map_err(|_| AuthError::internal("Hook event lock poisoned"))?
+            .clear();
         let result = better_auth_core::store::transaction(auth.store().as_ref(), move |tx| {
             Box::pin(async move {
                 let _ = tx
@@ -287,7 +305,7 @@ async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_applica
         .await;
         assert_eq!(result.is_err(), rollback);
         assert_eq!(
-            auth.store().list_users(Default::default()).await.unwrap().1,
+            auth.store().list_users(Default::default()).await?.1,
             if rollback { 0 } else { 2 }
         );
         let mut expected = vec![
@@ -304,6 +322,12 @@ async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_applica
                 "app.after:parent@example.com",
             ]);
         }
-        assert_eq!(*events.lock().unwrap(), expected);
+        assert_eq!(
+            *events
+                .lock()
+                .map_err(|_| AuthError::internal("Hook event lock poisoned"))?,
+            expected
+        );
     }
+    Ok(())
 }

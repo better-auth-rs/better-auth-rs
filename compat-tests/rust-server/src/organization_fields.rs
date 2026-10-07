@@ -15,7 +15,7 @@ fn suffix(value: Value, suffix: &str) -> better_auth::AuthResult<Value> {
     Ok(better_auth::__private_core::Utf16String::from_units(text).into())
 }
 
-fn fields() -> UserConfig {
+fn fields(label_column: &str) -> UserConfig {
     UserConfig {
         additional_fields: Some(
             [
@@ -23,7 +23,7 @@ fn fields() -> UserConfig {
                     "label".into(),
                     UserFieldConfig {
                         required: Some(false),
-                        field_name: Some("storedLabel".into()),
+                        field_name: Some(label_column.into()),
                         default_value: Some(Value::from("guest")),
                         transform: Some(FieldTransforms {
                             input: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
@@ -106,18 +106,11 @@ fn fields() -> UserConfig {
 
 pub fn configure(config: &mut OrganizationConfig) {
     config.teams.maximum_members_per_team = Some(1);
-    config.schema.organization = fields();
-    config.schema.member = fields();
-    config
-        .schema
-        .member
-        .fields_mut()
-        .get_mut("label")
-        .expect("the shared field configuration includes label")
-        .field_name = Some("stored_label".into());
-    config.schema.invitation = fields();
-    config.schema.team = fields();
-    config.schema.organization_role = fields();
+    config.schema.organization = fields("storedLabel");
+    config.schema.member = fields("stored_label");
+    config.schema.invitation = fields("storedLabel");
+    config.schema.team = fields("storedLabel");
+    config.schema.organization_role = fields("storedLabel");
     config.schema.organization.fields_mut().extend([
         (
             "requiredTag".into(),

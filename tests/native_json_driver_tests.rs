@@ -1,6 +1,5 @@
 #![cfg(feature = "seaorm2")]
 #![expect(
-    clippy::panic_in_result_fn,
     clippy::expect_used,
     reason = "The paired contract must fail on fixture drift, callback loss, or database behavior differences."
 )]
@@ -228,9 +227,12 @@ async fn check(
                 }
                 "mysql" => {
                     assert_eq!(expected.name, "Error");
-                    assert_eq!(expected.properties["code"], "ER_INVALID_JSON_TEXT");
-                    assert_eq!(expected.properties["errno"], 3140);
-                    assert_eq!(expected.properties["sqlState"], "22032");
+                    assert_eq!(
+                        expected.properties.get("code"),
+                        Some(&json!("ER_INVALID_JSON_TEXT"))
+                    );
+                    assert_eq!(expected.properties.get("errno"), Some(&json!(3140)));
+                    assert_eq!(expected.properties.get("sqlState"), Some(&json!("22032")));
                     format!(
                         "Query Error: error returned from database: 3140 (22032): {}",
                         expected.message

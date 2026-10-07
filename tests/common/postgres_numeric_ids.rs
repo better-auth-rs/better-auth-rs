@@ -391,7 +391,7 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
             },
         )
         .await?;
-    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Updated"));
+    assert_eq!(updated.name.typed()?.as_deref(), Some("Updated"));
     let verification = auth
         .store()
         .create_verification(CreateVerification {

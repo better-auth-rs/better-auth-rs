@@ -25,25 +25,26 @@ use better_auth_seaorm::store::__private_test_support::{
 };
 use serde_json::json;
 
+type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
 #[tokio::test]
-async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaults_after_reopen() {
+async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaults_after_reopen()
+-> TestResult {
     let path = std::env::temp_dir().join(format!(
         "better-auth-organization-fields-{}.sqlite",
         uuid::Uuid::new_v4()
     ));
     let url = format!("sqlite://{}?mode=rwc", path.display());
-    let db = Database::connect(&url).await.unwrap();
-    run_migrations(&db).await.unwrap();
-    fixture::create_tables(&db).await.unwrap();
+    let db = Database::connect(&url).await?;
+    run_migrations(&db).await?;
+    fixture::create_tables(&db).await?;
     let config = better_auth::AuthConfig::new("organization-persistence-secret-at-least-32-chars")
         .base_url("http://localhost:3000");
     let mut options = OrganizationConfig::default();
     fixture::configure(&mut options);
     let store = SeaOrmStore::<BundledSchema>::new(config.clone(), db.clone())
         .with_organization_schema::<fixture::models::Models>();
-    store
-        .configure_organization_fields(options.schema.clone())
-        .unwrap();
+    store.configure_organization_fields(options.schema.clone())?;
     for id in ["owner", "recipient"] {
         let _ = store
             .create_user(CreateUser {
@@ -52,39 +53,36 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
                 email: Some(format!("{id}@example.com")),
                 ..Default::default()
             })
-            .await
-            .unwrap();
+            .await?;
     }
     let mut create = CreateOrganization::new("Mapped organization", "mapped");
     let _ = create
         .additional_fields
         .insert("label".into(), FieldValue::from("original"));
-    let organization = store.create_organization(create).await.unwrap();
+    let organization = store.create_organization(create).await?;
     assert_eq!(organization.metadata.field_value(), FieldValue::Null);
     assert_eq!(
-        organization.additional_fields["label"],
-        FieldValue::from("original:in:out")
+        organization.additional_fields.get("label"),
+        Some(&FieldValue::from("original:in:out"))
     );
     assert_eq!(
-        organization.additional_fields["secret"],
-        FieldValue::from("hidden")
+        organization.additional_fields.get("secret"),
+        Some(&FieldValue::from("hidden"))
     );
     let _ = store
         .create_member(CreateMember::new(
-            organization.id.typed().unwrap(),
+            organization.id.typed()?,
             "owner",
             "owner",
         ))
-        .await
-        .unwrap();
+        .await?;
     let team = store
         .create_team(CreateTeam {
             name: "Mapped team".into(),
             organization_id: organization.id.clone(),
             ..Default::default()
         })
-        .await
-        .unwrap();
+        .await?;
     let session = store
         .create_session(CreateSession {
             additional_fields: Default::default(),
@@ -95,85 +93,80 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
             impersonated_by: None,
             active_organization_id: None,
         })
-        .await
-        .unwrap();
+        .await?;
     let mut invitation = CreateInvitation::new(
-        organization.id.typed().unwrap(),
+        organization.id.typed()?,
         "recipient@example.com",
         "member",
         "owner",
         (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
     );
-    invitation.team_id = Some(team.id.typed().unwrap().clone());
+    invitation.team_id = Some(team.id.typed()?.clone());
     let _ = invitation
         .additional_fields
         .insert("label".into(), FieldValue::from("invite"));
-    let invitation = store.create_invitation(invitation).await.unwrap();
+    let invitation = store.create_invitation(invitation).await?;
     let (member, accepted, snapshot) = store
         .accept_invitation_with_teams(
-            invitation.id.typed().unwrap(),
+            invitation.id.typed()?,
             "recipient",
             Some(session.token()),
             true,
             Some(1).into(),
         )
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(
-        member.additional_fields["label"],
-        FieldValue::from("guest:in:out")
+        member.additional_fields.get("label"),
+        Some(&FieldValue::from("guest:in:out"))
     );
     assert_eq!(
-        accepted.additional_fields["label"],
-        FieldValue::from("invite:in:out")
+        accepted.additional_fields.get("label"),
+        Some(&FieldValue::from("invite:in:out"))
     );
     assert_eq!(
-        accepted.additional_fields["marker"],
-        FieldValue::from("updated")
+        accepted.additional_fields.get("marker"),
+        Some(&FieldValue::from("updated"))
     );
     assert_eq!(
-        snapshot.unwrap().active_team_id.as_deref(),
+        snapshot
+            .ok_or("Accepted invitation must return a session snapshot")?
+            .active_team_id
+            .as_deref(),
         team.id.as_str()
     );
-    let raw = fixture::models::organization::Entity::find_by_id(organization.id.typed().unwrap())
+    let raw = fixture::models::organization::Entity::find_by_id(organization.id.typed()?)
         .one(&db)
-        .await
-        .unwrap()
-        .unwrap();
+        .await?
+        .ok_or("Created organization must remain stored")?;
     assert_eq!(raw.stored_label.as_deref(), Some("original:in"));
     let membership = fixture::models::team_member::Entity::find()
-        .filter(fixture::models::team_member::Column::TeamId.eq(team.id.typed().unwrap()))
+        .filter(fixture::models::team_member::Column::TeamId.eq(team.id.typed()?))
         .one(&db)
-        .await
-        .unwrap()
-        .unwrap();
+        .await?
+        .ok_or("Accepted invitation must create a team membership")?;
     assert_eq!(
         membership.membership_key,
         Some(
             better_auth::__private_core::organization_fields::team_membership_key(
-                team.id.typed().unwrap(),
+                team.id.typed()?,
                 "recipient"
-            )
-            .unwrap()
+            )?
         )
     );
     drop(store);
-    db.close().await.unwrap();
+    db.close().await?;
 
-    let db = Database::connect(&url).await.unwrap();
+    let db = Database::connect(&url).await?;
     let store = SeaOrmStore::<BundledSchema>::new(config.clone(), db.clone())
         .with_organization_schema::<fixture::models::Models>();
-    store
-        .configure_organization_fields(options.schema.clone())
-        .unwrap();
+    store.configure_organization_fields(options.schema.clone())?;
     let restored = store
-        .get_organization_by_id(organization.id.typed().unwrap())
-        .await
-        .unwrap()
-        .unwrap();
+        .get_organization_by_id(organization.id.typed()?)
+        .await?
+        .ok_or("Organization must remain stored after reopening the database")?;
     assert_eq!(
-        restored.additional_fields["label"],
-        FieldValue::from("original:in:out")
+        restored.additional_fields.get("label"),
+        Some(&FieldValue::from("original:in:out"))
     );
     let owner_session = store
         .create_session(CreateSession {
@@ -185,17 +178,15 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
             active_organization_id: None,
             additional_fields: Default::default(),
         })
-        .await
-        .unwrap();
+        .await?;
     let auth = better_auth::BetterAuth::<BundledSchema>::new(config)
         .store(store.clone())
         .plugin(better_auth::plugins::organization::OrganizationPlugin::with_config(options))
         .build()
-        .await
-        .unwrap();
+        .await?;
     let updated = store
         .update_organization(
-            organization.id.typed().unwrap(),
+            organization.id.typed()?,
             UpdateOrganization {
                 metadata: Some(FieldValue::Null),
                 additional_fields: [("label".into(), FieldValue::from("changed"))]
@@ -204,62 +195,57 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
                 ..Default::default()
             },
         )
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(updated.name, "Mapped organization");
     assert_eq!(updated.metadata.field_value(), FieldValue::from("null"));
     assert_http_metadata(
         &auth,
         owner_session.token(),
-        organization.id.typed().unwrap(),
+        organization.id.typed()?,
         json!(null),
     )
-    .await;
+    .await?;
     assert_eq!(
-        updated.additional_fields["label"],
-        FieldValue::from("changed:in:out")
+        updated.additional_fields.get("label"),
+        Some(&FieldValue::from("changed:in:out"))
     );
     assert_eq!(
-        updated.additional_fields["marker"],
-        FieldValue::from("updated")
+        updated.additional_fields.get("marker"),
+        Some(&FieldValue::from("updated"))
     );
     let updated = store
         .update_organization(
-            organization.id.typed().unwrap(),
+            organization.id.typed()?,
             UpdateOrganization {
                 metadata: Some(FieldValue::from(FieldMap::new())),
                 ..Default::default()
             },
         )
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(updated.metadata.field_value(), FieldValue::from("{}"));
     assert_http_metadata(
         &auth,
         owner_session.token(),
-        organization.id.typed().unwrap(),
+        organization.id.typed()?,
         json!({}),
     )
-    .await;
+    .await?;
     let pending = store
-        .get_invitation_by_id(invitation.id.typed().unwrap())
-        .await
-        .unwrap()
-        .unwrap();
+        .get_invitation_by_id(invitation.id.typed()?)
+        .await?
+        .ok_or("Accepted invitation must remain stored after reopening the database")?;
     assert_eq!(
-        pending.additional_fields["marker"],
-        FieldValue::from("updated")
+        pending.additional_fields.get("marker"),
+        Some(&FieldValue::from("updated"))
     );
-    let users = store
-        .list_team_members(team.id.typed().unwrap())
-        .await
-        .unwrap();
+    let users = store.list_team_members(team.id.typed()?).await?;
     assert_eq!(users.len(), 1);
-    fixture::reset(&db).await.unwrap();
+    fixture::reset(&db).await?;
     drop(auth);
     drop(store);
-    db.close().await.unwrap();
-    std::fs::remove_file(path).unwrap();
+    db.close().await?;
+    std::fs::remove_file(path)?;
+    Ok(())
 }
 
 async fn assert_http_metadata(
@@ -267,7 +253,7 @@ async fn assert_http_metadata(
     token: &str,
     organization_id: &str,
     expected: serde_json::Value,
-) {
+) -> TestResult {
     let cookie = better_auth::__private_core::utils::cookie_utils::sign_cookie_value(
         token,
         auth.config().signing_secret(),
@@ -290,7 +276,7 @@ async fn assert_http_metadata(
         )
         .await
         .unwrap_or_else(|error| error.to_auth_response());
-    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
     if expected.is_null() {
         assert_eq!(response.status, 400);
         assert_eq!(
@@ -304,11 +290,12 @@ async fn assert_http_metadata(
         assert_eq!(response.status, 200);
         assert_eq!(body.get("metadata"), Some(&expected));
     }
+    Ok(())
 }
 
 #[tokio::test]
 async fn organization_field_configuration_accepts_replacement_policies_and_rejects_invalid_mappings()
- {
+-> TestResult {
     use better_auth::{
         BetterAuth, config::UserFieldConfig, plugins::organization::OrganizationPlugin,
     };
@@ -342,7 +329,7 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
             Some("Unknown organization model column: unmappedLabel"),
         ),
     ] {
-        let db = Database::connect("sqlite::memory:").await.unwrap();
+        let db = Database::connect("sqlite::memory:").await?;
         let config =
             better_auth::AuthConfig::new("organization-configuration-secret-at-least-32-chars");
         let store = SeaOrmStore::<BundledSchema>::new(config.clone(), db)
@@ -354,7 +341,7 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
             "invitation" => &mut options.schema.invitation,
             "team" => &mut options.schema.team,
             "organizationRole" => &mut options.schema.organization_role,
-            _ => unreachable!(),
+            _ => return Err(format!("Unknown fixture entity: {entity}").into()),
         };
         let _ = fields.fields_mut().insert(
             name.into(),
@@ -371,7 +358,7 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
         if let Some(expected) = expected {
             let error = result
                 .err()
-                .expect("invalid field configuration must fail before handling requests");
+                .ok_or("invalid field configuration must fail before handling requests")?;
             assert!(
                 error.to_string().contains(expected),
                 "{entity}.{name}: {error}"
@@ -383,4 +370,5 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
             );
         }
     }
+    Ok(())
 }

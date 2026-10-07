@@ -76,8 +76,8 @@ async fn raw_username_projection_resolves_empty_aliases_and_preserves_serialized
                     }
                     .expect("ordinary model projection succeeds");
                     assert_eq!(
-                        *events.lock().expect("projection trace lock"),
-                        [observed.clone()],
+                        events.lock().expect("projection trace lock").as_slice(),
+                        std::slice::from_ref(&observed),
                         "callback: {name}, alias={alias:?}, public={public}, returned={returned}",
                     );
                     let expected = if public && !returned {
