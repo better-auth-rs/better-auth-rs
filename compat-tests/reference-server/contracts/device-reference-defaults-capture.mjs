@@ -14,15 +14,41 @@ function scenarios(ownerRefType) {
     { suffix: "eq-owner", operator: "eq", sourceValue: "owner" },
     { suffix: "eq-object", operator: "eq", value: { value: 1 } },
     { suffix: "in-owner-null", operator: "in", sourceValue: "owner-array" },
+    { suffix: "in-non-array", operator: "in", value: "ordinary-owner" },
   ] : [
     { suffix: "eq-number", operator: "eq", value: 1 },
     { suffix: "eq-date", operator: "eq", value: new Date(1) },
     { suffix: "in-date", operator: "in", value: [new Date(1)] },
     { suffix: "eq-invalid-date", operator: "eq", value: new Date(NaN) },
+    { suffix: "in-non-array", operator: "in", value: 1 },
   ];
   return inputs.map((input, index) => ({
     ...base, ...input, name: `default-${ownerRefType}-reference-${input.suffix}`, physical: index % 2 === 1,
   }));
+}
+
+function expectedOutcome(backend, input) {
+  switch (input.suffix) {
+    case "in-non-array":
+      return { name: "BetterAuthError", message: "Value must be an array" };
+    case "eq-owner":
+    case "eq-number":
+      return "consumed";
+    case "eq-object":
+    case "eq-date":
+      return "preserved";
+    case "in-owner-null":
+      if (backend === "memory") return { name: "Error", message: "Value must be an array" };
+      return backend === "postgres" ? "consumed" : "preserved";
+    case "in-date":
+      return backend === "sqlite"
+        ? { name: "TypeError", message: "Binding expected string, TypedArray, boolean, number, bigint or null" }
+        : "preserved";
+    case "eq-invalid-date":
+      return backend === "sqlite" ? { name: "RangeError", message: "Invalid Date" } : "preserved";
+    default:
+      assert.fail(`Unknown captured operand: ${input.suffix}`);
+  }
 }
 
 export async function captureDeviceReferenceDefaults(backend, { diagnostics = [] } = {}) {
@@ -32,7 +58,7 @@ export async function captureDeviceReferenceDefaults(backend, { diagnostics = []
     // Date strings normalize before input callbacks; a numeric seed preserves a valid text ID reference.
     const ownerId = ownerRefType === "date" ? "1" : "ordinary-owner";
     const inputs = scenarios(ownerRefType);
-    assert.equal(inputs.length, ownerRefType === "json" ? 3 : 4);
+    assert.equal(inputs.length, ownerRefType === "json" ? 4 : 5);
     assert.equal(new Set(inputs.map(input => input.name)).size, inputs.length);
     const diagnostic = { backend, ownerRefType, ownerId, serial: false, inputs: observeValue(inputs) };
     diagnostics.push(diagnostic);
@@ -63,10 +89,16 @@ export async function captureDeviceReferenceDefaults(backend, { diagnostics = []
       assert.equal(captured.seeded.ownerRef, ownerId);
       assert.equal(captured.before.length, 1);
       assert.ok(Object.hasOwn(captured.before[0], "stored_ownerRef"));
+      const storedValue = ownerRefType === "date" && backend === "memory" ? 1 : ownerId;
+      assert.equal(captured.before[0].stored_ownerRef, storedValue);
       assert.deepEqual(captured.seedEvents.filter(event => event.field === "ownerRef" && event.phase === "input"), [
         { phase: "input", field: "ownerRef", value: ownerRefType === "json" ? ownerId : 1 },
       ]);
       assert.equal(captured.seedEvents.filter(event => event.field === "ownerRef" && event.phase === "output").length, 1);
+      assert.deepEqual(captured.seedEvents.filter(event => event.field === "ownerRef"), [
+        { phase: "input", field: "ownerRef", value: ownerRefType === "json" ? ownerId : 1 },
+        { phase: "output", field: "ownerRef", value: storedValue },
+      ]);
       for (const snapshot of [captured.storage.before, captured.storage.after]) {
         assert.deepEqual(Object.keys(snapshot), models);
         for (const model of models) assert.ok(Array.isArray(snapshot[model]));
@@ -76,6 +108,18 @@ export async function captureDeviceReferenceDefaults(backend, { diagnostics = []
       }
       assert.deepEqual(captured.storage.before.deviceCode, captured.before);
       assert.deepEqual(captured.storage.after.deviceCode, captured.after);
+      const outcome = expectedOutcome(backend, input);
+      if (outcome === "consumed") {
+        assert.equal(captured.error, null);
+        assert.deepEqual(captured.result, captured.seeded);
+        assert.deepEqual(captured.after, []);
+        assert.deepEqual(captured.events, captured.seedEvents.filter(event => event.phase === "output"));
+      } else {
+        assert.equal(captured.result, null);
+        assert.deepEqual(captured.error, outcome === "preserved" ? null : outcome);
+        assert.deepEqual(captured.events, []);
+        assert.deepEqual(captured.storage.after, captured.storage.before);
+      }
     }
     groups.push(group);
   }
