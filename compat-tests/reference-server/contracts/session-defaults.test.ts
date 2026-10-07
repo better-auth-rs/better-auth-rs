@@ -31,6 +31,7 @@ function generation(mode: Mode) {
 async function observe(options: {
   mode: Mode;
   fields: (events: Events) => Record<string, DBFieldAttribute>;
+  pluginFields?: (events: Events) => Record<string, DBFieldAttribute>;
   patch?: RecordValue;
   caller?: RecordValue;
   cancel?: boolean;
@@ -50,6 +51,10 @@ async function observe(options: {
       return id;
     } } },
     session: { storeSessionInDatabase: options.mode === "database", additionalFields: options.fields(events) },
+    plugins: options.pluginFields ? [{
+      id: "session-defaults-contract",
+      schema: { session: { fields: options.pluginFields(events) } },
+    }] : [],
     ...(options.mode === "secondary" ? { secondaryStorage: {
       async get(key: string) {
         const value = cache.get(key)?.value ?? null;
@@ -216,5 +221,75 @@ test("literal and factory undefined session defaults retain distinct own-key and
         });
       }
     }
+  }
+});
+
+test("session initial defaults use input schema order while adapter transforms use application policies", async () => {
+  for (const mode of modes) {
+    for (const patched of [false, true]) {
+      const observation = await observe({ mode, patch: patched ? { label: undefined } : undefined, fields: events => ({
+        appOnly: { type: "string", defaultValue() {
+          events.push(["default", "application-only", "A"]);
+          return "A";
+        } },
+        label: { type: "string", defaultValue() {
+          events.push(["default", "application-label", "unused"]);
+          return "unused";
+        }, transform: { input(value) {
+          events.push(["input", "application-label", value]);
+          return `app:${value}`;
+        } } },
+      }), pluginFields: events => ({
+        label: { type: "string", defaultValue() {
+          events.push(["default", "plugin-label", "P"]);
+          return "P";
+        }, transform: { input(value) {
+          events.push(["input", "plugin-label", value]);
+          return `plugin:${value}`;
+        } } },
+        pluginOnly: { type: "string", defaultValue() {
+          events.push(["default", "plugin-only", "Q"]);
+          return "Q";
+        } },
+      }) });
+      const before = {
+        ...nativeSession, ...(mode === "secondary" ? { id: generatedId } : {}),
+        appOnly: "A", label: "P", pluginOnly: "Q",
+      };
+      const result = {
+        ...before, id: generatedId,
+        label: mode === "database" ? patched ? "app:unused" : "app:P" : patched ? undefined : "P",
+      };
+      check(observation, {
+        events: [
+          ...(mode === "secondary" ? [generation(mode)] : []),
+          ["default", "application-only", "A"], ["default", "plugin-label", "P"], ["default", "plugin-only", "Q"],
+          ["before", before],
+          ...(mode === "database" && patched ? [["default", "application-label", "unused"]] : []),
+          ...(mode === "database" ? [["input", "application-label", patched ? "unused" : "P"], generation(mode)] : []),
+        ],
+        result, row: mode === "database" ? result : undefined,
+      });
+    }
+  }
+});
+
+test("a plugin session declaration can remove an application initial default without removing its adapter default", async () => {
+  for (const mode of modes) {
+    const observation = await observe({ mode, fields: events => ({
+      label: { type: "string", defaultValue() {
+        events.push(["default", "application-label", "A"]);
+        return "A";
+      } },
+    }), pluginFields: () => ({ label: { type: "string", required: false } }) });
+    const before = { ...nativeSession, ...(mode === "secondary" ? { id: generatedId } : {}) };
+    const result = { ...before, id: generatedId, ...(mode === "database" ? { label: "A" } : {}) };
+    check(observation, {
+      events: [
+        ...(mode === "secondary" ? [generation(mode)] : []), ["before", before],
+        ...(mode === "database" ? [["default", "application-label", "A"], generation(mode)] : []),
+      ],
+      result, row: mode === "database" ? result : undefined,
+    });
   }
 });

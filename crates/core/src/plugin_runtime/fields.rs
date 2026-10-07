@@ -359,6 +359,8 @@ impl ModelFields {
         };
         (adapter.user, endpoint.user) = resolve(EntityRole::User, application.user.clone());
         let (stored, public) = resolve(EntityRole::Session, application.session.field_schema());
+        // Initial defaults use input precedence; adapter policies retain application precedence.
+        adapter.session_input_fields = Some(public.clone());
         adapter.session.additional_fields = stored.additional_fields;
         endpoint.session.additional_fields = public.additional_fields;
         let (stored, public) = resolve(

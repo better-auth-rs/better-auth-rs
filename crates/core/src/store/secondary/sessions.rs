@@ -96,7 +96,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         if !id.is_empty() {
             let _ = fields.insert("id".into(), id.into());
         }
-        fields.extend(self.config.session.default_fields());
+        fields.extend(self.config.session_default_fields());
         fields.extend(std::mem::take(&mut input.additional_fields));
         input.additional_fields = fields;
         Ok(())

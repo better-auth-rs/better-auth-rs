@@ -29,6 +29,9 @@ use std::sync::{
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
+#[path = "session_initial_defaults_tests/plugin_precedence.rs"]
+mod plugin_precedence;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
     Missing,
@@ -257,7 +260,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
     let _ = raw
         .create_user(CreateUser {
             id: Some("owner".into()),
-            name: Some("Owner".into()),
+            name: Some("Owner".into()).into(),
             email: Some("owner@session-defaults.test".into()),
             ..Default::default()
         })

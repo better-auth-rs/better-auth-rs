@@ -197,7 +197,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         mut create_session: CreateSession,
     ) -> AuthResult<Option<SessionView>> {
         let _ = create_session.additional_fields.remove("id");
-        let mut fields = self.session_config.default_fields();
+        let mut fields = self.config.session_default_fields();
         fields.extend(std::mem::take(&mut create_session.additional_fields));
         create_session.additional_fields = fields;
         if !self

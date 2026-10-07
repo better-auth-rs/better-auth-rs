@@ -56,6 +56,7 @@ pub struct AuthConfig {
     /// Usage reporting is disabled by default.
     pub telemetry: crate::observability::TelemetryConfig,
     pub(crate) resolved_cookies: Option<crate::request_runtime::CookieSettings>,
+    pub(crate) session_input_fields: Option<UserConfig>,
     /// Secret key for signing tokens and sessions
     pub secret: String,
 
@@ -260,19 +261,23 @@ impl SessionConfig {
 
     /// Evaluate creation defaults without validating or transforming session input.
     pub fn default_fields(&self) -> crate::FieldMap {
-        self.field_schema()
-            .ordered_fields(&[])
-            .into_iter()
-            .filter(|(_, field)| {
-                field.default_value_fn.is_some()
-                    || field
-                        .default_value
-                        .as_ref()
-                        .is_some_and(|value| !value.is_undefined())
-            })
-            .filter_map(|(name, field)| field.default_value().map(|value| (name.to_owned(), value)))
-            .collect()
+        session_defaults(&self.field_schema())
     }
+}
+
+fn session_defaults(schema: &UserConfig) -> crate::FieldMap {
+    schema
+        .ordered_fields(&[])
+        .into_iter()
+        .filter(|(_, field)| {
+            field.default_value_fn.is_some()
+                || field
+                    .default_value
+                    .as_ref()
+                    .is_some_and(|value| !value.is_undefined())
+        })
+        .filter_map(|(name, field)| field.default_value().map(|value| (name.to_owned(), value)))
+        .collect()
 }
 
 /// Options for authenticating sessions through the Authorization header.
@@ -603,6 +608,7 @@ impl Default for AuthConfig {
             experimental: Default::default(),
             telemetry: Default::default(),
             resolved_cookies: None,
+            session_input_fields: None,
             secret: String::new(),
             secrets: None,
             app_name: "Better Auth".to_string(),
@@ -677,6 +683,14 @@ impl Default for Argon2Config {
 }
 
 impl AuthConfig {
+    /// Evaluate Session creation defaults with plugin input precedence.
+    #[doc(hidden)]
+    pub fn session_default_fields(&self) -> crate::FieldMap {
+        self.session_input_fields
+            .as_ref()
+            .map_or_else(|| self.session.default_fields(), session_defaults)
+    }
+
     /// Configure current and retained encryption keys in priority order.
     pub fn secrets(mut self, keys: Vec<VersionedSecret>) -> Self {
         self.secrets = Some(keys);

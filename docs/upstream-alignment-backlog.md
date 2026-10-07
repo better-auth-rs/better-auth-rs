@@ -12,6 +12,10 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+Source review found that Session initial defaults used the adapter schema instead of the input schema. Initialization now retains the resolved input schema for initial defaults, preserving plugin precedence and declaration order. The adapter schema retains application precedence for later defaults and transforms. The upstream contract adds plugin/application collisions, absent plugin defaults, and hook-produced Undefined. Rust acceptance remains pending.
+
+User-fields CI 37627274879 at `7907ad7` passed the upstream contracts and production Clippy, then rejected the new owner name's input type. The test now converts the required name through its existing `SchemaValue<Option<String>>` boundary. Every input value and assertion remains unchanged. Complete logs are retained; this run did not reach Rust behavior acceptance.
+
 User-fields CI 37626300123 at `88da707` passed the upstream contracts, both Clippy checks, core/SeaORM regressions, and the complete Memory Session-default matrix. The SQL default matrix stopped during User setup because its new input omitted the bundled schema's required `name`. The input now supplies `Owner`, matching the upstream setup; all Session assertions remain unchanged. Runtime-values CI 37625615484 at `fe3feb5` passed 56 core tests, the complete Session Undefined-alias fixture, the zero-alias regression, and every selected integration target.
 
 User-fields CI 37625609987 at `fe3feb5` passed all 23 upstream contracts with 637 assertions, including Session defaults and literal/factory Undefined reference behavior. Production Clippy passed. Test Clippy then found that the new SQL defaults test passed generic `DatabaseHooks` to the SeaORM-specific hook method. The test now uses the existing `RuntimeStore::with_runtime` adapter, preserving every case and assertion. Rust behavior acceptance remains pending.
