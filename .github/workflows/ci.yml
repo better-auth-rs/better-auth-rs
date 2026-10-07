@@ -42,6 +42,7 @@ on:
           - plugin-display-values
           - memory-sorting
           - schema-joins
+          - field-projection
           - account-user-auth
           - user-fields
           - runtime-values

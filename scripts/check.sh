@@ -271,6 +271,17 @@ run_stage() {
         ./compat-tests/reference-server/contracts/session-user-join-reference.test.ts \
         ./compat-tests/reference-server/contracts/custom-model-join-reference.test.ts
       ;;
+    field-projection)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-core -- -D warnings
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test schema_preflight_tests --test async_field_transform_tests \
+        --test transform_batch_tests --test account_owner_batch_tests \
+        --test fallback_continuation_tests --test organization_join_continuation_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test schema_preflight_tests -- \
+        --ignored --exact mysql::live_mysql_preflight_tracks_migrations_defaults_and_auto_increment \
+        live_postgres_preflight_tracks_migrations_defaults_and_search_path
+      ;;
     schema-joins)
       cargo fmt --all -- --check
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings

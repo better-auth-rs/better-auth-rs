@@ -207,7 +207,7 @@ where
 
 type ProjectionTasks<'a, R> = FuturesUnordered<BoxFuture<'a, AuthResult<(usize, R)>>>;
 
-async fn projection_tasks<'a, T: Send, R: Send + 'a, F>(
+fn projection_tasks<'a, T: Send, R: Send + 'a, F>(
     rows: &'a mut [T],
     fields: &'a IndexMap<String, UserFieldConfig>,
     project: &'a (
@@ -215,44 +215,48 @@ async fn projection_tasks<'a, T: Send, R: Send + 'a, F>(
             + Sync
         ),
     complete: &'a (impl Fn(usize, &mut T) -> F + Sync),
-) -> (Option<crate::AuthError>, ProjectionTasks<'a, R>)
+) -> BoxFuture<'a, (Option<crate::AuthError>, ProjectionTasks<'a, R>)>
 where
     F: Future<Output = AuthResult<R>> + Send + 'a,
 {
-    let mut first_error = None;
-    let pending: FuturesUnordered<BoxFuture<'_, AuthResult<(usize, R)>>> = FuturesUnordered::new();
-    if fields.values().any(is_async) {
-        for (index, row) in rows.iter_mut().enumerate() {
-            pending.push(Box::pin(async move {
-                for (name, field) in fields {
-                    project(row, name, field).await?;
-                }
-                Ok((index, complete(index, row).await?))
-            }));
-        }
-    } else {
-        let mut active = vec![true; rows.len()];
-        for (name, field) in fields {
-            for (row, active) in rows.iter_mut().zip(&mut active) {
-                if !*active {
-                    continue;
-                }
-                if let Err(error) = project(row, name, field).await {
-                    *active = false;
-                    if first_error.is_none() {
-                        first_error = Some(error);
+    // Erase the scheduler future so request callers do not expand every nested Send obligation.
+    Box::pin(async move {
+        let mut first_error = None;
+        let pending: FuturesUnordered<BoxFuture<'_, AuthResult<(usize, R)>>> =
+            FuturesUnordered::new();
+        if fields.values().any(is_async) {
+            for (index, row) in rows.iter_mut().enumerate() {
+                pending.push(Box::pin(async move {
+                    for (name, field) in fields {
+                        project(row, name, field).await?;
+                    }
+                    Ok((index, complete(index, row).await?))
+                }));
+            }
+        } else {
+            let mut active = vec![true; rows.len()];
+            for (name, field) in fields {
+                for (row, active) in rows.iter_mut().zip(&mut active) {
+                    if !*active {
+                        continue;
+                    }
+                    if let Err(error) = project(row, name, field).await {
+                        *active = false;
+                        if first_error.is_none() {
+                            first_error = Some(error);
+                        }
                     }
                 }
             }
-        }
-        for ((index, row), active) in rows.iter_mut().enumerate().zip(active) {
-            if active {
-                let future = complete(index, row);
-                pending.push(Box::pin(async move { Ok((index, future.await?)) }));
+            for ((index, row), active) in rows.iter_mut().enumerate().zip(active) {
+                if active {
+                    let future = complete(index, row);
+                    pending.push(Box::pin(async move { Ok((index, future.await?)) }));
+                }
             }
         }
-    }
-    (first_error, pending)
+        (first_error, pending)
+    })
 }
 
 /// Continue currently ready rows together without waiting for suspended peer rows.
