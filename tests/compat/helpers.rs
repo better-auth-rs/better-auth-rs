@@ -146,6 +146,7 @@ pub struct TestAuthOptions {
     pub creator_role: Option<String>,
     pub change_email_without_verification: bool,
     pub all_plugins: bool,
+    pub joins: Option<bool>,
 }
 
 struct TestResetSender {
@@ -297,7 +298,8 @@ pub async fn create_test_auth() -> TestAuth {
 }
 
 pub async fn create_test_auth_with_options(options: TestAuthOptions) -> TestAuth {
-    let config = test_config();
+    let mut config = test_config();
+    config.advanced.database.joins = options.joins;
     let store = test_store(&config).await;
     let organization_plugin = if options.all_plugins {
         OrganizationPlugin::with_config(better_auth::plugins::organization::OrganizationConfig {

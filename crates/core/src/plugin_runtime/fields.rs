@@ -17,6 +17,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
     schema_models: Option<Vec<(EntityRole, &'static str)>>,
+    user_plugin_fields: Vec<&'static str>,
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
@@ -124,6 +125,14 @@ impl ModelFields {
     /// Retain the same active logical models used by runtime schema validation.
     pub fn set_schema_configuration(&mut self, config: &crate::store::schema::SchemaConfiguration) {
         self.schema_models = Some(config.models());
+        self.user_plugin_fields =
+            crate::wire::UserView::active_plugin_fields(&config.metadata).collect();
+    }
+
+    /// Read native User fields owned by active plugins before adapter output projection.
+    #[doc(hidden)]
+    pub fn user_plugin_fields(&self) -> &[&'static str] {
+        &self.user_plugin_fields
     }
 
     pub(crate) fn organization_join_schema(&self, config: &AuthConfig) -> Self {

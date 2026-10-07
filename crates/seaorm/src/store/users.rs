@@ -181,7 +181,10 @@ where
             "image",
             "createdAt",
             "updatedAt",
-        ] {
+        ]
+        .into_iter()
+        .chain(self.model_fields.user_plugin_fields().iter().copied())
+        {
             let _ = fields
                 .fields_mut()
                 .entry(name.into())
@@ -203,6 +206,12 @@ where
             ["name", "email", "image"]
                 .into_iter()
                 .map(str::to_owned)
+                .chain(
+                    self.model_fields
+                        .user_plugin_fields()
+                        .iter()
+                        .map(|name| (*name).to_owned()),
+                )
                 .chain(self.config().user.fields().keys().cloned())
                 .collect(),
         );

@@ -19,6 +19,17 @@ const PLUGIN_FIELDS: &[(&str, &[&str])] = &[
 ];
 
 impl UserView {
+    pub(crate) fn active_plugin_fields(
+        metadata: &MetadataMap,
+    ) -> impl Iterator<Item = &'static str> + '_ {
+        PLUGIN_FIELDS
+            .iter()
+            .filter(move |(plugin, _)| {
+                metadata.get(*plugin).and_then(serde_json::Value::as_bool) == Some(true)
+            })
+            .flat_map(|(_, fields)| fields.iter().copied())
+    }
+
     /// Build an enumeration-safe signup response without adapter transforms or persistence.
     pub fn synthetic_output(
         data: FieldMap,
@@ -211,16 +222,12 @@ impl UserView {
             .map(|user| {
                 let mut view = Self::from_model(user)?;
                 view.visible_fields = Some(
-                    PLUGIN_FIELDS
-                        .iter()
-                        .filter(|(plugin, _)| {
-                            metadata.get(*plugin).and_then(serde_json::Value::as_bool) == Some(true)
-                        })
-                        .flat_map(|(_, fields)| fields.iter().map(|name| (*name).to_owned()))
+                    Self::active_plugin_fields(metadata)
                         .filter(|name| {
                             user.field_presence()
-                                .is_none_or(|fields| fields.contains(name))
+                                .is_none_or(|fields| fields.contains(*name))
                         })
+                        .map(str::to_owned)
                         .chain(
                             ["name", "email", "image"]
                                 .into_iter()

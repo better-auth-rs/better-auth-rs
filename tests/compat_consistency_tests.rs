@@ -14,52 +14,60 @@ use compat::shapes::compare_shapes;
 /// Validates that the user object is consistent across all responses.
 #[tokio::test]
 async fn test_auth_flow_user_object_consistency() {
-    let auth = create_test_auth().await;
+    for joins in [false, true] {
+        let auth = create_test_auth_with_options(TestAuthOptions {
+            joins: Some(joins),
+            ..Default::default()
+        })
+        .await;
 
-    // Step 1: Sign up
-    let (_signup_token, signup_body) =
-        signup_user(&auth, "flow@example.com", "password123", "Flow User").await;
-    let signup_user_obj = &signup_body["user"];
+        // Step 1: Sign up
+        let (_signup_token, signup_body) =
+            signup_user(&auth, "flow@example.com", "password123", "Flow User").await;
+        let signup_user_obj = &signup_body["user"];
 
-    // Step 2: Sign in
-    let (signin_token, signin_body) = signin_user(&auth, "flow@example.com", "password123").await;
-    let signin_user_obj = &signin_body["user"];
+        // Step 2: Sign in
+        let (signin_token, signin_body) =
+            signin_user(&auth, "flow@example.com", "password123").await;
+        let signin_user_obj = &signin_body["user"];
 
-    // Step 3: Get session
-    let (_, session_body) = send_request(&auth, get_with_auth("/get-session", &signin_token)).await;
-    let session_user_obj = &session_body["user"];
+        // Step 3: Get session
+        let (_, session_body) =
+            send_request(&auth, get_with_auth("/get-session", &signin_token)).await;
+        let session_user_obj = &session_body["user"];
 
-    // The user object should have the SAME shape across all responses
-    let shapes_to_compare = vec![
-        ("signup vs signin", signup_user_obj, signin_user_obj),
-        ("signup vs session", signup_user_obj, session_user_obj),
-    ];
+        // The user object should have the SAME shape across all responses
+        let shapes_to_compare = vec![
+            ("signup vs signin", signup_user_obj, signin_user_obj),
+            ("signup vs session", signup_user_obj, session_user_obj),
+        ];
 
-    for (label, a, b) in shapes_to_compare {
-        let diffs = compare_shapes(a, b, "user", false);
-        assert!(
-            diffs.is_empty(),
-            "User object shape mismatch between {}: {:?}",
-            label,
-            diffs
+        for (label, a, b) in shapes_to_compare {
+            let diffs = compare_shapes(a, b, "user", false);
+            assert!(
+                diffs.is_empty(),
+                "joins={joins}: User object shape mismatch between {}: {:?}",
+                label,
+                diffs
+            );
+        }
+
+        // Verify the user ID is consistent
+        assert_eq!(
+            signup_user_obj["id"], signin_user_obj["id"],
+            "joins={joins}: User ID must be consistent: signup vs signin"
+        );
+        assert_eq!(
+            signup_user_obj["id"], session_user_obj["id"],
+            "joins={joins}: User ID must be consistent: signup vs session"
+        );
+
+        // Verify the email is consistent
+        assert_eq!(
+            signup_user_obj["email"], signin_user_obj["email"],
+            "joins={joins}: Email must be consistent: signup vs signin"
         );
     }
-
-    // Verify the user ID is consistent
-    assert_eq!(
-        signup_user_obj["id"], signin_user_obj["id"],
-        "User ID must be consistent: signup vs signin"
-    );
-    assert_eq!(
-        signup_user_obj["id"], session_user_obj["id"],
-        "User ID must be consistent: signup vs session"
-    );
-
-    // Verify the email is consistent
-    assert_eq!(
-        signup_user_obj["email"], signin_user_obj["email"],
-        "Email must be consistent: signup vs signin"
-    );
 }
 
 /// Test that duplicate signup returns proper error shape.

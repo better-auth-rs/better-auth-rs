@@ -287,8 +287,12 @@ impl ResolvedJoin {
             .cloned()
             .unwrap_or_else(|| UserFieldConfig {
                 field_type: match logical {
-                    "emailVerified" => UserFieldType::Boolean,
-                    "createdAt" | "updatedAt" => UserFieldType::Date,
+                    "emailVerified"
+                    | "isAnonymous"
+                    | "phoneNumberVerified"
+                    | "twoFactorEnabled"
+                    | "banned" => UserFieldType::Boolean,
+                    "createdAt" | "updatedAt" | "banExpires" => UserFieldType::Date,
                     _ => UserFieldType::String,
                 },
                 ..Default::default()
