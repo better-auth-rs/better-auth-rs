@@ -1,6 +1,5 @@
 //! Bind declared ID references through the configured generation policy and storage type.
 
-use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{FieldMap, FieldValue};
 use sea_orm::sea_query::{ArrayType, ColumnType, Nullable, Value, ValueType, ValueTypeErr};
 use sea_orm::{ColIdx, QueryResult, TryGetError, TryGetable};
@@ -54,8 +53,8 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
     Ok(value)
 }
 
-/// Apply Serial conversion after field transforms and before typed model decoding.
-pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
+/// Convert native ID bindings before configured fields run their input policies.
+pub(crate) fn prepare_core_fields<C: sea_orm::ColumnTrait>(
     fields: &mut FieldMap,
     policy: &better_auth_core::id::IdGeneration,
     config: Option<&better_auth_core::user_fields::UserConfig>,
@@ -66,15 +65,11 @@ pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
         return Ok(());
     }
     for (name, value) in fields {
+        if name != "id" && config.is_some_and(|config| config.fields().contains_key(name)) {
+            continue;
+        }
         let column = column(name)?;
-        let configured = config.and_then(|config| {
-            config.fields().iter().find_map(|(logical, field)| {
-                (resolve_field_name(field.field_name.as_deref(), logical) == name).then_some(field)
-            })
-        });
-        if name == "id"
-            || configured.map_or_else(|| is_reference(&column), |field| field.references_id())
-        {
+        if name == "id" || is_reference(&column) {
             let text = matches!(
                 column.def().get_column_type(),
                 ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
@@ -318,5 +313,160 @@ mod tests {
             );
         }
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn callback_undefined_reaches_serial_sql_binding_before_omission() {
+        use better_auth_core::FieldValue;
+        use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
+
+        let config = UserConfig {
+            additional_fields: Some(
+                [(
+                    "owner".into(),
+                    UserFieldConfig {
+                        references: Some(UserFieldReference {
+                            model: "user".into(),
+                            field: "id".into(),
+                        }),
+                        transform: Some(FieldTransforms {
+                            input: Some(UserFieldTransform::new(|value| {
+                                assert_eq!(value, FieldValue::from("clear"));
+                                Ok(FieldValue::Undefined)
+                            })),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            ),
+        };
+        for backend in [
+            sea_orm::DbBackend::Sqlite,
+            sea_orm::DbBackend::Postgres,
+            sea_orm::DbBackend::MySql,
+        ] {
+            for text in [false, true] {
+                for policy in [IdGeneration::Serial, IdGeneration::Random] {
+                    let values = config
+                        .storage_fields_with_binding(
+                            [("owner".into(), FieldValue::from("clear"))].into(),
+                            false,
+                            |name, field, value| {
+                                input_binding(
+                                    name,
+                                    field,
+                                    value,
+                                    &policy,
+                                    |_| {
+                                        Ok(if text {
+                                            crate::store::entities::user::Column::Id
+                                        } else {
+                                            crate::store::entities::user::Column::Metadata
+                                        })
+                                    },
+                                    |_| true,
+                                    backend,
+                                )
+                            },
+                        )
+                        .await
+                        .unwrap();
+                    if matches!(policy, IdGeneration::Serial) {
+                        assert_eq!(values.len(), 1);
+                        if text {
+                            assert_eq!(values["owner"], FieldValue::from("NaN"));
+                        } else {
+                            assert!(
+                                matches!(values["owner"], FieldValue::Number(value) if value.is_nan())
+                            );
+                        }
+                    } else {
+                        assert!(values.is_empty());
+                    }
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn native_bindings_do_not_rebind_configured_storage_aliases() {
+        use better_auth_core::{FieldMap, FieldValue};
+
+        let config = UserConfig {
+            additional_fields: Some(
+                [
+                    (
+                        "firstAlias".into(),
+                        UserFieldConfig {
+                            field_name: Some("id".into()),
+                            references: Some(UserFieldReference {
+                                model: "user".into(),
+                                field: "id".into(),
+                            }),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "secondAlias".into(),
+                        UserFieldConfig {
+                            field_name: Some("id".into()),
+                            ..Default::default()
+                        },
+                    ),
+                    ("configuredOwner".into(), UserFieldConfig::default()),
+                ]
+                .into(),
+            ),
+        };
+        let mut core: FieldMap = [
+            ("id".into(), FieldValue::from("007")),
+            ("nativeOwner".into(), FieldValue::from("003")),
+            ("configuredOwner".into(), FieldValue::from("0004")),
+        ]
+        .into();
+        let column = |_: &str| Ok(crate::store::entities::user::Column::Id);
+        super::prepare_core_fields(
+            &mut core,
+            &IdGeneration::Serial,
+            Some(&config),
+            column,
+            |_| true,
+        )
+        .unwrap();
+        assert_eq!(core["id"], FieldValue::from("7"));
+        let fields = config
+            .organization_storage_fields_with_binding(
+                core,
+                [
+                    ("firstAlias".into(), FieldValue::from("0011")),
+                    ("secondAlias".into(), FieldValue::from("abc")),
+                ]
+                .into(),
+                false,
+                |name, field, value| {
+                    input_binding(
+                        name,
+                        field,
+                        value,
+                        &IdGeneration::Serial,
+                        column,
+                        |_| false,
+                        sea_orm::DbBackend::Sqlite,
+                    )
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            fields,
+            [
+                ("id".into(), FieldValue::from("abc")),
+                ("nativeOwner".into(), FieldValue::from("3")),
+                ("configuredOwner".into(), FieldValue::from("0004")),
+            ]
+            .into()
+        );
     }
 }

@@ -14,11 +14,24 @@ impl UserConfig {
         extras: FieldMap,
         create: bool,
     ) -> AuthResult<FieldMap> {
+        self.organization_storage_fields_with_binding(core, extras, create, |_, _, value| Ok(value))
+            .await
+    }
+
+    /// Bind each configured field before omitting Undefined or merging its storage column.
+    #[doc(hidden)]
+    pub async fn organization_storage_fields_with_binding(
+        &self,
+        core: FieldMap,
+        extras: FieldMap,
+        create: bool,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<FieldMap> {
         let mut output = core.clone();
         output.retain(|name, _| name == "id" || !self.fields().contains_key(name));
         let mut input = extras;
         input.extend(core);
-        output.extend(self.storage_fields_async(input, create, true).await?);
+        output.extend(self.storage_fields_async(input, create, true, bind).await?);
         Ok(output)
     }
 

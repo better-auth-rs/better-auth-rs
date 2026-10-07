@@ -269,11 +269,7 @@ impl EphemeralStore {
         Ok(fields)
     }
 
-    fn bind_record_fields(
-        &self,
-        schema: &crate::user_fields::UserConfig,
-        fields: &mut FieldMap,
-    ) -> AuthResult<()> {
+    fn bind_record_id(&self, fields: &mut FieldMap) -> AuthResult<()> {
         if matches!(
             self.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
@@ -284,30 +280,22 @@ impl EphemeralStore {
                 let _ = fields.insert("id".into(), Value::Number(number));
             }
         }
-        for (name, field) in schema.fields() {
-            if name == "id" {
-                continue;
-            }
-            if let Some(value) =
-                fields.get_mut(resolve_field_name(field.field_name.as_deref(), name))
-            {
-                *value = self.memory_plugin_field_input(field, std::mem::take(value))?;
-            }
-        }
         Ok(())
     }
 
     pub(super) async fn prepare_record_patch(
         &self,
         role: EntityRole,
-        core: FieldMap,
+        mut core: FieldMap,
         extras: FieldMap,
     ) -> AuthResult<PreparedOrganizationFields> {
         let schema = self.field_config(role)?;
-        let mut fields = schema
-            .organization_storage_fields(core, extras, false)
+        self.bind_record_id(&mut core)?;
+        let fields = schema
+            .organization_storage_fields_with_binding(core, extras, false, |_, field, value| {
+                self.memory_plugin_field_input(field, value)
+            })
             .await?;
-        self.bind_record_fields(&schema, &mut fields)?;
         Ok(PreparedOrganizationFields {
             schema,
             role,
@@ -325,14 +313,16 @@ impl EphemeralStore {
     ) -> AuthResult<T> {
         let schema = self.field_config(role)?;
         let create = patch.is_none();
-        let core = match patch {
+        let mut core = match patch {
             Some(patch) => patch,
             None => record_input(role, &value)?,
         };
-        let mut fields = schema
-            .organization_storage_fields(core, extras, create)
+        self.bind_record_id(&mut core)?;
+        let fields = schema
+            .organization_storage_fields_with_binding(core, extras, create, |_, field, value| {
+                self.memory_plugin_field_input(field, value)
+            })
             .await?;
-        self.bind_record_fields(&schema, &mut fields)?;
         PreparedOrganizationFields {
             schema,
             role,
@@ -504,6 +494,46 @@ impl EphemeralStore {
         row.user_id = Self::project_id(&row.user_id)?;
         Ok(row)
     }
+}
+
+#[tokio::test]
+async fn organization_id_slot_preserves_bound_zero_alias() {
+    use crate::organization_fields::OrganizationFields;
+    use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldReference};
+
+    let mut config = AuthConfig::default();
+    config.advanced.database.generate_id = Some(crate::id::IdGeneration::Serial);
+    let store = EphemeralStore::new(Arc::new(config));
+    store
+        .configure_organization_fields(OrganizationFields {
+            organization: UserConfig {
+                additional_fields: Some(
+                    [(
+                        "aliasId".into(),
+                        UserFieldConfig {
+                            field_name: Some("id".into()),
+                            references: Some(UserFieldReference {
+                                model: "organization".into(),
+                                field: "id".into(),
+                            }),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    let patch = store
+        .prepare_record_patch(
+            EntityRole::Organization,
+            [("id".into(), Value::from("7"))].into(),
+            [("aliasId".into(), Value::from("0"))].into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patch.fields, [("id".into(), Value::Number(0.0))].into());
 }
 
 #[tokio::test]

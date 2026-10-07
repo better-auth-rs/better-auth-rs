@@ -174,8 +174,23 @@ impl ModelFields {
     pub async fn device_code_fields_for_storage(
         &self,
         scope: SchemaValue<Option<String>>,
+        additional_fields: FieldMap,
+        create: bool,
+    ) -> AuthResult<FieldMap> {
+        self.device_code_fields_with_binding(scope, additional_fields, create, |_, _, value| {
+            Ok(value)
+        })
+        .await
+    }
+
+    /// Bind scope and application fields before omitting callback Undefined values.
+    #[doc(hidden)]
+    pub async fn device_code_fields_with_binding(
+        &self,
+        scope: SchemaValue<Option<String>>,
         mut additional_fields: FieldMap,
         create: bool,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
         // The typed scope owns omission too; application fields cannot supply an omitted native value.
         let _ = additional_fields.shift_remove("scope");
@@ -185,7 +200,7 @@ impl ModelFields {
             .map(|value| ("scope".into(), value))
             .collect();
         self.fields(EntityRole::DeviceCode)
-            .organization_storage_fields(core, additional_fields, create)
+            .organization_storage_fields_with_binding(core, additional_fields, create, bind)
             .await
     }
 

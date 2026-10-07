@@ -5674,8 +5674,8 @@
                 "type": "date",
                 "value": "2030-01-02T03:04:05.000Z"
               },
-              "ipAddress": null,
-              "userAgent": null,
+              "ipAddress": "",
+              "userAgent": "",
               "aliasId": "seed"
             }
           },
@@ -5701,8 +5701,8 @@
               "type": "date",
               "value": "2030-01-02T03:04:05.000Z"
             },
-            "ipAddress": null,
-            "userAgent": null,
+            "ipAddress": "",
+            "userAgent": "",
             "userId": "1",
             "aliasId": "1",
             "id": "1"
@@ -5725,8 +5725,8 @@
                   "type": "date",
                   "value": "2030-01-02T03:04:05.000Z"
                 },
-                "ipAddress": null,
-                "userAgent": null,
+                "ipAddress": "",
+                "userAgent": "",
                 "userId": 1,
                 "id": 1
               }
@@ -5767,8 +5767,8 @@
               "type": "date",
               "value": "2030-01-02T03:04:05.000Z"
             },
-            "ipAddress": null,
-            "userAgent": null,
+            "ipAddress": "",
+            "userAgent": "",
             "userId": 1,
             "id": 1
           }
@@ -5822,8 +5822,8 @@
           "type": "date",
           "value": "2031-01-02T03:04:05.000Z"
         },
-        "ipAddress": null,
-        "userAgent": null,
+        "ipAddress": "",
+        "userAgent": "",
         "userId": "1",
         "aliasId": "NaN",
         "id": "NaN"
@@ -5847,8 +5847,8 @@
               "type": "date",
               "value": "2031-01-02T03:04:05.000Z"
             },
-            "ipAddress": null,
-            "userAgent": null,
+            "ipAddress": "",
+            "userAgent": "",
             "userId": 1,
             "id": {
               "type": "number",

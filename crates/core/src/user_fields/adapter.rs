@@ -158,14 +158,7 @@ impl UserConfig {
         create: bool,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
-        let mut fields = self.storage_fields(input, create).await?;
-        for (name, field) in self.fields() {
-            let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-            if let Some(value) = fields.get_mut(storage_name) {
-                *value = bind(storage_name, field, value.take())?;
-            }
-        }
-        Ok(fields)
+        self.storage_fields_async(input, create, false, bind).await
     }
 }
 

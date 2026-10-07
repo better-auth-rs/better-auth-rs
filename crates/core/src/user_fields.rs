@@ -6,6 +6,8 @@ use crate::{FieldMap, FieldValue as Value};
 use indexmap::IndexMap;
 use std::sync::{Arc, LazyLock};
 mod adapter;
+#[cfg(test)]
+mod input_binding_tests;
 pub use adapter::FieldOutputCapabilities;
 mod batch;
 pub(crate) use batch::{
@@ -246,7 +248,8 @@ impl UserConfig {
 
     /// Map configured fields to application storage columns and await adapter transforms.
     pub async fn storage_fields(&self, input: FieldMap, create: bool) -> AuthResult<FieldMap> {
-        self.storage_fields_async(input, create, false).await
+        self.storage_fields_async(input, create, false, |_, _, value| Ok(value))
+            .await
     }
 
     async fn storage_fields_async(
@@ -254,6 +257,7 @@ impl UserConfig {
         input: FieldMap,
         create: bool,
         preserve_id: bool,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
         let mut output = FieldMap::new();
         for (name, field) in self.fields() {
@@ -261,10 +265,11 @@ impl UserConfig {
                 continue;
             }
             if let Some(value) = field.storage_input(input.get(name), create).await? {
-                let _ = output.insert(
-                    resolve_field_name(field.field_name.as_deref(), name).to_owned(),
-                    value,
-                );
+                let storage = resolve_field_name(field.field_name.as_deref(), name);
+                let value = bind(storage, field, value)?;
+                if !value.is_undefined() {
+                    let _ = output.insert(storage.to_owned(), value);
+                }
             }
         }
         Ok(output)
@@ -284,7 +289,8 @@ impl UserFieldConfig {
             Some(transform) => transform.call(value).await,
             None => Ok(value),
         }?;
-        Ok((!value.is_undefined()).then_some(value))
+        // Serial references convert callback Undefined to NaN before final omission.
+        Ok(Some(value))
     }
 
     // The option skips a field; Undefined can still reach a configured callback.
@@ -292,9 +298,7 @@ impl UserFieldConfig {
         let mut value = input.cloned().unwrap_or_default();
         if value.is_undefined()
             && if create {
-                self.default_value.is_none()
-                    && self.default_value_fn.is_none()
-                    && self.input_transform().is_none()
+                !self.has_storage_default() && self.input_transform().is_none()
             } else {
                 self.on_update.is_none()
             }
@@ -304,6 +308,7 @@ impl UserFieldConfig {
         self.normalize_date(&mut value)?;
         if create
             && (value.is_undefined() || (self.required == Some(true) && value.is_null()))
+            && self.has_storage_default()
             && let Some(default) = self.default_value()
         {
             value = default;
@@ -315,5 +320,13 @@ impl UserFieldConfig {
             value = update();
         }
         Ok(Some(value))
+    }
+
+    fn has_storage_default(&self) -> bool {
+        self.default_value_fn.is_some()
+            || self
+                .default_value
+                .as_ref()
+                .is_some_and(|value| !value.is_undefined())
     }
 }

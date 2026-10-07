@@ -466,16 +466,7 @@ impl UserConfig {
         if let Some(id) = input.get("id") {
             let _ = output.insert("id".into(), id.clone());
         }
-        let transformed = self.storage_fields_async(input, create, true).await?;
-        for (name, field) in self.fields() {
-            if name == "id" {
-                continue;
-            }
-            let storage = resolve_field_name(field.field_name.as_deref(), name);
-            if let Some(value) = transformed.get(storage) {
-                let _ = output.insert(storage.to_owned(), bind(storage, field, value.clone())?);
-            }
-        }
+        output.extend(self.storage_fields_async(input, create, true, bind).await?);
         Ok(output)
     }
 

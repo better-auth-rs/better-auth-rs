@@ -51,7 +51,7 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
     backend: sea_orm::DbBackend,
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<super::record_write::RecordWrite<Entity<M>>> {
-    let core = core
+    let mut core = core
         .into_iter()
         .map(|(name, value)| {
             let column = M::column(&name)?;
@@ -61,38 +61,36 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
             ))
         })
         .collect::<AuthResult<FieldMap>>()?;
-    let mut fields = config
-        .organization_storage_fields(core, input, create)
-        .await?;
-    for (name, field) in config.fields() {
-        if name == "id" {
-            continue;
-        }
-        let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-        if let Some(value) = fields.get_mut(storage_name) {
-            let column = M::column(storage_name)?;
-            let native_json = matches!(
-                column.def().get_column_type(),
-                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-            );
-            *value = crate::reference_id::input_binding(
-                storage_name,
-                field,
-                std::mem::take(value),
-                policy,
-                M::column,
-                |_| native_json,
-                backend,
-            )?;
-        }
-    }
-    crate::reference_id::prepare_fields(
-        &mut fields,
+    crate::reference_id::prepare_core_fields(
+        &mut core,
         policy,
         Some(config),
         M::column,
         M::is_id_reference,
     )?;
+    let fields = config
+        .organization_storage_fields_with_binding(
+            core,
+            input,
+            create,
+            |storage_name, field, value| {
+                let column = M::column(storage_name)?;
+                let native_json = matches!(
+                    column.def().get_column_type(),
+                    sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+                );
+                crate::reference_id::input_binding(
+                    storage_name,
+                    field,
+                    value,
+                    policy,
+                    M::column,
+                    |_| native_json,
+                    backend,
+                )
+            },
+        )
+        .await?;
     let mut active = super::record_write::RecordWrite::<Entity<M>>::default();
     for (name, value) in fields {
         let configured = config.fields().iter().any(|(logical, field)| {

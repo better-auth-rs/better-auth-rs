@@ -94,15 +94,11 @@ impl ModelFields {
             .collect();
         let config = self.fields(EntityRole::ApiKey);
         let mut fields = config
-            .organization_storage_fields(core, extras, create)
+            .organization_storage_fields_with_binding(core, extras, create, |_, field, value| {
+                bind(field, value)
+            })
             .await?;
         let name = optional_string(&mut fields, storage_name(config));
-        for (name, field) in config.fields() {
-            let storage = resolve_field_name(field.field_name.as_deref(), name);
-            if let Some(value) = fields.get_mut(storage) {
-                *value = bind(field, std::mem::take(value))?;
-            }
-        }
         Ok(ApiKeyFieldPatch {
             name,
             additional_fields: fields,

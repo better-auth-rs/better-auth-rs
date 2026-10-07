@@ -126,7 +126,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-sort-field.test.ts
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test user_id_generation_order_tests --test plugin_id_slot_tests --test session_id_policy_tests --test session_initial_defaults_tests --test legacy_schema_integration_tests -- -D warnings
-      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value:: id_slot store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: reference_id::tests:: schema_history field_value:: id_slot store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test user_id_generation_order_tests --test user_record_values_tests \
         --test async_field_transform_tests --test sql_user_extra_output_tests \

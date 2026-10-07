@@ -134,15 +134,17 @@ impl EphemeralStore {
         Ok(rows)
     }
 
-    fn bind_device_code_fields(&self, values: &mut FieldMap) -> AuthResult<()> {
-        for (name, field) in self.model_fields.fields(EntityRole::DeviceCode).fields() {
-            if let Some(value) =
-                values.get_mut(resolve_field_name(field.field_name.as_deref(), name))
-            {
-                *value = self.memory_plugin_field_input(field, std::mem::take(value))?;
-            }
-        }
-        Ok(())
+    async fn device_code_fields_for_storage(
+        &self,
+        scope: crate::SchemaValue<Option<String>>,
+        additional_fields: FieldMap,
+        create: bool,
+    ) -> AuthResult<FieldMap> {
+        self.model_fields
+            .device_code_fields_with_binding(scope, additional_fields, create, |_, field, value| {
+                self.memory_plugin_field_input(field, value)
+            })
+            .await
     }
 }
 
@@ -150,10 +152,8 @@ impl EphemeralStore {
 impl DeviceCodeStore for EphemeralStore {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
         let mut fields = self
-            .model_fields
             .device_code_fields_for_storage(input.scope, input.additional_fields, true)
             .await?;
-        self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let mut device_code = DeviceCode {
             additional_fields: fields,
@@ -208,10 +208,8 @@ impl DeviceCodeStore for EphemeralStore {
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
         let mut fields = self
-            .model_fields
             .device_code_fields_for_storage(update.scope, update.additional_fields, false)
             .await?;
-        self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let id = self.memory_primary_id_query(&id.field_value())?;
         let (snapshot, source) = self
@@ -254,10 +252,8 @@ impl DeviceCodeStore for EphemeralStore {
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
         let mut fields = self
-            .model_fields
             .device_code_fields_for_storage(update.scope, update.additional_fields, false)
             .await?;
-        self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let id = crate::SchemaValue::<String>::from_field(
             self.memory_primary_id_query(&id.field_value())?,
@@ -302,10 +298,8 @@ impl DeviceCodeStore for EphemeralStore {
         user_id: &str,
     ) -> AuthResult<bool> {
         let mut fields = self
-            .model_fields
             .device_code_fields_for_storage(Default::default(), Default::default(), false)
             .await?;
-        self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let id = crate::SchemaValue::<String>::from_field(
             self.memory_primary_id_query(&id.field_value())?,

@@ -43,7 +43,13 @@ pub(super) fn apply<M: SeaOrmPluginModel>(
     mut fields: FieldMap,
     policy: &IdGeneration,
 ) -> AuthResult<()> {
-    crate::reference_id::prepare_fields(&mut fields, policy, None, M::column, M::is_id_reference)?;
+    crate::reference_id::prepare_core_fields(
+        &mut fields,
+        policy,
+        None,
+        M::column,
+        M::is_id_reference,
+    )?;
     for (name, value) in fields {
         active.native_field(M::column(&name)?, value);
     }

@@ -39,33 +39,33 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         additional_fields: FieldMap,
         create: bool,
     ) -> AuthResult<super::plugin_models::Write<P::DeviceCode>> {
-        let config = self.model_fields.fields(EntityRole::DeviceCode);
-        let mut fields = self
-            .model_fields
-            .device_code_fields_for_storage(scope, additional_fields, create)
-            .await?;
         let backend = self.connection().get_database_backend();
-        for (name, field) in config.fields() {
-            let storage = resolve_field_name(field.field_name.as_deref(), name);
-            if let Some(value) = fields.get_mut(storage) {
-                *value = crate::reference_id::input_binding(
-                    storage,
-                    field,
-                    std::mem::take(value),
-                    self.config().advanced.database.generate_id(),
-                    P::DeviceCode::column,
-                    |name| {
-                        P::DeviceCode::column(name).is_ok_and(|column| {
-                            matches!(
-                                column.def().get_column_type(),
-                                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-                            )
-                        })
-                    },
-                    backend,
-                )?;
-            }
-        }
+        let fields = self
+            .model_fields
+            .device_code_fields_with_binding(
+                scope,
+                additional_fields,
+                create,
+                |storage, field, value| {
+                    crate::reference_id::input_binding(
+                        storage,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        P::DeviceCode::column,
+                        |name| {
+                            P::DeviceCode::column(name).is_ok_and(|column| {
+                                matches!(
+                                    column.def().get_column_type(),
+                                    sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+                                )
+                            })
+                        },
+                        backend,
+                    )
+                },
+            )
+            .await?;
         let mut active = super::plugin_models::Write::<P::DeviceCode>::default();
         for (name, value) in fields {
             active.field(P::DeviceCode::column(&name)?, value);
