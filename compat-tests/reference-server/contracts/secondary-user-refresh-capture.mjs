@@ -220,7 +220,7 @@ async function captureCase(backend, scenario) {
       assert.ok(event.ttl <= Math.floor((expiresAt.getTime() - start) / 1000));
       event.ttl = "<validated-session-ttl>";
     }
-    verifyCase(scenario, before, afterReturn, after, events, outcome);
+    verifyCase(backend, scenario, before, afterReturn, after, events, outcome);
     return normalize({ backend, scenario: scenario.name, transaction: scenario.transaction, before, events, outcome, afterReturn, after }, updatedAt);
   } finally {
     for (const gate of Object.values(gates)) gate.release.resolve();
@@ -228,7 +228,7 @@ async function captureCase(backend, scenario) {
   }
 }
 
-function verifyCase(scenario, before, afterReturn, after, events, outcome) {
+function verifyCase(backend, scenario, before, afterReturn, after, events, outcome) {
   const hooks = events.filter(event => event.kind.startsWith("hook."));
   assert.deepEqual(hooks.map(event => event.kind), scenario.cancel || scenario.rollback
     ? ["hook.before"] : ["hook.before", "hook.after"]);
@@ -256,8 +256,15 @@ function verifyCase(scenario, before, afterReturn, after, events, outcome) {
     assert.equal(outcome.value.name, "Updated");
   }
   const logs = events.filter(event => event.kind === "logger");
-  assert.equal(logs.length, errorSource ? 0 : 1);
-  for (const log of logs) {
+  const transactionLogs = scenario.transaction ? [{
+    kind: "logger", level: "debug",
+    message: `[${backend === "memory" ? "Memory Adapter" : "Kysely Adapter"}] - Using provided transaction implementation.`,
+    args: [],
+  }] : [];
+  assert.deepEqual(logs.slice(0, transactionLogs.length), transactionLogs);
+  const refreshLogs = logs.slice(transactionLogs.length);
+  assert.equal(refreshLogs.length, errorSource ? 0 : 1, `${backend}/${scenario.name}: ${JSON.stringify(logs)}`);
+  for (const log of refreshLogs) {
     assert.equal(log.level, "error");
     assert.equal(log.message, refreshMessage);
     assert.equal(log.args.length, 1);
