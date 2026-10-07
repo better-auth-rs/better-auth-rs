@@ -12,6 +12,8 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+Member/User reference capture CI 37644872964 at `9eea953` passed seventeen scenarios, 34 empty-reader boundaries, and 136 Memory/SQLite cases with native joins enabled and disabled. Source SHA, artifact checksums, and repeated captures match. The fixture preserves both generic adapter results and Organization projections, including reverse relations that produce an array and missing-child failures. This is upstream evidence; Rust still uses the fixed Member/User relation.
+
 Plugin-fields CI 37642331117, attempt 2, passed at `61a1a50`. User-fields CI 37642323409, attempt 2, reached test Clippy and found outdated JSON access, redundant conversions, and test lint annotations. Those issues are corrected without changing behavior assertions; user-fields behavior acceptance remains pending.
 
 Memory sorting capture CI 37643457826 at `4e76fd1` passed byte-identical repeat sampling. Its eleven scenarios and 31 × 31 string comparison matrix preserve the distinction between Memory locale collation and API Key cache relational comparison. Runtime locale and ICU data are recorded separately. Rust Memory sorting still requires a collation implementation.
