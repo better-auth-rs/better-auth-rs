@@ -410,21 +410,20 @@ mod concurrency_tests;
 
 #[cfg(test)]
 mod start_tests {
+    use super::super::record_bindings::utf16_string;
     use super::*;
+    use better_auth_core::ApiKeyStart;
 
     #[test]
     fn database_text_conversion_preserves_backend_boundaries() {
         let split = ApiKeyStart::prefix("😀abcdefgh", 1);
-        assert_eq!(
-            start_for_database(split.clone(), DbBackend::Sqlite).unwrap(),
-            "���"
-        );
+        assert_eq!(utf16_string(&split, DbBackend::Sqlite), "���");
         for backend in [DbBackend::Postgres, DbBackend::MySql] {
-            assert_eq!(start_for_database(split.clone(), backend).unwrap(), "�");
+            assert_eq!(utf16_string(&split, backend), "�");
         }
         for backend in [DbBackend::Sqlite, DbBackend::Postgres, DbBackend::MySql] {
             assert_eq!(
-                start_for_database(ApiKeyStart::prefix("😀abcdefgh", 6), backend).unwrap(),
+                utf16_string(&ApiKeyStart::prefix("😀abcdefgh", 6), backend),
                 "😀abcd"
             );
         }

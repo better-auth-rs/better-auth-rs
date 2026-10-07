@@ -768,18 +768,19 @@ impl<S: AuthSchema> BetterAuth<S> {
                 })?;
 
         if body
-            .get("email")
-            .is_some_and(better_auth_core::user_fields::is_truthy)
+            .remove("email")
+            .map(better_auth_core::FieldValue::from_json)
+            .transpose()?
+            .is_some_and(|value| value.is_truthy())
         {
             return Err(AuthError::bad_request("Email can not be updated"));
         }
-        let _ = body.remove("email");
 
         let clear_phone_number = context.get_metadata("phone-number.enabled")
             == Some(&serde_json::Value::Bool(true))
             && body.get("phoneNumber") == Some(&serde_json::Value::Null);
-        let name = better_auth_core::SchemaValue::from_json(body.remove("name"));
-        let image = better_auth_core::SchemaValue::from_json(body.remove("image"));
+        let name = better_auth_core::SchemaValue::from_json(body.remove("name"))?;
+        let image = better_auth_core::SchemaValue::from_json(body.remove("image"))?;
         let additional_fields = context.parse_user_input(&body, false)?;
 
         let has_changes = clear_phone_number

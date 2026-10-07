@@ -34,7 +34,16 @@ pub(super) fn configuration<'a>(
             }
             // JSON omits function-valued attributes. Never invoke application callbacks for telemetry.
             if field.default_value_fn.is_none() {
-                option(&mut value, "defaultValue", field.default_value.as_ref())?;
+                option(
+                    &mut value,
+                    "defaultValue",
+                    field
+                        .default_value
+                        .as_ref()
+                        .map(better_auth_core::FieldValue::json)
+                        .transpose()?
+                        .flatten(),
+                )?;
             }
             if field.transform.is_some() {
                 let _ = value.insert("transform".into(), json!({}));
