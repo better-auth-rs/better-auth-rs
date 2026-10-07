@@ -87,18 +87,22 @@ fn compare_metadata(actual: &Value, expected: &Value) {
         actual.pointer("/systemInfo/deploymentVendor"),
         expected.pointer("/systemInfo/deploymentVendor")
     );
-    for key in [
-        "systemRelease",
-        "cpuCount",
-        "cpuModel",
-        "cpuSpeed",
-        "memory",
-        "isWSL",
-    ] {
+    for key in ["cpuCount", "cpuModel", "cpuSpeed", "memory"] {
         assert_eq!(
             actual.get("systemInfo").and_then(|system| system.get(key)),
             Some(&Value::Null),
             "{key}"
+        );
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        assert_eq!(
+            actual.pointer("/systemInfo/systemRelease"),
+            Some(&Value::Null)
+        );
+        assert_eq!(
+            actual.pointer("/systemInfo/isWSL"),
+            Some(&Value::Bool(false))
         );
     }
     assert!(
@@ -111,16 +115,44 @@ fn compare_metadata(actual: &Value, expected: &Value) {
     );
 }
 
-fn compare_docker(actual: &Value, expected: &Value) -> AuthResult<()> {
-    let docker = expected
-        .pointer("/systemInfo/isDocker")
-        .and_then(Value::as_bool)
-        .ok_or_else(|| AuthError::internal("missing upstream Docker observation"))?;
+fn compare_host(actual: &Value, expected: &Value) -> AuthResult<()> {
+    let actual_system = actual
+        .get("systemInfo")
+        .and_then(Value::as_object)
+        .ok_or_else(|| AuthError::internal("missing Rust system metadata"))?;
+    let expected_system = expected
+        .get("systemInfo")
+        .and_then(Value::as_object)
+        .ok_or_else(|| AuthError::internal("missing upstream system observation"))?;
     assert_eq!(
-        actual.pointer("/systemInfo/isDocker"),
-        Some(&Value::Bool(docker)),
-        "Docker detection must match the upstream event from this runner"
+        actual_system.keys().collect::<Vec<_>>(),
+        expected_system.keys().collect::<Vec<_>>(),
+        "system metadata keys and order must match the upstream event from this runner"
     );
+    for key in ["isDocker", "isWSL"] {
+        let pointer = format!("/systemInfo/{key}");
+        let value = expected
+            .pointer(&pointer)
+            .and_then(Value::as_bool)
+            .ok_or_else(|| AuthError::internal(format!("missing upstream {key} observation")))?;
+        assert_eq!(
+            actual.pointer(&pointer),
+            Some(&Value::Bool(value)),
+            "{key} must match the upstream event from this runner"
+        );
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let release = expected
+            .pointer("/systemInfo/systemRelease")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AuthError::internal("missing upstream release observation"))?;
+        assert_eq!(
+            actual.pointer("/systemInfo/systemRelease"),
+            Some(&json!(release)),
+            "Linux release must match the upstream event from this runner"
+        );
+    }
     Ok(())
 }
 
@@ -194,7 +226,7 @@ async fn environment_case() -> AuthResult<()> {
         let direct = observation
             .pointer("/direct/0/payload")
             .ok_or_else(|| AuthError::internal("missing upstream direct telemetry event"))?;
-        compare_docker(&metadata, direct)?;
+        compare_host(&metadata, direct)?;
         let upstream_events = observation
             .get("auth")
             .and_then(Value::as_array)
@@ -204,7 +236,7 @@ async fn environment_case() -> AuthResult<()> {
             let payload = upstream_event
                 .get("payload")
                 .ok_or_else(|| AuthError::internal("missing upstream auth telemetry payload"))?;
-            compare_docker(&event.payload, payload)?;
+            compare_host(&event.payload, payload)?;
         }
     }
     Ok(())

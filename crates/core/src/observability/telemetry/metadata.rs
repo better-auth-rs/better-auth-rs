@@ -117,19 +117,15 @@ pub(super) fn initialization_metadata() -> Map<String, Value> {
     let mut system_info = Map::from_iter([
         ("deploymentVendor".into(), json!(vendor())),
         ("systemPlatform".into(), json!(platform)),
-        ("systemArchitecture".into(), json!(architecture)),
     ]);
-    // Kernel, CPU, RAM, and WSL metadata still require an upstream-compatible native provider.
-    for key in [
-        "systemRelease",
-        "cpuCount",
-        "cpuModel",
-        "cpuSpeed",
-        "memory",
-        "isWSL",
-    ] {
+    let kernel = host::kernel_info();
+    let _ = system_info.insert("systemRelease".into(), json!(kernel.release));
+    let _ = system_info.insert("systemArchitecture".into(), json!(architecture));
+    // CPU and RAM metadata still require an upstream-compatible native provider.
+    for key in ["cpuCount", "cpuModel", "cpuSpeed", "memory"] {
         let _ = system_info.insert(key.into(), Value::Null);
     }
+    let _ = system_info.insert("isWSL".into(), json!(kernel.is_wsl));
     let _ = system_info.insert("isDocker".into(), json!(host::is_docker()));
     if std::io::stdout().is_terminal() {
         let _ = system_info.insert("isTTY".into(), Value::Bool(true));

@@ -65,3 +65,6 @@ futures-util = "0.3.34"
 default = []
 redis-cache = ["dep:redis"]
 axum = ["dep:axum"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { workspace = true, features = ["feature"] }
