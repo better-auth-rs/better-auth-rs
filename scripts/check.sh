@@ -78,8 +78,8 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test user_id_generation_order_tests -- -D warnings
-      cargo test --locked -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value:: store::ephemeral::user_serial_tests:: store::ephemeral::rows::tests::
-      cargo test --locked --features axum,seaorm2,redis-cache \
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value:: store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test user_id_generation_order_tests --test user_record_values_tests \
         --test async_field_transform_tests --test sql_user_extra_output_tests \
         --test user_sort_field_tests --test schema_join_reference_tests \
