@@ -1,6 +1,7 @@
 //! Native joins retain child row references selected by the original raw query.
 
 use super::rows::RowRef;
+use super::sessions::SessionSource;
 use super::*;
 use crate::session::SessionData;
 use crate::store::schema::resolve_field_name;
@@ -327,7 +328,10 @@ impl EphemeralStore {
         &self,
         rows: Vec<(SessionView, Option<UserRef>)>,
     ) -> AuthResult<Vec<SessionSnapshot>> {
-        let sessions = rows.iter().map(|(session, _)| session.clone()).collect();
+        let sessions = rows
+            .iter()
+            .map(|(session, _)| SessionSource::Snapshot(Box::new(session.clone())))
+            .collect();
         self.output_sessions_batches_then(sessions, |ready| {
             let rows = &rows;
             async move {

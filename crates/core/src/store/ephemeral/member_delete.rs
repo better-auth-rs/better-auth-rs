@@ -23,6 +23,7 @@ impl EphemeralStore {
             &organization_id,
         )?;
         let user_id = self.organization_primary_id(&user_id)?;
+        let user_id = Self::project_id(&user_id)?;
         let user_id = user_id.typed()?;
         let teams = {
             let mut state = self.lock()?;

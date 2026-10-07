@@ -284,7 +284,7 @@ pub trait AuthTwoFactor:
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn secret(&self) -> &str;
     fn backup_codes(&self) -> &str;
-    fn user_id(&self) -> Cow<'_, str>;
+    fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
     fn verified(&self) -> Option<bool>;
     fn failed_verification_count(&self) -> Option<i64>;
     fn locked_until(&self) -> Option<crate::FieldDate>;
@@ -339,7 +339,7 @@ pub trait AuthPasskey:
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> &SchemaValue<Option<String>>;
     fn public_key(&self) -> &str;
-    fn user_id(&self) -> Cow<'_, str>;
+    fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
     fn credential_id(&self) -> &str;
     fn counter(&self) -> u64;
     fn device_type(&self) -> &str;

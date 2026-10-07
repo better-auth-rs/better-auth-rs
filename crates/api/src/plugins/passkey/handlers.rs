@@ -382,7 +382,7 @@ pub(super) async fn verify_authentication_core(
 
     let Some(user) = ctx
         .database
-        .get_user_by_id(updated_passkey.user_id().as_ref())
+        .get_user_by_id_field(&updated_passkey.user_id().into_owned())
         .await?
     else {
         return response_message(500, "User not found");
@@ -427,7 +427,7 @@ pub(super) async fn delete_passkey_core(
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
 
-    if user.id().into_owned() != passkey.user_id().as_ref() {
+    if user.id() != passkey.user_id() {
         return Err(AuthError::forbidden("Unauthorized"));
     }
 
@@ -446,7 +446,7 @@ pub(super) async fn update_passkey_core(
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
 
-    if user.id().into_owned() != passkey.user_id().as_ref() {
+    if user.id() != passkey.user_id() {
         return Err(AuthError::forbidden(
             "You are not allowed to register this passkey",
         ));

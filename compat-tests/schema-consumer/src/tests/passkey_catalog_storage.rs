@@ -60,7 +60,7 @@ where
     let mut expected = Passkey {
         additional_fields: Default::default(),
         id: created.id.clone(),
-        user_id: input.user_id,
+        user_id: input.user_id.into(),
         name: input.name,
         public_key: input.public_key,
         credential_id: input.credential_id,

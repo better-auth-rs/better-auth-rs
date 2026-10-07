@@ -1,4 +1,5 @@
 use super::hooks::CommittedWrite;
+use super::sessions::SessionSource;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, SessionUpdate};
 
@@ -140,11 +141,14 @@ impl EphemeralStore {
         }
         let session = self
             .raw("session", "update", |state| {
-                let Some(mut session) = state.sessions.find_mut(|row| row.token == token)? else {
+                let Some(source) = state.sessions.first_ref(|row| row.token == token)? else {
                     return Ok(None);
                 };
-                update.apply(&mut session, id, user_id);
-                Ok(Some(session.clone()))
+                source.write(|session| {
+                    update.apply(session, id, user_id);
+                    Ok(())
+                })?;
+                Ok(Some(SessionSource::Live(source)))
             })
             .await?;
         let session =
@@ -169,10 +173,9 @@ impl EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .snapshot()?
-                        .iter()
-                        .filter(|row| matches(row))
-                        .cloned()
+                        .select_refs(matches)?
+                        .into_iter()
+                        .map(SessionSource::Live)
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
                     None,

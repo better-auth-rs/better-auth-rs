@@ -20,16 +20,8 @@ impl EphemeralStore {
         &self,
         value: &crate::SchemaValue<String>,
     ) -> AuthResult<crate::SchemaValue<String>> {
-        // Organization records store textual primary IDs.
-        if matches!(
-            self.config.advanced.database.generate_id(),
-            crate::id::IdGeneration::Serial
-        ) {
-            let number = crate::query::field_number(&value.field_value())?;
-            Ok(crate::schema_value::number_string(number).into())
-        } else {
-            Ok(value.clone())
-        }
+        self.memory_primary_id_query(&value.field_value())
+            .map(crate::SchemaValue::from_field)
     }
 
     pub(super) fn organization_reference_query(

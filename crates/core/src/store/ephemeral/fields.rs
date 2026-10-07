@@ -33,6 +33,14 @@ fn decode_record<T: MemoryOrganizationRecord>(fields: FieldMap) -> AuthResult<T>
     T::from_field_values(fields)
 }
 
+fn decode_output_record<T: MemoryOrganizationRecord>(mut fields: FieldMap) -> AuthResult<T> {
+    if let Some(id) = fields.get_mut("id") {
+        *id = EphemeralStore::project_id(&crate::SchemaValue::from_field(id.clone()))?
+            .into_field_value();
+    }
+    decode_record(fields)
+}
+
 #[tokio::test]
 async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
     use crate::{
@@ -266,6 +274,16 @@ impl EphemeralStore {
         schema: &crate::user_fields::UserConfig,
         fields: &mut FieldMap,
     ) -> AuthResult<()> {
+        if matches!(
+            self.config.advanced.database.generate_id(),
+            crate::id::IdGeneration::Serial
+        ) && let Some(id) = fields.remove("id")
+        {
+            let number = crate::query::field_number(&id)?;
+            if id.truthy() && !number.is_nan() {
+                let _ = fields.insert("id".into(), Value::Number(number));
+            }
+        }
         for (name, field) in schema.fields() {
             if name == "id" {
                 continue;
@@ -351,7 +369,9 @@ impl EphemeralStore {
             let rows = values
                 .iter()
                 .enumerate()
-                .map(|(index, row)| row.read(|value| Ok((index, value.clone()))))
+                .map(|(index, row)| {
+                    row.read(|value| Ok((index, decode_output_record(object(value)?)?)))
+                })
                 .collect::<AuthResult<Vec<_>>>()?;
             let mut rows = complete(rows).await?;
             rows.sort_unstable_by_key(|(index, _)| *index);
@@ -397,7 +417,11 @@ impl EphemeralStore {
                         )
                         .await?;
                         crate::user_fields::assign_output(output, name, field, value)?;
-                    } else if let Some(value) = value {
+                    } else if let Some(mut value) = value {
+                        if name == "id" {
+                            value = Self::project_id(&crate::SchemaValue::from_field(value))?
+                                .into_field_value();
+                        }
                         let _ = output.insert(name.to_owned(), value);
                     }
                     Ok(())
@@ -416,7 +440,10 @@ impl EphemeralStore {
     ) -> AuthResult<Vec<T>> {
         let schema = self.field_config(role)?;
         if schema.fields().is_empty() {
-            return Ok(values);
+            return values
+                .iter()
+                .map(|value| decode_output_record(object(value)?))
+                .collect();
         }
         let records = values
             .iter()
@@ -426,7 +453,7 @@ impl EphemeralStore {
             .organization_output_memory_records(records)
             .await?
             .into_iter()
-            .map(decode_record)
+            .map(decode_output_record)
             .collect()
     }
 
@@ -441,7 +468,12 @@ impl EphemeralStore {
     {
         let schema = self.field_config(role)?;
         if schema.fields().is_empty() {
-            let mut rows = complete(values.into_iter().enumerate().collect()).await?;
+            let values = values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| Ok((index, decode_output_record(object(value)?)?)))
+                .collect::<AuthResult<Vec<_>>>()?;
+            let mut rows = complete(values).await?;
             rows.sort_unstable_by_key(|(index, _)| *index);
             return Ok(rows.into_iter().map(|(_, row)| row).collect());
         }
@@ -452,7 +484,7 @@ impl EphemeralStore {
         schema
             .organization_output_memory_records_batches_then(
                 records,
-                |_, fields| decode_record(fields),
+                |_, fields| decode_output_record(fields),
                 complete,
             )
             .await
@@ -464,6 +496,12 @@ impl EphemeralStore {
         value: T,
     ) -> AuthResult<T> {
         Ok(self.output_records(role, vec![value]).await?.remove(0))
+    }
+
+    pub(super) fn output_team_member(mut row: crate::TeamMember) -> AuthResult<crate::TeamMember> {
+        row.id = Self::project_id(&row.id)?;
+        row.team_id = Self::project_id(&row.team_id)?;
+        Ok(row)
     }
 }
 

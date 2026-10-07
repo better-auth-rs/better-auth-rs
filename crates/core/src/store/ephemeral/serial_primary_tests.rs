@@ -1,6 +1,8 @@
 use super::*;
 
+mod device;
 mod fixture;
+mod organization;
 mod plugin_credentials;
 mod session_plugins;
 

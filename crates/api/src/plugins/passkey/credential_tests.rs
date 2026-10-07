@@ -172,7 +172,7 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
             let mut row = Passkey {
                 additional_fields: Default::default(),
                 id: "passkey-row".to_owned().into(),
-                user_id: String::from_utf8(OWNER.to_vec())?,
+                user_id: String::from_utf8(OWNER.to_vec())?.into(),
                 name: Some("Personal key".to_owned()).into(),
                 public_key: metadata.public_key.clone(),
                 credential_id: URL_SAFE_NO_PAD.encode(registered.cred.cred_id.as_ref()),
@@ -219,7 +219,7 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                 assert_eq!(result.counter(), counter);
                 assert!(u64::from(result.counter()) > row.counter);
                 assert!(result.user_verified());
-                assert_eq!(row.user_id.as_bytes(), OWNER);
+                assert_eq!(row.user_id.typed()?.as_bytes(), OWNER);
                 match stored.authentication_update(result.counter())? {
                     UpdatePasskeyAuthentication::Native { counter } => {
                         assert_eq!(storage, PasskeyStorage::Native);

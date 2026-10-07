@@ -19,7 +19,8 @@ pub struct TwoFactor {
     #[serde(rename = "backupCodes")]
     pub backup_codes: String,
     #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
     /// Whether the authenticator secret has completed enrollment.
     pub verified: Option<bool>,
     /// Consecutive failed sign-in verifications across factors and challenges.
@@ -120,7 +121,8 @@ pub struct Passkey {
     #[serde(rename = "publicKey")]
     pub public_key: String,
     #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
     #[serde(rename = "credentialID")]
     pub credential_id: String,
     pub counter: u64,
@@ -468,8 +470,8 @@ impl AuthTwoFactor for TwoFactor {
     fn backup_codes(&self) -> &str {
         &self.backup_codes
     }
-    fn user_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.user_id)
+    fn user_id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.user_id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn verified(&self) -> Option<bool> {
         self.verified
@@ -620,8 +622,8 @@ impl AuthPasskey for Passkey {
     fn public_key(&self) -> &str {
         &self.public_key
     }
-    fn user_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.user_id)
+    fn user_id(&self) -> SchemaValue<Cow<'_, str>> {
+        self.user_id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
     fn credential_id(&self) -> &str {
         &self.credential_id

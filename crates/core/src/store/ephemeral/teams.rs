@@ -36,7 +36,9 @@ impl TeamStore for EphemeralStore {
             .await?;
         {
             let mut state = self.lock()?;
-            self.assign_insert_serial_id(&mut team.id, state.teams.len());
+            if let Some(id) = self.next_serial_id(state.teams.len()) {
+                team.id = crate::SchemaValue::from_field(id);
+            }
             state.teams.push(team.clone());
         }
         self.output_team(team).await
@@ -94,13 +96,14 @@ impl TeamStore for EphemeralStore {
         self.output_team(team).await
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
-        let id = self.config.advanced.database.generate_id().coerce_id(id)?;
-        let id = id.as_ref();
+        let id = self.organization_query(EntityRole::Team, "id", Value::from(id))?;
+        let public_id = Self::project_id(&id)?;
+        let public_id = public_id.typed()?;
         let (organization_id, snapshot) = {
             let state = self.lock()?;
             let organization_id = state
                 .teams
-                .get(id)?
+                .get(&id)?
                 .ok_or_else(|| AuthError::not_found("Team not found"))?
                 .organization_id;
             let invitation_org = self.organization_query(
@@ -138,7 +141,10 @@ impl TeamStore for EphemeralStore {
             let Some(ids) = invitation.team_id.typed()?.as_ref() else {
                 continue;
             };
-            let retained: Vec<_> = ids.split(',').filter(|team_id| *team_id != id).collect();
+            let retained: Vec<_> = ids
+                .split(',')
+                .filter(|team_id| *team_id != public_id)
+                .collect();
             if retained.len() == ids.split(',').count() {
                 continue;
             }
@@ -156,20 +162,21 @@ impl TeamStore for EphemeralStore {
                     FieldMap::new(),
                 )
                 .await?;
+            let invitation_id = self.organization_primary_id(&invitation.id)?;
             let current = self
                 .lock()?
                 .invitations
-                .get(&invitation.id)?
+                .get(&invitation_id)?
                 .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
             let _ = self
                 .output_invitation(patch.clone().apply(current)?)
                 .await?;
-            updates.push((invitation.id, patch));
+            updates.push((invitation_id, patch));
         }
         let mut state = self.lock()?;
         let team = state
             .teams
-            .get(id)?
+            .get(&id)?
             .ok_or_else(|| AuthError::not_found("Team not found"))?;
         let pending: Vec<_> = state
             .invitations
@@ -206,7 +213,7 @@ impl TeamStore for EphemeralStore {
                 Ok((id, patch.apply(row)?))
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let _ = state.teams.remove(id)?;
+        let _ = state.teams.remove(&id)?;
         state.team_members.retain(|member| member.team_id != id)?;
         for (id, invitation) in updates {
             let _ = state.invitations.replace(&id, invitation)?;
@@ -302,29 +309,18 @@ impl TeamStore for EphemeralStore {
             .generate_id()
             .coerce_id(user_id)?;
         let user_id = user_id.as_ref();
-        let team_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(team_id)?;
-        let team_id = team_id.as_ref();
-        Ok(self
-            .lock()?
+        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
+        self.lock()?
             .team_members
             .snapshot()?
             .iter()
             .find(|member| member.team_id == team_id && member.user_id == user_id)
-            .cloned())
+            .cloned()
+            .map(Self::output_team_member)
+            .transpose()
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
-        let team_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(team_id)?;
-        let team_id = team_id.as_ref();
+        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
         let rows = self
             .lock()?
             .team_members
@@ -332,20 +328,17 @@ impl TeamStore for EphemeralStore {
             .into_iter()
             .filter(|row| row.team_id == team_id)
             .collect();
-        Ok(crate::query::paginate_memory(
+        crate::query::paginate_memory(
             rows,
             Some(self.config.advanced.database.find_many_limit()),
             None,
-        ))
+        )
+        .into_iter()
+        .map(Self::output_team_member)
+        .collect()
     }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
-        let team_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(team_id)?;
-        let team_id = team_id.as_ref();
+        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
         Ok(self
             .lock()?
             .team_members
@@ -380,7 +373,7 @@ impl TeamStore for EphemeralStore {
                 .iter()
                 .find(|member| member.team_id == *team_id && member.user_id == user_id)
             {
-                return Ok(Some(member.clone()));
+                return Self::output_team_member(member.clone()).map(Some);
             }
             (
                 team,
@@ -410,7 +403,7 @@ impl TeamStore for EphemeralStore {
             .iter()
             .find(|member| member.team_id == *team_id && member.user_id == user_id)
         {
-            return Ok(Some(member.clone()));
+            return Self::output_team_member(member.clone()).map(Some);
         }
         let actual = members
             .iter()
@@ -432,9 +425,11 @@ impl TeamStore for EphemeralStore {
             user_id: user_id.to_owned(),
             created_at: Utc::now().into(),
         };
-        self.assign_insert_serial_id(&mut member.id, state.team_members.len());
+        if let Some(id) = self.next_serial_id(state.team_members.len()) {
+            member.id = crate::SchemaValue::from_field(id);
+        }
         state.team_members.push(member.clone());
-        Ok(Some(member))
+        Self::output_team_member(member).map(Some)
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
         let user_id = self
@@ -444,20 +439,15 @@ impl TeamStore for EphemeralStore {
             .generate_id()
             .coerce_id(user_id)?;
         let user_id = user_id.as_ref();
-        let team_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(team_id)?;
-        let team_id = team_id.as_ref();
+        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
+        let team_id = &team_id;
         let (team, members) = {
             let state = self.lock()?;
             (state.teams.get(team_id)?, state.team_members.snapshot()?)
         };
         let selected: Vec<_> = members
             .into_iter()
-            .filter(|row| row.team_id == team_id)
+            .filter(|row| row.team_id == *team_id)
             .collect();
         let deleted = selected.iter().filter(|row| row.user_id == user_id).count();
         let prepared = if let Some(team) = team {
@@ -473,7 +463,7 @@ impl TeamStore for EphemeralStore {
             .team_members
             .snapshot()?
             .into_iter()
-            .filter(|row| row.team_id == team_id)
+            .filter(|row| row.team_id == *team_id)
             .collect();
         if current != selected {
             return Err(AuthError::conflict(
@@ -490,7 +480,7 @@ impl TeamStore for EphemeralStore {
         }
         state
             .team_members
-            .retain(|member| member.team_id != team_id || member.user_id != user_id)?;
+            .retain(|member| member.team_id != *team_id || member.user_id != user_id)?;
         Ok(())
     }
 }
@@ -580,7 +570,9 @@ impl OrganizationRoleStore for EphemeralStore {
             }) {
                 return Err(AuthError::bad_request("Role already exists"));
             }
-            self.assign_insert_serial_id(&mut role.id, state.organization_roles.len());
+            if let Some(id) = self.next_serial_id(state.organization_roles.len()) {
+                role.id = crate::SchemaValue::from_field(id);
+            }
             state.organization_roles.push(role.clone());
         }
         self.output_organization_role(role).await

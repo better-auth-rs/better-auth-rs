@@ -1,19 +1,34 @@
 use super::hooks::CommittedWrite;
+use super::rows::RowRef;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
 use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 
+pub(super) enum SessionSource {
+    Live(RowRef<SessionView>),
+    Snapshot(Box<SessionView>),
+}
+
+impl SessionSource {
+    fn read<T>(&self, read: impl FnOnce(&SessionView) -> AuthResult<T>) -> AuthResult<T> {
+        match self {
+            Self::Live(source) => source.read(read),
+            Self::Snapshot(row) => read(row),
+        }
+    }
+}
+
 impl EphemeralStore {
-    pub(super) async fn output_session(&self, session: SessionView) -> AuthResult<SessionView> {
+    pub(super) async fn output_session(&self, session: SessionSource) -> AuthResult<SessionView> {
         // Projection preserves the one input row.
         Ok(self.output_sessions(vec![session]).await?.remove(0))
     }
 
     pub(super) async fn output_sessions(
         &self,
-        sessions: Vec<SessionView>,
+        sessions: Vec<SessionSource>,
     ) -> AuthResult<Vec<SessionView>> {
         self.output_sessions_batches_then(sessions, |ready| std::future::ready(Ok(ready)))
             .await
@@ -21,7 +36,7 @@ impl EphemeralStore {
 
     pub(super) async fn output_sessions_batches_then<R: Send, F>(
         &self,
-        sessions: Vec<SessionView>,
+        sessions: Vec<SessionSource>,
         complete: impl Fn(Vec<(usize, SessionView)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
@@ -29,31 +44,40 @@ impl EphemeralStore {
     {
         let mut rows: Vec<_> = sessions
             .into_iter()
-            .map(|mut session| {
-                let storage = session.field_values()?;
+            .map(|source| {
+                let mut session = source.read(|row| Ok(row.clone()))?;
                 session.additional_fields.clear();
-                Ok((session, storage))
+                Ok((session, source))
             })
             .collect::<AuthResult<_>>()?;
-        crate::user_fields::project_fields_batches_then(
+        crate::user_fields::project_source_fields_batches_then(
             &mut rows,
             self.session_config.fields(),
-            |(session, storage), name, field| {
-                Box::pin(async move {
-                    let value = storage
+            |(_, source), name, field| {
+                source.read(|row| {
+                    let storage = row.field_values()?;
+                    Ok(storage
                         .get(resolve_field_name(field.field_name.as_deref(), name))
                         .or_else(|| storage.get(name))
-                        .cloned();
-                    let value = field
-                        .adapter_output(value.unwrap_or_default(), field.references_id())
-                        .await?;
+                        .cloned()
+                        .unwrap_or_default())
+                })
+            },
+            |(session, _), name, field, value| {
+                Box::pin(async move {
+                    let value = field.adapter_output(value, field.references_id()).await?;
                     let _ = session.additional_fields.insert(name.to_owned(), value);
                     Ok(())
                 })
             },
-            |_, (session, _)| {
+            |_, (session, source)| {
                 let mut session = session.clone();
-                session.id = Self::project_id(&session.id)?;
+                session.id = if self.session_config.fields().contains_key("id") {
+                    Self::project_id(&session.id)?
+                } else {
+                    // The implicit ID slot follows application fields; earlier native fields keep their selected values.
+                    source.read(|row| Self::project_id(&row.id))?
+                };
                 if self.session_config.fields().contains_key("userId") {
                     session.user_id = crate::SchemaValue::from_field(
                         session
@@ -242,15 +266,15 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 }
             }
         }
-        self.raw("session", "create", |state| {
-            if let Some(id) = self.next_serial_id(state.sessions.len()) {
-                session.id = crate::SchemaValue::from_field(id);
-            }
-            state.sessions.push(session.clone());
-            Ok(())
-        })
-        .await?;
-        let session = self.output_session(session).await?;
+        let source = self
+            .raw("session", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.sessions.len()) {
+                    session.id = crate::SchemaValue::from_field(id);
+                }
+                Ok(SessionSource::Live(state.sessions.push_ref(session)))
+            })
+            .await?;
+        let session = self.output_session(source).await?;
         self.after_create_runtime_session(&session, crate::hooks::current_request_hook_context())
             .await?;
         Ok(Some(session))
@@ -259,7 +283,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
         let session = self
             .raw("session", "findOne", |state| {
-                state.sessions.find(|row| row.token == token)
+                Ok(state
+                    .sessions
+                    .first_ref(|row| row.token == token)?
+                    .map(SessionSource::Live))
             })
             .await?;
         futures_util::future::OptionFuture::from(
@@ -296,14 +323,14 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .snapshot()?
-                        .into_iter()
-                        .filter(|session| {
+                        .select_refs(|session| {
                             tokens.contains(&session.token)
                                 && (!only_active
                                     || session.expires_at.milliseconds()
                                         > now.timestamp_millis() as f64)
-                        })
+                        })?
+                        .into_iter()
+                        .map(SessionSource::Live)
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
                     None,
@@ -369,10 +396,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .snapshot()?
-                        .iter()
-                        .filter(|session| session.user_id.field_value().strict_equals(&user_id))
-                        .cloned()
+                        .select_refs(|session| {
+                            session.user_id.field_value().strict_equals(&user_id)
+                        })?
+                        .into_iter()
+                        .map(SessionSource::Live)
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
                     None,
@@ -401,7 +429,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
         let session = self
             .raw("session", "findOne", |state| {
-                state.sessions.find(|row| row.token == token)
+                Ok(state
+                    .sessions
+                    .first_ref(|row| row.token == token)?
+                    .map(SessionSource::Live))
             })
             .await?;
         // A failed single-row snapshot prevents deletion, unlike a failed batch snapshot.
@@ -509,6 +540,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         .ok_or(AuthError::SessionNotFound)
     }
 }
+
+#[cfg(test)]
+mod live_output_tests;
 
 #[tokio::test]
 async fn invitation_fields_update_atomically_with_team_membership() {

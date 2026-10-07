@@ -122,15 +122,6 @@ impl EphemeralStore {
             .adapter_id(model, supplied, false)
     }
 
-    fn assign_insert_serial_id(&self, id: &mut crate::SchemaValue<String>, row_count: usize) {
-        if matches!(
-            self.config.advanced.database.generate_id(),
-            crate::id::IdGeneration::Serial
-        ) {
-            *id = (row_count + 1).to_string().into();
-        }
-    }
-
     fn next_serial_id(&self, row_count: usize) -> Option<Value> {
         matches!(
             self.config.advanced.database.generate_id(),

@@ -27,7 +27,7 @@ fn api_key(label: &str) -> CreateApiKey {
 fn passkey(label: &str) -> CreatePasskey {
     CreatePasskey {
         additional_fields: FieldMap::new(),
-        user_id: "owner".into(),
+        user_id: "001".into(),
         name: Some(label.into()).into(),
         credential_id: label.into(),
         public_key: "public-key".into(),
@@ -203,6 +203,7 @@ async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -
     for label in ["first", "second", "third"] {
         let created = store.create_passkey(passkey(label)).await?;
         assert!(matches!(created.id.field_value(), Value::String(_)));
+        assert_eq!(created.user_id, "1");
     }
     assert_eq!(
         store
@@ -210,9 +211,13 @@ async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -
             .passkeys
             .snapshot()?
             .iter()
-            .map(|row| row.id.field_value())
+            .map(|row| (row.id.field_value(), row.user_id.field_value()))
             .collect::<Vec<_>>(),
-        [Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)]
+        [
+            (Value::Number(1.0), Value::Number(1.0)),
+            (Value::Number(2.0), Value::Number(1.0)),
+            (Value::Number(3.0), Value::Number(1.0))
+        ]
     );
     let renamed = store.update_passkey_name("001", "renamed").await?;
     assert_eq!(renamed.id, "1");
@@ -229,7 +234,7 @@ async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -
         )
         .await?;
     assert_eq!(updated.id, "1");
-    assert_eq!(updated.user_id, "owner");
+    assert_eq!(updated.user_id, "1");
     assert_eq!(updated.credential.typed()?, "updated-private-credential");
     assert_eq!(updated.counter, 7);
     assert_eq!(required(store.get_passkey_by_id("001").await?)?, updated);
@@ -245,26 +250,39 @@ async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -
         required(store.get_passkey_by_credential_id("reused").await?)?.id,
         "3"
     );
-    assert_eq!(store.list_passkeys_by_user("owner").await?.len(), 2);
+    let mut other = passkey("other-owner");
+    other.user_id = "002".into();
+    let other = store.create_passkey(other).await?;
+    assert_eq!(other.user_id, "2");
+    let own = store.list_passkeys_by_user("1").await?;
+    assert_eq!(own.len(), 2);
+    assert_eq!(store.list_passkeys_by_user("001").await?, own);
+    assert!(own.iter().all(|row| row.user_id == "1"));
+    assert_eq!(store.list_passkeys_by_user("002").await?, vec![other]);
     Ok(())
 }
 
 #[tokio::test]
 async fn serial_two_factor_ids_keep_backup_code_and_lockout_guards() -> AuthResult<()> {
     let store = serial_store();
-    let created = store.create_two_factor(two_factor("first")).await?;
+    let created = store.create_two_factor(two_factor("001")).await?;
     assert_eq!(created.id, "1");
-    let second = store.create_two_factor(two_factor("second")).await?;
+    assert_eq!(created.user_id, "1");
+    let second = store.create_two_factor(two_factor("002")).await?;
     assert_eq!(second.id, "2");
+    assert_eq!(second.user_id, "2");
     assert_eq!(
         store
             .lock()?
             .two_factors
             .snapshot()?
             .iter()
-            .map(|row| row.id.field_value())
+            .map(|row| (row.id.field_value(), row.user_id.field_value()))
             .collect::<Vec<_>>(),
-        [Value::Number(1.0), Value::Number(2.0)]
+        [
+            (Value::Number(1.0), Value::Number(1.0)),
+            (Value::Number(2.0), Value::Number(2.0))
+        ]
     );
     let padded = "001".to_owned().into();
     let updated = store
@@ -309,32 +327,46 @@ async fn serial_two_factor_ids_keep_backup_code_and_lockout_guards() -> AuthResu
     store
         .record_two_factor_failure(&padded, 2, &|| Ok(until))
         .await?;
-    let locked = required(store.get_two_factor_by_user_id("first").await?)?;
+    let locked = required(store.get_two_factor_by_user_id("1").await?)?;
     assert_eq!(locked.failed_verification_count, Some(2));
     assert_eq!(locked.locked_until, Some(until.into()));
     store
         .reset_two_factor_failures(&padded, Some(until - chrono::Duration::seconds(1)))
         .await?;
     assert_eq!(
-        required(store.get_two_factor_by_user_id("first").await?)?.failed_verification_count,
+        required(store.get_two_factor_by_user_id("001").await?)?.failed_verification_count,
         Some(2)
     );
     store
         .reset_two_factor_failures(&padded, Some(until))
         .await?;
-    let reset = required(store.get_two_factor_by_user_id("first").await?)?;
+    let reset = required(store.get_two_factor_by_user_id("1").await?)?;
     assert_eq!(reset.failed_verification_count, Some(0));
     assert_eq!(reset.locked_until, None);
     assert_eq!(
-        required(store.get_two_factor_by_user_id("second").await?)?,
+        required(store.get_two_factor_by_user_id("002").await?)?,
         second
     );
-    store.delete_two_factor("first").await?;
-    assert_eq!(store.create_two_factor(two_factor("reused")).await?.id, "2");
-    store.delete_two_factor("second").await?;
-    assert!(store.get_two_factor_by_user_id("second").await?.is_none());
+    let replaced = store
+        .update_two_factor_backup_codes("001", "owner-replacement")
+        .await?;
+    assert_eq!(replaced.user_id, "1");
+    assert_eq!(replaced.backup_codes, "owner-replacement");
     assert_eq!(
-        required(store.get_two_factor_by_user_id("reused").await?)?.id,
+        required(store.get_two_factor_by_user_id("1").await?)?,
+        replaced
+    );
+    assert_eq!(
+        required(store.get_two_factor_by_user_id("2").await?)?,
+        second
+    );
+    store.delete_two_factor("001").await?;
+    assert!(store.get_two_factor_by_user_id("1").await?.is_none());
+    assert_eq!(store.create_two_factor(two_factor("003")).await?.id, "2");
+    store.delete_two_factor("002").await?;
+    assert!(store.get_two_factor_by_user_id("2").await?.is_none());
+    assert_eq!(
+        required(store.get_two_factor_by_user_id("3").await?)?.id,
         "2"
     );
     Ok(())

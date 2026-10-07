@@ -66,8 +66,9 @@ run_stage() {
     runtime-values)
       bun --no-install test \
         ./compat-tests/reference-server/contracts/plugin-display-presence.test.ts \
-        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts
-      cargo clippy --locked --features axum,seaorm2,redis-cache \
+        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
+        ./compat-tests/reference-server/contracts/session-live-output.test.ts
+      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache \
         --test custom_session_fields_tests --test organization_native_fields_tests \
         --test device_runtime_transaction_tests --test device_where_tests \
         --test auth_entity_extra_fields_tests --test legacy_schema_integration_tests \
@@ -77,6 +78,8 @@ run_stage() {
       cargo test --locked -p better-auth-core --lib -- field_value:: \
         store::ephemeral::serial_primary_tests:: \
         store::ephemeral::api_keys::tests:: store::ephemeral::two_factor::tests:: \
+        store::ephemeral::sessions::live_output_tests:: \
+        store::ephemeral::invitation_accept::tests:: \
         store::ephemeral::fields::builtin_policies_transform_typed_records_once_and_preserve_adapter_id \
         types::tests::nullable_user_updates_preserve_omission_null_and_values
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
@@ -97,7 +100,8 @@ run_stage() {
       cargo clippy --locked -p better-auth-core -- -D warnings
       cargo test --locked -p better-auth-core --lib -- \
         store::ephemeral::serial_primary_tests:: store::ephemeral::user_serial_tests:: \
-        store::ephemeral::rows::tests::
+        store::ephemeral::rows::tests:: store::ephemeral::sessions::live_output_tests:: \
+        store::ephemeral::invitation_accept::tests::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test memory_serial_reference_tests --test organization_serial_reference_tests \
         --test native_core_join_tests --test native_memory_join_tests \

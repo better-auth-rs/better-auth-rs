@@ -508,7 +508,8 @@ pub struct PasskeyView {
     #[serde(rename = "credentialID")]
     pub credential_id: String,
     #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub user_id: SchemaValue<String>,
     #[serde(rename = "publicKey")]
     pub public_key: String,
     pub counter: u64,

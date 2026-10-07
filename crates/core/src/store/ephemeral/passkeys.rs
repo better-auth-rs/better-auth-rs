@@ -31,6 +31,7 @@ impl EphemeralStore {
         fields.extend(configured.clone());
         for (snapshot, _) in &mut rows {
             snapshot.additional_fields.clear();
+            snapshot.user_id = Self::project_id(&snapshot.user_id)?;
         }
         project_source_fields_then(
             &mut rows,
@@ -119,7 +120,7 @@ impl PasskeyStore for EphemeralStore {
                 .generated_id("passkey", None, self.lock()?.passkeys.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            user_id: input.user_id,
+            user_id: self.memory_reference_id_input(input.user_id.into())?,
             name: fields.name.unwrap_or_default(),
             credential_id: input.credential_id,
             public_key: input.public_key,
@@ -159,10 +160,13 @@ impl PasskeyStore for EphemeralStore {
     }
 
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
+        let user_id = self.memory_primary_id_query(&crate::FieldValue::from(user_id))?;
         let selected = self
             .raw("passkey", "findMany", |state| {
                 crate::query::paginate_memory(
-                    state.passkeys.select_refs(|row| row.user_id == user_id)?,
+                    state
+                        .passkeys
+                        .select_refs(|row| row.user_id.field_value().strict_equals(&user_id))?,
                     Some(self.config.advanced.database.find_many_limit()),
                     None,
                 )

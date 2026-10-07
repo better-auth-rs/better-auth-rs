@@ -113,7 +113,7 @@ where
     let mut expected = TwoFactor {
         additional_fields: Default::default(),
         id: created.id.clone(),
-        user_id: owner_id.clone(),
+        user_id: owner_id.clone().into(),
         secret: "ordinary-encrypted-secret".into(),
         backup_codes: "ordinary-encrypted-codes".into(),
         verified: Some(false),

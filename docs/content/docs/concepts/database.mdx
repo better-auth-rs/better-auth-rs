@@ -141,6 +141,8 @@ Pure-secondary sessions and API keys use the context generator. The legacy `adva
 
 Runtime records use `SchemaValue<String>` for IDs so `Undefined` remains distinct from an empty string. JSON omits absent IDs. Store and database-hook methods return `UserView` and `SessionView`; `AuthSchema::User` and `AuthSchema::Session` remain typed database mappings. Use `id.typed()?` only when the operation requires a present string ID. Use `id.is_undefined()` to inspect omission. Query application entity models directly when an application needs columns outside its configured auth fields.
 
+`Passkey`, `PasskeyView`, and `TwoFactor` also use `SchemaValue<String>` for `user_id`. Their entity traits return `SchemaValue<Cow<'_, str>>`; `CreatePasskey.user_id` and `CreateTwoFactor.user_id` remain `String`. Memory Serial mode stores numeric user references, returns canonical string references, and binds owner queries such as `"001"` to user `1`. These models still reject additional-field policies that replace `userId`. API Key `referenceId` has no schema reference metadata and remains a literal `String`.
+
 The opt-in PostgreSQL identity regressions use application-owned integer models. They check `Serial` and `Database` modes, session/account foreign keys, public string IDs, transaction commit and rollback, numeric aliases, and reference conversion after an input transform. A separate text-ID table checks forced UUID omission against a `gen_random_uuid()::text` default. Set `BETTER_AUTH_TEST_POSTGRES_URL` to a test database whose role can create schemas, then run:
 
 ```sh

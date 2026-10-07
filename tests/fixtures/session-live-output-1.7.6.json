@@ -1,0 +1,688 @@
+{
+  "version": "1.7.6",
+  "backend": "memory",
+  "idSlot": "implicit",
+  "cases": [
+    {
+      "path": "create",
+      "before": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "label",
+          "Desk"
+        ],
+        [
+          "write",
+          "Desk",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": "1",
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": "101"
+          }
+        ],
+        [
+          "tail",
+          "after:Desk"
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "live-session-desk",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "ipAddress": "",
+        "userAgent": "",
+        "userId": "1",
+        "label": "Desk:out",
+        "tail": "after:Desk:out",
+        "id": "101"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": 101
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "path": "get-native-join",
+      "before": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "before:Desk",
+            "id": 1
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        [
+          "label",
+          "Desk"
+        ],
+        [
+          "write",
+          "Desk",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": "1",
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": "101"
+          }
+        ],
+        [
+          "tail",
+          "before:Desk"
+        ]
+      ],
+      "result": {
+        "session": {
+          "expiresAt": {
+            "type": "date",
+            "value": "2100-01-02T03:04:05.000Z"
+          },
+          "token": "live-session-desk",
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "ipAddress": "",
+          "userAgent": "",
+          "userId": "1",
+          "label": "Desk:out",
+          "tail": "before:Desk:out",
+          "id": "1"
+        },
+        "user": {
+          "name": "Session owner",
+          "email": "owner@session-live-output.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "1"
+        }
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": 101
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "path": "list",
+      "before": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "before:Desk",
+            "id": 1
+          },
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-travel",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Travel",
+            "tail": "before:Travel",
+            "id": 2
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        [
+          "label",
+          "Desk"
+        ],
+        [
+          "label",
+          "Travel"
+        ],
+        [
+          "write",
+          "Desk",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": "1",
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": "101"
+          }
+        ],
+        [
+          "write",
+          "Travel",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-travel",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": "1",
+            "label": "Travel",
+            "tail": "after:Travel",
+            "id": "102"
+          }
+        ],
+        [
+          "tail",
+          "after:Desk"
+        ],
+        [
+          "tail",
+          "after:Travel"
+        ]
+      ],
+      "result": [
+        {
+          "expiresAt": {
+            "type": "date",
+            "value": "2100-01-02T03:04:05.000Z"
+          },
+          "token": "live-session-desk",
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "ipAddress": "",
+          "userAgent": "",
+          "userId": "1",
+          "label": "Desk:out",
+          "tail": "after:Desk:out",
+          "id": "101"
+        },
+        {
+          "expiresAt": {
+            "type": "date",
+            "value": "2100-01-02T03:04:05.000Z"
+          },
+          "token": "live-session-travel",
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "ipAddress": "",
+          "userAgent": "",
+          "userId": "1",
+          "label": "Travel:out",
+          "tail": "after:Travel:out",
+          "id": "102"
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": 101
+          },
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-travel",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Travel",
+            "tail": "after:Travel",
+            "id": 102
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "path": "update",
+      "before": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "before:Desk",
+            "id": 1
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        [
+          "label",
+          "Desk"
+        ],
+        [
+          "write",
+          "Desk",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": "1",
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": "101"
+          }
+        ],
+        [
+          "tail",
+          "after:Desk"
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "live-session-desk",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "ipAddress": "",
+        "userAgent": "",
+        "userId": "1",
+        "label": "Desk:out",
+        "tail": "after:Desk:out",
+        "id": "101"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Session owner",
+            "email": "owner@session-live-output.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2101-01-02T03:04:05.000Z"
+            },
+            "token": "live-session-desk",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "",
+            "userAgent": "",
+            "userId": 1,
+            "label": "Desk",
+            "tail": "after:Desk",
+            "id": 101
+          }
+        ],
+        "verification": []
+      }
+    }
+  ]
+}

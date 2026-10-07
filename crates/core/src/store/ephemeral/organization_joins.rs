@@ -353,8 +353,11 @@ impl EphemeralStore {
             let organizations = rows
                 .iter()
                 .map(|row| {
-                    let id = self.organization_primary_id(&row.organization_id)?;
-                    state.organizations.first_ref(|org| org.id == id)
+                    state.organizations.first_ref(|org| {
+                        org.id
+                            .field_value()
+                            .strict_equals(&row.organization_id.field_value())
+                    })
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
             (rows, organizations)
@@ -438,8 +441,11 @@ impl EphemeralStore {
             let organizations = rows
                 .iter()
                 .map(|row| {
-                    let id = self.organization_primary_id(&row.organization_id)?;
-                    state.organizations.first_ref(|org| org.id == id)
+                    state.organizations.first_ref(|org| {
+                        org.id
+                            .field_value()
+                            .strict_equals(&row.organization_id.field_value())
+                    })
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
             (rows, organizations)

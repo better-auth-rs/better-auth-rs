@@ -22,6 +22,7 @@ impl EphemeralStore {
         mut snapshot: TwoFactor,
         source: RowRef<TwoFactor>,
     ) -> AuthResult<TwoFactor> {
+        snapshot.user_id = Self::project_id(&snapshot.user_id)?;
         let mut output = FieldMap::new();
         for (name, field) in self.model_fields.fields(EntityRole::TwoFactor).fields() {
             let value = source.read(|row| {
@@ -212,7 +213,7 @@ impl TwoFactorStore for EphemeralStore {
                 .generated_id("twoFactor", None, self.lock()?.two_factors.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            user_id: input.user_id,
+            user_id: self.memory_reference_id_input(input.user_id.into())?,
             secret: input.secret,
             backup_codes: input.backup_codes,
             verified: Some(input.verified),
@@ -233,11 +234,12 @@ impl TwoFactorStore for EphemeralStore {
         self.project_two_factor(snapshot, source).await
     }
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
+        let user_id = self.memory_primary_id_query(&crate::FieldValue::from(user_id))?;
         let selected = self
             .raw("twoFactor", "findOne", |state| {
                 state
                     .two_factors
-                    .first_ref(|factor| factor.user_id == user_id)?
+                    .first_ref(|factor| factor.user_id.field_value().strict_equals(&user_id))?
                     .map(|source| {
                         let snapshot = source.read(|factor| Ok(factor.clone()))?;
                         Ok((snapshot, source))
@@ -258,9 +260,10 @@ impl TwoFactorStore for EphemeralStore {
         let fields = self
             .prepare_two_factor_fields(FieldMap::new(), false)
             .await?;
+        let user_id = self.memory_primary_id_query(&crate::FieldValue::from(user_id))?;
         self.write_two_factor_row(
             "update",
-            |factor| factor.user_id == user_id,
+            |factor| factor.user_id.field_value().strict_equals(&user_id),
             |factor| {
                 factor.backup_codes = backup_codes.to_owned();
                 factor.additional_fields.extend(fields);
@@ -270,10 +273,11 @@ impl TwoFactorStore for EphemeralStore {
         .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))
     }
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+        let user_id = self.memory_primary_id_query(&crate::FieldValue::from(user_id))?;
         self.raw("twoFactor", "delete", |state| {
             state
                 .two_factors
-                .retain(|factor| factor.user_id != user_id)?;
+                .retain(|factor| !factor.user_id.field_value().strict_equals(&user_id))?;
             Ok(())
         })
         .await

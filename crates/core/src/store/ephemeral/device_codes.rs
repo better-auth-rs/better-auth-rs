@@ -119,7 +119,19 @@ impl EphemeralStore {
         // Only declared application fields are live; authorization fields retain the selected snapshot.
         self.model_fields
             .assign_device_code_output(&mut snapshot, output);
+        snapshot.id = Self::project_id(&snapshot.id)?;
         Ok(snapshot)
+    }
+
+    async fn project_device_code_snapshots(
+        &self,
+        rows: Vec<DeviceCode>,
+    ) -> AuthResult<Vec<DeviceCode>> {
+        let mut rows = self.model_fields.project_device_codes(rows).await?;
+        for row in &mut rows {
+            row.id = Self::project_id(&row.id)?;
+        }
+        Ok(rows)
     }
 
     fn bind_device_code_fields(&self, values: &mut FieldMap) -> AuthResult<()> {
@@ -143,7 +155,7 @@ impl DeviceCodeStore for EphemeralStore {
             .await?;
         self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
-        let device_code = DeviceCode {
+        let mut device_code = DeviceCode {
             additional_fields: fields,
             id: self
                 .generated_id("deviceCode", None, self.lock()?.device_codes.len())?
@@ -164,6 +176,9 @@ impl DeviceCodeStore for EphemeralStore {
         };
         let (snapshot, source) = self
             .raw("deviceCode", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.device_codes.len()) {
+                    device_code.id = crate::SchemaValue::from_field(id);
+                }
                 let source = state.device_codes.push_ref(device_code.clone());
                 Ok((device_code, source))
             })
@@ -198,9 +213,13 @@ impl DeviceCodeStore for EphemeralStore {
             .await?;
         self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let (snapshot, source) = self
             .raw("deviceCode", "update", |state| {
-                let Some(source) = state.device_codes.first_ref(|row| &row.id == id)? else {
+                let Some(source) = state
+                    .device_codes
+                    .first_ref(|row| row.id.field_value().strict_equals(&id))?
+                else {
                     return Ok(None);
                 };
 
@@ -240,9 +259,12 @@ impl DeviceCodeStore for EphemeralStore {
             .await?;
         self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
+        let id = crate::SchemaValue::<String>::from_field(
+            self.memory_primary_id_query(&id.field_value())?,
+        );
         let row = self
             .raw("deviceCode", "update", |state| {
-                let Some(mut device_code) = state.device_codes.get_mut(id)? else {
+                let Some(mut device_code) = state.device_codes.get_mut(&id)? else {
                     return Ok(None);
                 };
 
@@ -269,8 +291,7 @@ impl DeviceCodeStore for EphemeralStore {
             .await?;
         // Successful boolean writes still await the adapter output policy.
         Ok(!self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_snapshots(row.into_iter().collect())
             .await?
             .is_empty())
     }
@@ -286,9 +307,12 @@ impl DeviceCodeStore for EphemeralStore {
             .await?;
         self.bind_device_code_fields(&mut fields)?;
         let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
+        let id = crate::SchemaValue::<String>::from_field(
+            self.memory_primary_id_query(&id.field_value())?,
+        );
         let row = self
             .raw("deviceCode", "incrementOne", |state| {
-                let Some(mut device_code) = state.device_codes.get_mut(id)? else {
+                let Some(mut device_code) = state.device_codes.get_mut(&id)? else {
                     return Ok(None);
                 };
 
@@ -306,8 +330,7 @@ impl DeviceCodeStore for EphemeralStore {
             .await?;
         // Successful boolean writes still await the adapter output policy.
         Ok(!self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_snapshots(row.into_iter().collect())
             .await?
             .is_empty())
     }
@@ -332,6 +355,10 @@ impl DeviceCodeStore for EphemeralStore {
                 .map(Value::String)
                 .unwrap_or_default();
         }
+        let mut expected = expected.clone();
+        expected.id = crate::SchemaValue::from_field(
+            self.memory_primary_id_query(&expected.id.field_value())?,
+        );
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
                 let mut selected = None;
@@ -340,7 +367,7 @@ impl DeviceCodeStore for EphemeralStore {
                     let row = source.read(|row| Ok(row.clone()))?;
                     let matches = query::matches(&row, &query)?;
                     if selected.is_none()
-                        && same_bindings(&row, expected)
+                        && same_bindings(&row, &expected)
                         && row.user_id.is_some()
                         && row.status == "approved"
                         && matches
@@ -373,15 +400,17 @@ impl DeviceCodeStore for EphemeralStore {
             })
             .await?;
         Ok(self
-            .model_fields
-            .project_device_codes(row.into_iter().collect())
+            .project_device_code_snapshots(row.into_iter().collect())
             .await?
             .pop())
     }
 
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
+        let id = crate::SchemaValue::<String>::from_field(
+            self.memory_primary_id_query(&id.field_value())?,
+        );
         self.raw("deviceCode", "delete", |state| {
-            let _ = state.device_codes.remove(id)?;
+            let _ = state.device_codes.remove(&id)?;
             Ok(())
         })
         .await
@@ -392,14 +421,17 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         status: &str,
     ) -> AuthResult<bool> {
+        let id = crate::SchemaValue::<String>::from_field(
+            self.memory_primary_id_query(&id.field_value())?,
+        );
         self.raw("deviceCode", "delete", |state| {
             let should_delete = state
                 .device_codes
-                .get(id)?
+                .get(&id)?
                 .is_some_and(|device_code| device_code.status == status);
 
             if should_delete {
-                let _ = state.device_codes.remove(id)?;
+                let _ = state.device_codes.remove(&id)?;
             }
 
             Ok(should_delete)

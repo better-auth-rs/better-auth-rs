@@ -12,13 +12,8 @@ impl EphemeralStore {
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
-        let invitation_id = self
-            .config
-            .advanced
-            .database
-            .generate_id()
-            .coerce_id(invitation_id)?;
-        let invitation_id = invitation_id.as_ref();
+        let bound_id =
+            self.organization_query(EntityRole::Invitation, "id", Value::from(invitation_id))?;
         let patch = self
             .prepare_record_patch(
                 EntityRole::Invitation,
@@ -32,7 +27,7 @@ impl EphemeralStore {
             let state = self.lock()?;
             let mut row = state
                 .invitations
-                .get_mut(invitation_id)?
+                .get_mut(&bound_id)?
                 .filter(|row| row.is_pending())
                 .ok_or_else(|| AuthError::bad_request("Invitation not found"))?;
             *row = patch.apply(row.clone())?;
@@ -231,9 +226,12 @@ impl EphemeralStore {
             role: invitation.role.clone(),
             created_at: Utc::now().into(),
         };
-        let member = self
+        let mut member: Member = self
             .store_record(EntityRole::Member, member, None, FieldMap::new())
             .await?;
+        if let Some(id) = self.next_serial_id(member_count) {
+            member.id = SchemaValue::from_field(id);
+        }
         let output = self.output_member(member.clone()).await?;
         for (team_id, _) in &reservations {
             memberships.push(TeamMember {
@@ -326,6 +324,7 @@ impl EphemeralStore {
         }
         // Validate the complete staged result before publishing any member, seat, or session delta.
         let organization_id = self.organization_primary_id(&invitation.organization_id)?;
+        let organization_id = Self::project_id(&organization_id)?;
         let organization_id = organization_id.typed()?.clone();
         let (session, cookie_session) = if let Some(mut session) = session {
             let cookie_session = if let [team_id] = team_ids.as_slice() {
@@ -334,7 +333,12 @@ impl EphemeralStore {
                     let _ = fields.insert("activeTeamId".into());
                 }
                 session.updated_at = Utc::now().into();
-                Some(session.clone())
+                let mut cookie = session.clone();
+                cookie.id = Self::project_id(&cookie.id)?;
+                if !self.session_config.fields().contains_key("userId") {
+                    cookie.user_id = Self::project_id(&cookie.user_id)?;
+                }
+                Some(cookie)
             } else {
                 None
             };
@@ -357,7 +361,9 @@ impl EphemeralStore {
             ));
         }
         for mut membership in memberships {
-            self.assign_insert_serial_id(&mut membership.id, state.team_members.len());
+            if let Some(id) = self.next_serial_id(state.team_members.len()) {
+                membership.id = SchemaValue::from_field(id);
+            }
             state.team_members.push(membership);
         }
         for (id, team) in teams {
@@ -460,6 +466,10 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 2);
         let state = store.lock()?;
         assert_eq!(state.members.len(), 1);
+        assert_eq!(
+            state.members.snapshot()?[0].id.field_value(),
+            Value::Number(1.0)
+        );
         assert_eq!(state.members.snapshot()?[0].role, "member");
         let invitations = state.invitations.snapshot()?;
         assert_eq!(invitations.iter().filter(|row| row.is_pending()).count(), 1);
