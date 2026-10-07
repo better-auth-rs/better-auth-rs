@@ -4,12 +4,6 @@ use std::borrow::Cow;
 
 use crate::entity::{AuthApiKey, AuthPasskey, AuthTwoFactor};
 
-pub(crate) fn deserialize_display_string<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<SchemaValue<Option<String>>, D::Error> {
-    Option::<String>::deserialize(deserializer).map(SchemaValue::Typed)
-}
-
 /// Two-factor authentication response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TwoFactor {
@@ -116,7 +110,6 @@ pub struct Passkey {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(deserialize_with = "deserialize_display_string")]
     pub name: SchemaValue<Option<String>>,
     #[serde(rename = "publicKey")]
     pub public_key: String,
@@ -140,7 +133,6 @@ pub struct Passkey {
     #[serde(with = "crate::field_value::serde::schema_date")]
     pub updated_at: SchemaValue<crate::FieldDate>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(deserialize_with = "deserialize_display_string")]
     pub aaguid: SchemaValue<Option<String>>,
     #[serde(skip_serializing, skip_deserializing, default)]
     pub credential: SchemaValue<String>,
@@ -361,7 +353,6 @@ pub struct ApiKey {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(deserialize_with = "deserialize_display_string")]
     pub name: SchemaValue<Option<String>>,
     pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,

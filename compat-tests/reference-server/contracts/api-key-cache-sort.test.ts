@@ -21,4 +21,35 @@ test("secondary API keys retain UTF-16, null, and stable signed-zero ordering",a
   const result=await auth.api.listApiKeys({headers,query:{sortBy:"remaining",sortDirection:direction}});
   expect(result.apiKeys.map((key:any)=>key.name)).toEqual(direction==="asc"?["A",null,"\ue000","\u{10000}","a"]:["a","\ue000","\u{10000}",null,"A"]);
  }
+ for(const {names,ascending,descending} of [
+  {names:[42],ascending:[0],descending:[0]},
+  {names:[10,2],ascending:[1,0],descending:[0,1]},
+  {names:[2,"2","10"],ascending:[0,2,1],descending:[0,1,2]},
+  {names:[2,"word",1],ascending:[0,1,2],descending:[0,1,2]},
+  {names:[10,"2",2,null,undefined,null,10],ascending:[3,4,5,1,2,0,6],descending:[0,6,1,2,3,4,5]},
+ ]){
+  values.clear();
+  const records=names.map((name,index)=>({...keys[0],id:`dynamic-${index}`,key:`dynamic-secret-${index}`,name}));
+  for(const key of records)values.set(`api-key:by-id:${key.id}`,JSON.stringify(key));
+  values.set(`api-key:by-ref:${owner}`,JSON.stringify(records.map(key=>key.id)));
+  for(const direction of ["asc","desc"]){
+   const result=await auth.api.listApiKeys({headers,query:{sortBy:"name",sortDirection:direction}});
+   const expected=direction==="asc"?ascending:descending;
+   expect(result.total).toBe(names.length);
+   expect(result.apiKeys.map((key:any)=>[key.id,key.name,Object.hasOwn(key,"name")])).toStrictEqual(expected.map(index=>[`dynamic-${index}`,names[index],names[index]!==undefined]));
+  }
+ }
+ for(const field of ["createdAt","updatedAt","expiresAt","lastRequest","lastRefillAt"] as const){
+  values.clear();
+  const dates=["2099-10-02T00:00:00.000Z","invalid-date","2099-10-01T00:00:00.000Z"];
+  const records=dates.map((date,index)=>({...keys[0],id:`date-${index}`,key:`date-secret-${index}`,[field]:date}));
+  for(const key of records)values.set(`api-key:by-id:${key.id}`,JSON.stringify(key));
+  values.set(`api-key:by-ref:${owner}`,JSON.stringify(records.map(key=>key.id)));
+  for(const direction of ["asc","desc"]){
+   const result=await auth.api.listApiKeys({headers,query:{sortBy:field,sortDirection:direction}});
+   expect(result.total).toBe(dates.length);
+   expect(Number.isNaN(result.apiKeys[1][field]!.getTime())).toBe(true);
+   expect(JSON.parse(JSON.stringify(result.apiKeys)).map((key:any)=>[key.id,key[field]])).toStrictEqual([["date-0",dates[0]],["date-1",null],["date-2",dates[2]]]);
+  }
+ }
 });

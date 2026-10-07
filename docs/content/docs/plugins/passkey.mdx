@@ -113,6 +113,8 @@ Generate application columns with `passkey.additionalFields` in the CLI schema c
 
 `Passkey`, `CreatePasskey`, and `PasskeyView` use `SchemaValue<Option<String>>` for `name` and `aaguid`. Use `Default::default()` for omission, `None.into()` for explicit null, and `Some(value).into()` for a string. Public output omits undefined values and preserves explicit null. Omitted, empty, or explicit logical `field_name` values select the default column. Nonempty aliases can map `name` and `aaguid` to their corresponding typed columns. Match those aliases to the SeaORM column mapping or CLI `passkey.fields` mapping. An alias cannot share another field's logical name or storage column. Replacement types, references, and mappings to another native field remain unsupported. `transports: None` serializes as null; this `Option<String>` API does not distinguish JavaScript undefined from explicit null.
 
+Output transforms can return JSON values outside the declared string type. `Passkey` and `PasskeyView` preserve those values as `SchemaValue::Dynamic` when decoding JSON. Read `.json()` or `.field_value()` to inspect a transformed value. Use `.typed()?` when the caller requires a string or null.
+
 ## How It Works
 
 ### Registration Flow

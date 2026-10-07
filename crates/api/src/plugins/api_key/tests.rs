@@ -845,7 +845,8 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
     }
     let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
     for ((mut key, name), remaining) in keys
-        .into_iter()
+        .iter()
+        .cloned()
         .zip([
             Some("\u{e000}"),
             Some("\u{10000}"),
@@ -930,6 +931,144 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
                 .collect::<Vec<_>>(),
             expected
         );
+    }
+    for (names, ascending, descending) in [
+        (vec![Some(json!(42))], vec![0], vec![0]),
+        (
+            vec![Some(json!(10)), Some(json!(2))],
+            vec![1, 0],
+            vec![0, 1],
+        ),
+        (
+            vec![Some(json!(2)), Some(json!("2")), Some(json!("10"))],
+            vec![0, 2, 1],
+            vec![0, 1, 2],
+        ),
+        (
+            vec![Some(json!(2)), Some(json!("word")), Some(json!(1))],
+            vec![0, 1, 2],
+            vec![0, 1, 2],
+        ),
+        (
+            vec![
+                Some(json!(10)),
+                Some(json!("2")),
+                Some(json!(2)),
+                Some(serde_json::Value::Null),
+                None,
+                Some(serde_json::Value::Null),
+                Some(json!(10)),
+            ],
+            vec![3, 4, 5, 1, 2, 0, 6],
+            vec![0, 6, 1, 2, 3, 4, 5],
+        ),
+    ] {
+        let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
+        for (index, name) in names.iter().enumerate() {
+            let mut key = keys[0].clone();
+            key.id = format!("dynamic-{index}").into();
+            key.key_hash = format!("dynamic-secret-{index}");
+            key.name = better_auth_core::SchemaValue::from_json(name.clone()).unwrap();
+            storage::put(cache.as_ref(), &key, false).await.unwrap();
+        }
+        let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+            storage: ApiKeyStorage::SecondaryStorage,
+            custom_storage: Some(cache),
+            ..Default::default()
+        });
+        for (direction, expected) in [("asc", ascending), ("desc", descending)] {
+            let result = handlers::list_keys_core(
+                "list-owner",
+                &types::ListKeysQuery {
+                    sort_by: Some("name".into()),
+                    sort_direction: Some(direction.into()),
+                    ..Default::default()
+                },
+                &plugin,
+                ctx,
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.total, names.len());
+            assert_eq!(
+                result
+                    .api_keys
+                    .iter()
+                    .map(|key| (key.id.typed().unwrap().clone(), key.name.json().unwrap()))
+                    .collect::<Vec<_>>(),
+                expected
+                    .into_iter()
+                    .map(|index| (format!("dynamic-{index}"), names[index].clone()))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+    for field in [
+        "createdAt",
+        "updatedAt",
+        "expiresAt",
+        "lastRequest",
+        "lastRefillAt",
+    ] {
+        let dates = [
+            "2099-10-02T00:00:00.000Z",
+            "invalid-date",
+            "2099-10-01T00:00:00.000Z",
+        ];
+        let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
+        for (index, date) in dates.iter().enumerate() {
+            let mut key = keys[0].clone();
+            key.id = format!("date-{index}").into();
+            key.key_hash = format!("date-secret-{index}");
+            storage::put(cache.as_ref(), &key, false).await.unwrap();
+            let mut row = serde_json::to_value(&key).unwrap();
+            row[field] = json!(date);
+            better_auth_core::store::SecondaryStorage::set(
+                cache.as_ref(),
+                &format!("api-key:by-id:date-{index}"),
+                &row.to_string(),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+        let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+            storage: ApiKeyStorage::SecondaryStorage,
+            custom_storage: Some(cache),
+            ..Default::default()
+        });
+        for direction in ["asc", "desc"] {
+            let result = handlers::list_keys_core(
+                "list-owner",
+                &types::ListKeysQuery {
+                    sort_by: Some(field.into()),
+                    sort_direction: Some(direction.into()),
+                    ..Default::default()
+                },
+                &plugin,
+                ctx,
+            )
+            .await
+            .unwrap();
+            assert_eq!(result.total, dates.len());
+            assert_eq!(
+                result
+                    .api_keys
+                    .iter()
+                    .map(|key| {
+                        (
+                            key.id.typed().unwrap().clone(),
+                            serde_json::to_value(key).unwrap()[field].clone(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                vec![
+                    ("date-0".into(), json!(dates[0])),
+                    ("date-1".into(), serde_json::Value::Null),
+                    ("date-2".into(), json!(dates[2])),
+                ]
+            );
+        }
     }
 }
 

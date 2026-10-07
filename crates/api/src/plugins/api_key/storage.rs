@@ -3,7 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 
 use better_auth_core::store::SecondaryStorage;
-use better_auth_core::{ApiKey, AuthContext, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
+use better_auth_core::wire::ApiKeyView;
+use better_auth_core::{
+    ApiKey, AuthContext, AuthError, AuthResult, CreateApiKey, FieldValue, UpdateApiKey,
+};
 use chrono::Utc;
 use futures_util::{StreamExt, TryFutureExt, future, stream};
 use serde_json::Value;
@@ -585,36 +588,24 @@ fn compare_strings(left: Option<&str>, right: Option<&str>) -> std::cmp::Orderin
     }
 }
 
-fn sort_views(
-    views: &mut Vec<better_auth_core::wire::ApiKeyView>,
-    sort_by: &str,
-    direction: Option<&str>,
-) -> AuthResult<()> {
-    if sort_by == "name" {
-        let mut named = std::mem::take(views)
-            .into_iter()
-            .map(|view| {
-                let name = if view.name.is_undefined() {
-                    None
-                } else {
-                    view.name.typed()?.clone()
-                };
-                Ok((name, view))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        named.sort_by(|a, b| {
-            let order = compare_strings(a.0.as_deref(), b.0.as_deref());
-            if direction == Some("desc") {
-                order.reverse()
-            } else {
-                order
-            }
-        });
-        *views = named.into_iter().map(|(_, view)| view).collect();
-        return Ok(());
-    }
-    views.sort_by(|a, b| {
+fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) -> AuthResult<()> {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+
+    let compare = |a: &ApiKeyView, b: &ApiKeyView| -> AuthResult<std::cmp::Ordering> {
         let ordering = match sort_by {
+            "name" => {
+                let left = a.name.field_value();
+                let right = b.name.field_value();
+                match (&left, &right) {
+                    (
+                        FieldValue::Null | FieldValue::Undefined,
+                        FieldValue::Null | FieldValue::Undefined,
+                    ) => Equal,
+                    (FieldValue::Null | FieldValue::Undefined, _) => Less,
+                    (_, FieldValue::Null | FieldValue::Undefined) => Greater,
+                    _ => better_auth_core::query::field_compare(&left, &right)?.unwrap_or(Equal),
+                }
+            }
             "id" => compare_strings(a.id.as_str(), b.id.as_str()),
             "start" => a.start.cmp(&b.start),
             "prefix" => compare_strings(a.prefix.as_deref(), b.prefix.as_deref()),
@@ -662,14 +653,23 @@ fn sort_views(
             }
             "refillAmount" => compare_numbers(a.refill_amount, b.refill_amount),
             "refillInterval" => compare_numbers(a.refill_interval, b.refill_interval),
-            _ => std::cmp::Ordering::Equal,
+            _ => Equal,
         };
-        if direction == Some("desc") {
+        Ok(if direction == Some("desc") {
             ordering.reverse()
         } else {
             ordering
+        })
+    };
+    // Mixed values and invalid dates can violate sort_by's total-order requirement.
+    // ponytail: O(n²); use a subquadratic sort that accepts unordered comparisons if large cache lists become costly.
+    for index in 1..views.len() {
+        let mut current = index;
+        while current > 0 && compare(&views[current], &views[current - 1])? == Less {
+            views.swap(current - 1, current);
+            current -= 1;
         }
-    });
+    }
     Ok(())
 }
 

@@ -42,7 +42,7 @@ run_stage() {
     plugin-fields)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test auth_entity_plugin_alias_tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt user_fields::record::tests::
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
@@ -51,8 +51,9 @@ run_stage() {
         --test auth_entity_plugin_alias_tests \
         --test plugin_output_capabilities_tests --test sql_user_extra_output_tests \
         --test api_key_metadata_tests --test api_key_metadata_timing_tests --test jwt_transaction_tests
-      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: device_ownership::
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: device_ownership:: presence:: presence_cache::
       bun --no-install test \
+        ./compat-tests/reference-server/contracts/plugin-display-presence.test.ts \
         ./compat-tests/reference-server/contracts/api-key-field-policies.test.ts \
         ./compat-tests/reference-server/contracts/api-key-fields.test.ts \
         ./compat-tests/reference-server/contracts/api-key-name-mapping.test.ts \

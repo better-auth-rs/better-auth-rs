@@ -145,9 +145,9 @@ function keyFields(trace: string[], output: Display) {
 }
 
 for (const backend of ["memory", "sqlite"] as const) for (const mode of ["database", "fallback"] as const) {
-  for (const presence of ["null", "undefined"] as const) {
+  for (const presence of ["null", "undefined", "number"] as const) {
     test(`API Key name ${presence} survives ${mode === "database" ? "database reads" : "fallback refill and cache hits"} (${backend})`, async () => {
-      const expected = presence === "null" ? null : undefined;
+      const expected = presence === "null" ? null : presence === "number" ? 42 : undefined;
       const trace: string[] = [];
       const {cache, customStorage} = storage();
       const f = await fixture(backend, [apiKey({

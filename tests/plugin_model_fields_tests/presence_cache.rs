@@ -3,6 +3,7 @@ use super::*;
 use better_auth::plugins::api_key::{ApiKeyConfig, ApiKeyPlugin, ApiKeyStorage};
 use better_auth::server_api::CreateKeyOptions;
 use better_auth_core::store::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
+use better_auth_core::wire::ApiKeyView;
 
 async fn cache_name(
     cache: &MemoryCacheAdapter,
@@ -23,15 +24,14 @@ async fn cache_name(
 
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     for mode in ["database", "fallback", "secondary"] {
-        for null in [false, true]
-            .into_iter()
-            .filter(|null| mode != "secondary" || *null)
+        for (presence, expected) in [
+            ("undefined", None),
+            ("null", Some(Value::Null)),
+            ("number", Some(json!(42))),
+        ]
+        .into_iter()
+        .filter(|(presence, _)| mode != "secondary" || *presence == "null")
         {
-            let expected = if null || mode == "secondary" {
-                Some(Value::Null)
-            } else {
-                None
-            };
             let trace = Arc::new(Mutex::new(Vec::new()));
             let input_trace = trace.clone();
             let output_trace = trace.clone();
@@ -80,7 +80,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 )]))
                 .build()
                 .await?;
-            let owner = owner(raw.as_ref(), &format!("display-key-{mode}-{null}")).await?;
+            let owner = owner(raw.as_ref(), &format!("display-key-{mode}-{presence}")).await?;
             let token = token(&auth, &owner).await?;
             let created = auth
                 .api_keys()?
@@ -111,6 +111,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             let by_id = format!("api-key:by-id:{id}");
             let body = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
             assert_display(&body, "name", expected.clone());
+            let decoded: ApiKeyView = serde_json::from_value(body)?;
+            assert_eq!(decoded.name.json()?, expected);
             assert_eq!(
                 *trace_lock(&trace)?,
                 if mode == "database" {

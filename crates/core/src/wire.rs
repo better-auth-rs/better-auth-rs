@@ -505,7 +505,6 @@ pub struct PasskeyView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
     pub name: SchemaValue<Option<String>>,
     #[serde(rename = "credentialID")]
     pub credential_id: String,
@@ -525,7 +524,6 @@ pub struct PasskeyView {
     #[serde(with = "crate::field_value::serde::optional_schema_date")]
     pub created_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
     pub aaguid: SchemaValue<Option<String>>,
 }
 
@@ -560,7 +558,6 @@ pub struct ApiKeyView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
     pub name: SchemaValue<Option<String>>,
     pub start: Option<crate::ApiKeyStart>,
     pub prefix: Option<String>,

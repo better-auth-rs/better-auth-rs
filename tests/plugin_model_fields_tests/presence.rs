@@ -1,7 +1,7 @@
 use super::*;
 use better_auth::plugins::passkey::PasskeyPlugin;
 use better_auth::server_api::EndpointInput;
-use better_auth_core::{HttpMethod, SchemaValue, entity::AuthSession, wire::PasskeyView};
+use better_auth_core::{HttpMethod, Passkey, SchemaValue, entity::AuthSession, wire::PasskeyView};
 
 const AAGUID: &str = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
 
@@ -210,6 +210,15 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
     for field in ["name", "aaguid"] {
         assert_display(&view, field, Some(json!(42)));
     }
+    let decoded_view: PasskeyView = serde_json::from_value(view)?;
+    assert_eq!(decoded_view.name.field_value(), FieldValue::Number(42.0));
+    assert_eq!(decoded_view.aaguid.field_value(), FieldValue::Number(42.0));
+    let decoded_record: Passkey = serde_json::from_value(serde_json::to_value(&updated)?)?;
+    assert_eq!(decoded_record.name.field_value(), FieldValue::Number(42.0));
+    assert_eq!(
+        decoded_record.aaguid.field_value(),
+        FieldValue::Number(42.0)
+    );
     assert_eq!(
         *trace_lock(&trace)?,
         [
