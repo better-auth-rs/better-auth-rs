@@ -354,8 +354,17 @@ impl EphemeralStore {
                     async move {
                         let tails = ready
                             .iter()
-                            .map(|(index, _)| pending[*index].1.clone())
-                            .collect();
+                            .map(|(index, _)| {
+                                pending
+                                    .get(*index)
+                                    .map(|(_, tail)| tail.clone())
+                                    .ok_or_else(|| {
+                                        AuthError::internal(
+                                            "User projection lost its pending page index",
+                                        )
+                                    })
+                            })
+                            .collect::<AuthResult<Vec<_>>>()?;
                         // Ready parents advance independently; each page awaits its preceding child.
                         let tails = self.output_user_pages(tails).await?;
                         Ok(ready
@@ -369,7 +378,9 @@ impl EphemeralStore {
                 })
                 .await?;
             for ((index, _), users) in pending.into_iter().zip(projected) {
-                output[index] = users;
+                *output.get_mut(index).ok_or_else(|| {
+                    AuthError::internal("User projection lost its output page index")
+                })? = users;
             }
             Ok(output)
         })

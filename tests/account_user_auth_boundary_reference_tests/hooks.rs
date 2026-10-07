@@ -1,0 +1,239 @@
+use super::*;
+use better_auth_core::{
+    CreateVerification, UpdateAccount, UpdateUser,
+    store::database_hooks::{
+        DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
+        VerificationUpdate,
+    },
+    wire::{AccountView, SessionView, UserView, VerificationView},
+};
+
+pub(super) struct Hooks(pub(super) Events);
+impl Hooks {
+    fn record(
+        &self,
+        model: &str,
+        operation: &str,
+        phase: &str,
+        fields: FieldValue,
+    ) -> AuthResult<()> {
+        self.0.push(json!({"kind": "hook", "model": model, "operation": operation, "phase": phase, "data": values::observe(&fields)?}))
+    }
+    fn unexpected(
+        &self,
+        model: &str,
+        operation: &str,
+        phase: &str,
+        data: &dyn std::fmt::Debug,
+    ) -> AuthResult<()> {
+        self.0.push(json!({"kind": "unexpected-hook", "model": model, "operation": operation, "phase": phase, "native": format!("{data:?}")}))
+    }
+}
+
+#[better_auth_core::database_hooks()]
+impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
+    async fn before_create_user(
+        &self,
+        data: &mut CreateUser,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("user", "create", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_create_user(
+        &self,
+        data: &UserView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("user", "create", "after", &data)?;
+        Ok(())
+    }
+    async fn before_update_user(
+        &self,
+        data: &UpdateUser,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+        self.unexpected("user", "update", "before", &data)?;
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_update_user(
+        &self,
+        data: Option<&UserView>,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("user", "update", "after", &data)?;
+        Ok(())
+    }
+    async fn before_delete_user(
+        &self,
+        data: &UserView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("user", "delete", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_delete_user(
+        &self,
+        data: &UserView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("user", "delete", "after", &data)?;
+        Ok(())
+    }
+    async fn before_create_account(
+        &self,
+        data: &mut CreateAccount,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("account", "create", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_create_account(
+        &self,
+        data: &AccountView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("account", "create", "after", &data)?;
+        Ok(())
+    }
+    async fn before_update_account(
+        &self,
+        data: &UpdateAccount,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+        self.record("account", "update", "before", data.fields()?.into())?;
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_update_account(
+        &self,
+        data: Option<&AccountView>,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.record(
+            "account",
+            "update",
+            "after",
+            data.map(AccountView::internal_fields)
+                .transpose()?
+                .map_or(FieldValue::Null, Into::into),
+        )?;
+        Ok(())
+    }
+    async fn before_delete_account(
+        &self,
+        data: &AccountView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("account", "delete", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_delete_account(
+        &self,
+        data: &AccountView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("account", "delete", "after", &data)?;
+        Ok(())
+    }
+    async fn before_create_session(
+        &self,
+        data: &mut FieldMap,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        self.record("session", "create", "before", data.clone().into())?;
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_create_session(
+        &self,
+        data: &SessionView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.record(
+            "session",
+            "create",
+            "after",
+            FieldMap::from(data.clone()).into(),
+        )?;
+        Ok(())
+    }
+    async fn before_update_session(
+        &self,
+        data: &SessionUpdate,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+        self.unexpected("session", "update", "before", &data)?;
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_update_session(
+        &self,
+        data: Option<&SessionView>,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("session", "update", "after", &data)?;
+        Ok(())
+    }
+    async fn before_delete_session(
+        &self,
+        data: &SessionView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("session", "delete", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_delete_session(
+        &self,
+        data: &SessionView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("session", "delete", "after", &data)?;
+        Ok(())
+    }
+    async fn before_create_verification(
+        &self,
+        data: &mut CreateVerification,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("verification", "create", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_create_verification(
+        &self,
+        data: &VerificationView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("verification", "create", "after", &data)?;
+        Ok(())
+    }
+    async fn before_update_verification(
+        &self,
+        data: &VerificationUpdate,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+        self.unexpected("verification", "update", "before", &data)?;
+        Ok(DatabaseHookUpdate::Continue)
+    }
+    async fn after_update_verification(
+        &self,
+        data: Option<&VerificationView>,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("verification", "update", "after", &data)?;
+        Ok(())
+    }
+    async fn before_delete_verification(
+        &self,
+        data: &VerificationView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.unexpected("verification", "delete", "before", &data)?;
+        Ok(DatabaseHookControl::Continue)
+    }
+    async fn after_delete_verification(
+        &self,
+        data: &VerificationView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.unexpected("verification", "delete", "after", &data)?;
+        Ok(())
+    }
+}
