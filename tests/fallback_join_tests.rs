@@ -8,7 +8,9 @@ use std::sync::{
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
-    CreateUser, FieldMap, store::EphemeralStore, user_fields::UserFieldConfig,
+    CreateUser, FieldMap,
+    store::{EphemeralStore, JoinValue},
+    user_fields::UserFieldConfig,
 };
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -127,9 +129,11 @@ async fn run<S: AuthSchema>(
         .await?
         .ok_or_else(|| AuthError::internal("owner missing"))?;
     assert_eq!(owner.account.user_id, "alice");
+    let JoinValue::One(owner_user) = owner.user else {
+        return Err(AuthError::internal("Expected a single Account owner"));
+    };
     assert_eq!(
-        owner
-            .user
+        owner_user
             .ok_or_else(|| AuthError::internal("user missing"))?
             .id,
         "alice"
@@ -140,16 +144,15 @@ async fn run<S: AuthSchema>(
         .await?
         .ok_or_else(|| AuthError::internal("user missing"))?;
     assert_eq!(record.user.id, "alice");
-    assert!(
-        record
-            .accounts
-            .iter()
-            .all(|account| account.user_id == "alice")
-    );
+    let JoinValue::Many(accounts) = record.accounts else {
+        return Err(AuthError::internal(
+            "Expected the Account relationship page",
+        ));
+    };
+    assert!(accounts.iter().all(|account| account.user_id == "alice"));
     assert_eq!(
         json!(
-            record
-                .accounts
+            accounts
                 .iter()
                 .map(|account| &account.account_id)
                 .collect::<Vec<_>>()

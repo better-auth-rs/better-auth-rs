@@ -17,7 +17,7 @@ mod postgres;
 use better_auth_core::{
     AuthConfig, AuthError, AuthResponse, AuthResult, AuthSchema, CreateAccount, CreateSession,
     CreateUser, UpdateAccount, UpdateUser,
-    store::{AccountStore, SessionStore, UserStore},
+    store::{AccountStore, JoinValue, SessionStore, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
     wire::{SessionView, UserView},
 };
@@ -282,9 +282,12 @@ async fn query(store: &Store, path: &str) -> AuthResult<Value> {
                 .get_account_owner("ordinary-provider", "ordinary-a-0")
                 .await?
                 .unwrap();
+            let JoinValue::One(owner_user) = owner.user else {
+                return Err(AuthError::internal("Expected a single Account owner"));
+            };
             Ok(
                 json!({"kind":"owned", "displayLabel":owner.account.additional_fields["displayLabel"].json()?,
-                "user":owner.user.as_ref().map(display_user)}),
+                "user":owner_user.as_ref().map(display_user)}),
             )
         }
         _ => {
@@ -292,8 +295,13 @@ async fn query(store: &Store, path: &str) -> AuthResult<Value> {
                 .get_user_with_accounts("A@ordinary-native-join.test")
                 .await?
                 .unwrap();
+            let JoinValue::Many(accounts) = row.accounts else {
+                return Err(AuthError::internal(
+                    "Expected the Account relationship page",
+                ));
+            };
             Ok(
-                json!({"user":display_user(&row.user), "accounts":row.accounts.into_iter()
+                json!({"user":display_user(&row.user), "accounts":accounts.into_iter()
                 .map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?}),
             )
         }
@@ -481,7 +489,7 @@ async fn check_optional_account(db: DatabaseConnection) {
         .unwrap()
         .unwrap();
     assert_eq!(row.user.name.json().unwrap(), Some(json!("No accounts")));
-    assert!(row.accounts.is_empty());
+    assert!(matches!(row.accounts, JoinValue::Many(accounts) if accounts.is_empty()));
 }
 
 #[tokio::test]

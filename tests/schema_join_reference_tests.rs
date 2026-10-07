@@ -6,7 +6,7 @@
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser,
-    store::EphemeralStore,
+    store::{EphemeralStore, JoinValue},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldReference, UserFieldTransform},
     wire::{AccountView, UserView},
 };
@@ -290,14 +290,38 @@ async fn observe<S: AuthSchema>(
     let _ = events.take();
     let result: AuthResult<Value> = async {
         match case.operation {
-            Operation::Accounts => Ok(store.get_user_with_accounts(EMAIL).await?.map_or(Value::Null, |joined| {
-                json!({ "user": user_summary(&joined.user), "accounts": joined.accounts.iter().map(account_summary).collect::<Vec<_>>() })
-            })),
-            Operation::Owner => Ok(store.get_account_owner("provider", "external-owner").await?.map_or(Value::Null, |joined| {
-                json!({ "account": account_summary(&joined.account), "user": joined.user.as_ref().map(user_summary) })
-            })),
+            Operation::Accounts => {
+                Ok(store
+                    .get_user_with_accounts(EMAIL)
+                    .await?
+                    .map_or(Value::Null, |joined| {
+                        let accounts = match joined.accounts {
+                            JoinValue::One(account) => {
+                                account.as_ref().map_or(Value::Null, account_summary)
+                            }
+                            JoinValue::Many(accounts) => {
+                                json!(accounts.iter().map(account_summary).collect::<Vec<_>>())
+                            }
+                        };
+                        json!({ "user": user_summary(&joined.user), "accounts": accounts })
+                    }))
+            }
+            Operation::Owner => Ok(store
+                .get_account_owner("provider", "external-owner")
+                .await?
+                .map_or(Value::Null, |joined| {
+                    let user = match joined.user {
+                        JoinValue::One(user) => user.as_ref().map_or(Value::Null, user_summary),
+                        JoinValue::Many(users) => {
+                            json!(users.iter().map(user_summary).collect::<Vec<_>>())
+                        }
+                    };
+                    json!({ "account": account_summary(&joined.account), "user": user })
+                })),
         }
-    }.with_subscriber(tracing_subscriber::registry().with(events.clone())).await;
+    }
+    .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+    .await;
     let result = match result {
         Ok(value) => value,
         Err(error) => json!({ "error": error.instrumentation_message() }),

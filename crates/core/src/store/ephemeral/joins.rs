@@ -5,8 +5,9 @@ use super::sessions::SessionSource;
 use super::*;
 use crate::session::SessionData;
 use crate::store::schema::resolve_field_name;
-use crate::store::{AccountOwner, UserAccounts};
-use crate::user_fields::{UserFieldConfig, project_adapter_value, project_source_fields_then};
+use crate::user_fields::{
+    UserFieldConfig, project_adapter_value, project_source_fields_batches_then,
+};
 
 type UserRef = RowRef<UserView>;
 type AccountRef = RowRef<FieldMap>;
@@ -14,6 +15,18 @@ type SessionSnapshot = (SessionView, Option<SessionData>);
 
 impl EphemeralStore {
     pub(super) async fn output_user_refs(&self, users: Vec<UserRef>) -> AuthResult<Vec<UserView>> {
+        self.output_user_refs_batches_then(users, |ready| std::future::ready(Ok(ready)))
+            .await
+    }
+
+    pub(super) async fn output_user_refs_batches_then<R: Send, F>(
+        &self,
+        users: Vec<UserRef>,
+        complete: impl Fn(Vec<(usize, UserView)>) -> F + Sync,
+    ) -> AuthResult<Vec<R>>
+    where
+        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
+    {
         if !users.is_empty() {
             self.model_fields
                 .begin_id_output(crate::store::schema::EntityRole::User)?;
@@ -42,7 +55,7 @@ impl EphemeralStore {
             .into_iter()
             .map(|user| (user, FieldMap::new(), FieldMap::new()))
             .collect::<Vec<_>>();
-        project_source_fields_then(
+        project_source_fields_batches_then(
             &mut rows,
             fields.fields(),
             |(source, native, _), name, field| {
@@ -86,6 +99,7 @@ impl EphemeralStore {
                 self.assign_user_output(&mut user, std::mem::take(output))?;
                 Ok(user)
             },
+            complete,
         )
         .await
     }
@@ -114,151 +128,6 @@ impl EphemeralStore {
             let _ = fields.insert("id".into(), id.into_field_value());
         }
         Ok(AccountView::from_adapter_fields(fields))
-    }
-
-    pub(super) async fn user_account_refs(&self, user_id: &str) -> AuthResult<Vec<AccountRef>> {
-        self.model_fields
-            .canonicalize_id(crate::store::schema::EntityRole::Account)?;
-        let fields = self.config.account.field_schema();
-        let user_id =
-            self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;
-        self.raw("account", "findMany", |state| {
-            Ok(crate::query::paginate_memory(
-                state.accounts.select_refs(|record| {
-                    record
-                        .get(fields.record_storage_key("userId"))
-                        .unwrap_or(&Value::Undefined)
-                        .strict_equals(&user_id)
-                })?,
-                Some(self.config.advanced.database.find_many_limit()),
-                None,
-            ))
-        })
-        .await
-    }
-
-    pub(super) async fn joined_user_accounts(
-        &self,
-        email: &str,
-    ) -> AuthResult<Option<UserAccounts>> {
-        let fields = self.config.account.field_schema();
-        let records = self
-            .raw("user", "findOne", |state| {
-                let Some(user) = state
-                    .users
-                    .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))?
-                else {
-                    return Ok(None);
-                };
-                let stored_id = Self::project_id(&user.id)?;
-                let mut accounts = Vec::new();
-                let id = user.id.field_value();
-                let matching = state.accounts.select_refs(|row| {
-                    row.get(fields.record_storage_key("userId"))
-                        .unwrap_or(&Value::Undefined)
-                        .strict_equals(&id)
-                })?;
-                let mut seen = Vec::new();
-                for row in matching {
-                    if accounts.len() as f64 >= self.config.advanced.database.find_many_limit() {
-                        break;
-                    }
-                    let id = row.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
-                    if !seen.iter().any(|seen: &Value| seen.same_value_zero(&id)) {
-                        seen.push(id);
-                        accounts.push(row);
-                    }
-                }
-                Ok(Some((user, stored_id, accounts)))
-            })
-            .await?;
-        let Some((user, stored_id, accounts)) = records else {
-            return Ok(None);
-        };
-        let user = self.output_user(user).await?;
-        let mut projected = Vec::with_capacity(accounts.len());
-        for account in accounts {
-            projected.push(self.output_account_ref(&account).await?);
-        }
-        UserAccounts::new(user, projected, &stored_id).map(Some)
-    }
-
-    pub(super) async fn joined_account_owner(
-        &self,
-        provider: &str,
-        account_id: &str,
-    ) -> AuthResult<Option<AccountOwner>> {
-        let fields = self.config.account.field_schema();
-        let bound_provider =
-            self.memory_field_query(&fields, "providerId", Value::String(provider.to_owned()))?;
-        let account_id =
-            self.memory_field_query(&fields, "accountId", Value::String(account_id.to_owned()))?;
-        let rows = self
-            .raw("account", "findMany", |state| {
-                let mut rows = Vec::new();
-                for account in state
-                    .accounts
-                    .snapshot()?
-                    .into_iter()
-                    .filter(|record| {
-                        record
-                            .get(fields.record_storage_key("providerId"))
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_provider)
-                            && record
-                                .get(fields.record_storage_key("accountId"))
-                                .unwrap_or(&Value::Undefined)
-                                .strict_equals(&account_id)
-                    })
-                    .take(2)
-                {
-                    let owner = account.get(fields.record_storage_key("userId")).cloned();
-                    let user = state.users.first_ref(|user| {
-                        user.id
-                            .field_value()
-                            .strict_equals(owner.as_ref().unwrap_or(&Value::Undefined))
-                    })?;
-                    rows.push((account, self.stored_account_owner_id(owner)?, user));
-                }
-                Ok(rows)
-            })
-            .await?;
-        let storage: Vec<_> = rows.iter().map(|(account, _, _)| account.clone()).collect();
-        let owners = fields
-            .project_memory_records_batches_then(&storage, |ready| {
-                let rows = &rows;
-                async move {
-                    let mut pending = Vec::new();
-                    let mut users = Vec::new();
-                    for (index, account) in ready {
-                        let (_, owner_id, user) = rows.get(index).ok_or_else(|| {
-                            AuthError::internal("Account projection lost its stored owner index")
-                        })?;
-                        users.extend(user.clone());
-                        pending.push((index, account, owner_id, user.is_some()));
-                    }
-                    let mut users = self.output_user_refs(users).await?.into_iter();
-                    pending
-                        .into_iter()
-                        .map(|(index, account, owner, has_user)| {
-                            AccountOwner::new(
-                                AccountView::from_adapter_fields(account),
-                                if has_user { users.next() } else { None },
-                                owner,
-                            )
-                            .map(|owner| (index, owner))
-                        })
-                        .collect()
-                }
-            })
-            .await?;
-        if owners.len() > 1 {
-            return Err(AuthError::internal(format!(
-                "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
-                serde_json::to_string(provider)?
-            )));
-        }
-        Ok(owners.into_iter().next())
     }
 
     pub(super) async fn joined_session_snapshot(

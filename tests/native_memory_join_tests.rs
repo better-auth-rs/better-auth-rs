@@ -7,7 +7,10 @@
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, CreateAccount, CreateSession, CreateUser, FieldMap,
     FieldValue, UpdateAccount, UpdateUser,
-    store::{AccountStore, EphemeralStore, SessionStore, UserStore, database_hooks::SessionUpdate},
+    store::{
+        AccountStore, EphemeralStore, JoinValue, SessionStore, UserStore,
+        database_hooks::SessionUpdate,
+    },
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
     wire::{SessionView, UserView},
 };
@@ -290,14 +293,22 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
                 .get_account_owner("ordinary-provider", "ordinary-a-0")
                 .await?
                 .unwrap();
-            json!({ "kind": "owned", "displayLabel": owner.account.additional_fields["displayLabel"].json()?, "user": user(owner.user.as_ref().unwrap()) })
+            let JoinValue::One(owner_user) = owner.user else {
+                return Err(AuthError::internal("Expected a single Account owner"));
+            };
+            json!({ "kind": "owned", "displayLabel": owner.account.additional_fields["displayLabel"].json()?, "user": user(owner_user.as_ref().unwrap()) })
         }
         "accounts" => {
             let joined = store
                 .get_user_with_accounts("A@ordinary-native-join.test")
                 .await?
                 .unwrap();
-            json!({ "user": user(&joined.user), "accounts": joined.accounts.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()? })
+            let JoinValue::Many(accounts) = joined.accounts else {
+                return Err(AuthError::internal(
+                    "Expected the Account relationship page",
+                ));
+            };
+            json!({ "user": user(&joined.user), "accounts": accounts.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()? })
         }
         _ => return Err(AuthError::internal("unknown normal join fixture path")),
     })
@@ -446,12 +457,14 @@ async fn native_user_child_reads_unconfigured_image_after_name_callback() -> Aut
                 .unwrap()
                 .user
         } else {
-            store
+            let owner = store
                 .get_account_owner("ordinary-provider", "ordinary-account")
                 .await?
-                .unwrap()
-                .user
-                .unwrap()
+                .unwrap();
+            let JoinValue::One(owner_user) = owner.user else {
+                return Err(AuthError::internal("Expected a single Account owner"));
+            };
+            owner_user.unwrap()
         };
         trace.enabled.store(false, Ordering::SeqCst);
         let stored = store.get_user_by_id("ordinary-user").await?.unwrap();

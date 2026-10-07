@@ -104,6 +104,8 @@ A `disableRefresh=true` query parameter prevents refresh for the request. Sessio
 
 Session creation publishes its cache snapshot immediately by default. Explicitly deferred transaction creation, used by Passkey registration, publishes after commit; rollback discards that deferred write. User updates through the authentication store refresh cached user snapshots. See [Secondary Storage](/docs/concepts/secondary-storage) for backend methods, atomic verification consumption, and model hydration requirements.
 
+`AuthRequest::new_session()` and `EndpointContext::new_session()` return `NativeSessionData`, the exact snapshot supplied to the cookie writer. Its `user` is a `FieldValue`, so an array selected by an Account/User relationship stays an array. Cookie version callbacks receive the same native snapshot. Read named properties with `user_field("id")`; array properties return `Undefined`. HTTP and cache output use `public_user` to filter fields. Authenticated session reads continue to return typed `SessionData`; an issuance snapshot does not establish an authenticated user.
+
 ## Cookie Cache
 
 Enable a signed or encrypted session cache to avoid a database read on each request:

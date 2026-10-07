@@ -14,7 +14,7 @@ use crate::{AuthError, AuthRequest, AuthResult, CookieAttributes};
 
 pub(super) use crate::utils::cookie_utils::get_chunked_cookie as read;
 
-use super::SessionData;
+use super::{NativeSessionData, SessionData};
 
 #[derive(Debug, Deserialize)]
 pub(super) struct CachedSession {
@@ -64,19 +64,22 @@ fn normalize_dates(value: &mut Value) {
 }
 
 pub(super) async fn payload(
-    data: &SessionData,
+    data: &NativeSessionData,
     config: &AuthConfig,
     cache: &CookieCacheConfig,
     dont_remember: bool,
 ) -> AuthResult<(serde_json::Map<String, Value>, f64)> {
     let now = Utc::now();
+    let mut session = data.session.clone();
+    session.filter_returned_fields(&config.session);
+    let user = data.public_user(&config.user)?;
     let version = cache.version.resolve(data).await?;
-    let mut public = data.clone();
-    public.user.filter_cached_fields(&config.user);
-    public.session.filter_returned_fields(&config.session);
     let mut payload = serde_json::Map::new();
-    let _ = payload.insert("session".into(), serde_json::to_value(&public.session)?);
-    let _ = payload.insert("user".into(), serde_json::to_value(&public.user)?);
+    let _ = payload.insert("session".into(), serde_json::to_value(&session)?);
+    let _ = payload.insert(
+        "user".into(),
+        serde_json::to_value(crate::field_value::serde::Json(&user))?,
+    );
     let _ = payload.insert("updatedAt".into(), now.timestamp_millis().into());
     let _ = payload.insert("version".into(), version.into());
     for value in payload.values_mut() {
@@ -91,7 +94,7 @@ pub(super) async fn payload(
 }
 
 pub(super) async fn encode(
-    data: &SessionData,
+    data: &NativeSessionData,
     config: &AuthConfig,
     cache: &CookieCacheConfig,
     dont_remember: bool,
@@ -240,7 +243,7 @@ pub(super) fn expire(req: &AuthRequest, config: &AuthConfig) -> AuthResult<()> {
 
 pub(super) async fn write(
     req: &AuthRequest,
-    data: &SessionData,
+    data: &NativeSessionData,
     config: &AuthConfig,
     dont_remember: bool,
     signed: Option<String>,
@@ -275,7 +278,7 @@ pub(super) async fn write(
 
 fn renew_account_cookie(
     req: &AuthRequest,
-    data: &SessionData,
+    data: &NativeSessionData,
     config: &AuthConfig,
     cache: &CookieCacheConfig,
     bind_account_user: bool,
@@ -293,7 +296,9 @@ fn renew_account_cookie(
     }) else {
         return Ok(());
     };
-    if bind_account_user && account.get("userId").and_then(Value::as_str) != data.user.id.as_str() {
+    if bind_account_user
+        && account.get("userId").and_then(Value::as_str) != data.user_field("id").as_str()
+    {
         let cookie = config.auth_cookie("account_data", Default::default());
         expire_cookie(req, &cookie, None)?;
         return clear_existing_cookies(req, &cookie, None);

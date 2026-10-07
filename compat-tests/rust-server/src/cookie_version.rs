@@ -45,7 +45,7 @@ impl CookieVersionFixture {
                 let state = state.clone();
                 async move {
                     let mut state = state.lock().unwrap();
-                    state.events.push(json!({ "sessionId": data.session.id, "userId": data.user.id, "name": data.user.name, "hiddenSession": data.session.additional_fields.get("internalNote").map(FieldValue::json).transpose()?.flatten(), "hiddenUser": data.user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten() }));
+                    state.events.push(json!({ "sessionId": data.session.id, "userId": data.user_field("id").json()?, "name": data.user_field("name").json()?, "hiddenSession": data.session.additional_fields.get("internalNote").map(FieldValue::json).transpose()?.flatten(), "hiddenUser": data.user_field("secretNote").json()? }));
                     if state.fail {
                         return Err(AuthError::internal("Cookie version failed"));
                     }

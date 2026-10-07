@@ -1,18 +1,27 @@
 //! Runtime projections returned by the core adapter's ordinary joins.
 
 use crate::{
-    AuthConfig, AuthError, AuthResult, SchemaValue,
+    AuthConfig, AuthError, AuthResult,
     plugin_runtime::ModelFields,
     store::schema::{EntityRole, resolve_field_name},
     user_fields::{USER_FIELDS, UserConfig, UserFieldConfig, UserFieldReference, UserFieldType},
     wire::{AccountView, UserView},
 };
 
-/// An account and its persisted owner. A missing owner is an orphaned account, not a new identity.
+/// The selected relationship preserves a single record, a missing record, or a record page.
+#[derive(Debug, Clone)]
+pub enum JoinValue<T> {
+    /// A relationship that selects at most one record.
+    One(Option<T>),
+    /// A relationship that selects a record page, including an empty page.
+    Many(Vec<T>),
+}
+
+/// An account and the User relationship selected by the active schema.
 #[derive(Debug, Clone)]
 pub struct AccountOwner {
     pub account: AccountView,
-    pub user: Option<UserView>,
+    pub user: JoinValue<UserView>,
 }
 
 impl AccountOwner {
@@ -22,6 +31,15 @@ impl AccountOwner {
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
+        Self::resolve_schema(config, schema, table_matches).map(|_| ())
+    }
+
+    /// Resolve final Account/User references before reading either model.
+    pub fn resolve_schema(
+        config: &AuthConfig,
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<ResolvedJoin> {
         resolve_references(
             (
                 EntityRole::Account,
@@ -32,33 +50,14 @@ impl AccountOwner {
             schema,
             table_matches,
         )
-        .map(|_| ())
-    }
-
-    /// Check projections against the canonical owner ID captured before output policies run.
-    pub fn new(
-        account: AccountView,
-        user: Option<UserView>,
-        stored_owner_id: &SchemaValue<String>,
-    ) -> AuthResult<Self> {
-        if account.user_id != *stored_owner_id
-            || user
-                .as_ref()
-                .is_some_and(|user| user.id != *stored_owner_id)
-        {
-            return Err(AuthError::internal(
-                "Account projection changed its owner binding",
-            ));
-        }
-        Ok(Self { account, user })
     }
 }
 
-/// A user and the adapter-limited account page joined to that user.
+/// A user and the Account relationship selected by the active schema.
 #[derive(Debug, Clone)]
 pub struct UserAccounts {
     pub user: UserView,
-    pub accounts: Vec<AccountView>,
+    pub accounts: JoinValue<AccountView>,
 }
 
 impl UserAccounts {
@@ -68,6 +67,15 @@ impl UserAccounts {
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
+        Self::resolve_schema(config, schema, table_matches).map(|_| ())
+    }
+
+    /// Resolve final User/Account references before reading either model.
+    pub fn resolve_schema(
+        config: &AuthConfig,
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<ResolvedJoin> {
         resolve_references(
             (EntityRole::User, "user", &config.user),
             (
@@ -78,25 +86,15 @@ impl UserAccounts {
             schema,
             table_matches,
         )
-        .map(|_| ())
     }
 
-    /// Check a stored user and its account page without trusting projected identity fields.
-    pub fn new(
-        user: UserView,
-        accounts: Vec<AccountView>,
-        stored_user_id: &SchemaValue<String>,
-    ) -> AuthResult<Self> {
-        if user.id != *stored_user_id
-            || accounts
-                .iter()
-                .any(|account| account.user_id != *stored_user_id)
-        {
-            return Err(AuthError::internal(
-                "User projection changed its account binding",
-            ));
-        }
-        Ok(Self { user, accounts })
+    /// The internal adapter replaces a null Account relationship with an empty page.
+    pub fn new(user: UserView, accounts: JoinValue<AccountView>) -> Self {
+        let accounts = match accounts {
+            JoinValue::One(None) => JoinValue::Many(Vec::new()),
+            accounts => accounts,
+        };
+        Self { user, accounts }
     }
 }
 
@@ -155,7 +153,7 @@ fn resolve_references(
     (model_role, model, model_fields): (EntityRole, &str, &UserConfig),
     schema: &ModelFields,
     table_matches: impl Fn(EntityRole, &str) -> bool,
-) -> AuthResult<MemberUserJoin> {
+) -> AuthResult<ResolvedJoin> {
     // Where conversion changes adapter metadata before join validation, including failed joins.
     schema.begin_id_query(base_role)?;
     let base_fields = schema.runtime_fields(base_role, base_fields)?;
@@ -183,9 +181,10 @@ fn resolve_references(
                     resolve_field(model, &model_fields, &reference.field)?,
                 )
             };
-            Ok(MemberUserJoin {
+            Ok(ResolvedJoin {
                 from: from.1.to_owned(),
                 to: to.1.to_owned(),
+                logical_from: from.0.to_owned(),
                 logical_to: to.0.to_owned(),
                 many: to.1 != "id" && !*unique,
             })
@@ -217,21 +216,24 @@ pub struct MemberUser {
     pub user: crate::MemberUserView,
 }
 
-/// Selected Member/User join fields and result cardinality.
+/// Selected join fields and result cardinality.
 #[derive(Debug, Clone)]
-pub struct MemberUserJoin {
-    /// Physical field on Member.
+pub struct ResolvedJoin {
+    /// Physical field on the parent model.
     pub from: String,
-    /// Physical field on User.
+    /// Physical field on the child model.
     pub to: String,
-    /// Original logical User field corresponding to the native target column.
+    /// Original logical parent field corresponding to the native source column.
+    pub logical_from: String,
+    /// Original logical child field corresponding to the native target column.
     pub logical_to: String,
-    /// Whether the selected foreign key returns a page instead of one user.
+    /// Whether the selected foreign key returns a page instead of one record.
     pub many: bool,
 }
 
 impl MemberUser {
-    fn field_schema(configured: &UserConfig) -> UserConfig {
+    #[doc(hidden)]
+    pub fn field_schema(configured: &UserConfig) -> UserConfig {
         let mut defaults = ModelFields::default();
         defaults.register_organization_schema(&Default::default(), true);
         let mut fields = defaults.fields(EntityRole::Member).clone();
@@ -260,7 +262,7 @@ impl MemberUser {
         member_fields: &UserConfig,
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
-    ) -> AuthResult<MemberUserJoin> {
+    ) -> AuthResult<ResolvedJoin> {
         let schema = schema.organization_join_schema(config);
         let fields = Self::field_schema(member_fields);
         resolve_references(
@@ -272,9 +274,9 @@ impl MemberUser {
     }
 }
 
-impl MemberUserJoin {
+impl ResolvedJoin {
     /// Resolve User query attributes without changing creation or output policies.
-    pub fn target_field(config: &AuthConfig, logical: &str) -> UserFieldConfig {
+    pub fn user_field(config: &AuthConfig, logical: &str) -> UserFieldConfig {
         if logical == "id" {
             return UserFieldConfig::default();
         }
@@ -293,37 +295,38 @@ impl MemberUserJoin {
             })
     }
 
-    /// Resolve the native source column again against the projected Member field names.
+    /// Resolve the native source column again against the projected parent field names.
     pub fn fallback_from(
         &self,
-        member_fields: &UserConfig,
+        (role, model, fields): (EntityRole, &str, &UserConfig),
         schema: &ModelFields,
     ) -> AuthResult<String> {
-        let fields =
-            schema.runtime_fields(EntityRole::Member, &MemberUser::field_schema(member_fields))?;
-        Ok(resolve_field("member", &fields, &self.from)?.0.to_owned())
+        let fields = schema.runtime_fields(role, fields)?;
+        Ok(resolve_field(model, &fields, &self.from)?.0.to_owned())
     }
 
-    /// Resolve the fallback query column before installing the User ID query policy.
+    /// Resolve the fallback query column before installing the child ID query policy.
     pub fn fallback_target(
         &self,
-        config: &AuthConfig,
+        (role, model, fields): (EntityRole, &str, &UserConfig),
         schema: &ModelFields,
     ) -> AuthResult<(String, String)> {
-        let fields = schema.runtime_fields(EntityRole::User, &config.user)?;
-        let (logical, physical) = resolve_field("user", &fields, &self.to)?;
-        schema.begin_id_query(EntityRole::User)?;
+        let fields = schema.runtime_fields(role, fields)?;
+        let (logical, physical) = resolve_field(model, &fields, &self.to)?;
+        schema.begin_id_query(role)?;
         Ok((logical.to_owned(), physical.to_owned()))
     }
+}
 
+impl MemberUser {
     /// Select the organization summary after every joined user output callback completes.
     pub fn finish(
-        &self,
+        relation: &ResolvedJoin,
         member: crate::Member,
         users: Vec<crate::MemberUserView>,
         require_user: bool,
     ) -> AuthResult<Option<MemberUser>> {
-        let user = if self.many {
+        let user = if relation.many {
             // JavaScript reads the four summary properties from the array, including an empty array.
             crate::MemberUserView::default()
         } else if let Some(user) = users.first() {

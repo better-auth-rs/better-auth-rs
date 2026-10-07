@@ -17,8 +17,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod cache_tests;
 mod cookie_cache;
+mod native;
 mod response;
 mod signer;
+pub use native::NativeSessionData;
 pub use signer::{SessionCookieContext, SessionCookieSigner};
 #[cfg(test)]
 mod response_tests;
@@ -201,6 +203,17 @@ impl<S: AuthSchema> SessionManager<S> {
         data: SessionData,
         dont_remember: Option<bool>,
     ) -> AuthResult<()> {
+        self.set_native_session_cookie(req, data.into(), dont_remember)
+            .await
+    }
+
+    /// Write credentials while preserving the native User value for endpoint after hooks.
+    pub async fn set_native_session_cookie(
+        &self,
+        req: &AuthRequest,
+        data: NativeSessionData,
+        dont_remember: Option<bool>,
+    ) -> AuthResult<()> {
         self.issue_session_cookie(req, data, dont_remember, None)
             .await
     }
@@ -213,14 +226,14 @@ impl<S: AuthSchema> SessionManager<S> {
         dont_remember: Option<bool>,
         transaction: &dyn crate::store::AuthTransaction<S>,
     ) -> AuthResult<()> {
-        self.issue_session_cookie(req, data, dont_remember, Some(transaction))
+        self.issue_session_cookie(req, data.into(), dont_remember, Some(transaction))
             .await
     }
 
     async fn issue_session_cookie(
         &self,
         req: &AuthRequest,
-        data: SessionData,
+        data: NativeSessionData,
         dont_remember: Option<bool>,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<()> {
@@ -252,8 +265,19 @@ impl<S: AuthSchema> SessionManager<S> {
         ip_address: Option<String>,
         user_agent: Option<String>,
     ) -> AuthResult<crate::wire::SessionView> {
-        self.create_session_with_lifetime(
-            user,
+        self.create_session_for_id(user.id().into_owned(), ip_address, user_agent)
+            .await
+    }
+
+    /// Preserve the selected runtime User ID, including an omitted ID, during session creation.
+    pub async fn create_session_for_id(
+        &self,
+        user_id: crate::SchemaValue<String>,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+    ) -> AuthResult<SessionView> {
+        self.create_session_for_id_with_lifetime(
+            user_id,
             ip_address,
             user_agent,
             self.config.session.expires_in(),
@@ -269,11 +293,28 @@ impl<S: AuthSchema> SessionManager<S> {
         user_agent: Option<String>,
         expires_in: chrono::Duration,
     ) -> AuthResult<crate::wire::SessionView> {
+        self.create_session_for_id_with_lifetime(
+            user.id().into_owned(),
+            ip_address,
+            user_agent,
+            expires_in,
+        )
+        .await
+    }
+
+    /// Create a session from a native User ID with an explicit lifetime.
+    pub async fn create_session_for_id_with_lifetime(
+        &self,
+        user_id: crate::SchemaValue<String>,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+        expires_in: chrono::Duration,
+    ) -> AuthResult<SessionView> {
         let expires_at = Utc::now() + expires_in;
 
         let create_session = CreateSession {
             additional_fields: Default::default(),
-            user_id: user.id().into_owned(),
+            user_id,
             expires_at: expires_at.into(),
             ip_address,
             user_agent,
@@ -407,7 +448,7 @@ impl<S: AuthSchema> SessionManager<S> {
                     "1"
                 } else {
                     &payload.version
-                }) == cache.version.resolve(&payload.data).await?
+                }) == cache.version.resolve(&payload.data.clone().into()).await?
                 && expires >= Utc::now().timestamp_millis()
                 && payload.data.session.expires_at.milliseconds()
                     >= Utc::now().timestamp_millis() as f64
@@ -529,14 +570,14 @@ impl<S: AuthSchema> SessionManager<S> {
         data: &SessionData,
         dont_remember: bool,
     ) -> AuthResult<()> {
-        self.write_cache_with_response(req, data, dont_remember, None, None)
+        self.write_cache_with_response(req, &data.clone().into(), dont_remember, None, None)
             .await
     }
 
     async fn write_cache_with_response(
         &self,
         req: &AuthRequest,
-        data: &SessionData,
+        data: &NativeSessionData,
         dont_remember: bool,
         response_headers: Option<&crate::Headers>,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,

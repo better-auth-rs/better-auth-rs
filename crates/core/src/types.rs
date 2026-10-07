@@ -56,7 +56,7 @@ pub struct AuthRequest {
     server_only: bool,
     server_context: std::sync::Arc<std::sync::Mutex<crate::FieldMap>>,
     headers_present: bool,
-    new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
+    new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::NativeSessionData>>>,
     session_snapshot: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
 }
 
@@ -513,7 +513,7 @@ impl AuthRequest {
     }
 
     /// The exact identity last passed to the session-cookie writer during this endpoint call.
-    pub fn new_session(&self) -> crate::AuthResult<Option<crate::session::SessionData>> {
+    pub fn new_session(&self) -> crate::AuthResult<Option<crate::session::NativeSessionData>> {
         Ok(self
             .new_session
             .lock()
@@ -532,7 +532,7 @@ impl AuthRequest {
 
     pub(crate) fn set_new_session(
         &self,
-        data: crate::session::SessionData,
+        data: crate::session::NativeSessionData,
     ) -> crate::AuthResult<()> {
         *self
             .new_session

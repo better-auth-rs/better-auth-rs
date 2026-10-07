@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser,
-    id::IdGeneration, store::EphemeralStore,
+    id::IdGeneration,
+    store::{EphemeralStore, JoinValue},
 };
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -33,9 +34,13 @@ async fn verify<S: AuthSchema>(store: &impl AuthStore<S>) -> AuthResult<()> {
         .await?
         .ok_or_else(|| AuthError::internal("Expected user account join"))?;
     assert_eq!(joined.user.id, user.id);
-    assert_eq!(joined.accounts.len(), 1);
-    let joined_account = joined
-        .accounts
+    let JoinValue::Many(accounts) = joined.accounts else {
+        return Err(AuthError::internal(
+            "Expected the Account relationship page",
+        ));
+    };
+    assert_eq!(accounts.len(), 1);
+    let joined_account = accounts
         .first()
         .ok_or_else(|| AuthError::internal("Expected joined account"))?;
     assert_eq!(joined_account.id, account.id);
@@ -46,9 +51,11 @@ async fn verify<S: AuthSchema>(store: &impl AuthStore<S>) -> AuthResult<()> {
         .ok_or_else(|| AuthError::internal("Expected account owner join"))?;
     assert_eq!(owner.account.id, account.id);
     assert_eq!(owner.account.user_id, user.id);
+    let JoinValue::One(owner_user) = owner.user else {
+        return Err(AuthError::internal("Expected a single Account owner"));
+    };
     assert_eq!(
-        owner
-            .user
+        owner_user
             .ok_or_else(|| AuthError::internal("Expected owner"))?
             .id,
         user.id

@@ -111,7 +111,7 @@ fn selected_reference_fields_match_upstream() -> Result<(), Box<dyn std::error::
                 },
             );
         let actual = match resolved {
-            Ok(MemberUserJoin { from, to, .. }) => {
+            Ok(ResolvedJoin { from, to, .. }) => {
                 assert_eq!(case.events.len(), 1, "{} {operation}", case.name);
                 let event = case.events.first().ok_or("Missing captured read")?;
                 assert_eq!(event.get(0), Some(&json!("findOne")));

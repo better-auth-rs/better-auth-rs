@@ -7,8 +7,11 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
 };
 
-use better_auth_core::store::UserStore;
-use better_auth_core::user_fields::{FieldOutputCapabilities, UserFieldType};
+use better_auth_core::store::{ResolvedJoin, UserStore};
+use better_auth_core::user_fields::{
+    AdapterRecord, FieldOutputCapabilities, UserConfig, UserFieldType,
+};
+use better_auth_core::{AuthUser, FieldMap, FieldValue};
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::DatabaseHookUpdate;
@@ -68,7 +71,6 @@ where
                 },
             )
             .await?;
-        use better_auth_core::AuthUser;
         for (view, row) in output.iter_mut().zip(rows) {
             view.visible_fields = row.field_presence().cloned();
         }
@@ -139,6 +141,120 @@ where
                 }
             })
             .collect()
+    }
+
+    fn native_user_record(&self, user: &S::User, fields: &UserConfig) -> AuthResult<AdapterRecord> {
+        let backend = self.connection().get_database_backend();
+        let storage = super::joins::native_child_fields(fields, |name, field| {
+            let value = column_value::<<S::User as SeaOrmUserModel>::Entity>(
+                user,
+                S::User::field_column(name)?,
+            );
+            super::field_output::raw_field_output(value, field, backend)?.ok_or_else(|| {
+                AuthError::internal(format!(
+                    "Raw SQL output omitted selected User field: {name}"
+                ))
+            })
+        })?;
+        let core = FieldMap::from([("id".into(), user.id().into_owned().into_field_value())]);
+        let mut record = AdapterRecord::new(core, FieldMap::new());
+        record.map_storage_fields(
+            fields,
+            super::field_output::capabilities(backend),
+            |name, _| Ok(Some(storage.get(name).cloned().unwrap_or_default())),
+        )?;
+        Ok(record)
+    }
+
+    pub(super) async fn output_native_user_pages(
+        &self,
+        pages: Vec<&[S::User]>,
+    ) -> AuthResult<Vec<Vec<FieldMap>>> {
+        if pages.iter().any(|page| !page.is_empty()) {
+            self.model_fields.begin_id_output(EntityRole::User)?;
+        }
+        let mut fields = self.config().user.clone();
+        for name in [
+            "name",
+            "email",
+            "emailVerified",
+            "image",
+            "createdAt",
+            "updatedAt",
+        ] {
+            let _ = fields
+                .fields_mut()
+                .entry(name.into())
+                .or_insert_with(|| ResolvedJoin::user_field(self.config(), name));
+        }
+        let mut fields = fields.user_adapter_fields();
+        let _ = fields.fields_mut().insert("id".into(), Default::default());
+        super::joins::project_child_pages(
+            &fields,
+            pages,
+            self.connection().get_database_backend(),
+            &|user| self.native_user_record(user, &fields),
+        )
+        .await
+    }
+
+    pub(super) fn set_join_user_visibility(&self, user: &mut better_auth_core::UserView) {
+        user.visible_fields = Some(
+            ["name", "email", "image"]
+                .into_iter()
+                .map(str::to_owned)
+                .chain(self.config().user.fields().keys().cloned())
+                .collect(),
+        );
+    }
+
+    pub(super) async fn selected_join_users(
+        &self,
+        relation: &ResolvedJoin,
+        value: FieldValue,
+        limit: f64,
+    ) -> AuthResult<Vec<S::User>> {
+        if value.is_null() || value.is_undefined() {
+            return Ok(Vec::new());
+        }
+        let (logical_to, physical_to) = relation.fallback_target(
+            (EntityRole::User, "user", &self.config().user),
+            &self.model_fields,
+        )?;
+        let field = ResolvedJoin::user_field(self.config(), &logical_to);
+        let policy = self.config().advanced.database.generate_id();
+        let backend = self.connection().get_database_backend();
+        let original = value.clone();
+        let value = if logical_to == "id" || field.references_id() {
+            policy.adapter_id_query(value)?
+        } else {
+            value
+        };
+        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
+        let value = super::value_filter::adapter_query_value(value, &original, &field, backend)?;
+        let column = S::User::field_column(&physical_to)?;
+        let query = <S::User as SeaOrmUserModel>::Entity::find()
+            .filter(super::value_filter::equals(column, &value, backend)?);
+        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+            self.config(),
+            if relation.many { "findMany" } else { "findOne" },
+            async {
+                if relation.many {
+                    query
+                        .limit(super::pagination::sql_pagination(backend, Some(limit), None)?.0)
+                        .all(self.connection())
+                        .await
+                        .map_err(map_db_err)
+                } else {
+                    query
+                        .one(self.connection())
+                        .await
+                        .map(|user| user.into_iter().collect())
+                        .map_err(map_db_err)
+                }
+            },
+        )
+        .await
     }
 
     pub(super) async fn find_user_by_username(
@@ -620,13 +736,13 @@ where
         &self,
         email: &str,
     ) -> AuthResult<Option<better_auth_core::store::UserAccounts>> {
-        use better_auth_core::AuthUser;
-        better_auth_core::store::UserAccounts::validate_schema(
+        let relation = better_auth_core::store::UserAccounts::resolve_schema(
             self.config(),
             &self.model_fields,
             super::model_names::table_matches::<S, O, P>,
         )?;
-        let (record, native_accounts) = if self.config().advanced.database.joins == Some(true) {
+        let native_join = self.config().advanced.database.joins == Some(true);
+        let (record, native_accounts) = if native_join {
             self.model_fields.canonicalize_id(EntityRole::Account)?;
             let query = super::joins::joined_query::<
                 <S::User as SeaOrmUserModel>::Entity,
@@ -635,7 +751,10 @@ where
                 <S::User as SeaOrmUserModel>::Entity::find()
                     .filter(S::User::email_column().eq(normalize_user_email(email)))
                     .limit(1),
-                (S::User::id_column(), S::Account::user_id_column()),
+                (
+                    S::User::field_column(&relation.from)?,
+                    S::Account::field_column(&relation.to)?,
+                ),
                 S::Account::id_column(),
             );
             let rows = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
@@ -652,11 +771,12 @@ where
                 return Ok(None);
             };
             let accounts =
-                super::joins::limited_children::<<S::Account as SeaOrmAccountModel>::Entity>(
+                super::joins::selected_children::<<S::Account as SeaOrmAccountModel>::Entity>(
                     std::iter::once(first_account)
                         .chain(rows.map(|(_, account)| account))
                         .flatten(),
                     S::Account::id_column(),
+                    relation.many,
                     self.config().advanced.database.find_many_limit(),
                 );
             (record, Some(accounts))
@@ -666,22 +786,33 @@ where
             };
             (record, None)
         };
-        let stored_user_id = record.id().into_owned();
-        let user = self.output_user(&record, self.connection()).await?;
+        let mut user = self.output_user(&record, self.connection()).await?;
+        self.set_join_user_visibility(&mut user);
         let records = if let Some(records) = native_accounts {
             records
         } else {
-            match stored_user_id.as_str() {
-                Some(id) => self.user_account_records(id).await?,
-                None => Vec::new(),
-            }
+            let source = relation.fallback_from(
+                (EntityRole::User, "user", &self.config().user),
+                &self.model_fields,
+            )?;
+            let value = FieldMap::from(user.clone())
+                .remove(&source)
+                .unwrap_or_default();
+            self.selected_join_accounts(&relation, value).await?
         };
         let mut accounts = Vec::with_capacity(records.len());
         for record in records {
-            accounts.push(self.output_account(&record, self.connection()).await?);
+            accounts.push(if native_join {
+                self.output_native_account(&record).await?
+            } else {
+                self.output_account(&record, self.connection()).await?
+            });
         }
 
-        better_auth_core::store::UserAccounts::new(user, accounts, &stored_user_id).map(Some)
+        Ok(Some(better_auth_core::store::UserAccounts::new(
+            user,
+            super::joins::relation_value(relation.many, accounts),
+        )))
     }
 
     async fn get_user_by_email(

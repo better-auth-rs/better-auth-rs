@@ -246,12 +246,17 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                 if self.config.disable_setting_jwt_header || req.path() != "/get-session" {
                     return Ok(());
                 }
-                let Some(data) = req.session_snapshot()?.or(req.new_session()?) else {
+                let snapshot = req.session_snapshot()?;
+                let Some(data) = snapshot
+                    .clone()
+                    .map(better_auth_core::session::NativeSessionData::from)
+                    .or(req.new_session()?)
+                else {
                     return Ok(());
                 };
                 let payload = serde_json::to_value(&data)?;
                 let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
-                endpoint.session = Some((data.user, data.session));
+                endpoint.session = snapshot.map(|data| (data.user, data.session));
                 endpoint.response = Some(response);
                 let token = self.sign_session(payload, &endpoint).await?;
                 let _ = response.headers.insert("set-auth-jwt", token);

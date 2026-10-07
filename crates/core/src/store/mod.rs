@@ -410,7 +410,7 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         limit: f64,
     ) -> AuthResult<Vec<crate::UserView>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::UserView>>;
-    /// Read the user first, then its account page using the adapter default limit.
+    /// Read the user and the schema-selected Account relationship, preserving single-record and page results.
     async fn get_user_with_accounts(&self, _email: &str) -> AuthResult<Option<UserAccounts>> {
         Err(AuthError::config(
             "The store must support user account joins",
@@ -658,8 +658,8 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
 
 mod joins;
 pub use joins::{
-    AccountOwner, InvitationOrganization, MemberUser, MemberUserJoin, OrganizationDetails,
-    OrganizationDetailsQuery, OrganizationKey, UserAccounts,
+    AccountOwner, InvitationOrganization, JoinValue, MemberUser, OrganizationDetails,
+    OrganizationDetailsQuery, OrganizationKey, ResolvedJoin, UserAccounts,
 };
 
 #[async_trait]
@@ -681,7 +681,7 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Option<crate::wire::AccountView>>;
-    /// Read at most two matching accounts and their persisted owners before returning a unique identity.
+    /// Read at most two matching accounts and their schema-selected User relationships before checking duplicate identities.
     async fn get_account_owner(
         &self,
         _provider: &str,

@@ -1,5 +1,5 @@
 use better_auth_core::entity::{AuthSession, AuthUser};
-use better_auth_core::wire::{SessionView, UserView};
+use better_auth_core::wire::SessionView;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount, CreateUser,
     UpdateAccount, UpdateUser,
@@ -9,7 +9,7 @@ use super::encryption::encrypt_token_set;
 use super::providers::{OAuthTokenSet, OAuthUserInfo};
 use super::resolved::ResolvedProvider;
 use super::state::AccountCookiePayload;
-use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_user_session};
+use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_selected_user_session};
 
 pub(super) struct OAuthSignInOptions<'a> {
     pub(super) request: &'a AuthRequest,
@@ -51,9 +51,9 @@ impl OAuthSignInOptions<'_> {
 }
 
 pub(super) struct ProcessOAuthUserResult {
-    pub(super) issued: better_auth_core::session::SessionData,
+    pub(super) issued: better_auth_core::session::NativeSessionData,
     pub(super) session: SessionView,
-    pub(super) user: UserView,
+    pub(super) user: serde_json::Value,
     pub(super) is_register: bool,
     pub(super) account_cookie: Option<AccountCookiePayload>,
 }
@@ -125,7 +125,7 @@ impl From<String> for OAuthSignInError {
 impl From<SessionIssueError> for OAuthSignInError {
     fn from(value: SessionIssueError) -> Self {
         match value {
-            SessionIssueError::Auth(error) => Self::Generic(error.to_string()),
+            SessionIssueError::Auth(error) => Self::Auth(error),
             SessionIssueError::Banned { message } => Self::Banned(message),
         }
     }
@@ -210,17 +210,49 @@ pub(super) async fn process_oauth_sign_in(
             .data
             .map(|data| (data.user, data.session));
     }
+    let (account_owner, existing_user) = match account_owner {
+        Some(owner) => (Some(owner), None),
+        None => {
+            let existing = ctx
+                .database
+                .get_user_with_accounts(&provider_email.to_lowercase())
+                .await
+                .map_err(|error| account_query_error(error, ctx))?;
+            match existing {
+                Some(existing) => {
+                    let better_auth_core::store::JoinValue::Many(accounts) = existing.accounts
+                    else {
+                        return Err(AuthError::internal("accounts.find is not a function").into());
+                    };
+                    match accounts.into_iter().find(|account| {
+                        account.provider_id == provider_name && account.account_id == user_info.id
+                    }) {
+                        Some(account) => (
+                            Some(better_auth_core::store::AccountOwner {
+                                account,
+                                user: better_auth_core::store::JoinValue::One(Some(existing.user)),
+                            }),
+                            None,
+                        ),
+                        None => (None, Some(existing.user)),
+                    }
+                }
+                None => (None, None),
+            }
+        }
+    };
     if let Some(owner) = account_owner {
-        let Some(mut user) = owner.user else {
-            return Err(OAuthSignInError::Generic("unable to link account".into()));
+        let user_id = match &owner.user {
+            better_auth_core::store::JoinValue::One(Some(user)) => user.id().field_value(),
+            better_auth_core::store::JoinValue::Many(_) => better_auth_core::FieldValue::Undefined,
+            better_auth_core::store::JoinValue::One(None) => {
+                return Err(OAuthSignInError::Generic("unable to link account".into()));
+            }
         };
         let existing_account = owner.account;
         validate_provider_user(
             user_info,
-            existing_account
-                .user_id
-                .typed()
-                .map_err(|error| error.to_string())?,
+            user_id,
             provider_name,
             options.profile,
             crate::plugins::user_admission::UserValidationAction::SignIn,
@@ -236,6 +268,7 @@ pub(super) async fn process_oauth_sign_in(
                         .typed()
                         .map_err(|error| error.to_string())?,
                     UpdateAccount {
+                        provider_id: provider_name.to_owned().into(),
                         access_token: (token_bundle.access_token.clone())
                             .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                             .unwrap_or_default(),
@@ -262,73 +295,91 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?;
         }
 
-        if email_verified
-            && !user.email_verified()
-            && user
-                .email()
-                .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
-        {
-            user = ctx
-                .database
-                .update_user(
-                    user.id()
-                        .typed()
-                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-                    UpdateUser {
-                        email_verified: Some(true),
-                        ..Default::default()
-                    },
-                )
-                .await
-                .map_err(|error| error.to_string())?;
-        }
+        let user = match owner.user {
+            better_auth_core::store::JoinValue::One(Some(mut user)) => {
+                if email_verified
+                    && !user.email_verified()
+                    && user
+                        .email()
+                        .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
+                {
+                    let _ = ctx
+                        .database
+                        .update_user(
+                            user.id()
+                                .typed()
+                                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
+                            UpdateUser {
+                                email_verified: Some(true),
+                                ..Default::default()
+                            },
+                        )
+                        .await
+                        .map_err(|error| error.to_string())?;
+                }
 
-        if options.override_user_info {
-            user = ctx
-                .database
-                .update_user(
-                    user.id()
-                        .typed()
-                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-                    UpdateUser {
-                        additional_fields: ctx
-                            .config
-                            .user
-                            .parse_provider_input(&user_info.additional_fields, false)
-                            .map_err(|error| error.to_string())?,
-                        name: user_info
-                            .name()?
-                            .map(|value| Some(value.to_owned()).into())
-                            .unwrap_or_default(),
-                        image: user_info.image.clone().map(Into::into).unwrap_or_default(),
-                        email: Some(provider_email.to_lowercase()),
-                        email_verified: Some(
-                            email_verified
-                                || (user.email_verified()
-                                    && user.email().is_some_and(|email| {
-                                        email.eq_ignore_ascii_case(provider_email)
-                                    })),
-                        ),
-                        ..Default::default()
-                    },
-                )
-                .await
-                .map_err(|error| error.to_string())?;
-        }
+                if options.override_user_info {
+                    user = ctx
+                        .database
+                        .update_user(
+                            user.id()
+                                .typed()
+                                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
+                            UpdateUser {
+                                additional_fields: ctx
+                                    .config
+                                    .user
+                                    .parse_provider_input(&user_info.additional_fields, false)
+                                    .map_err(|error| error.to_string())?,
+                                name: user_info
+                                    .name()?
+                                    .map(|value| Some(value.to_owned()).into())
+                                    .unwrap_or_default(),
+                                image: user_info.image.clone().map(Into::into).unwrap_or_default(),
+                                email: Some(provider_email.to_lowercase()),
+                                email_verified: Some(
+                                    email_verified
+                                        || (user.email_verified()
+                                            && user.email().is_some_and(|email| {
+                                                email.eq_ignore_ascii_case(provider_email)
+                                            })),
+                                ),
+                                ..Default::default()
+                            },
+                        )
+                        .await
+                        .map_err(|error| error.to_string())?;
+                }
 
-        options
-            .check_email_verification(provider, &user, false, ctx)
-            .await?;
-        let issued = issue_user_session(
-            ctx,
-            user.id()
-                .typed()
-                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-            meta.ip_address.clone(),
-            meta.user_agent.clone(),
-        )
-        .await
-        .map_err(OAuthSignInError::from)?;
+                options
+                    .check_email_verification(provider, &user, false, ctx)
+                    .await?;
+                better_auth_core::FieldValue::from(better_auth_core::FieldMap::from(user))
+            }
+            better_auth_core::store::JoinValue::Many(users) => {
+                if options.override_user_info {
+                    return Err(AuthError::config(
+                        "OAuth profile updates for array User relationships are not supported",
+                    )
+                    .into());
+                }
+                if provider.config.require_email_verification == Some(true) {
+                    return Err(OAuthSignInError::Generic("email_not_verified".into()));
+                }
+                better_auth_core::FieldValue::Array(
+                    users
+                        .into_iter()
+                        .map(|user| better_auth_core::FieldMap::from(user).into())
+                        .collect(),
+                )
+            }
+            better_auth_core::store::JoinValue::One(None) => {
+                return Err(OAuthSignInError::Generic("unable to link account".into()));
+            }
+        };
+        let issued = issue_selected_user_session(ctx, user, meta, ctx.config.session.expires_in())
+            .await
+            .map_err(OAuthSignInError::from)?;
         let account_cookie = ctx.config.account.store_account_cookie().then(|| {
             if !ctx.config.account.update_account_on_sign_in() {
                 return existing_account.clone();
@@ -361,33 +412,10 @@ pub(super) async fn process_oauth_sign_in(
             }
         });
 
-        return Ok(ProcessOAuthUserResult {
-            issued: ctx
-                .session_manager()
-                .internal_data(&issued.user, &issued.session)
-                .await
-                .map_err(|error| error.to_string())?,
-            session: ctx
-                .session_view(&issued.session)
-                .await
-                .map_err(|error| error.to_string())?,
-            user: ctx
-                .user_view(&issued.user)
-                .await
-                .map_err(|error| error.to_string())?,
-            is_register: false,
-            account_cookie,
-        });
+        return finish_oauth_user(issued, false, account_cookie, ctx).await;
     }
 
-    let existing_user = ctx
-        .database
-        .get_user_with_accounts(&provider_email.to_lowercase())
-        .await
-        .map_err(|error| account_query_error(error, ctx))?;
-
-    if let Some(existing) = existing_user {
-        let existing_user = existing.user;
+    if let Some(existing_user) = existing_user {
         let linking = &ctx.config.account.account_linking;
         let trusted_provider = ctx
             .trusted_providers()
@@ -406,10 +434,7 @@ pub(super) async fn process_oauth_sign_in(
 
         validate_provider_user(
             user_info,
-            existing_user
-                .id()
-                .typed()
-                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
+            existing_user.id().field_value(),
             provider_name,
             options.profile,
             crate::plugins::user_admission::UserValidationAction::LinkAccount,
@@ -457,7 +482,7 @@ pub(super) async fn process_oauth_sign_in(
                 .email()
                 .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
         {
-            linked_user = ctx
+            let _ = ctx
                 .database
                 .update_user(
                     linked_user
@@ -510,14 +535,11 @@ pub(super) async fn process_oauth_sign_in(
         options
             .check_email_verification(provider, &linked_user, false, ctx)
             .await?;
-        let issued = issue_user_session(
+        let issued = issue_selected_user_session(
             ctx,
-            linked_user
-                .id()
-                .typed()
-                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-            meta.ip_address.clone(),
-            meta.user_agent.clone(),
+            better_auth_core::FieldMap::from(linked_user).into(),
+            meta,
+            ctx.config.session.expires_in(),
         )
         .await
         .map_err(OAuthSignInError::from)?;
@@ -527,23 +549,7 @@ pub(super) async fn process_oauth_sign_in(
             .store_account_cookie()
             .then(|| created_account.clone());
 
-        Ok(ProcessOAuthUserResult {
-            issued: ctx
-                .session_manager()
-                .internal_data(&issued.user, &issued.session)
-                .await
-                .map_err(|error| error.to_string())?,
-            session: ctx
-                .session_view(&issued.session)
-                .await
-                .map_err(|error| error.to_string())?,
-            user: ctx
-                .user_view(&issued.user)
-                .await
-                .map_err(|error| error.to_string())?,
-            is_register: false,
-            account_cookie,
-        })
+        finish_oauth_user(issued, false, account_cookie, ctx).await
     } else {
         if options.disable_sign_up {
             return Err(OAuthSignInError::Generic("signup disabled".to_string()));
@@ -635,14 +641,11 @@ pub(super) async fn process_oauth_sign_in(
         options
             .check_email_verification(provider, &created_user, true, ctx)
             .await?;
-        let issued = issue_user_session(
+        let issued = issue_selected_user_session(
             ctx,
-            created_user
-                .id()
-                .typed()
-                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-            meta.ip_address.clone(),
-            meta.user_agent.clone(),
+            better_auth_core::FieldMap::from(ctx.internal_user_view(&created_user).await?).into(),
+            meta,
+            ctx.config.session.expires_in(),
         )
         .await
         .map_err(OAuthSignInError::from)?;
@@ -652,24 +655,26 @@ pub(super) async fn process_oauth_sign_in(
             .store_account_cookie()
             .then(|| created_account.clone());
 
-        Ok(ProcessOAuthUserResult {
-            issued: ctx
-                .session_manager()
-                .internal_data(&issued.user, &issued.session)
-                .await
-                .map_err(|error| error.to_string())?,
-            session: ctx
-                .session_view(&issued.session)
-                .await
-                .map_err(|error| error.to_string())?,
-            user: ctx
-                .user_view(&issued.user)
-                .await
-                .map_err(|error| error.to_string())?,
-            is_register: true,
-            account_cookie,
-        })
+        finish_oauth_user(issued, true, account_cookie, ctx).await
     }
+}
+
+async fn finish_oauth_user(
+    issued: better_auth_core::session::NativeSessionData,
+    is_register: bool,
+    account_cookie: Option<AccountCookiePayload>,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> Result<ProcessOAuthUserResult, OAuthSignInError> {
+    Ok(ProcessOAuthUserResult {
+        user: issued
+            .public_user(&ctx.config.user)?
+            .json()?
+            .ok_or_else(|| AuthError::internal("User output must be an object"))?,
+        session: ctx.session_view(&issued.session).await?,
+        issued,
+        is_register,
+        account_cookie,
+    })
 }
 
 pub(crate) async fn sign_in_verified_profile(
@@ -720,7 +725,7 @@ pub(crate) async fn sign_in_verified_profile(
         OAuthSignInError::Endpoint(response) => response.into(),
     })?;
     ctx.session_manager()
-        .set_session_cookie(req, outcome.issued, None)
+        .set_native_session_cookie(req, outcome.issued, None)
         .await?;
     Ok(AuthResponse::json(
         200,
@@ -730,14 +735,14 @@ pub(crate) async fn sign_in_verified_profile(
 
 pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
     user: &OAuthUserInfo,
-    user_id: &str,
+    user_id: better_auth_core::FieldValue,
     provider: &str,
     profile: Option<&serde_json::Value>,
     action: crate::plugins::user_admission::UserValidationAction,
     endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
 ) -> Result<(), OAuthSignInError> {
     let mut fields = user.additional_fields.clone();
-    let _ = fields.insert("id".into(), user_id.into());
+    let _ = fields.insert("id".into(), user_id);
     if let Some(email) = user.email()? {
         let _ = fields.insert("email".into(), email.to_lowercase().into());
     } else if user.email.is_undefined() {

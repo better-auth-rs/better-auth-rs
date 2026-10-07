@@ -355,7 +355,7 @@ pub(super) async fn handle_callback(
         }
     }
     ctx.session_manager()
-        .set_session_cookie(req, outcome.issued, None)
+        .set_native_session_cookie(req, outcome.issued, None)
         .await?;
     let response = redirect_response(&redirect_target);
     Ok(response)

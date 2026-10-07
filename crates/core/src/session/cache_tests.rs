@@ -221,7 +221,7 @@ async fn cache_is_bound_to_session_token_and_signature() {
     ] {
         let (manager, original) = setup(config(strategy)).await;
         let cache = manager.config.session.cookie_cache.as_ref().unwrap();
-        let encoded = cookie_cache::encode(&original, &manager.config, cache, false)
+        let encoded = cookie_cache::encode(&original.clone().into(), &manager.config, cache, false)
             .await
             .unwrap();
         let user = manager
@@ -269,7 +269,7 @@ async fn cache_is_bound_to_session_token_and_signature() {
 async fn valid_cache_survives_revocation_until_authoritative_read() {
     let (manager, data) = setup(config(CookieCacheStrategy::Compact)).await;
     let cache = manager.config.session.cookie_cache.as_ref().unwrap();
-    let encoded = cookie_cache::encode(&data, &manager.config, cache, false)
+    let encoded = cookie_cache::encode(&data.clone().into(), &manager.config, cache, false)
         .await
         .unwrap();
     manager
@@ -565,7 +565,7 @@ async fn fractional_cookie_cache_lifetimes_match_pinned_fixture() {
             let (manager, data) = setup(cfg).await;
             let cache = manager.config.session.cookie_cache.as_ref().unwrap();
             let before = Utc::now();
-            let encoded = cookie_cache::encode(&data, &manager.config, cache, false)
+            let encoded = cookie_cache::encode(&data.clone().into(), &manager.config, cache, false)
                 .await
                 .unwrap();
             let after = Utc::now();

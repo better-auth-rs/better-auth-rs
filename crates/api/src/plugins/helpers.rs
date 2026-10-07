@@ -307,6 +307,34 @@ pub(crate) async fn issue_user_session_with_lifetime<S: better_auth_core::AuthSc
     Ok(IssuedSession { user, session })
 }
 
+/// Issue a session from the selected adapter result, preserving the route's user snapshot.
+pub(crate) async fn issue_selected_user_session<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user: better_auth_core::FieldValue,
+    meta: &better_auth_core::RequestMeta,
+    expires_in: chrono::Duration,
+) -> Result<better_auth_core::session::NativeSessionData, SessionIssueError> {
+    let user_id = better_auth_core::SchemaValue::<String>::from_field(
+        user.as_object()
+            .and_then(|fields| fields.get("id"))
+            .cloned()
+            .unwrap_or_default(),
+    );
+    if admin_plugin_enabled(ctx) {
+        let _ = session_user(ctx, user_id.typed()?, None).await?;
+    }
+    let session = ctx
+        .session_manager()
+        .create_session_for_id_with_lifetime(
+            user_id,
+            meta.ip_address.clone(),
+            meta.user_agent.clone(),
+            expires_in,
+        )
+        .await?;
+    Ok(better_auth_core::session::NativeSessionData { user, session })
+}
+
 /// Resolve the user and apply session admission through the active transaction.
 pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,

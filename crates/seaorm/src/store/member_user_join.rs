@@ -6,11 +6,10 @@ use crate::{
     SeaOrmSessionModel, SeaOrmUserModel, SeaOrmVerificationModel, schema::AuthSchema,
 };
 use better_auth_core::{
-    AuthRecordFields, AuthResult, AuthUser, FieldMap, FieldValue, FromFieldMap, MemberUserView,
-    store::{MemberUser, MemberUserJoin, schema::EntityRole},
-    user_fields::AdapterRecord,
+    AuthRecordFields, AuthResult, FromFieldMap, MemberUserView,
+    store::{MemberUser, schema::EntityRole},
 };
-use sea_orm::{EntityTrait, QueryFilter, QuerySelect, Select};
+use sea_orm::{QuerySelect, Select};
 
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -91,9 +90,16 @@ where
             None => {
                 let value = member
                     .field_values()?
-                    .remove(&relation.fallback_from(&fields, &self.model_fields)?)
+                    .remove(&relation.fallback_from(
+                        (
+                            EntityRole::Member,
+                            "member",
+                            &MemberUser::field_schema(&fields),
+                        ),
+                        &self.model_fields,
+                    )?)
                     .unwrap_or_default();
-                self.member_join_users(&relation, value, limit).await?
+                self.selected_join_users(&relation, value, limit).await?
             }
         };
         let mut output = Vec::with_capacity(users.len());
@@ -104,102 +110,14 @@ where
                 MemberUserView::from_user(&self.output_user(&user, self.connection()).await?)
             });
         }
-        relation.finish(member, output, require_user)
+        MemberUser::finish(&relation, member, output, require_user)
     }
 
     async fn output_member_join_user(&self, user: &S::User) -> AuthResult<MemberUserView> {
-        self.model_fields.begin_id_output(EntityRole::User)?;
-        let backend = self.connection().get_database_backend();
-        let mut fields = self.config().user.clone();
-        for name in [
-            "name",
-            "email",
-            "emailVerified",
-            "image",
-            "createdAt",
-            "updatedAt",
-        ] {
-            let _ = fields
-                .fields_mut()
-                .entry(name.into())
-                .or_insert_with(|| MemberUserJoin::target_field(self.config(), name));
-        }
-        let mut fields = fields.user_adapter_fields();
-        let _ = fields.fields_mut().insert("id".into(), Default::default());
-        let storage = super::joins::native_child_fields(&fields, |name, field| {
-            let value = super::field_output::column_value::<<S::User as SeaOrmUserModel>::Entity>(
-                user,
-                S::User::field_column(name)?,
-            );
-            super::field_output::raw_field_output(value, field, backend)?.ok_or_else(|| {
-                better_auth_core::AuthError::internal(format!(
-                    "Raw SQL output omitted selected User field: {name}"
-                ))
-            })
-        })?;
-        let core = FieldMap::from([("id".into(), user.id().into_owned().into_field_value())]);
-        let mut record = AdapterRecord::new(core, FieldMap::new());
-        record.map_storage_fields(
-            &fields,
-            super::field_output::capabilities(backend),
-            |name, _| Ok(Some(storage.get(name).cloned().unwrap_or_default())),
-        )?;
-        // The adapter completes every callback for one child before starting the next child.
-        let mut output = fields
-            .project_adapter_records(
-                vec![record],
-                backend == sea_orm::DbBackend::Postgres,
-                backend != sea_orm::DbBackend::Sqlite,
-            )
+        // The one selected child remains a complete field map for the summary decoder.
+        let mut pages = self
+            .output_native_user_pages(vec![std::slice::from_ref(user)])
             .await?;
-        // Projection preserves the one selected child.
-        MemberUserView::from_field_values(output.remove(0))
-    }
-
-    async fn member_join_users(
-        &self,
-        relation: &MemberUserJoin,
-        value: FieldValue,
-        limit: f64,
-    ) -> AuthResult<Vec<S::User>> {
-        if value.is_null() || value.is_undefined() {
-            return Ok(Vec::new());
-        }
-        let (logical_to, physical_to) =
-            relation.fallback_target(self.config(), &self.model_fields)?;
-        let field = MemberUserJoin::target_field(self.config(), &logical_to);
-        let policy = self.config().advanced.database.generate_id();
-        let backend = self.connection().get_database_backend();
-        let original = value.clone();
-        let value = if logical_to == "id" || field.references_id() {
-            policy.adapter_id_query(value)?
-        } else {
-            value
-        };
-        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, &original, &field, backend)?;
-        let column = S::User::field_column(&physical_to)?;
-        let query = <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(super::value_filter::equals(column, &value, backend)?);
-        database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-            self.config(),
-            if relation.many { "findMany" } else { "findOne" },
-            async {
-                if relation.many {
-                    query
-                        .limit(super::pagination::sql_pagination(backend, Some(limit), None)?.0)
-                        .all(self.connection())
-                        .await
-                        .map_err(map_db_err)
-                } else {
-                    query
-                        .one(self.connection())
-                        .await
-                        .map(|user| user.into_iter().collect())
-                        .map_err(map_db_err)
-                }
-            },
-        )
-        .await
+        MemberUserView::from_field_values(pages.remove(0).remove(0))
     }
 }

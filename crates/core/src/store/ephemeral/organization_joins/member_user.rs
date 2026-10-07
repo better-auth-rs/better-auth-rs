@@ -1,22 +1,6 @@
 use super::*;
 
-fn user_value(user: &UserView, logical: &str, physical: &str) -> Value {
-    if physical == "id" {
-        return user.id.field_value();
-    }
-    if matches!(logical, "name" | "image") {
-        return user.native_field_value(logical).unwrap_or_default();
-    }
-    user.additional_fields
-        .get(physical)
-        .cloned()
-        .or_else(|| {
-            (physical == logical)
-                .then(|| user.native_field_value(logical))
-                .flatten()
-        })
-        .unwrap_or_default()
-}
+use super::super::account_joins::user_value;
 
 fn selected_users(
     state: &State,
@@ -102,7 +86,14 @@ impl EphemeralStore {
         let users = match native_users {
             Some(users) => users,
             None => {
-                let from = join.fallback_from(&fields, &self.model_fields)?;
+                let from = join.fallback_from(
+                    (
+                        EntityRole::Member,
+                        "member",
+                        &MemberUser::field_schema(&fields),
+                    ),
+                    &self.model_fields,
+                )?;
                 let value = member
                     .field_values()?
                     .get(&from)
@@ -111,14 +102,15 @@ impl EphemeralStore {
                 if value.is_null() || value.is_undefined() {
                     Vec::new()
                 } else {
-                    let (logical, physical) =
-                        join.fallback_target(&self.config, &self.model_fields)?;
+                    let (logical, physical) = join.fallback_target(
+                        (EntityRole::User, "user", &self.config.user),
+                        &self.model_fields,
+                    )?;
                     let value = if logical == "id" {
                         self.memory_primary_id_query(&value)?
                     } else {
                         let value = self.memory_field_query(&self.config.user, &logical, value)?;
-                        let field =
-                            crate::store::MemberUserJoin::target_field(&self.config, &logical);
+                        let field = crate::store::ResolvedJoin::user_field(&self.config, &logical);
                         crate::user_query::bind_filter(&field, &value)?
                     };
                     self.raw(
@@ -146,6 +138,6 @@ impl EphemeralStore {
                     .map(crate::MemberUserView::from_user),
             );
         }
-        join.finish(member, projected, require_user)
+        MemberUser::finish(&join, member, projected, require_user)
     }
 }

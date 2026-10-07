@@ -74,7 +74,7 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
     }
 
     /// Identity supplied to the most recent session-cookie write in this endpoint.
-    pub fn new_session(&self) -> AuthResult<Option<better_auth_core::session::SessionData>> {
+    pub fn new_session(&self) -> AuthResult<Option<better_auth_core::session::NativeSessionData>> {
         self.input_request
             .map(AuthRequest::new_session)
             .transpose()

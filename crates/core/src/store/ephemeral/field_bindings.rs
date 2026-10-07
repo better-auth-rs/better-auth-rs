@@ -115,26 +115,4 @@ impl EphemeralStore {
             None => self.memory_primary_id_query(&value),
         }
     }
-
-    pub(super) fn stored_account_owner_id(
-        &self,
-        value: Option<Value>,
-    ) -> AuthResult<crate::SchemaValue<String>> {
-        let reference = self
-            .config
-            .account
-            .field_schema()
-            .fields()
-            .get("userId")
-            .is_some_and(|field| self.uses_serial_reference(field));
-        match value {
-            Some(value) if reference && !value.is_null() => {
-                // Derive the canonical binding from the captured raw value, not output policies.
-                crate::SchemaValue::<String>::from_field(value)
-                    .display_string()
-                    .map(Into::into)
-            }
-            value => Ok(crate::SchemaValue::from_field(value.unwrap_or_default())),
-        }
-    }
 }

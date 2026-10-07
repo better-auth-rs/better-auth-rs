@@ -803,7 +803,7 @@ impl OAuthProxyPlugin {
         };
         req.append_response_header("Set-Cookie", clear)?;
         ctx.session_manager()
-            .set_session_cookie(req, outcome.issued, None)
+            .set_native_session_cookie(req, outcome.issued, None)
             .await?;
         Ok(handlers::redirect_response(target))
     }

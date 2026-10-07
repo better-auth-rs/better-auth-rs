@@ -15,11 +15,16 @@ impl TwoFactorPlugin {
         }
         let Some(data) = req
             .new_session()?
-            .filter(|data| data.user.two_factor_enabled == Some(true))
+            .filter(|data| data.user_field("twoFactorEnabled").as_bool() == Some(true))
         else {
             return Ok(());
         };
-        let trusted = inspect_trusted_device(req, &data.user, ctx).await?;
+        let fields = data
+            .user
+            .as_object()
+            .ok_or_else(|| AuthError::internal("A two-factor challenge requires a User object"))?;
+        let user = better_auth_core::UserView::try_from(fields.clone())?;
+        let trusted = inspect_trusted_device(req, &user, ctx).await?;
         for cookie in trusted.set_cookie_headers {
             response.headers.append("Set-Cookie", cookie);
         }
@@ -30,7 +35,7 @@ impl TwoFactorPlugin {
         delete_session_cookies(req, &ctx.config, true, Some(&mut response.headers))?;
         ctx.database.delete_session(&data.session.token).await?;
         req.clear_new_session()?;
-        let challenge = begin_sign_in_challenge(&data.user, ctx, &mut response.headers).await?;
+        let challenge = begin_sign_in_challenge(&user, ctx, &mut response.headers).await?;
         response.replace_returned(AuthResponse::json(200, &challenge)?);
         Ok(())
     }

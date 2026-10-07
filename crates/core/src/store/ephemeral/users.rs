@@ -7,7 +7,10 @@ use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
 
 impl EphemeralStore {
-    async fn user_ref_by_email(&self, email: &str) -> AuthResult<Option<RowRef<UserView>>> {
+    pub(super) async fn user_ref_by_email(
+        &self,
+        email: &str,
+    ) -> AuthResult<Option<RowRef<UserView>>> {
         self.user_ref(|user| user.email.as_deref() == Some(&email.to_lowercase()))
             .await
     }
@@ -521,24 +524,12 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Option<crate::store::UserAccounts>> {
-        crate::store::UserAccounts::validate_schema(&self.config, &self.model_fields, |_, _| {
-            false
-        })?;
-        if self.config.advanced.database.joins == Some(true) {
-            return self.joined_user_accounts(email).await;
-        }
-        let Some(record) = self.user_ref_by_email(email).await? else {
-            return Ok(None);
-        };
-        let stored_user_id = record.read(|user| Self::project_id(&user.id))?;
-        let user = self.output_user_refs(vec![record]).await?.remove(0);
-        let mut accounts = Vec::new();
-        if let Some(id) = stored_user_id.as_str() {
-            for record in self.user_account_refs(id).await? {
-                accounts.push(self.output_account_ref(&record).await?);
-            }
-        }
-        crate::store::UserAccounts::new(user, accounts, &stored_user_id).map(Some)
+        let relation = crate::store::UserAccounts::resolve_schema(
+            &self.config,
+            &self.model_fields,
+            |_, _| false,
+        )?;
+        self.user_accounts_relation(email, &relation).await
     }
 
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>> {

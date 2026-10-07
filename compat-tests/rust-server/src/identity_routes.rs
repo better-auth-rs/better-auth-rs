@@ -53,7 +53,7 @@ impl IdentityFixture {
         if profile.starts_with("anonymous") || profile == "oauth-proxy-anonymous" {
             let generator = self.clone();
             let callback = self.clone();
-            builder.plugin(AnonymousPlugin::new().generate_random_email(move||{let fixture=generator.clone();async move {let mut state=fixture.state.lock().await;state.counter+=1;Ok(format!("anonymous-{}@example.com",state.counter))}}).disable_delete_anonymous_user(profile=="anonymous-disabled").on_link_account(move|link|{let fixture=callback.clone();async move {fixture.state.lock().await.links.push(json!({"anonymousId":link.anonymous_user.id,"newId":link.new_user.id}));Ok(())}}))
+            builder.plugin(AnonymousPlugin::new().generate_random_email(move||{let fixture=generator.clone();async move {let mut state=fixture.state.lock().await;state.counter+=1;Ok(format!("anonymous-{}@example.com",state.counter))}}).disable_delete_anonymous_user(profile=="anonymous-disabled").on_link_account(move|link|{let fixture=callback.clone();async move {fixture.state.lock().await.links.push(json!({"anonymousId":link.anonymous_user.id,"newId":link.new_user.as_object().and_then(|user| user.get("id")).map(better_auth_core::FieldValue::json).transpose()?.flatten()}));Ok(())}}))
         } else if profile.starts_with("phone-number") || profile == "email-otp-reuse" {
             let sender = self.clone();
             let reset = self.clone();

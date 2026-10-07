@@ -19,7 +19,7 @@ Configure application user fields with `AuthConfig.user.fields_mut()` and matchi
 
 Adapter-created JSON text uses JavaScript property ordering and number formatting. Custom adapters can use `FieldValue` to retain runtime values until an explicit JSON boundary. Manual SeaORM models can use `seaorm::field_value::{from_column, decode_column}` for typed column conversion. See [JSON field bindings](docs/content/docs/concepts/database.mdx#json-field-bindings) for value conversion and native SQL JSON storage.
 
-Account and Verification Memory fields store JSON as text and retain native arrays. See [field representation](docs/content/docs/concepts/account-verification-fields.mdx#memory-json-and-arrays) for callback values and reference conversion. Account/User joins reject missing or ambiguous final references before database reads; see [database integration](docs/content/docs/concepts/database.mdx) for the supported relation boundary.
+Account and Verification Memory fields store JSON as text and retain native arrays. See [field representation](docs/content/docs/concepts/account-verification-fields.mdx#memory-json-and-arrays) for callback values and reference conversion. Account/User joins execute the selected schema relationship and preserve single or array results through `JoinValue`; see [database integration](docs/content/docs/concepts/database.mdx) for custom adapter migration.
 
 User record updates preserve raw `name` and `image` values through `SchemaValue`; see [database integration](docs/content/docs/concepts/database.mdx#existing-databases) for physical column contracts and the SQLite parameter-binding safety boundary.
 

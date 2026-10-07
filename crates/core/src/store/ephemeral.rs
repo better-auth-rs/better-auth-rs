@@ -24,6 +24,7 @@ use crate::types::{
 };
 use crate::wire::{AccountView, SessionView, UserView, VerificationView};
 
+mod account_joins;
 mod accounts;
 mod api_keys;
 mod device_codes;

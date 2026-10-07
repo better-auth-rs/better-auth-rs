@@ -5,8 +5,8 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthResult, CreateAccount, CreateUser, UpdateAccount,
-    store::{AccountStore, EphemeralStore, UserStore},
+    AuthConfig, AuthError, AuthResult, CreateAccount, CreateUser, UpdateAccount,
+    store::{AccountStore, EphemeralStore, JoinValue, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
 };
 use serde_json::{Value, json};
@@ -117,13 +117,18 @@ async fn account_children_read_the_selected_live_page_sequentially() -> AuthResu
             .get_user_with_accounts("ordinary@account-page.test")
             .await?
             .unwrap();
+        let JoinValue::Many(accounts) = joined.accounts else {
+            return Err(AuthError::internal(
+                "Expected the Account relationship page",
+            ));
+        };
         trace.enabled.store(false, Ordering::SeqCst);
         let stored = store.get_user_accounts("ordinary-user").await?;
         assert_eq!(
             json!({
                 "joins": case["joins"],
                 "events": *trace.events.lock().unwrap(),
-                "result": joined.accounts.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?,
+                "result": accounts.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?,
                 "stored": stored.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?
             }),
             *case

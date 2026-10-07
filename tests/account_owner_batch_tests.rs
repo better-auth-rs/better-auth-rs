@@ -9,7 +9,7 @@
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser, FieldMap,
     FieldValue,
-    store::EphemeralStore,
+    store::{EphemeralStore, JoinValue},
     user_fields::{
         AdapterRecord, FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform,
     },
@@ -394,12 +394,15 @@ async fn check_owner<S: AuthSchema>(store: &impl AuthStore<S>, trace: &Arc<Mutex
         owner.account.refresh_token.json().unwrap(),
         Some(json!("refresh:out"))
     );
+    let JoinValue::One(owner_user) = owner.user else {
+        panic!("Expected a single Account owner");
+    };
     assert_eq!(
-        owner.user.as_ref().unwrap().name.json().unwrap(),
+        owner_user.as_ref().unwrap().name.json().unwrap(),
         Some(json!("Fixture User:out"))
     );
     assert_eq!(
-        owner.user.as_ref().unwrap().image.json().unwrap(),
+        owner_user.as_ref().unwrap().image.json().unwrap(),
         Some(json!("https://ordinary-owner.test/image.png:out"))
     );
     let expected = [

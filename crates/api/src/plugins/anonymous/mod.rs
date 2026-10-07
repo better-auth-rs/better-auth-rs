@@ -25,8 +25,8 @@ pub struct AnonymousLink {
     pub anonymous_user: UserView,
     /// Active session for the anonymous identity.
     pub anonymous_session: SessionView,
-    /// Identity authenticated by the completed endpoint.
-    pub new_user: UserView,
+    /// User value supplied by the completed endpoint.
+    pub new_user: better_auth_core::FieldValue,
     /// Session issued by the completed endpoint.
     pub new_session: SessionView,
     /// Request that completed authentication.
@@ -369,7 +369,7 @@ impl AnonymousPlugin {
             anonymous_user: previous.user.clone(),
             anonymous_session: previous.session.clone(),
             new_user: new_session.user.clone(),
-            new_session: new_session.session,
+            new_session: new_session.session.clone(),
             request: req.clone(),
         };
         if let Some(callback) = ctx
@@ -397,8 +397,12 @@ impl AnonymousPlugin {
             callback(link).await?;
         }
         if !self.disable_delete_anonymous_user
-            && previous.user.id != new_session.user.id
-            && new_session.user.is_anonymous != Some(true)
+            && !previous
+                .user
+                .id
+                .field_value()
+                .strict_equals(new_session.user_field("id"))
+            && new_session.user_field("isAnonymous").as_bool() != Some(true)
         {
             // Upstream keeps a successful sign-in when post-link cleanup fails.
             if let Err(cause) = ctx.database.delete_user(previous.user.id.typed()?).await {

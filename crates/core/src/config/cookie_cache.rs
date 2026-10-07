@@ -1,9 +1,11 @@
-use crate::{AuthResult, session::SessionData};
+use crate::{AuthResult, session::NativeSessionData};
 use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Asynchronous cookie version calculation from the session and user snapshot.
 pub type CookieCacheVersionCallback = Arc<
-    dyn Fn(SessionData) -> Pin<Box<dyn Future<Output = AuthResult<String>> + Send>> + Send + Sync,
+    dyn Fn(NativeSessionData) -> Pin<Box<dyn Future<Output = AuthResult<String>> + Send>>
+        + Send
+        + Sync,
 >;
 
 /// A constant cache version or an application callback evaluated on writes and reads.
@@ -19,13 +21,13 @@ impl CookieCacheVersion {
     /// Use an asynchronous callback without boxing the returned future at each call site.
     pub fn dynamic<F, Fut>(callback: F) -> Self
     where
-        F: Fn(SessionData) -> Fut + Send + Sync + 'static,
+        F: Fn(NativeSessionData) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = AuthResult<String>> + Send + 'static,
     {
         Self::Dynamic(Arc::new(move |data| Box::pin(callback(data))))
     }
 
-    pub(crate) async fn resolve(&self, data: &SessionData) -> AuthResult<String> {
+    pub(crate) async fn resolve(&self, data: &NativeSessionData) -> AuthResult<String> {
         match self {
             Self::Fixed(version) if version.is_empty() => Ok("1".into()),
             Self::Fixed(version) => Ok(version.clone()),

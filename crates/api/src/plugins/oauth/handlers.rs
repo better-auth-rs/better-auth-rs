@@ -227,7 +227,7 @@ pub(super) async fn complete_link_social(
     let ctx = endpoint.auth;
     super::signin::validate_provider_user(
         user_info,
-        &link.user_id,
+        link.user_id.clone().into(),
         provider_name,
         profile,
         crate::plugins::user_admission::UserValidationAction::LinkAccount,
@@ -454,7 +454,7 @@ async fn sign_in_with_id_token_core(
         user: Some(outcome.user),
     };
     ctx.session_manager()
-        .set_session_cookie(req, outcome.issued, None)
+        .set_native_session_cookie(req, outcome.issued, None)
         .await?;
     Ok(AuthResponse::json(200, &response)?)
 }

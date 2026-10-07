@@ -11,7 +11,7 @@ use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::wire::UserView;
 
-use crate::plugins::helpers::{SessionIssueError, issue_user_session_with_lifetime};
+use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session};
 
 mod callbacks;
 mod request;
@@ -319,11 +319,11 @@ async fn finalize_sign_in_with_user_core(
     } else {
         ctx.config.session.expires_in()
     };
-    let issued = issue_user_session_with_lifetime(
+    let user = ctx.internal_user_view(&user).await?;
+    let issued = issue_selected_user_session(
         ctx,
-        user.id().typed()?,
-        meta.ip_address.clone(),
-        meta.user_agent.clone(),
+        better_auth_core::FieldMap::from(user.clone()).into(),
+        meta,
         expires_in,
     )
     .await
@@ -331,11 +331,7 @@ async fn finalize_sign_in_with_user_core(
     let token = issued.session.token().to_string();
     let manager = ctx.session_manager();
     manager
-        .set_session_cookie(
-            req,
-            manager.internal_data(&issued.user, &issued.session).await?,
-            Some(remember_me == Some(false)),
-        )
+        .set_native_session_cookie(req, issued, Some(remember_me == Some(false)))
         .await?;
 
     if let Some(callback) = callback_url.filter(|url| !url.is_empty()) {
@@ -345,7 +341,7 @@ async fn finalize_sign_in_with_user_core(
         redirect: callback_url.is_some_and(|url| !url.is_empty()),
         token: token.clone(),
         url: callback_url.map(str::to_owned),
-        user: ctx.user_view(&issued.user).await?,
+        user: ctx.user_view(&user).await?,
     };
     Ok(SignInCoreResult { response })
 }
@@ -369,8 +365,10 @@ pub(crate) async fn sign_in_core(
     };
 
     let user = record.user;
-    let credential = record
-        .accounts
+    let better_auth_core::store::JoinValue::Many(accounts) = record.accounts else {
+        return Err(AuthError::internal("accounts.find is not a function"));
+    };
+    let credential = accounts
         .into_iter()
         .find(|account| account.provider_id == "credential" && account.account_id == user.id);
     let hash = credential

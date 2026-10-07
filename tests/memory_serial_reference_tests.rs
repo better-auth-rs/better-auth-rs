@@ -3,7 +3,7 @@ use better_auth_core::{
     UpdateAccount, UpdateUser,
     id::IdGeneration,
     store::{
-        AccountStore, EphemeralStore, SessionStore, UserStore, VerificationStore,
+        AccountStore, EphemeralStore, JoinValue, SessionStore, UserStore, VerificationStore,
         database_hooks::VerificationUpdate,
     },
     user_fields::{
@@ -267,13 +267,15 @@ async fn serial_account_queries_retain_raw_bindings_for_both_join_modes() {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(owner.user.unwrap().id, user.id);
+        assert!(matches!(owner.user, JoinValue::One(Some(owner)) if owner.id == user.id));
         let joined = store
             .get_user_with_accounts("account@serial-reference.test")
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(joined.accounts[0].user_id, user.id);
+        assert!(
+            matches!(joined.accounts, JoinValue::Many(accounts) if accounts[0].user_id == user.id)
+        );
         store.delete_user(user.id.typed().unwrap()).await.unwrap();
         assert!(store.get_user_accounts("1").await.unwrap().is_empty());
     }

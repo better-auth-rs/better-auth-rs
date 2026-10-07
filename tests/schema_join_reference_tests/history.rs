@@ -99,17 +99,23 @@ async fn verify<S: AuthSchema>(
                 "owner" => Ok(active
                     .get_account_owner("provider", "external-owner")
                     .await?
-                    .map_or(
-                        Value::Null,
-                        |row| json!({"account": row.account, "user": row.user}),
-                    )),
+                    .map_or(Value::Null, |row| {
+                        let user = match row.user {
+                            JoinValue::One(user) => json!(user),
+                            JoinValue::Many(users) => json!(users),
+                        };
+                        json!({"account": row.account, "user": user})
+                    })),
                 "accounts" => Ok(active
                     .get_user_with_accounts("owner@join-history.test")
                     .await?
-                    .map_or(
-                        Value::Null,
-                        |row| json!({"user": row.user, "accounts": row.accounts}),
-                    )),
+                    .map_or(Value::Null, |row| {
+                        let accounts = match row.accounts {
+                            JoinValue::One(account) => json!(account),
+                            JoinValue::Many(accounts) => json!(accounts),
+                        };
+                        json!({"user": row.user, "accounts": accounts})
+                    })),
                 "read-user" => Ok(serde_json::to_value(
                     active
                         .get_user_by_email("missing@join-history.test")

@@ -57,10 +57,13 @@ async fn serial_array_owners_join_only_after_fallback_projection() -> AuthResult
         );
         let owner = required(store.get_account_owner("fixture", "array-owner").await?)?;
         assert_eq!(owner.account.user_id, "1");
+        let crate::store::JoinValue::One(user) = owner.user else {
+            return Err(AuthError::internal("Expected a single Account owner"));
+        };
         if joins {
-            assert!(owner.user.is_none());
+            assert!(user.is_none());
         } else {
-            assert_eq!(required(owner.user)?.id, "1");
+            assert_eq!(required(user)?.id, "1");
         }
     }
     Ok(())

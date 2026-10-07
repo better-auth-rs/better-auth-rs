@@ -100,7 +100,13 @@ fn config(joins: bool, events: &Events) -> AuthConfig {
 async fn owner<S: AuthSchema>(store: &impl AuthStore<S>) -> Value {
     match store.get_account_owner("provider", "missing").await {
         Ok(None) => Value::Null,
-        Ok(Some(row)) => json!({"account": row.account, "user": row.user}),
+        Ok(Some(row)) => {
+            let user = match row.user {
+                JoinValue::One(user) => json!(user),
+                JoinValue::Many(users) => json!(users),
+            };
+            json!({"account": row.account, "user": user})
+        }
         Err(error) => json!({"error": error.instrumentation_message()}),
     }
 }

@@ -146,10 +146,18 @@ async fn serial_user_joins_keep_numeric_bindings_in_both_modes() -> AuthResult<(
                 .await?,
         )?;
         assert_eq!(accounts.user.id, "1");
-        assert_eq!(accounts.accounts.len(), 1);
-        assert_eq!(required(accounts.accounts.first())?.user_id, "1");
+        let crate::store::JoinValue::Many(accounts) = accounts.accounts else {
+            return Err(AuthError::internal(
+                "Expected the Account relationship page",
+            ));
+        };
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(required(accounts.first())?.user_id, "1");
         let account = required(store.get_account_owner("fixture", "serial-account").await?)?;
-        assert_eq!(required(account.user)?.id, "1");
+        let crate::store::JoinValue::One(user) = account.user else {
+            return Err(AuthError::internal("Expected a single Account owner"));
+        };
+        assert_eq!(required(user)?.id, "1");
         let session = store
             .create_session(CreateSession {
                 user_id: owner.id,

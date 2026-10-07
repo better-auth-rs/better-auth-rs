@@ -4,7 +4,11 @@ use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
-    async fn account_records(&self, provider: &str, account_id: &str) -> AuthResult<Vec<FieldMap>> {
+    pub(super) async fn account_records(
+        &self,
+        provider: &str,
+        account_id: &str,
+    ) -> AuthResult<Vec<FieldMap>> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let provider =
@@ -174,61 +178,13 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         provider: &str,
         account_id: &str,
     ) -> AuthResult<Option<crate::store::AccountOwner>> {
-        crate::store::AccountOwner::validate_schema(&self.config, &self.model_fields, |_, _| {
-            false
-        })?;
-        if self.config.advanced.database.joins == Some(true) {
-            return self.joined_account_owner(provider, account_id).await;
-        }
-        let fields = self.config.account.field_schema();
-        let records = self.account_records(provider, account_id).await?;
-        let owner_ids: Vec<_> = records
-            .iter()
-            .map(|record| record.get(fields.record_storage_key("userId")).cloned())
-            .collect();
-        let owners = fields
-            .project_memory_records_batches_then(&records, |ready| {
-                let owner_ids = &owner_ids;
-                async move {
-                    let mut pending = Vec::new();
-                    let mut users = Vec::new();
-                    for (index, output) in ready {
-                        let owner_id = owner_ids.get(index).ok_or_else(|| {
-                            AuthError::internal("Account projection lost its stored owner index")
-                        })?;
-                        let stored_owner_id = self.stored_account_owner_id(owner_id.clone())?;
-                        let user = match output.get("userId") {
-                            Some(id) if !id.is_null() && !id.is_undefined() => {
-                                self.user_ref_by_id_value(id).await?
-                            }
-                            _ => None,
-                        };
-                        let has_user = user.is_some();
-                        users.extend(user);
-                        pending.push((index, output, stored_owner_id, has_user));
-                    }
-                    let mut users = self.output_user_refs(users).await?.into_iter();
-                    pending
-                        .into_iter()
-                        .map(|(index, output, stored_owner_id, has_user)| {
-                            crate::store::AccountOwner::new(
-                                AccountView::from_adapter_fields(output),
-                                if has_user { users.next() } else { None },
-                                &stored_owner_id,
-                            )
-                            .map(|owner| (index, owner))
-                        })
-                        .collect()
-                }
-            })
-            .await?;
-        if owners.len() > 1 {
-            return Err(AuthError::internal(format!(
-                "Multiple accounts match the same accountId for provider {}. Resolve duplicate account identities before continuing.",
-                serde_json::to_string(provider)?
-            )));
-        }
-        Ok(owners.into_iter().next())
+        let relation = crate::store::AccountOwner::resolve_schema(
+            &self.config,
+            &self.model_fields,
+            |_, _| false,
+        )?;
+        self.account_owner_relation(provider, account_id, &relation)
+            .await
     }
 
     async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {

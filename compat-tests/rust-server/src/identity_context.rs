@@ -121,7 +121,9 @@ impl AuthPlugin<StatelessSchema> for Fixture {
             let _ = ctx
                 .database
                 .update_user(
-                    data.user.id.typed().unwrap(),
+                    data.user_field("id").as_str().ok_or_else(|| {
+                        AuthError::internal("Issued fixture User has no string ID")
+                    })?,
                     UpdateUser {
                         name: Some("Changed after issue".into()).into(),
                         additional_fields: FieldMap::from_iter([(
@@ -132,7 +134,7 @@ impl AuthPlugin<StatelessSchema> for Fixture {
                     },
                 )
                 .await?;
-            self.record(json!({"event":"application","name":data.user.name,"secret":json_field(&data.user.additional_fields, "secretNote")?}));
+            self.record(json!({"event":"application","name":data.user_field("name").json()?,"secret":data.user_field("secretNote").json()?}));
         }
         Ok(())
     }
@@ -176,13 +178,15 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
             Ok("Anonymous fixture".into())
         }) })
         .on_link_account(move |linked, endpoint| { let fixture=link.clone(); Box::pin(async move {
-            let stored = endpoint.auth.database.get_user_by_id(linked.new_user.id.typed().unwrap()).await?.unwrap();
+            let new_user = linked.new_user.as_object().ok_or_else(|| AuthError::internal("Linked fixture User is not an object"))?;
+            let new_id = new_user.get("id").and_then(FieldValue::as_str).ok_or_else(|| AuthError::internal("Linked fixture User has no string ID"))?;
+            let stored = endpoint.auth.database.get_user_by_id(new_id).await?.unwrap();
             let snapshot=endpoint.new_session()?.unwrap();
             fixture.record(json!({"event":"link","context":context(endpoint),
                 "oldHidden":json_field(&linked.anonymous_user.additional_fields, "secretNote")?,"oldSessionHidden":json_field(&linked.anonymous_session.additional_fields, "secretSession")?,
-                "newHidden":json_field(&linked.new_user.additional_fields, "secretNote")?,"newSessionHidden":json_field(&linked.new_session.additional_fields, "secretSession")?,
-                "newName":linked.new_user.name,"storedName":stored.name,"storedHidden":json_field(&stored.additional_fields, "secretNote")?,
-                "sameSnapshot":snapshot.user.id == linked.new_user.id && snapshot.user.name == linked.new_user.name,
+                "newHidden":json_field(new_user, "secretNote")?,"newSessionHidden":json_field(&linked.new_session.additional_fields, "secretSession")?,
+                "newName":json_field(new_user, "name")?,"storedName":stored.name,"storedHidden":json_field(&stored.additional_fields, "secretNote")?,
+                "sameSnapshot":snapshot.user_field("id") == new_user.get("id").unwrap_or(&FieldValue::Undefined) && snapshot.user_field("name") == new_user.get("name").unwrap_or(&FieldValue::Undefined),
                 "oldExists":endpoint.auth.database.get_user_by_id(linked.anonymous_user.id.typed().unwrap()).await?.is_some()}));
             endpoint.set_header("x-callback-observed","anonymous-link")?;
             fixture.fail()

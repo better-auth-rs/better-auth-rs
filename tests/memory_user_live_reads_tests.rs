@@ -5,8 +5,9 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthResult, CreateAccount, CreateSession, CreateUser, ListUsersParams, UpdateUser,
-    store::{AccountStore, EphemeralStore, SessionStore, UserStore},
+    AuthConfig, AuthError, AuthResult, CreateAccount, CreateSession, CreateUser, ListUsersParams,
+    UpdateUser,
+    store::{AccountStore, EphemeralStore, JoinValue, SessionStore, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
     wire::UserView,
 };
@@ -176,14 +177,16 @@ async fn ordinary_user_reads_keep_later_display_fields_live() -> AuthResult<()> 
                         .list_users_by_ids(&["ordinary-user".into()], 1.0)
                         .await?
                 }
-                "owner" => vec![
-                    store
+                "owner" => {
+                    let owner = store
                         .get_account_owner("ordinary-provider", "ordinary-account")
                         .await?
-                        .unwrap()
-                        .user
-                        .unwrap(),
-                ],
+                        .unwrap();
+                    let JoinValue::One(owner_user) = owner.user else {
+                        return Err(AuthError::internal("Expected a single Account owner"));
+                    };
+                    vec![owner_user.unwrap()]
+                }
                 "sessions" => store
                     .get_session_snapshots(&[token], false)
                     .await?

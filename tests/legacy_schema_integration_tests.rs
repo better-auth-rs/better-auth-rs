@@ -19,7 +19,7 @@ use better_auth::prelude::{
 use better_auth::{
     Argon2PasswordHasher, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth,
 };
-use better_auth_core::{AuthRecordFields, FieldDate, FieldMap, FieldValue};
+use better_auth_core::{AuthRecordFields, FieldDate, FieldMap, FieldValue, store::JoinValue};
 use better_auth_seaorm::sea_orm;
 use better_auth_seaorm::sea_orm::entity::prelude::*;
 use better_auth_seaorm::sea_orm::{
@@ -1077,9 +1077,8 @@ async fn legacy_numeric_schema_existing_user_can_sign_in() {
         .expect("numeric owner join should succeed")
         .expect("numeric credential should exist");
     assert_eq!(owner.account.user_id, legacy_user_id.to_string());
-    assert_eq!(
-        owner.user.expect("numeric owner should exist").id,
-        legacy_user_id.to_string()
+    assert!(
+        matches!(owner.user, JoinValue::One(Some(user)) if user.id == legacy_user_id.to_string())
     );
 
     let signin = request(

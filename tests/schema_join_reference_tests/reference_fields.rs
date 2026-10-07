@@ -151,10 +151,19 @@ async fn verify<S: AuthSchema>(store: &impl AuthStore<S>) -> AuthResult<()> {
                 let result = async {
                     match operation {
                         Operation::Accounts => view.get_user_with_accounts(EMAIL).await.map(|row| row.map(|joined| {
-                            json!({"user": joined.user.id, "accounts": joined.accounts.into_iter().map(|account| json!({"id": account.id, "userId": account.user_id})).collect::<Vec<_>>()})
+                            let account = |account: &AccountView| json!({"id": account.id, "userId": account.user_id});
+                            let accounts = match joined.accounts {
+                                JoinValue::One(row) => row.as_ref().map_or(Value::Null, account),
+                                JoinValue::Many(rows) => json!(rows.iter().map(account).collect::<Vec<_>>()),
+                            };
+                            json!({"user": joined.user.id, "accounts": accounts})
                         })),
                         Operation::Owner => view.get_account_owner("provider", "external-owner").await.map(|row| row.map(|joined| {
-                            json!({"account": joined.account.id, "userId": joined.account.user_id, "owner": joined.user.map(|user| user.id)})
+                            let owner = match joined.user {
+                                JoinValue::One(user) => json!(user.map(|user| user.id)),
+                                JoinValue::Many(users) => json!(users.into_iter().map(|user| user.id).collect::<Vec<_>>()),
+                            };
+                            json!({"account": joined.account.id, "userId": joined.account.user_id, "owner": owner})
                         })),
                     }
                 }.with_subscriber(tracing_subscriber::registry().with(events.clone())).await;

@@ -1,4 +1,3 @@
-use better_auth_core::wire::UserView;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +68,7 @@ pub(crate) struct SocialSignInResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<UserView>,
+    pub user: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
