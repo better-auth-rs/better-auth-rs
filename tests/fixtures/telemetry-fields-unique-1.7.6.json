@@ -1,0 +1,99 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "omitted",
+      "config": {
+        "user": {
+          "additionalFields": {
+            "label": {
+              "type": "string",
+              "transform": {}
+            }
+          },
+          "changeEmail": {
+            "sendChangeEmailConfirmation": false
+          }
+        },
+        "session": {
+          "additionalFields": {
+            "label": {
+              "type": "string",
+              "transform": {}
+            }
+          },
+          "cookieCache": {
+            "enabled": true,
+            "maxAge": 604800,
+            "strategy": "jwe"
+          }
+        }
+      },
+      "callbacks": []
+    },
+    {
+      "name": "false",
+      "config": {
+        "user": {
+          "additionalFields": {
+            "label": {
+              "type": "string",
+              "unique": false,
+              "transform": {}
+            }
+          },
+          "changeEmail": {
+            "sendChangeEmailConfirmation": false
+          }
+        },
+        "session": {
+          "additionalFields": {
+            "label": {
+              "type": "string",
+              "unique": false,
+              "transform": {}
+            }
+          },
+          "cookieCache": {
+            "enabled": true,
+            "maxAge": 604800,
+            "strategy": "jwe"
+          }
+        }
+      },
+      "callbacks": []
+    },
+    {
+      "name": "true",
+      "config": {
+        "user": {
+          "additionalFields": {
+            "label": {
+              "type": "string",
+              "unique": true,
+              "transform": {}
+            }
+          },
+          "changeEmail": {
+            "sendChangeEmailConfirmation": false
+          }
+        },
+        "session": {
+          "additionalFields": {
+            "label": {
+              "type": "string",
+              "unique": true,
+              "transform": {}
+            }
+          },
+          "cookieCache": {
+            "enabled": true,
+            "maxAge": 604800,
+            "strategy": "jwe"
+          }
+        }
+      },
+      "callbacks": []
+    }
+  ]
+}

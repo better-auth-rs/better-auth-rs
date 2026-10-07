@@ -25,6 +25,7 @@ pub(super) fn configuration<'a>(
             option(&mut value, "required", field.required)?;
             option(&mut value, "input", field.input)?;
             option(&mut value, "returned", field.returned)?;
+            option(&mut value, "unique", field.unique)?;
             option(&mut value, "fieldName", field.field_name.as_ref())?;
             if let Some(reference) = &field.references {
                 let _ = value.insert(

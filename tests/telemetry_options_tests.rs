@@ -52,6 +52,9 @@ mod storage;
 #[path = "telemetry_options/fields.rs"]
 mod fields;
 
+#[path = "telemetry_options/unique.rs"]
+mod unique;
+
 #[path = "telemetry_options/durations.rs"]
 mod durations;
 
