@@ -13,6 +13,8 @@ mod live;
 mod name_mapping;
 #[path = "api_key_additional_fields_tests/name_mapping_conflicts.rs"]
 mod name_mapping_conflicts;
+#[path = "support/api_key_name_mapping_contract.rs"]
+mod name_mapping_contract;
 
 use better_auth::{
     __private_core::{

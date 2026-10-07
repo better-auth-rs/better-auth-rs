@@ -1,7 +1,8 @@
-use super::{contract, fixture};
+use super::{contract, fixture, name_mapping_contract};
 use better_auth::__private_core::{AuthResult, store::EphemeralStore};
 use better_auth::seaorm::sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
-use contract::{NameMapping, Scenario};
+use contract::Scenario;
+use name_mapping_contract::NameMapping;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -160,7 +161,7 @@ async fn memory_api_key_name_mappings_match_complete_upstream_operations_and_err
     for mapping in NameMapping::ALL {
         let expected = expected(&fixture, "memory", mapping);
         for scenario in Scenario::all() {
-            let observed = contract::observe_name_mapping(
+            let observed = name_mapping_contract::observe_name_mapping(
                 Arc::new(EphemeralStore::new(Arc::new(contract::config()))),
                 mapping,
                 scenario,
@@ -184,13 +185,15 @@ async fn sqlite_api_key_name_mappings_match_complete_upstream_operations_and_err
                 let (store, database) =
                     fixture::sqlite_for::<fixture::renamed::Model>(contract::config()).await;
                 (
-                    contract::observe_name_mapping(Arc::new(store), mapping, scenario).await?,
+                    name_mapping_contract::observe_name_mapping(Arc::new(store), mapping, scenario)
+                        .await?,
                     database,
                 )
             } else {
                 let (store, database) = fixture::sqlite(contract::config()).await;
                 (
-                    contract::observe_name_mapping(Arc::new(store), mapping, scenario).await?,
+                    name_mapping_contract::observe_name_mapping(Arc::new(store), mapping, scenario)
+                        .await?,
                     database,
                 )
             };
