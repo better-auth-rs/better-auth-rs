@@ -12,6 +12,8 @@ on:
       - compat-tests/reference-server/contracts/device-where-transactions-capture.mjs
       - compat-tests/reference-server/contracts/memory-transaction-values-capture.mjs
       - compat-tests/reference-server/contracts/user-serial-create-order-capture.mjs
+      - compat-tests/reference-server/contracts/account-verification-serial-primary-capture.mjs
+      - compat-tests/reference-server/contracts/native-json-driver-capture.mjs
 
 permissions:
   contents: read
@@ -22,9 +24,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: user-serial-create-order
-            regression: memory-transaction-values
+          - contract: account-verification-serial-primary
+            regression: user-serial-create-order
             backend: ''
+          - contract: native-json-driver
+            regression: device-where
+            backend: sqlite
+          - contract: native-json-driver
+            regression: device-where
+            backend: postgres
+          - contract: native-json-driver
+            regression: device-where
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
