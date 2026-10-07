@@ -9,12 +9,24 @@ use better_auth_core::{
 };
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
-    sea_query::{Condition, ExprTrait, Func, SimpleExpr, extension::postgres::PgExpr},
+    sea_query::{BinOper, Condition, ExprTrait, Func, SimpleExpr, extension::postgres::PgBinOper},
 };
 use serde_json::Value;
 
-fn candidate(value: Value, numeric: bool) -> sea_orm::Value {
-    match value {
+fn candidate(value: Value, numeric: bool, backend: DbBackend) -> AuthResult<SimpleExpr> {
+    if backend == DbBackend::Postgres {
+        let text = match value {
+            Value::Null => None,
+            Value::String(value) => Some(value),
+            value @ (Value::Array(_) | Value::Object(_)) => {
+                Some(better_auth_core::utils::json::stringify(&value)?)
+            }
+            value => Some(SchemaValue::<Value>::Dynamic(value).display_string()?),
+        };
+        // node-postgres sends untyped text, including numbers. SeaQuery quotes the unknown literal safely.
+        return Ok(SimpleExpr::Constant(sea_orm::Value::String(text)));
+    }
+    Ok(SimpleExpr::Value(match value {
         Value::Null if numeric => sea_orm::Value::Double(None),
         Value::Null => sea_orm::Value::String(None),
         Value::String(value) => value.into(),
@@ -29,7 +41,7 @@ fn candidate(value: Value, numeric: bool) -> sea_orm::Value {
         }
         Value::Bool(value) => value.into(),
         value @ (Value::Array(_) | Value::Object(_)) => sea_orm::Value::Json(Some(Box::new(value))),
-    }
+    }))
 }
 
 fn ownership_predicate(
@@ -63,7 +75,7 @@ fn ownership_predicate(
             } else {
                 column
             };
-            let value = candidate(lower(query.value), numeric);
+            let value = candidate(lower(query.value), numeric, backend)?;
             if query.operator == WhereOperator::Eq {
                 column.eq(value)
             } else {
@@ -82,17 +94,18 @@ fn ownership_predicate(
             };
             let values = values
                 .into_iter()
-                .map(|value| candidate(lower(value), numeric));
+                .map(|value| candidate(lower(value), numeric, backend))
+                .collect::<AuthResult<Vec<_>>>()?;
             if query.operator == WhereOperator::In {
                 column.is_in(values)
             } else {
                 column.is_not_in(values)
             }
         }
-        WhereOperator::Lt => column.lt(candidate(query.value, numeric)),
-        WhereOperator::Lte => column.lte(candidate(query.value, numeric)),
-        WhereOperator::Gt => column.gt(candidate(query.value, numeric)),
-        WhereOperator::Gte => column.gte(candidate(query.value, numeric)),
+        WhereOperator::Lt => column.lt(candidate(query.value, numeric, backend)?),
+        WhereOperator::Lte => column.lte(candidate(query.value, numeric, backend)?),
+        WhereOperator::Gt => column.gt(candidate(query.value, numeric, backend)?),
+        WhereOperator::Gte => column.gte(candidate(query.value, numeric, backend)?),
         WhereOperator::Contains | WhereOperator::StartsWith | WhereOperator::EndsWith => {
             let text = SchemaValue::<Value>::Dynamic(query.value).display_string()?;
             let pattern = match query.operator {
@@ -100,12 +113,13 @@ fn ownership_predicate(
                 WhereOperator::StartsWith => format!("{text}%"),
                 _ => format!("%{text}"),
             };
+            let pattern = candidate(Value::String(pattern), false, backend)?;
             if insensitive && backend == DbBackend::Postgres {
-                column.ilike(pattern)
+                column.binary(PgBinOper::ILike, pattern)
             } else if insensitive {
-                Func::lower(column).binary(sea_orm::sea_query::BinOper::Like, Func::lower(pattern))
+                Func::lower(column).binary(BinOper::Like, Func::lower(pattern))
             } else {
-                column.like(pattern)
+                column.binary(BinOper::Like, pattern)
             }
         }
     })

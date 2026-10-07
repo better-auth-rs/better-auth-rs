@@ -39,7 +39,7 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test auth_entity_plugin_alias_tests -- -D warnings
-      cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt
+      cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt user_fields::record::tests::
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
         --test two_factor_additional_fields_tests --test device_additional_fields_tests \

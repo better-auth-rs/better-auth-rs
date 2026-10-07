@@ -21,6 +21,17 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
         );
         return serial_reference(value, text_column);
     }
+    if !field.references_id()
+        && matches!(
+            field.field_type,
+            better_auth_core::user_fields::UserFieldType::Json
+        )
+        && value.is_null()
+        && native_json_field(name)
+    {
+        // SQLx serializes native JSON bindings; encoding null here would create a JSON string.
+        return Ok(value);
+    }
     field.adapter_input(
         value,
         backend == sea_orm::DbBackend::Postgres,
@@ -94,19 +105,34 @@ pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
 ) -> better_auth_core::AuthResult<()> {
     for (name, field) in fields.fields() {
         if name != "id"
-            && backend == sea_orm::DbBackend::Sqlite
             && matches!(
                 field.field_type,
                 better_auth_core::user_fields::UserFieldType::Json
             )
-            && field.references.is_none()
+            && !field.references_id()
         {
             use sea_orm::ColumnTrait;
             let column = column(resolve_field_name(field.field_name.as_deref(), name))?;
-            if matches!(
-                column.def().get_column_type(),
-                ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
-            ) && let sea_orm::ActiveValue::Set(value) = active.get(column)
+            if backend != sea_orm::DbBackend::Postgres
+                && matches!(
+                    column.def().get_column_type(),
+                    ColumnType::Json | ColumnType::JsonBinary
+                )
+                && matches!(
+                    active.get(column),
+                    sea_orm::ActiveValue::Set(Value::Json(None))
+                )
+            {
+                // Non-native JSON adapters send the JSON literal null, not SQL NULL.
+                active
+                    .try_set(column, Value::Json(Some(Box::new(serde_json::Value::Null))))
+                    .map_err(crate::store::map_db_err)?;
+            } else if backend == sea_orm::DbBackend::Sqlite
+                && matches!(
+                    column.def().get_column_type(),
+                    ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
+                )
+                && let sea_orm::ActiveValue::Set(value) = active.get(column)
             {
                 active
                     .try_set(column, binding(value, backend)?)

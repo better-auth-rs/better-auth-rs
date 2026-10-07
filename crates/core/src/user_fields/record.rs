@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub struct AdapterRecord {
     output: indexmap::IndexMap<String, SchemaValue<Value>>,
     storage: Map<String, Value>,
+    raw_storage: bool,
 }
 
 impl AdapterRecord {
@@ -21,10 +22,12 @@ impl AdapterRecord {
                 .map(|(name, value)| (name, SchemaValue::Typed(value)))
                 .collect(),
             storage,
+            raw_storage: false,
         }
     }
 
-    /// Restore adapter values before output policies. `None` retains the extracted value.
+    /// Restore raw adapter values before output policies. `None` retains the extracted value.
+    /// The restored values bypass the model's JSON conversion before callbacks.
     pub fn map_storage_fields(
         &mut self,
         fields: &UserConfig,
@@ -36,6 +39,7 @@ impl AdapterRecord {
                 let _ = self.storage.insert(storage.to_owned(), value);
             }
         }
+        self.raw_storage = true;
         Ok(())
     }
 }
@@ -669,9 +673,13 @@ async fn project_adapter_field_with_capabilities(
         .storage
         .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned();
-    let value = field
-        .adapter_output_with_capabilities(value, capabilities)
-        .await?;
+    let value = if record.raw_storage {
+        field.adapter_output_from_raw(value, capabilities).await?
+    } else {
+        field
+            .adapter_output_with_capabilities(value, capabilities)
+            .await?
+    };
     let value = project_output_value(value, field, supports_native_dates);
     if value.is_undefined() {
         let _ = record.output.shift_remove(name);
@@ -711,5 +719,52 @@ fn project_output_value(
         }
     } else {
         SchemaValue::from_json(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::user_fields::{FieldTransforms, UserFieldTransform};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn raw_adapter_json_reaches_callbacks_before_output_decoding() -> AuthResult<()> {
+        for raw in [Value::Null, json!({"owner": "Alpha"}), json!(["Alpha"])] {
+            let expected = raw.clone();
+            let fields = UserConfig {
+                additional_fields: Some(
+                    [(
+                        "payload".into(),
+                        UserFieldConfig {
+                            field_type: UserFieldType::Json,
+                            transform: Some(FieldTransforms {
+                                output: Some(UserFieldTransform::new(move |value| {
+                                    assert_eq!(value, Some(expected.clone()));
+                                    Ok(Some(json!("[3,4]")))
+                                })),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
+            };
+            let mut record = AdapterRecord::new(Map::new(), Map::new());
+            record.map_storage_fields(&fields, |_, _| Ok(Some(raw.clone())))?;
+            let projected = fields
+                .project_adapter_records_with_capabilities(
+                    vec![record],
+                    FieldOutputCapabilities::json_only(false),
+                    true,
+                )
+                .await?;
+            assert_eq!(
+                projected.first().and_then(|row| row.get("payload")),
+                Some(&SchemaValue::Typed(json!([3, 4])))
+            );
+        }
+        Ok(())
     }
 }
