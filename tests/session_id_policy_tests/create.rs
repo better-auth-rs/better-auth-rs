@@ -15,7 +15,7 @@ fn event(events: &Events, value: impl Into<String>) -> AuthResult<()> {
 fn input(label: Option<&str>) -> AuthResult<CreateSession> {
     Ok(CreateSession {
         user_id: "owner".into(),
-        expires_at: "2100-01-02T03:04:05Z"
+        expires_at: "2031-01-02T03:04:05Z"
             .parse::<chrono::DateTime<chrono::Utc>>()
             .map_err(|error| AuthError::internal(error.to_string()))?
             .into(),
@@ -110,7 +110,7 @@ async fn check_creates(database: &DatabaseConnection) -> TestResult {
             id: expected_id.into(),
             token: created.token.clone(),
             user_id: "owner".into(),
-            expires_at: "2100-01-02T03:04:05Z".parse()?,
+            expires_at: "2031-01-02T03:04:05Z".parse()?,
             created_at: created
                 .created_at
                 .to_datetime()?
