@@ -188,6 +188,7 @@ jobs:
           if [[ "$CHECK_STAGE" == "telemetry" ]]; then
             export BETTER_AUTH_TELEMETRY_OBSERVATION_DIR="$RUNNER_TEMP/telemetry-host-observations/rust"
             export BETTER_AUTH_TELEMETRY_UPSTREAM_OBSERVATION="$RUNNER_TEMP/telemetry-host-observations/upstream.json.system-observation.json"
+            export TELEMETRY_CPU_ERROR_OUTPUT="$RUNNER_TEMP/telemetry-host-observations/cpu-errors.json"
             mkdir -p "$BETTER_AUTH_TELEMETRY_OBSERVATION_DIR"
           fi
           if [[ "$CHECK_STAGE" == "consumer" || "$CHECK_STAGE" == "consumer-schema" ]]; then

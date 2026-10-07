@@ -87,19 +87,20 @@ fn compare_metadata(actual: &Value, expected: &Value) {
         actual.pointer("/systemInfo/deploymentVendor"),
         expected.pointer("/systemInfo/deploymentVendor")
     );
-    for key in ["cpuCount", "cpuModel", "cpuSpeed", "memory"] {
-        assert_eq!(
-            actual.get("systemInfo").and_then(|system| system.get(key)),
-            Some(&Value::Null),
-            "{key}"
-        );
-    }
     #[cfg(not(target_os = "linux"))]
     {
+        for key in ["cpuCount", "cpuModel", "cpuSpeed"] {
+            assert_eq!(
+                actual.get("systemInfo").and_then(|system| system.get(key)),
+                Some(&Value::Null),
+                "{key}"
+            );
+        }
         assert_eq!(
             actual.pointer("/systemInfo/systemRelease"),
             Some(&Value::Null)
         );
+        assert_eq!(actual.pointer("/systemInfo/memory"), Some(&Value::Null));
         assert_eq!(
             actual.pointer("/systemInfo/isWSL"),
             Some(&Value::Bool(false))
@@ -151,6 +152,32 @@ fn compare_host(actual: &Value, expected: &Value) -> AuthResult<()> {
             actual.pointer("/systemInfo/systemRelease"),
             Some(&json!(release)),
             "Linux release must match the upstream event from this runner"
+        );
+        let memory = expected
+            .pointer("/systemInfo/memory")
+            .filter(|value| value.is_number())
+            .ok_or_else(|| AuthError::internal("missing upstream memory observation"))?;
+        assert_eq!(
+            actual.pointer("/systemInfo/memory"),
+            Some(memory),
+            "Linux memory must match the upstream event from this runner"
+        );
+        for key in [
+            "systemPlatform",
+            "systemArchitecture",
+            "cpuCount",
+            "cpuModel",
+        ] {
+            assert_eq!(
+                actual_system.get(key),
+                expected_system.get(key),
+                "{key} must match the upstream event from this runner"
+            );
+        }
+        // Frequency changes between processes; both raw observations remain in the artifact.
+        assert!(
+            actual_system.get("cpuSpeed").is_some_and(Value::is_number),
+            "CPU speed must contain the native observation"
         );
     }
     Ok(())

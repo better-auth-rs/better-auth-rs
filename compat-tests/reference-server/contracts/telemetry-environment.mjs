@@ -25,7 +25,51 @@ function publicMetadata(payload) {
   return JSON.parse(JSON.stringify({ environment: payload.environment, systemInfo: { deploymentVendor: payload.systemInfo.deploymentVendor }, packageManager: payload.packageManager }));
 }
 
-if (process.argv[2] === "--observe") {
+async function installCpuError(mode, record) {
+  assert.ok(["cpus", "model"].includes(mode));
+  const { default: os } = await import("node:os");
+  const { default: fs } = await import("node:fs");
+  const originals = [];
+  const replace = (object, key, value) => {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    originals.push([object, key, descriptor]);
+    Object.defineProperty(object, key, { ...descriptor, value });
+  };
+  replace(os, "cpus", () => {
+    record("cpus");
+    if (mode === "cpus") throw new Error("injected CPU probe error");
+    return [{
+      get model() {
+        record("model");
+        throw new Error("injected CPU model error");
+      },
+      get speed() {
+        record("speed");
+        return 0;
+      },
+    }];
+  });
+  for (const key of ["platform", "release", "arch", "totalmem"]) {
+    const original = os[key];
+    replace(os, key, (...args) => {
+      record(key);
+      return Reflect.apply(original, os, args);
+    });
+  }
+  const hostPaths = new Set(["/proc/version", "/proc/self/cgroup", "/.dockerenv", "/run/.containerenv"]);
+  for (const key of ["readFileSync", "statSync"]) {
+    const original = fs[key];
+    replace(fs, key, (...args) => {
+      if (hostPaths.has(String(args[0]))) record(`${key}:${args[0]}`);
+      return Reflect.apply(original, fs, args);
+    });
+  }
+  return () => {
+    for (const [object, key, descriptor] of originals) Object.defineProperty(object, key, descriptor);
+  };
+}
+
+if (["--observe", "--cpu-error"].includes(process.argv[2])) {
   const observation = {
     runtime: { name: typeof Bun === "undefined" ? "node" : "bun", version: typeof Bun === "undefined" ? process.versions.node : Bun.version, versions: process.versions },
     packages: {},
@@ -34,6 +78,8 @@ if (process.argv[2] === "--observe") {
     auth: [],
     fetches: [],
   };
+  let phase = "direct";
+  let restore = () => {};
   globalThis.fetch = async (input, init) => {
     observation.fetches.push(String(input));
     observation.auth.push(JSON.parse(init.body));
@@ -48,12 +94,19 @@ if (process.argv[2] === "--observe") {
     const { createTelemetry } = await import("@better-auth/telemetry");
     const { isTest } = await import("@better-auth/core/env");
     const { betterAuth } = await import("better-auth");
+    if (process.argv[2] === "--cpu-error") {
+      observation.cpuError = process.argv[3];
+      observation.probes = { direct: [], auth: [] };
+      restore = await installCpuError(observation.cpuError, probe => observation.probes[phase].push(probe));
+    }
     const options = { secret: "telemetry-environment-normal-secret-0123456789", baseURL: "https://example.test", logger: { disabled: true }, telemetry: { enabled: true } };
     await createTelemetry(options, { customTrack: async event => { observation.direct.push(event); }, skipTestCheck: true });
+    phase = "auth";
     const auth = betterAuth(options);
     await auth.$context;
     observation.emits = !isTest();
   } finally {
+    restore();
     process.stdout.write(JSON.stringify(observation));
   }
 } else {

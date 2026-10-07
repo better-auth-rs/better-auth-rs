@@ -1,51 +1,87 @@
 use std::{fs, io, sync::OnceLock};
 
-pub(super) struct KernelInfo {
-    pub(super) release: Option<String>,
-    pub(super) is_wsl: bool,
-}
+use serde_json::Value;
 
-pub(super) fn kernel_info() -> KernelInfo {
+#[cfg(any(target_os = "linux", test))]
+pub(super) mod cpu;
+
+pub(super) fn system_release() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
-        detect_kernel(
-            || {
-                nix::sys::utsname::uname()
-                    .map(|uname| uname.release().to_string_lossy().into_owned())
-                    .map_err(io::Error::from)
-            },
+        Some(detect_release(uname_release))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn uname_release() -> io::Result<String> {
+    nix::sys::utsname::uname()
+        .map(|uname| uname.release().to_string_lossy().into_owned())
+        .map_err(io::Error::from)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn detect_release(release: impl FnOnce() -> io::Result<String>) -> String {
+    // Bun 1.4.2 ignores Linux uname errors and returns its zeroed release buffer.
+    release().unwrap_or_default()
+}
+
+pub(super) fn memory() -> Value {
+    #[cfg(target_os = "linux")]
+    {
+        detect_memory(|| {
+            nix::sys::sysinfo::sysinfo()
+                .map(|info| info.ram_total())
+                .map_err(io::Error::from)
+        })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Value::Null
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn detect_memory(probe: impl FnOnce() -> io::Result<u64>) -> Value {
+    // Bun reports sysinfo failures as zero and exposes the u64 result as a JavaScript Number.
+    let bytes = probe().unwrap_or_default();
+    serde_json::json!(crate::field_value::serde::Json(&crate::FieldValue::Number(
+        bytes as f64
+    )))
+}
+
+pub(super) fn is_wsl() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        detect_wsl(
+            uname_release,
             || fs::read("/proc/version"),
             is_inside_container,
         )
     }
     #[cfg(not(target_os = "linux"))]
     {
-        KernelInfo {
-            release: None,
-            is_wsl: false,
-        }
+        false
     }
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn detect_kernel(
-    mut release: impl FnMut() -> io::Result<String>,
+fn detect_wsl(
+    release: impl FnOnce() -> io::Result<String>,
     version: impl FnOnce() -> io::Result<Vec<u8>>,
     inside_container: impl FnOnce() -> bool,
-) -> KernelInfo {
-    // Bun 1.4.2 ignores Linux uname errors and returns its zeroed release buffer.
-    let system_release = release().unwrap_or_default();
-    let wsl_release = release().unwrap_or_default();
+) -> bool {
+    let wsl_release = detect_release(release);
     let microsoft = wsl_release.to_lowercase().contains("microsoft")
         || version().is_ok_and(|bytes| {
             String::from_utf8_lossy(&bytes)
                 .to_lowercase()
                 .contains("microsoft")
         });
-    KernelInfo {
-        release: Some(system_release),
-        is_wsl: microsoft && !inside_container(),
-    }
+    microsoft && !inside_container()
 }
 
 #[cfg(target_os = "linux")]
@@ -95,10 +131,43 @@ fn detect_docker(
 mod tests {
     use std::cell::Cell;
 
+    use serde_json::json;
+
     use super::*;
 
     #[test]
-    fn kernel_reads_release_twice_and_uses_second_for_wsl() {
+    fn memory_is_uncached_and_maps_probe_errors_to_zero() {
+        let reads = Cell::new(0);
+        for (bytes, expected) in [
+            (Some(8_589_934_592), json!(8_589_934_592_u64)),
+            (None, json!(0)),
+            (Some(17_179_869_184), json!(17_179_869_184_u64)),
+        ] {
+            assert_eq!(
+                detect_memory(|| {
+                    reads.set(reads.get() + 1);
+                    bytes.ok_or_else(|| io::ErrorKind::PermissionDenied.into())
+                }),
+                expected
+            );
+        }
+        assert_eq!(reads.get(), 3);
+    }
+
+    #[test]
+    fn memory_projects_unsigned_bytes_through_javascript_numbers() {
+        assert_eq!(
+            detect_memory(|| Ok(9_007_199_254_740_993)),
+            json!(9_007_199_254_740_992_u64)
+        );
+        assert_eq!(
+            detect_memory(|| Ok(u64::MAX)),
+            json!(18_446_744_073_709_552_000.0)
+        );
+    }
+
+    #[test]
+    fn system_and_wsl_read_release_independently() {
         for (first, second, expected, expected_version_reads) in [
             (" first release\n", "5.15-MiCrOsOfT-standard", true, 0),
             ("5.15-Microsoft", "second release", false, 1),
@@ -106,16 +175,18 @@ mod tests {
             let release_reads = Cell::new(0);
             let version_reads = Cell::new(0);
             let container_reads = Cell::new(0);
-            let info = detect_kernel(
-                || {
-                    release_reads.set(release_reads.get() + 1);
-                    Ok(if release_reads.get() == 1 {
-                        first
-                    } else {
-                        second
-                    }
-                    .into())
-                },
+            let mut release = || {
+                release_reads.set(release_reads.get() + 1);
+                Ok(if release_reads.get() == 1 {
+                    first
+                } else {
+                    second
+                }
+                .into())
+            };
+            let system_release = detect_release(&mut release);
+            let is_wsl = detect_wsl(
+                release,
                 || {
                     version_reads.set(version_reads.get() + 1);
                     Ok(b"Linux version 6.17.0".to_vec())
@@ -125,8 +196,8 @@ mod tests {
                     false
                 },
             );
-            assert_eq!(info.release.as_deref(), Some(first));
-            assert_eq!(info.is_wsl, expected);
+            assert_eq!(system_release, first);
+            assert_eq!(is_wsl, expected);
             assert_eq!(release_reads.get(), 2);
             assert_eq!(version_reads.get(), expected_version_reads);
             assert_eq!(container_reads.get(), u32::from(expected));
@@ -144,7 +215,7 @@ mod tests {
             (None, false),
         ] {
             let container_reads = Cell::new(0);
-            let info = detect_kernel(
+            let is_wsl = detect_wsl(
                 || Ok("6.17.0".into()),
                 || {
                     contents
@@ -156,7 +227,7 @@ mod tests {
                     false
                 },
             );
-            assert_eq!(info.is_wsl, expected, "{contents:?}");
+            assert_eq!(is_wsl, expected, "{contents:?}");
             assert_eq!(container_reads.get(), u32::from(expected));
         }
     }
@@ -165,19 +236,21 @@ mod tests {
     fn uname_errors_preserve_empty_release_and_proc_fallback() {
         let release_reads = Cell::new(0);
         let version_reads = Cell::new(0);
-        let info = detect_kernel(
-            || {
-                release_reads.set(release_reads.get() + 1);
-                Err(io::ErrorKind::PermissionDenied.into())
-            },
+        let mut release = || {
+            release_reads.set(release_reads.get() + 1);
+            Err(io::ErrorKind::PermissionDenied.into())
+        };
+        let system_release = detect_release(&mut release);
+        let is_wsl = detect_wsl(
+            release,
             || {
                 version_reads.set(version_reads.get() + 1);
                 Ok(b"Linux version Microsoft".to_vec())
             },
             || false,
         );
-        assert_eq!(info.release.as_deref(), Some(""));
-        assert!(info.is_wsl);
+        assert_eq!(system_release, "");
+        assert!(is_wsl);
         assert_eq!(release_reads.get(), 2);
         assert_eq!(version_reads.get(), 1);
     }
@@ -192,7 +265,7 @@ mod tests {
         ] {
             let container_cached = OnceLock::new();
             let docker_cached = OnceLock::new();
-            let info = detect_kernel(
+            let is_wsl = detect_wsl(
                 || Ok("Microsoft".into()),
                 || Err(io::ErrorKind::NotFound.into()),
                 || {
@@ -228,7 +301,7 @@ mod tests {
                 },
             );
             assert_eq!(
-                info.is_wsl,
+                is_wsl,
                 !(container_marker || docker_marker || docker_cgroup)
             );
             assert_eq!(
@@ -253,11 +326,13 @@ mod tests {
             let marker_reads = Cell::new(0);
             let docker_reads = Cell::new(0);
             for (microsoft, current) in [(true, initial), (false, !initial), (true, !initial)] {
-                let info = detect_kernel(
-                    || {
-                        release_reads.set(release_reads.get() + 1);
-                        Ok("6.17.0".into())
-                    },
+                let mut release = || {
+                    release_reads.set(release_reads.get() + 1);
+                    Ok("6.17.0".into())
+                };
+                assert_eq!(detect_release(&mut release), "6.17.0");
+                let is_wsl = detect_wsl(
+                    release,
                     || {
                         version_reads.set(version_reads.get() + 1);
                         Ok(if microsoft {
@@ -280,7 +355,7 @@ mod tests {
                         )
                     },
                 );
-                assert_eq!(info.is_wsl, microsoft && !initial);
+                assert_eq!(is_wsl, microsoft && !initial);
             }
             assert_eq!(release_reads.get(), 6);
             assert_eq!(version_reads.get(), 3);
