@@ -368,6 +368,14 @@ run_stage() {
         ./compat-tests/reference-server/contracts/openapi-rate-limit-model.test.ts \
         ./compat-tests/reference-server/contracts/device-issuance.test.ts
       ;;
+    oauth-duration)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-api --features axum -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test oauth_token_duration_tests -- -D warnings
+      cargo test --locked --features axum,seaorm2,redis-cache --test oauth_token_duration_tests
+      cargo test --locked -p better-auth-api --features axum --lib plugins::oauth::provider_tokens::duration_tests::
+      bun --no-install test ./compat-tests/reference-server/contracts/oauth-token-duration.test.ts
+      ;;
     provider-options)
       cargo clippy --locked -p better-auth-api --features axum -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test oauth_token_duration_tests -- -D warnings
