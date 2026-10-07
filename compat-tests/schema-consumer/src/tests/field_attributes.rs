@@ -1,6 +1,6 @@
 use better_auth::config::UserFieldTransform;
 use better_auth::{
-    AuthConfig, BetterAuth,
+    AuthConfig, BetterAuth, FieldMap, FieldValue,
     config::{UserFieldConfig, UserFieldReference, UserFieldType},
     plugins::organization::{OrganizationConfig, OrganizationPlugin},
     prelude::CreateOrganization,
@@ -243,7 +243,12 @@ fn runtime_fields(output_calls: Arc<AtomicUsize>) -> OrganizationConfig {
                     .get("fieldName")
                     .and_then(Value::as_str)
                     .map(str::to_owned),
-                default_value: definition.get("defaultValue").cloned(),
+                default_value: definition
+                    .get("defaultValue")
+                    .cloned()
+                    .map(FieldValue::from_json)
+                    .transpose()
+                    .unwrap(),
                 references: definition
                     .get("references")
                     .map(|reference| UserFieldReference {
@@ -265,8 +270,8 @@ fn runtime_fields(output_calls: Arc<AtomicUsize>) -> OrganizationConfig {
                 field.transform.get_or_insert_default().output =
                     Some(UserFieldTransform::new(move |value| {
                         calls.fetch_add(1, Ordering::SeqCst);
-                        assert_eq!(value, Some(json!("12.5")));
-                        Ok(Some(json!({"original":value})))
+                        assert_eq!(value, FieldValue::from("12.5"));
+                        Ok(FieldMap::from([("original".into(), value)]).into())
                     }));
             }
             fields.fields_mut().insert(name.clone(), field);
@@ -306,13 +311,13 @@ async fn generated_id_references_keep_database_bindings_and_output_conversion_or
         .await
         .unwrap();
     let mut input = CreateOrganization::new("Attributes", "attributes");
-    input.additional_fields = json!({
+    input.additional_fields = FieldMap::from_json(json!({
         "fractional":1.25, "wideFractional":1.25, "owner":12.5, "bigOwner":12.5, "transformedOwner":12.5,
         "flagOwner":true, "jsonOwner":{"tenant":"A"}, "arrayOwner":["A","B"]
     })
     .as_object()
     .unwrap()
-    .clone();
+    .clone()).unwrap();
     let created = auth.store().create_organization(input).await.unwrap();
     let found = auth
         .store()
@@ -347,7 +352,9 @@ async fn generated_id_references_keep_database_bindings_and_output_conversion_or
     // The SQL driver, not JavaScript String(), determines text affinity for numeric input.
     for (value, expected) in [(json!(1e20), "1.0e+20"), (json!(-0.0), "0.0")] {
         let mut update = better_auth::prelude::UpdateOrganization::default();
-        update.additional_fields.insert("owner".into(), value);
+        update
+            .additional_fields
+            .insert("owner".into(), FieldValue::from_json(value).unwrap());
         let updated = auth
             .store()
             .update_organization(created.id.typed().unwrap(), update)

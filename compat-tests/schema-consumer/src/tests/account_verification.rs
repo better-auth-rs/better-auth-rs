@@ -2,11 +2,11 @@ use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::Arc;
 
 use better_auth::{
-    AuthConfig, BetterAuth, SchemaValue,
+    AuthConfig, BetterAuth, FieldMap, FieldValue, SchemaValue,
     config::{UserFieldConfig, UserFieldType},
     prelude::{CreateAccount, CreateUser, CreateVerification, UpdateAccount},
     seaorm::{
-        Database, SeaOrmStore,
+        __private_chrono as chrono, Database, SeaOrmStore,
         sea_orm::{ConnectionTrait, DbBackend, Statement},
     },
 };
@@ -20,14 +20,20 @@ fn label(column: &str) -> UserFieldConfig {
     UserFieldConfig {
         required: Some(false),
         field_name: Some(column.into()),
-        default_value: Some(json!("default")),
-        on_update: Some(Arc::new(|| json!("updated"))),
+        default_value: Some("default".into()),
+        on_update: Some(Arc::new(|| "updated".into())),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+                if value.is_undefined() {
+                    return Ok(value);
+                }
+                Ok(format!("{}:in", value.as_str().unwrap()).into())
             })),
             output: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!({"stored": value})))
+                if value.is_undefined() {
+                    return Ok(value);
+                }
+                Ok(FieldMap::from([("stored".into(), value)]).into())
             })),
         }),
         ..Default::default()
@@ -41,10 +47,16 @@ fn number(column: &str, required: bool) -> UserFieldConfig {
         required: Some(required),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(value.as_f64().unwrap() + 0.5)))
+                if value.is_undefined() {
+                    return Ok(value);
+                }
+                Ok((value.as_f64().unwrap() + 0.5).into())
             })),
             output: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!({"number": value})))
+                if value.is_undefined() {
+                    return Ok(value);
+                }
+                Ok(FieldMap::from([("number".into(), value)]).into())
             })),
         }),
         ..Default::default()
@@ -92,7 +104,7 @@ async fn generated_account_verification_fields_keep_storage_and_output_types_sep
             user_id: user.id,
             account_id: "subject".into(),
             provider_id: "fixture".into(),
-            scope: SchemaValue::Dynamic(json!(1.25)),
+            scope: SchemaValue::Dynamic(1.25.into()),
             password: Some("private-credential".to_owned()).into(),
             ..Default::default()
         })
@@ -100,8 +112,8 @@ async fn generated_account_verification_fields_keep_storage_and_output_types_sep
         .unwrap();
     assert_eq!(account.scope.json().unwrap(), Some(json!({"number": 1.75})));
     assert_eq!(
-        account.additional_fields["label"],
-        json!({"stored": "default:in"})
+        account.additional_fields["label"].json().unwrap(),
+        Some(json!({"stored": "default:in"}))
     );
     assert!(
         serde_json::to_value(&account)
@@ -111,14 +123,14 @@ async fn generated_account_verification_fields_keep_storage_and_output_types_sep
     );
     assert_eq!(
         account.internal_fields().unwrap()["password"],
-        "private-credential"
+        FieldValue::from("private-credential")
     );
     let updated = auth
         .store()
         .update_account(
             account.id.typed().unwrap(),
             UpdateAccount {
-                scope: SchemaValue::Dynamic(json!(2.25)),
+                scope: SchemaValue::Dynamic(2.25.into()),
                 ..Default::default()
             },
         )
@@ -126,15 +138,18 @@ async fn generated_account_verification_fields_keep_storage_and_output_types_sep
         .unwrap();
     assert_eq!(updated.scope.json().unwrap(), Some(json!({"number": 2.75})));
     assert_eq!(
-        updated.additional_fields["label"],
-        json!({"stored": "updated:in"})
+        updated.additional_fields["label"].json().unwrap(),
+        Some(json!({"stored": "updated:in"}))
     );
     let verification = auth
         .store()
         .create_verification(CreateVerification {
             identifier: "numeric-code".into(),
-            value: SchemaValue::Dynamic(json!(3.25)),
-            expires_at: SchemaValue::Typed("2030-01-01T00:00:00Z".parse().unwrap()),
+            value: SchemaValue::Dynamic(3.25.into()),
+            expires_at: "2030-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+                .into(),
             ..Default::default()
         })
         .await
@@ -144,8 +159,8 @@ async fn generated_account_verification_fields_keep_storage_and_output_types_sep
         Some(json!({"number": 3.75}))
     );
     assert_eq!(
-        verification.additional_fields["label"],
-        json!({"stored": "default:in"})
+        verification.additional_fields["label"].json().unwrap(),
+        Some(json!({"stored": "default:in"}))
     );
     let stored = db
         .query_one_raw(Statement::from_string(

@@ -1,5 +1,5 @@
 use better_auth::{
-    AuthConfig, AuthSchema, BetterAuth,
+    AuthConfig, AuthSchema, BetterAuth, FieldDate, FieldValue,
     config::{IdGeneration, UserFieldConfig, UserFieldReference},
     prelude::{CreateAccount, CreateSession, CreateUser, CreateVerification},
     seaorm::{
@@ -14,7 +14,6 @@ use better_auth::{
         },
     },
 };
-use serde_json::json;
 
 #[path = "id_writes.rs"]
 mod writes;
@@ -103,7 +102,7 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
     let session = store
         .create_session(CreateSession {
             user_id: user.id.clone(),
-            expires_at: user.created_at + std::time::Duration::from_secs(3600),
+            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -118,18 +117,22 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
             user_id: user.id.clone(),
             account_id: "subject".into(),
             provider_id: "fixture".into(),
-            additional_fields: [("owner".into(), json!(id))].into_iter().collect(),
+            additional_fields: [("owner".into(), id.clone().into())].into_iter().collect(),
             ..Default::default()
         })
         .await
         .unwrap();
     assert_eq!(account.user_id.typed().unwrap(), id);
-    assert_eq!(account.additional_fields["owner"], json!(id));
+    assert_eq!(
+        account.additional_fields["owner"],
+        FieldValue::from(id.clone())
+    );
     let verification = store
         .create_verification(CreateVerification {
             identifier: "proof".into(),
             value: "proof-value".into(),
-            expires_at: (user.created_at + std::time::Duration::from_secs(3600)).into(),
+            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0)
+                .into(),
             ..Default::default()
         })
         .await
@@ -329,7 +332,7 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
             device_code: "generated-device".into(),
             user_code: "generated-user-code".into(),
             user_id: None,
-            expires_at: user.created_at + std::time::Duration::from_secs(300),
+            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 300_000.0),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),

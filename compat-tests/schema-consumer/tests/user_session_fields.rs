@@ -1,5 +1,5 @@
 use better_auth::{
-    AuthConfig, BetterAuth,
+    AuthConfig, BetterAuth, FieldDate, FieldMap, FieldValue,
     config::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
     prelude::{CreateSession, CreateUser, UpdateUser},
     seaorm::{
@@ -34,10 +34,16 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
                 field_name: Some("stored_label".into()),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(|value| {
-                        Ok(value.map(|value| json!(format!("stored:{}", value.as_str().unwrap()))))
+                        if value.is_undefined() {
+                            return Ok(value);
+                        }
+                        Ok(format!("stored:{}", value.as_str().unwrap()).into())
                     })),
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(value.map(|value| json!({ "stored": value })))
+                        if value.is_undefined() {
+                            return Ok(value);
+                        }
+                        Ok(FieldMap::from([("stored".into(), value)]).into())
                     })),
                 }),
                 ..Default::default()
@@ -66,7 +72,7 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
             UserFieldConfig {
                 field_type: UserFieldType::Boolean,
                 required: Some(false),
-                default_value: Some(json!(false)),
+                default_value: Some(false.into()),
                 ..Default::default()
             },
         ),
@@ -83,21 +89,27 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
     let mut input = CreateUser::new()
         .with_email("session-display@example.com")
         .with_name("Display");
-    input.additional_fields = [("label".into(), json!("reader"))].into_iter().collect();
+    input.additional_fields = [("label".into(), "reader".into())].into_iter().collect();
     let user = store.create_user(input).await.unwrap();
-    assert_eq!(json!(user.additional_fields), json!({ "label": "reader" }));
+    assert_eq!(
+        json!(user.additional_fields.json().unwrap()),
+        json!({ "label": "reader" })
+    );
     let session = store
         .create_session(CreateSession {
             user_id: user.id.clone(),
-            expires_at: user.created_at + std::time::Duration::from_secs(3600),
+            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
             active_organization_id: None,
             additional_fields: [
-                ("label".into(), json!("create")),
-                ("rating".into(), json!(1.25)),
-                ("details".into(), json!({ "topic": "sample" })),
+                ("label".into(), "create".into()),
+                ("rating".into(), 1.25.into()),
+                (
+                    "details".into(),
+                    FieldValue::from_json(json!({ "topic": "sample" })).unwrap(),
+                ),
             ]
             .into_iter()
             .collect(),
@@ -105,7 +117,7 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
         .await
         .unwrap();
     assert_eq!(
-        json!(session.additional_fields),
+        json!(session.additional_fields.json().unwrap()),
         json!({
             "label": { "stored": "stored:create" },
             "rating": 1.25,
@@ -117,19 +129,22 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
         .update_user(
             user.id.typed().unwrap(),
             UpdateUser {
-                additional_fields: [("label".into(), json!("editor"))].into_iter().collect(),
+                additional_fields: [("label".into(), "editor".into())].into_iter().collect(),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(json!(user.additional_fields), json!({ "label": "editor" }));
+    assert_eq!(
+        json!(user.additional_fields.json().unwrap()),
+        json!({ "label": "editor" })
+    );
     let updated = store
         .update_session_fields(
             &session.token,
             [
-                ("label".into(), json!("edit")),
-                ("rating".into(), json!(2.25)),
+                ("label".into(), "edit".into()),
+                ("rating".into(), 2.25.into()),
             ]
             .into_iter()
             .collect(),
@@ -138,7 +153,7 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
         .unwrap()
         .unwrap();
     assert_eq!(
-        json!(updated.additional_fields),
+        json!(updated.additional_fields.json().unwrap()),
         json!({
             "label": { "stored": "stored:edit" },
             "rating": 2.25,

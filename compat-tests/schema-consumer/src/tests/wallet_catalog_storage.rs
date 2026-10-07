@@ -50,7 +50,8 @@ fn public(row: WalletAddress) -> TestResult<Value> {
     assert!(additional_fields.is_empty());
     Ok(json!({
         "id": id.typed()?, "userId": user_id, "address": address,
-        "chainId": chain_id, "isPrimary": is_primary, "createdAt": date(created_at),
+        "chainId": chain_id, "isPrimary": is_primary,
+        "createdAt": date(created_at.to_datetime()?.ok_or("Expected a valid Wallet creation date")?),
     }))
 }
 
@@ -157,8 +158,13 @@ where
         .with_name("Wallet catalog owner")
         .with_email("owner@wallet-catalog.test")
         .with_email_verified(false);
-    owner_input.created_at = Some(first.created_at.parse()?);
-    owner_input.updated_at = owner_input.created_at;
+    owner_input.created_at = Some(
+        first
+            .created_at
+            .parse::<chrono::DateTime<chrono::Utc>>()?
+            .into(),
+    );
+    owner_input.updated_at = owner_input.created_at.clone();
     let store =
         SeaOrmStore::<S>::new(AuthConfig::default(), database.clone()).with_plugin_schema::<P>();
     let store: &dyn AuthStore<S> = &store;
@@ -175,7 +181,10 @@ where
                 address: input.address.clone(),
                 chain_id: input_wallet.chain_id,
                 is_primary: input_wallet.is_primary,
-                created_at: input_wallet.created_at.parse()?,
+                created_at: input_wallet
+                    .created_at
+                    .parse::<chrono::DateTime<chrono::Utc>>()?
+                    .into(),
                 additional_fields: Default::default(),
             })
             .await?;

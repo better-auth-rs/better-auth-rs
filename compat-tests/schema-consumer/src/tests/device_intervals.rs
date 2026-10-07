@@ -2,7 +2,7 @@ use better_auth::{
     AuthConfig, AuthSchema,
     prelude::CreateDeviceCode,
     seaorm::{
-        Database, SeaOrmStore,
+        __private_chrono as chrono, Database, SeaOrmStore,
         sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement},
     },
     store::AuthStore,
@@ -36,7 +36,9 @@ async fn check<S: AuthSchema>(
             device_code: "ordinary-generated-device".into(),
             user_code: "ORDINARY".into(),
             user_id: None,
-            expires_at: "2030-01-01T00:00:00Z".parse()?,
+            expires_at: "2030-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()?
+                .into(),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(1.5),

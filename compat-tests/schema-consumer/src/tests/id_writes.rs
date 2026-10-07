@@ -154,9 +154,9 @@ pub(super) async fn reference_writes<
             }),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
-                    if value == Some(json!("@owner")) {
+                    if value == FieldValue::from("@owner") {
                         observed.fetch_add(1, Ordering::SeqCst);
-                        Ok(Some(json!(transformed_owner)))
+                        Ok(transformed_owner.clone().into())
                     } else {
                         Ok(value)
                     }
@@ -177,16 +177,22 @@ pub(super) async fn reference_writes<
     store.configure_organization_fields(fields.clone()).unwrap();
     let mut create = CreateMember::new(&org_alias, &member_alias, "member");
     create.additional_fields = [
-        ("sponsor".into(), json!("@owner")),
-        ("externalId".into(), json!("0x10")),
+        ("sponsor".into(), "@owner".into()),
+        ("externalId".into(), "0x10".into()),
     ]
     .into_iter()
     .collect();
     let member = store.create_member(create).await.unwrap();
     assert_eq!(member.organization_id, organization.id);
     assert_eq!(member.user_id, user.id);
-    assert_eq!(member.additional_fields["sponsor"], json!(owner));
-    assert_eq!(member.additional_fields["externalId"], json!("0x10"));
+    assert_eq!(
+        member.additional_fields["sponsor"],
+        FieldValue::from(owner.clone())
+    );
+    assert_eq!(
+        member.additional_fields["externalId"],
+        FieldValue::from("0x10")
+    );
     assert_eq!(transforms.load(Ordering::SeqCst), 1);
     let mut missing = CreateMember::new(&org_alias, owner, "member");
     missing.user_id = Default::default();
@@ -213,7 +219,7 @@ pub(super) async fn reference_writes<
             device_code: "alias-device".into(),
             user_code: "0x10".into(),
             user_id: None,
-            expires_at: user.created_at + std::time::Duration::from_secs(300),
+            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 300_000.0),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),

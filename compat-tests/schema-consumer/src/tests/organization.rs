@@ -98,11 +98,11 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
         .fields_mut()
         .get_mut("joinedAt")
         .unwrap()
-        .default_value = Some(json!("2026-01-02T03:04:05.000Z"));
+        .default_value = Some("2026-01-02T03:04:05.000Z".into());
     organization.schema.member.fields_mut().insert(
         "badge".to_owned(),
         UserFieldConfig {
-            default_value: Some(json!("founder")),
+            default_value: Some("founder".into()),
             ..optional(UserFieldType::String)
         },
     );

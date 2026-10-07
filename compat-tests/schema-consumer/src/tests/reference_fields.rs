@@ -1,6 +1,6 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{
-    AuthConfig, AuthSchema, BetterAuth,
+    AuthConfig, AuthSchema, BetterAuth, FieldDate, FieldValue,
     config::{UserFieldConfig, UserFieldReference, UserFieldType},
     prelude::{CreateSession, CreateUser, SessionView, UpdateUser, UserView},
     seaorm::{
@@ -8,7 +8,6 @@ use better_auth::{
         sea_orm::{self, ConnectionTrait, Schema, entity::prelude::*},
     },
 };
-use serde_json::json;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -92,11 +91,11 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
             model: "user".into(),
             field: "id".into(),
         }),
-        default_value: Some(json!(1)),
+        default_value: Some(1.0.into()),
         transform: Some(FieldTransforms {
             output: Some(UserFieldTransform::new(move |value| {
                 count.fetch_add(1, Ordering::SeqCst);
-                assert!(value.as_ref().unwrap().is_string());
+                assert!(value.is_string());
                 Ok(value)
             })),
             ..Default::default()
@@ -109,7 +108,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         .fields_mut()
         .insert("owner".into(), field.clone());
     let mut session_field = field;
-    session_field.on_update = Some(Arc::new(|| json!(-0.0)));
+    session_field.on_update = Some(Arc::new(|| (-0.0).into()));
     config
         .session
         .fields_mut()
@@ -128,7 +127,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id.clone(),
-            expires_at: user.created_at + std::time::Duration::from_secs(3600),
+            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -136,7 +135,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         })
         .await
         .unwrap();
-    assert_eq!(user.additional_fields["owner"], "1");
+    assert_eq!(user.additional_fields["owner"], FieldValue::from("1"));
     assert_eq!(
         user::Entity::find_by_id(user.id.typed().unwrap())
             .one(&database)
@@ -146,7 +145,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
             .owner,
         Some(ReferenceId::Text("1".into()))
     );
-    assert_eq!(session.additional_fields["owner"], "1");
+    assert_eq!(session.additional_fields["owner"], FieldValue::from("1"));
     assert_eq!(
         session::Entity::find_by_id(session.id.typed().unwrap())
             .one(&database)
@@ -160,7 +159,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         .update_user(
             user.id.typed().unwrap(),
             UpdateUser {
-                additional_fields: [("owner".into(), json!(1e20))].into_iter().collect(),
+                additional_fields: [("owner".into(), 1e20.into())].into_iter().collect(),
                 ..Default::default()
             },
         )
@@ -169,7 +168,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
     let updated_session = store
         .update_session_fields(
             &session.token,
-            [("owner".into(), json!(1e20))].into_iter().collect(),
+            [("owner".into(), 1e20.into())].into_iter().collect(),
         )
         .await
         .unwrap()
@@ -208,10 +207,16 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
     );
     assert_eq!(calls.load(Ordering::SeqCst), 4);
     let refreshed = store
-        .update_session_expiry(&session.token, session.expires_at)
+        .update_session_expiry(
+            &session.token,
+            session.expires_at.to_datetime().unwrap().unwrap(),
+        )
         .await
         .unwrap();
-    assert_eq!(refreshed.additional_fields["owner"], "0.0");
+    assert_eq!(
+        refreshed.additional_fields["owner"],
+        FieldValue::from("0.0")
+    );
     assert_eq!(
         session::Entity::find_by_id(refreshed.id.typed().unwrap())
             .one(&database)

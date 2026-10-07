@@ -1,6 +1,6 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{
-    AuthConfig, BetterAuth, SchemaValue,
+    AuthConfig, BetterAuth, FieldValue, SchemaValue,
     config::{UserFieldConfig, UserFieldType},
     plugins::organization::{OrganizationConfig, OrganizationPlugin},
     prelude::{CreateOrganization, CreateTeam},
@@ -25,7 +25,11 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
                 required: Some(false),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(value.filter(|value| value.as_f64() != Some(99.0)))
+                        Ok(if value.as_f64() == Some(99.0) {
+                            FieldValue::Undefined
+                        } else {
+                            value
+                        })
                     })),
                     ..Default::default()
                 }),
@@ -54,7 +58,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
                 input: Some(false),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(|_| {
-                        Ok(Some(json!("2000-01-02T03:04:05+02:00")))
+                        Ok("2000-01-02T03:04:05+02:00".into())
                     })),
                     ..Default::default()
                 }),
@@ -64,7 +68,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         (
             "updatedAt".into(),
             UserFieldConfig {
-                default_value: Some(json!("public")),
+                default_value: Some("public".into()),
                 required: Some(false),
                 ..Default::default()
             },
@@ -93,9 +97,9 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         .enumerate()
     {
         let mut input = CreateOrganization::new("ignored", "ignored");
-        input.name = SchemaValue::Dynamic(name.clone());
-        input.slug = SchemaValue::Dynamic(json!(index));
-        input.logo = SchemaValue::Dynamic(json!(true));
+        input.name = SchemaValue::Dynamic(FieldValue::from_json(name.clone()).unwrap());
+        input.slug = SchemaValue::Dynamic(FieldValue::from_json(json!(index)).unwrap());
+        input.logo = SchemaValue::Dynamic(true.into());
         let organization = auth.store().create_organization(input).await.unwrap();
         let wire = serde_json::to_value(&organization).unwrap();
         if name == json!(99.0) {
@@ -108,7 +112,7 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         assert_eq!(wire["updatedAt"], "public");
         let found = auth
             .store()
-            .get_organization_by_slug_value(&json!(index))
+            .get_organization_by_slug_value(&FieldValue::from_json(json!(index)).unwrap())
             .await
             .unwrap()
             .unwrap();
@@ -122,7 +126,9 @@ async fn generated_builtin_replacement_types_preserve_storage_and_wire_values() 
         let team = auth
             .store()
             .create_team(CreateTeam {
-                name: SchemaValue::Dynamic(json!({"label": "structured"})),
+                name: SchemaValue::Dynamic(
+                    FieldValue::from_json(json!({"label": "structured"})).unwrap(),
+                ),
                 organization_id: organization.id,
                 ..Default::default()
             })

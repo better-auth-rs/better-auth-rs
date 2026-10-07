@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use better_auth::{
     __private_core::store::OrganizationStore,
-    AuthConfig,
+    AuthConfig, AuthResult, FieldMap, FieldValue,
     config::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
     plugins::organization::OrganizationConfig,
     prelude::{CreateOrganization, Organization, UpdateOrganization},
@@ -18,35 +18,36 @@ type Store = SeaOrmStore<generated::AppAuthSchema, generated::AppOrganizationSch
 type Events = Arc<Mutex<Vec<Value>>>;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn kind(value: Option<&Value>) -> &'static str {
+fn kind(value: &FieldValue) -> &'static str {
     match value {
-        None => "undefined",
-        Some(Value::Null) => "null",
-        Some(Value::Bool(_)) => "boolean",
-        Some(Value::Number(_)) => "number",
-        Some(Value::String(_)) => "string",
-        Some(Value::Array(_)) => "array",
-        Some(Value::Object(_)) => "object",
+        FieldValue::Undefined => "undefined",
+        FieldValue::Null => "null",
+        FieldValue::Bool(_) => "boolean",
+        FieldValue::Number(_) => "number",
+        FieldValue::String(_) | FieldValue::Utf16String(_) => "string",
+        FieldValue::Array(_) => "array",
+        FieldValue::Object(_) | FieldValue::Date(_) => "object",
     }
 }
 
-fn present(value: Option<&Value>) -> Map<String, Value> {
+fn present(value: Option<&FieldValue>) -> AuthResult<Map<String, Value>> {
+    let value = value.map(FieldValue::json).transpose()?.flatten();
     let mut result = Map::from_iter([("present".into(), json!(value.is_some()))]);
     if let Some(value) = value {
-        let _ = result.insert("value".into(), value.clone());
+        let _ = result.insert("value".into(), value);
     }
-    result
+    Ok(result)
 }
 
 fn policy(field: &'static str, events: &Events) -> UserFieldConfig {
     let callback = |phase: &'static str| {
         let events = events.clone();
         UserFieldTransform::new(move |value| {
-            let mut event = present(value.as_ref());
+            let mut event = present(Some(&value))?;
             event.extend([
                 ("phase".into(), json!(phase)),
                 ("field".into(), json!(field)),
-                ("kind".into(), json!(kind(value.as_ref()))),
+                ("kind".into(), json!(kind(&value))),
             ]);
             events
                 .lock()
@@ -63,7 +64,8 @@ fn policy(field: &'static str, events: &Events) -> UserFieldConfig {
             "stored_settings".into()
         }),
         required: Some(field == "requiredSettings"),
-        default_value: (field == "requiredSettings").then(|| json!({"theme": "default"})),
+        default_value: (field == "requiredSettings")
+            .then(|| FieldMap::from([("theme".into(), "default".into())]).into()),
         transform: Some(FieldTransforms {
             input: Some(callback("input")),
             output: Some(callback("output")),
@@ -83,14 +85,14 @@ async fn observe(
         .into_iter()
         .map(|field| {
             let value = row.additional_fields.get(field);
-            let mut display = present(value);
+            let mut display = present(value)?;
             let _ = display.insert(
                 "own".into(),
                 json!(row.additional_fields.contains_key(field)),
             );
-            (field.into(), Value::Object(display))
+            Ok((field.into(), Value::Object(display)))
         })
-        .collect();
+        .collect::<AuthResult<_>>()?;
     let stored = generated::organization::Entity::find_by_id(id)
         .one(database)
         .await?
@@ -160,7 +162,9 @@ async fn generated_sqlite_json_fields_preserve_scalar_bindings_and_text() -> Res
             format!("json-generation-{name}"),
         );
         if let Some(settings) = settings {
-            let _ = input.additional_fields.insert("settings".into(), settings);
+            let _ = input
+                .additional_fields
+                .insert("settings".into(), FieldValue::from_json(settings)?);
         }
         let row = store.create_organization(input).await?;
         let id = row.id.typed()?.clone();
@@ -184,7 +188,10 @@ async fn generated_sqlite_json_fields_preserve_scalar_bindings_and_text() -> Res
             .update_organization(
                 &object_id,
                 UpdateOrganization {
-                    additional_fields: Map::from_iter([(field.into(), value)]),
+                    additional_fields: FieldMap::from([(
+                        field.into(),
+                        FieldValue::from_json(value)?,
+                    )]),
                     ..Default::default()
                 },
             )

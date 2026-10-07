@@ -284,7 +284,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             device_code: "device-secret".into(),
             user_code: "ABCD2345".into(),
             user_id: None,
-            expires_at: user.created_at,
+            expires_at: user.created_at.into(),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),
@@ -435,7 +435,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             address: "0x1234".into(),
             chain_id: 1,
             is_primary: true,
-            created_at: user.created_at,
+            created_at: user.created_at.into(),
         })
         .await
         .unwrap();
