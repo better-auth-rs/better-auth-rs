@@ -22,6 +22,8 @@ on:
       - compat-tests/reference-server/contracts/organization-member-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/account-user-selected-relations-capture.mjs
       - compat-tests/reference-server/contracts/account-user-selected-relations.test.ts
+      - compat-tests/reference-server/contracts/account-user-auth-boundary-capture.mjs
+      - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
   contents: read
@@ -32,8 +34,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: account-user-selected-relations
-            regression: schema-join-reference
+          - contract: account-user-auth-boundary
+            regression: account-user-selected-relations
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
