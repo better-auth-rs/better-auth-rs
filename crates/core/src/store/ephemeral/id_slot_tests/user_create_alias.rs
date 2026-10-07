@@ -141,6 +141,7 @@ async fn memory_user_id_alias_reads_use_the_canonical_id_before_output_conversio
             );
             let store = EphemeralStore::new(Arc::new(config));
             let mut input = user_input("alias")?;
+            input.is_anonymous = Some(false);
             input.additional_fields = [("aliasId".into(), "A".into())].into();
             let created = store.create_user(input).await?;
             assert_eq!(created.id.field_value(), Value::from("null"));
