@@ -377,9 +377,11 @@ pub struct ApiKey {
     #[serde(rename = "lastRefillAt")]
     #[serde(with = "crate::field_value::serde::optional_date", default)]
     pub last_refill_at: Option<crate::FieldDate>,
-    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitEnabled")]
-    pub rate_limit_enabled: bool,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub rate_limit_enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitTimeWindow")]
     pub rate_limit_time_window: Option<f64>,
     #[serde(rename = "rateLimitMax")]
@@ -540,11 +542,11 @@ impl AuthApiKey for ApiKey {
     fn last_refill_at(&self) -> Option<crate::FieldDate> {
         self.last_refill_at.clone()
     }
-    fn enabled(&self) -> bool {
-        self.enabled
+    fn enabled(&self) -> &SchemaValue<bool> {
+        &self.enabled
     }
-    fn rate_limit_enabled(&self) -> bool {
-        self.rate_limit_enabled
+    fn rate_limit_enabled(&self) -> &SchemaValue<bool> {
+        &self.rate_limit_enabled
     }
     fn rate_limit_time_window(&self) -> Option<f64> {
         self.rate_limit_time_window
@@ -592,8 +594,8 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
             refill_interval: api_key.refill_interval(),
             refill_amount: api_key.refill_amount(),
             last_refill_at: api_key.last_refill_at(),
-            enabled: api_key.enabled(),
-            rate_limit_enabled: api_key.rate_limit_enabled(),
+            enabled: api_key.enabled().clone(),
+            rate_limit_enabled: api_key.rate_limit_enabled().clone(),
             rate_limit_time_window: api_key.rate_limit_time_window(),
             rate_limit_max: api_key.rate_limit_max(),
             request_count: api_key.request_count(),

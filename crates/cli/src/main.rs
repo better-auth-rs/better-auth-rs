@@ -44,7 +44,7 @@ enum Command {
         #[arg(long)]
         session_active_column: bool,
 
-        /// Retain the previous API Key table, column names, and date types when regenerating models.
+        /// Retain the previous API Key names, column types, nullability, and indexes.
         #[arg(long)]
         api_key_legacy_schema: bool,
 

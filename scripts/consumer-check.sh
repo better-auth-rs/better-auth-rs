@@ -38,6 +38,9 @@ export BETTER_AUTH_SQLITE_JSON_SCHEMA="$schema_dir/sqlite_json_schema.rs"
 "$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
 for backend in sqlite postgres mysql; do
+  schema="$schema_dir/native_api_key_${backend}.rs"
+  "$consumer_cli" generate --plugins api-key --database "$backend" --output "$schema"
+  export "BETTER_AUTH_NATIVE_API_KEY_${backend^^}_SCHEMA=$schema"
   for display in api-key-name passkey-name passkey-aaguid; do
     plugin=passkey
     if [[ "$display" == api-key-name ]]; then

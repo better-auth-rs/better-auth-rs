@@ -170,7 +170,7 @@ async fn issue_verify_and_revoke_machine_credential() -> Result<(), Box<dyn std:
             },
         )
         .await?;
-    assert!(!revoked.enabled);
+    assert_eq!(revoked.enabled.typed()?, &false);
     let rejected = api_keys
         .verify(&issued.key, required(vec!["heartbeat".into()]))
         .await;

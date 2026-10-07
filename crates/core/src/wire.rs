@@ -574,9 +574,11 @@ pub struct ApiKeyView {
     #[serde(rename = "lastRefillAt")]
     #[serde(default, with = "crate::field_value::serde::optional_date")]
     pub last_refill_at: Option<crate::FieldDate>,
-    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitEnabled")]
-    pub rate_limit_enabled: bool,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub rate_limit_enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitTimeWindow")]
     #[serde(serialize_with = "serialize_optional_number")]
     pub rate_limit_time_window: Option<f64>,
@@ -630,8 +632,8 @@ impl<T: AuthApiKey> From<&T> for ApiKeyView {
             refill_interval: ak.refill_interval(),
             refill_amount: ak.refill_amount(),
             last_refill_at: ak.last_refill_at(),
-            enabled: ak.enabled(),
-            rate_limit_enabled: ak.rate_limit_enabled(),
+            enabled: ak.enabled().clone(),
+            rate_limit_enabled: ak.rate_limit_enabled().clone(),
             rate_limit_time_window: ak.rate_limit_time_window(),
             rate_limit_max: ak.rate_limit_max(),
             request_count: ak.request_count(),

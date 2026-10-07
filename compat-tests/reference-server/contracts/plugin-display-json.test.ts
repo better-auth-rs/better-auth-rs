@@ -13,7 +13,24 @@ for (const backend of ["memory", "sqlite", "postgres", "mysql"] as const) {
     expect(observed.version).toBe("1.7.6");
     expect(observed.backend).toBe(backend);
     expect(observed.models.map(({ model, field }: { model: string; field: string }) => ({ model, field }))).toStrictEqual(displayJsonTargets);
+    if (backend !== "memory") {
+      expect(observed.apiKeyCatalog.columns.length).toBe(22);
+      expect(observed.apiKeyCatalog.constraints.foreignKeys).toStrictEqual([]);
+      expect(observed.apiKeyCatalog.storage.nullFlags.enabled).toBeNull();
+      expect(observed.apiKeyCatalog.storage.nullFlags.rateLimitEnabled).toBeNull();
+      const numeric = observed.apiKeyCatalog.storage.numeric;
+      expect(numeric.map(({ name }: { name: string }) => name))
+        .toStrictEqual(["integer", "fraction", "negative-fraction", "outside-int32"]);
+      for (const value of numeric) {
+        expect(value.accepted).toBe(value.error === null);
+        expect(value.row).not.toBeNull();
+      }
+    }
     for (const model of observed.models) {
+      if (backend !== "memory") {
+        expect(Array.isArray(model.constraints.indexes)).toBe(true);
+        expect(Array.isArray(model.constraints.foreignKeys)).toBe(true);
+      }
       expect(model.cases.map((value: { name: string }) => value.name)).toStrictEqual(displayJsonValues.map(value => value.name));
       for (const value of model.cases) {
         expect(value.operations.map((operation: { name: string }) => operation.name)).toStrictEqual(displayJsonValueOperations);

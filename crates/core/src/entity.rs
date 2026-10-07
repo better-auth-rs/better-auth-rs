@@ -314,8 +314,8 @@ pub trait AuthApiKey:
     fn refill_interval(&self) -> Option<f64>;
     fn refill_amount(&self) -> Option<f64>;
     fn last_refill_at(&self) -> Option<crate::FieldDate>;
-    fn enabled(&self) -> bool;
-    fn rate_limit_enabled(&self) -> bool;
+    fn enabled(&self) -> &SchemaValue<bool>;
+    fn rate_limit_enabled(&self) -> &SchemaValue<bool>;
     fn rate_limit_time_window(&self) -> Option<f64>;
     fn rate_limit_max(&self) -> Option<f64>;
     fn request_count(&self) -> Option<f64>;

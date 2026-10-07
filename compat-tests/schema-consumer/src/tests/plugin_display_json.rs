@@ -1,3 +1,5 @@
+#[path = "plugin_display_json_catalog.rs"]
+mod catalog;
 #[path = "../../../../tests/support/plugin_display_json_contract.rs"]
 mod contract;
 
@@ -134,7 +136,9 @@ where
         backend,
         target,
     )?;
-    if database.get_database_backend() != DbBackend::Sqlite {
+    if target == Target::ApiKeyName {
+        catalog::compare(&database, &target.table(), &expected).await?;
+    } else if database.get_database_backend() != DbBackend::Sqlite {
         let columns =
             server_catalog::observe(&database, database.get_database_backend(), [target.table()])
                 .await?;
@@ -211,6 +215,10 @@ async fn generated_sqlite_plugin_display_json() -> TestResult {
         database.close().await?;
         result?;
     }
+    let database = Database::connect("sqlite::memory:").await?;
+    let result = catalog::check_native(database.clone(), "sqlite").await;
+    database.close().await?;
+    result?;
     Ok(())
 }
 
@@ -223,6 +231,10 @@ async fn live_postgres_plugin_display_json() -> TestResult {
         })
         .await?;
     }
+    server_catalog::in_postgres_catalog(|database| async move {
+        catalog::check_native(database, "postgres").await
+    })
+    .await?;
     Ok(())
 }
 
@@ -235,5 +247,9 @@ async fn live_mysql_plugin_display_json() -> TestResult {
         })
         .await?;
     }
+    server_catalog::in_mysql_catalog(|database| async move {
+        catalog::check_native(database, "mysql").await
+    })
+    .await?;
     Ok(())
 }

@@ -267,7 +267,7 @@ impl ApiKeyPlugin {
             }
         }
 
-        if !api_key.enabled {
+        if !api_key.enabled.is_truthy()? {
             return Err(ApiKeyErrorCode::KeyDisabled.into());
         }
         if let Some(expires_at) = &api_key.expires_at

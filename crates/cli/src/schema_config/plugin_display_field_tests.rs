@@ -77,6 +77,45 @@ fn plugin_display_field_api_key_names_preserve_legacy_regeneration() {
                     .unwrap_or_else(|| rust_name.to_owned());
                 assert_eq!(column, if legacy { legacy_name } else { native_name });
             }
+            for name in ["enabled", "rate_limit_enabled"] {
+                let expected = if legacy {
+                    quote::quote!(bool)
+                } else {
+                    quote::quote!(Option<bool>)
+                };
+                assert_eq!(
+                    fields
+                        .get(name)
+                        .expect("API Key Boolean field")
+                        .ty
+                        .to_token_stream()
+                        .to_string(),
+                    expected.to_string()
+                );
+            }
+            for name in [
+                "refill_interval",
+                "refill_amount",
+                "rate_limit_time_window",
+                "rate_limit_max",
+                "request_count",
+                "remaining",
+            ] {
+                let expected = if legacy {
+                    quote::quote!(Option<f64>)
+                } else {
+                    quote::quote!(Option<better_auth::seaorm::SqlNumber>)
+                };
+                assert_eq!(
+                    fields
+                        .get(name)
+                        .expect("API Key numeric field")
+                        .ty
+                        .to_token_stream()
+                        .to_string(),
+                    expected.to_string()
+                );
+            }
         }
     }
 }

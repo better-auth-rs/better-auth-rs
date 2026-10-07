@@ -87,7 +87,7 @@ pub(super) async fn consume(
 
     loop {
         let now = Utc::now();
-        if !rate_enabled || !row.rate_limit_enabled {
+        if !rate_enabled || !row.rate_limit_enabled.is_truthy()? {
             if let Some(updated) = store
                 .write_api_key_usage(&row.id, ApiKeyUsageWrite::LastRequest(now))
                 .await?

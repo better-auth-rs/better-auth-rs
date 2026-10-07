@@ -121,7 +121,8 @@ pub(super) fn generate(
             } else {
                 quote!(#core_root::SchemaValue::Typed(Some(self.#ident.into())))
             }
-        } else if role == EntityRole::ApiKey && name == "name"
+        } else if role == EntityRole::ApiKey
+            && matches!(name.as_str(), "name" | "enabled" | "rate_limit_enabled")
             || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
         {
             quote!(#core_root::SchemaValue::from_field(#stored_value))
@@ -131,6 +132,18 @@ pub(super) fn generate(
             quote!(#core_root::SchemaValue::Typed(self.#ident.into()))
         } else if role == EntityRole::ApiKey && name == "start" {
             quote!(self.#ident.clone().map(#core_root::ApiKeyStart::from))
+        } else if role == EntityRole::ApiKey
+            && matches!(
+                name.as_str(),
+                "refill_interval"
+                    | "refill_amount"
+                    | "rate_limit_time_window"
+                    | "rate_limit_max"
+                    | "request_count"
+                    | "remaining"
+            )
+        {
+            quote!(self.#ident.map(f64::from))
         } else if role == EntityRole::ApiKey && matches!(name.as_str(), "created_at" | "updated_at")
         {
             quote!(self.#ident.into())

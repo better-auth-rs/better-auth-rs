@@ -7,7 +7,9 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 import { observeValue } from "./device-where-capture.mjs";
-import { captureFreshServerCatalog } from "./server-catalog-shared.mjs";
+import { captureFreshServerCatalog, observeServerIndexes } from "./server-catalog-shared.mjs";
+import { observeSqliteCatalog } from "./sqlite-catalog.ts";
+import { captureApiKeyCatalog } from "./api-key-catalog-capture.mjs";
 
 const version = "1.7.6";
 for (const name of ["better-auth", "@better-auth/core", "@better-auth/api-key", "@better-auth/passkey"]) {
@@ -222,13 +224,16 @@ async function captureTarget(backend, target) {
     try {
       const options = { ...config, database: database ?? memoryAdapter(memory) };
       if (database) await (await getMigrations(options)).runMigrations();
-      const columns = database ? database.query(`PRAGMA table_info("${tableName(target)}")`).all() : null;
+      const catalog = database ? observeSqliteCatalog(database, tableName(target), "The display table must exist").catalog : null;
+      const columns = catalog?.columns ?? null;
       const result = await captureRows({ options, backend, memory, query: async (sql, values) => database.query(sql).all(...values) }, target, state);
-      return { ...target, table: tableName(target), column, columns, ...result };
+      return { ...target, table: tableName(target), column, columns,
+        ...(catalog ? { constraints: { indexes: catalog.indexes, foreignKeys: catalog.foreignKeys } } : {}), ...result };
     } finally { database?.close(); }
   }
   const captured = await captureFreshServerCatalog(backend, [tableName(target)], config,
-    context => captureRows(context, target, state));
+    async context => ({ constraints: await observeServerIndexes(context, tableName(target)),
+      ...await captureRows(context, target, state) }));
   return { ...target, table: tableName(target), column, columns: captured.columns, ...captured.observation };
 }
 
@@ -236,7 +241,8 @@ export async function capturePluginDisplayJson(backend) {
   assert.ok(["memory", "sqlite", "postgres", "mysql"].includes(backend));
   const models = [];
   for (const target of displayJsonTargets) models.push(await captureTarget(backend, target));
-  return { version, backend, models };
+  return { version, backend, models,
+    ...(backend === "memory" ? {} : { apiKeyCatalog: await captureApiKeyCatalog(backend) }) };
 }
 
 if (import.meta.main) {

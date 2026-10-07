@@ -73,7 +73,7 @@ pub(in crate::plugins::api_key) async fn consume(
     }
     let mut changed_rate = false;
     let mut changed_count = false;
-    if !config.rate_limit.enabled || !key.rate_limit_enabled {
+    if !config.rate_limit.enabled || !key.rate_limit_enabled.is_truthy()? {
         snapshot.last_request = Some(current.clone());
         changed_rate = true;
     } else if let (Some(window), Some(max)) = (key.rate_limit_time_window, key.rate_limit_max) {

@@ -39,8 +39,8 @@ impl ApiKeyStore for EphemeralStore {
             refill_interval: input.refill_interval,
             refill_amount: input.refill_amount,
             last_refill_at: None,
-            enabled: input.enabled,
-            rate_limit_enabled: input.rate_limit_enabled,
+            enabled: input.enabled.into(),
+            rate_limit_enabled: input.rate_limit_enabled.into(),
             rate_limit_time_window: input.rate_limit_time_window,
             rate_limit_max: input.rate_limit_max,
             request_count: Some(0.0),
@@ -118,6 +118,29 @@ impl ApiKeyStore for EphemeralStore {
                         }
                     });
                     keys = named.into_iter().map(|(_, key)| key).collect();
+                } else if let Some((field @ ("enabled" | "rateLimitEnabled"), direction)) =
+                    sort.filter(|_| keys.len() > 1)
+                {
+                    let mut values = keys
+                        .into_iter()
+                        .map(|key| {
+                            let value = if field == "enabled" {
+                                &key.0.enabled
+                            } else {
+                                &key.0.rate_limit_enabled
+                            };
+                            Ok((value.field_value().decode::<Option<bool>>()?, key))
+                        })
+                        .collect::<AuthResult<Vec<_>>>()?;
+                    values.sort_by(|a, b| {
+                        let order = a.0.cmp(&b.0);
+                        if direction == "desc" {
+                            order.reverse()
+                        } else {
+                            order
+                        }
+                    });
+                    keys = values.into_iter().map(|(_, key)| key).collect();
                 } else if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
                     let compare = comparator(field)?;
                     keys.sort_by(|a, b| {
@@ -202,10 +225,10 @@ impl ApiKeyStore for EphemeralStore {
                         request_count,
                     );
                     if let Some(value) = update.enabled {
-                        key.enabled = value;
+                        key.enabled = value.into();
                     }
                     if let Some(value) = update.rate_limit_enabled {
-                        key.rate_limit_enabled = value;
+                        key.rate_limit_enabled = value.into();
                     }
                     if let Some(value) = update.expires_at {
                         key.expires_at = value;
@@ -553,8 +576,6 @@ fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Order
         "prefix" => |a, b| a.prefix.cmp(&b.prefix),
         "referenceId" => |a, b| a.reference_id.cmp(&b.reference_id),
         "configId" => |a, b| a.config_id.cmp(&b.config_id),
-        "enabled" => |a, b| a.enabled.cmp(&b.enabled),
-        "rateLimitEnabled" => |a, b| a.rate_limit_enabled.cmp(&b.rate_limit_enabled),
         "createdAt" => |a, b| compare_dates(Some(&a.created_at), Some(&b.created_at)),
         "updatedAt" => |a, b| compare_dates(Some(&a.updated_at), Some(&b.updated_at)),
         "expiresAt" => |a, b| compare_dates(a.expires_at.as_ref(), b.expires_at.as_ref()),

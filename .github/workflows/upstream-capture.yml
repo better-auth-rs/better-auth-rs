@@ -18,6 +18,7 @@ on:
       - compat-tests/reference-server/contracts/session-live-output-capture.mjs
       - compat-tests/reference-server/contracts/adapter-id-slot-capture.mjs
       - compat-tests/reference-server/contracts/plugin-display-json-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-catalog-capture.mjs
       - compat-tests/reference-server/contracts/memory-sort-capture.mjs
       - compat-tests/reference-server/contracts/organization-member-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/account-user-selected-relations-capture.mjs
@@ -35,9 +36,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: account-user-auth-boundary
-            regression: account-user-selected-relations
-            backend: ''
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: sqlite
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: postgres
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:

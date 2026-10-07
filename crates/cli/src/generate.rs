@@ -254,6 +254,13 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
             Some(quote!(#[sea_orm(column_type = "Integer")]))
         } else if entity.role == Some(EntityRole::DeviceCode) && name == "polling_interval" {
             Some(quote!(#[sea_orm(column_type = "Integer", nullable)]))
+        } else if entity.api_key_native_schema
+            && field
+                .registry_column
+                .and_then(|column| entity.catalog_field(column))
+                .is_some_and(|definition| definition.ty == "Option<f64>")
+        {
+            Some(quote!(#[sea_orm(column_type = "Integer", nullable)]))
         } else {
             None
         };
@@ -446,6 +453,7 @@ fn gen_table(
             if database == Database::Sqlite
                 && (sqlite_native_catalog(database, entity.role)
                     || entity.session_row_presence
+                    || entity.api_key_native_schema
                     || entity.device_code_native_schema
                     || entity.passkey_native_schema
                     || entity.two_factor_native_schema)
@@ -529,7 +537,6 @@ fn gen_server_native_column(
     if database == Database::Sqlite
         || !(entity.session_row_presence
             || entity.api_key_native_schema
-                && matches!(definition.ty, "DateTimeUtc" | "Option<DateTimeUtc>")
             || entity.device_code_native_schema
             || entity.passkey_native_schema
             || entity.two_factor_native_schema
@@ -565,6 +572,8 @@ fn gen_server_native_column(
         (Database::Mysql, "String" | "Option<String>")
             if (entity.passkey_native_schema && definition.name == "credential_id")
                 || (entity.two_factor_native_schema && definition.name == "secret")
+                || (entity.api_key_native_schema
+                    && matches!(definition.name, "config_id" | "reference_id" | "key_hash"))
                 || matches!(
                     (entity.role, definition.name),
                     (Some(EntityRole::User), "name" | "email")
@@ -748,11 +757,20 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
             Some((
                 columns,
                 index.unique
+                    && !(entity.api_key_native_schema && index.columns == ["key"])
                     && !(entity.passkey_native_schema && index.columns == ["credential_id"])
                     && !(entity.two_factor_native_schema && index.columns == ["user_id"]),
             ))
         })
         .collect();
+    if entity.api_key_native_schema {
+        indexes.sort_by_key(|(columns, _)| {
+            entity
+                .fields
+                .iter()
+                .position(|field| columns.as_slice() == [field.column.as_str()])
+        });
+    }
     if entity.passkey_native_schema {
         let user_id = entity.column("user_id");
         indexes.sort_by_key(|(columns, _)| columns.first().copied() != user_id);
@@ -777,6 +795,8 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
                 && matches!(field.registry_column, Some("user_id" | "credential_id")))
                 || (entity.two_factor_native_schema
                 && matches!(field.registry_column, Some("secret" | "user_id")))
+                || (entity.api_key_native_schema
+                && matches!(field.registry_column, Some("config_id" | "reference_id" | "key")))
                 || (entity.role == Some(EntityRole::WalletAddress)
                 && field.registry_column == Some("user_id"))
                 || (matches!(database, Database::Sqlite)

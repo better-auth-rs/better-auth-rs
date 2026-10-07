@@ -321,8 +321,8 @@ pub(super) async fn create(
             refill_interval: input.refill_interval,
             refill_amount: input.refill_amount,
             last_refill_at: None,
-            enabled: input.enabled,
-            rate_limit_enabled: input.rate_limit_enabled,
+            enabled: input.enabled.into(),
+            rate_limit_enabled: input.rate_limit_enabled.into(),
             rate_limit_time_window: input.rate_limit_time_window,
             rate_limit_max: input.rate_limit_max,
             request_count: Some(0.0),
@@ -362,10 +362,10 @@ pub(super) fn apply_update(key: &mut ApiKey, update: UpdateApiKey) {
         request_count
     );
     if let Some(value) = update.enabled {
-        key.enabled = value;
+        key.enabled = value.into();
     }
     if let Some(value) = update.rate_limit_enabled {
-        key.rate_limit_enabled = value;
+        key.rate_limit_enabled = value.into();
     }
     if let Some(value) = update.expires_at {
         key.expires_at = value;
@@ -593,9 +593,15 @@ fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) 
 
     let compare = |a: &ApiKeyView, b: &ApiKeyView| -> AuthResult<std::cmp::Ordering> {
         let ordering = match sort_by {
-            "name" => {
-                let left = a.name.field_value();
-                let right = b.name.field_value();
+            "name" | "enabled" | "rateLimitEnabled" => {
+                let (left, right) = match sort_by {
+                    "enabled" => (a.enabled.field_value(), b.enabled.field_value()),
+                    "rateLimitEnabled" => (
+                        a.rate_limit_enabled.field_value(),
+                        b.rate_limit_enabled.field_value(),
+                    ),
+                    _ => (a.name.field_value(), b.name.field_value()),
+                };
                 match (&left, &right) {
                     (
                         FieldValue::Null | FieldValue::Undefined,
@@ -611,8 +617,6 @@ fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) 
             "prefix" => compare_strings(a.prefix.as_deref(), b.prefix.as_deref()),
             "referenceId" => compare_strings(Some(&a.reference_id), Some(&b.reference_id)),
             "configId" => compare_strings(Some(&a.config_id), Some(&b.config_id)),
-            "enabled" => a.enabled.cmp(&b.enabled),
-            "rateLimitEnabled" => a.rate_limit_enabled.cmp(&b.rate_limit_enabled),
             "createdAt" => compare_numbers(
                 Some(a.created_at.milliseconds()),
                 Some(b.created_at.milliseconds()),
@@ -685,6 +689,45 @@ pub(super) fn deduplicate(keys: &mut Vec<ApiKey>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cache_codec_preserves_nullable_flags_in_public_views() -> AuthResult<()> {
+        for (flag, expected, truthy) in [
+            (None, FieldValue::Undefined, false),
+            (Some(Value::Null), FieldValue::Null, false),
+            (Some(Value::Bool(false)), FieldValue::Bool(false), false),
+            (Some(Value::Bool(true)), FieldValue::Bool(true), true),
+        ] {
+            let mut cached = serde_json::json!({
+                "id": "nullable-flags", "key": "hash", "referenceId": "owner", "configId": "default",
+                "createdAt": "2030-01-02T03:04:05.000Z", "updatedAt": "2030-01-02T03:04:05.000Z",
+                "metadata": { "purpose": "device" },
+            });
+            if let Some(flag) = &flag {
+                cached["enabled"] = flag.clone();
+                cached["rateLimitEnabled"] = flag.clone();
+            }
+            let key = deserialize(Some(Value::String(cached.to_string())))
+                .ok_or_else(|| AuthError::internal("The nullable cache entry must decode"))?;
+            assert_eq!(key.enabled.field_value(), expected);
+            assert_eq!(key.rate_limit_enabled.field_value(), expected);
+            assert_eq!(key.enabled.is_truthy()?, truthy);
+            assert_eq!(key.rate_limit_enabled.is_truthy()?, truthy);
+            let serialized = serialize(&key)?;
+            let stored: Value = serde_json::from_str(&serialized)?;
+            let restored = deserialize(Some(Value::String(serialized)))
+                .ok_or_else(|| AuthError::internal("The serialized cache entry must decode"))?;
+            assert_eq!(restored.enabled.field_value(), expected);
+            assert_eq!(restored.rate_limit_enabled.field_value(), expected);
+            let view = serde_json::to_value(ApiKeyView::from(&restored))?;
+            for value in [stored, view] {
+                assert_eq!(value.get("enabled"), flag.as_ref());
+                assert_eq!(value.get("rateLimitEnabled"), flag.as_ref());
+                assert_eq!(value["metadata"], cached["metadata"]);
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn cache_codec_preserves_unpaired_start_and_structured_metadata() {

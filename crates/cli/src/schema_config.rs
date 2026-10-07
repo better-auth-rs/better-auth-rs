@@ -326,7 +326,7 @@ impl Entity {
                     && fields
                         .iter()
                         .any(|field| field.name == "two_factor_enabled"));
-        let fields = fields
+        let mut fields = fields
             .iter()
             .filter(|field| {
                 !(passkey_native_schema && matches!(field.name, "credential" | "updated_at"))
@@ -335,6 +335,18 @@ impl Entity {
                         && matches!(field.name, "created_at" | "updated_at"))
             })
             .collect::<Vec<_>>();
+        if api_key_native_schema {
+            fields.sort_by_key(|field| match field.name {
+                "id" => 0,
+                "config_id" => 1,
+                "name" => 2,
+                "start" => 3,
+                "reference_id" => 4,
+                "prefix" => 5,
+                "key_hash" => 6,
+                _ => 7,
+            });
+        }
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
             || api_key_native_schema
@@ -383,47 +395,49 @@ impl Entity {
                     Ok(Field {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
-                        ty: syn::parse_str(
-                            if passkey_native_schema && field.name == "created_at" {
-                                "Option<DateTimeUtc>"
-                            } else if two_factor_native_schema
-                                && matches!(field.name, "verified" | "two_factor_enabled")
-                            {
-                                "Option<bool>"
-                            } else if two_factor_native_schema
-                                && field.name == "failed_verification_count"
-                            {
-                                if database == Database::Sqlite {
-                                    "Option<i64>"
-                                } else {
-                                    "Option<i32>"
-                                }
-                            } else if passkey_native_schema
-                                && field.name == "counter"
-                                && database != Database::Sqlite
-                            {
-                                "i32"
-                            } else if definition.role == Some(EntityRole::Invitation)
-                                && field.name == "role"
-                            {
-                                "Option<String>"
-                            } else if database != Database::Sqlite
-                                && matches!(
-                                    (definition.role, field.name),
-                                    (Some(EntityRole::Team), "member_count")
-                                        | (Some(EntityRole::WalletAddress), "chain_id")
-                                )
-                            {
-                                "i32"
-                            } else if database != Database::Sqlite
-                                && definition.role == Some(EntityRole::OrganizationRole)
-                                && field.name == "permission"
-                            {
-                                "String"
+                        ty: syn::parse_str(if api_key_native_schema && field.ty == "Option<f64>" {
+                            "Option<better_auth::seaorm::SqlNumber>"
+                        } else if api_key_native_schema && field.ty == "bool" {
+                            "Option<bool>"
+                        } else if passkey_native_schema && field.name == "created_at" {
+                            "Option<DateTimeUtc>"
+                        } else if two_factor_native_schema
+                            && matches!(field.name, "verified" | "two_factor_enabled")
+                        {
+                            "Option<bool>"
+                        } else if two_factor_native_schema
+                            && field.name == "failed_verification_count"
+                        {
+                            if database == Database::Sqlite {
+                                "Option<i64>"
                             } else {
-                                field.ty
-                            },
-                        )
+                                "Option<i32>"
+                            }
+                        } else if passkey_native_schema
+                            && field.name == "counter"
+                            && database != Database::Sqlite
+                        {
+                            "i32"
+                        } else if definition.role == Some(EntityRole::Invitation)
+                            && field.name == "role"
+                        {
+                            "Option<String>"
+                        } else if database != Database::Sqlite
+                            && matches!(
+                                (definition.role, field.name),
+                                (Some(EntityRole::Team), "member_count")
+                                    | (Some(EntityRole::WalletAddress), "chain_id")
+                            )
+                        {
+                            "i32"
+                        } else if database != Database::Sqlite
+                            && definition.role == Some(EntityRole::OrganizationRole)
+                            && field.name == "permission"
+                        {
+                            "String"
+                        } else {
+                            field.ty
+                        })
                         .map_err(|error| format!("invalid field type: {error}"))?,
                         column: if native_catalog
                             && (core_field(
