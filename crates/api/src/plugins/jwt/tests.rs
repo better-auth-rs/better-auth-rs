@@ -342,7 +342,9 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
             .jwks(&EndpointContext::native(None, None, Value::Null, &ctx))
             .await
             .unwrap()
-            .body,
+            .body
+            .bytes()
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(discovery["keys"].as_array().unwrap().len(), 2);
@@ -352,7 +354,9 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
             .jwks(&EndpointContext::native(None, None, Value::Null, &ctx))
             .await
             .unwrap()
-            .body,
+            .body
+            .bytes()
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(expired["keys"], json!([]));

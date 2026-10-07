@@ -159,7 +159,8 @@ async fn phone_native_consumption_preserves_transaction_cache_and_hook_failure_o
         let error = result.err().map(|error| match error {
             AuthError::Internal(message) => Value::String(message),
             error => {
-                serde_json::from_slice::<Value>(&error.to_auth_response().body).unwrap()["code"]
+                serde_json::from_slice::<Value>(&error.to_auth_response().body.bytes().unwrap())
+                    .unwrap()["code"]
                     .clone()
             }
         });

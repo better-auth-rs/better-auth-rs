@@ -368,7 +368,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
                 response.headers.get("x-ordinary-error").map(String::as_str),
                 Some("original")
             );
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             json!({"error":{"status":"BAD_REQUEST", "code":body["code"], "message":body["message"]}})
         }
     };

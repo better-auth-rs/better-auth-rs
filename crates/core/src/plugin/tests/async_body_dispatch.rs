@@ -118,7 +118,7 @@ async fn async_body_transform_finishes_before_query_headers_and_endpoint() {
                     let response = dispatch.await.unwrap();
                     assert_eq!(response.status, status);
                     assert_eq!(
-                        serde_json::from_slice::<Value>(&response.body).unwrap(),
+                        serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
                         expected
                     );
                     let scope = current_request_hook_context().unwrap();

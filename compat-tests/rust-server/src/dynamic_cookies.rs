@@ -113,7 +113,7 @@ pub async fn run() -> AuthResult<Value> {
     let session = auth
         .handle_request(request(HttpMethod::Get, "/get-session", None, &cookie))
         .await?;
-    let data: Value = serde_json::from_slice(&session.body)?;
+    let data: Value = serde_json::from_slice(&session.body.bytes()?)?;
     let logout = auth
         .handle_request(request(
             HttpMethod::Post,

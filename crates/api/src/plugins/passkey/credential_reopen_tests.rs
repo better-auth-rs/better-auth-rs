@@ -172,7 +172,7 @@ fn options(response: AuthResponse) -> TestResult<(Value, String)> {
         .and_then(|header| header.split(';').next())
         .ok_or("Passkey options must set the challenge cookie")?
         .to_owned();
-    Ok((serde_json::from_slice(&response.body)?, cookie))
+    Ok((serde_json::from_slice(&response.body.bytes()?)?, cookie))
 }
 
 fn challenge(options: &Value) -> TestResult<Vec<u8>> {
@@ -186,14 +186,14 @@ fn challenge(options: &Value) -> TestResult<Vec<u8>> {
 
 fn assert_error(response: AuthResponse, code: &str) -> TestResult {
     assert_eq!(response.status, 400);
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(body.get("code").and_then(Value::as_str), Some(code));
     Ok(())
 }
 
 fn assert_login(response: AuthResponse, owner: &str) -> TestResult {
     assert_eq!(response.status, 200);
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(body["user"]["id"], owner);
     assert_eq!(body["session"]["userId"], owner);
     Ok(())

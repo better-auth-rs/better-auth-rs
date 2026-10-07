@@ -282,7 +282,10 @@ fn wire(response: AuthResult<AuthResponse>) -> Response {
     let response = response.unwrap_or_else(|error| error.to_auth_response());
     let mut output = (
         StatusCode::from_u16(response.status).unwrap(),
-        response.body,
+        response
+            .body
+            .into_bytes()
+            .expect("The fixture response must serialize"),
     )
         .into_response();
     for (name, value) in response.headers.iter() {

@@ -162,7 +162,7 @@ async fn google_client_ids_sign_in_and_one_tap_match_pinned_successes() -> TestR
                 "provider":"google", "callbackURL":"http://localhost:3000/welcome", "disableRedirect":true
             }))?, &ctx).await?.ok_or("missing code start")?;
             assert_eq!(start.status, 200);
-            let body: Value = serde_json::from_slice(&start.body)?;
+            let body: Value = serde_json::from_slice(&start.body.bytes()?)?;
             let url = url::Url::parse(string(&body, "url")?)?;
             let state = url
                 .query_pairs()

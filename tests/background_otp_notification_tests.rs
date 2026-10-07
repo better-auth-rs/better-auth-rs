@@ -192,7 +192,7 @@ async fn operation(
     };
     match result {
         Ok(response) => {
-            json!({"status":response.status,"thrown":null,"body":String::from_utf8(response.body).unwrap()})
+            json!({"status":response.status,"thrown":null,"body":String::from_utf8(response.body.into_bytes().unwrap()).unwrap()})
         }
         Err(error) => json!({"status":null,"thrown":message(error),"body":null}),
     }

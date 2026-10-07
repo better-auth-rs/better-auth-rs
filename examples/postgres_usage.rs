@@ -926,7 +926,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
     println!("Status: {}", legacy_signin.status);
-    let legacy_data = parse_body(&legacy_signin.body);
+    let legacy_data = parse_body(&legacy_signin.body.bytes()?);
     println!(
         "Legacy DB user id: {}\n",
         legacy_data["user"]["id"].as_str().unwrap_or("<missing>")
@@ -949,7 +949,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
     println!("Status: {}", signup_response.status);
-    let signup_data = parse_body(&signup_response.body);
+    let signup_data = parse_body(&signup_response.body.bytes()?);
     let token = signup_data
         .get("token")
         .and_then(serde_json::Value::as_str)
@@ -973,7 +973,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Get session ===");
     let response = send(&auth, HttpMethod::Get, "/get-session", None, Some(&token)).await?;
     println!("Status: {}", response.status);
-    let data = parse_body(&response.body);
+    let data = parse_body(&response.body.bytes()?);
     println!(
         "Session user: {}\n",
         data.get("user")

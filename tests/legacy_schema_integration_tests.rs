@@ -996,7 +996,13 @@ async fn legacy_numeric_schema_signup_flow_uses_numeric_ids_and_defaults() {
         .expect("signup should succeed");
     assert_eq!(response.status, 200);
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).expect("valid json");
+    let body: serde_json::Value = serde_json::from_slice(
+        &response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("valid json");
     let token = body["token"]
         .as_str()
         .expect("token should exist")
@@ -1018,8 +1024,13 @@ async fn legacy_numeric_schema_signup_flow_uses_numeric_ids_and_defaults() {
         .await
         .expect("get-session should succeed");
     assert_eq!(session_response.status, 200);
-    let session_body: serde_json::Value =
-        serde_json::from_slice(&session_response.body).expect("valid session json");
+    let session_body: serde_json::Value = serde_json::from_slice(
+        &session_response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("valid session json");
     assert_eq!(session_body["user"]["id"], stored_user.id.to_string());
 
     let accounts_response = auth
@@ -1027,8 +1038,13 @@ async fn legacy_numeric_schema_signup_flow_uses_numeric_ids_and_defaults() {
         .await
         .expect("list-accounts should succeed");
     assert_eq!(accounts_response.status, 200);
-    let accounts_body: serde_json::Value =
-        serde_json::from_slice(&accounts_response.body).expect("valid accounts json");
+    let accounts_body: serde_json::Value = serde_json::from_slice(
+        &accounts_response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("valid accounts json");
     assert_eq!(accounts_body.as_array().expect("array").len(), 1);
     assert_eq!(accounts_body[0]["userId"], stored_user.id.to_string());
     assert_eq!(accounts_body[0]["providerId"], "credential");
@@ -1080,7 +1096,13 @@ async fn legacy_numeric_schema_existing_user_can_sign_in() {
         .expect("signin should succeed");
     assert_eq!(response.status, 200);
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).expect("valid json");
+    let body: serde_json::Value = serde_json::from_slice(
+        &response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("valid json");
     let token = body["token"]
         .as_str()
         .expect("token should exist")
@@ -1091,8 +1113,13 @@ async fn legacy_numeric_schema_existing_user_can_sign_in() {
         .handle_request(auth_request(HttpMethod::Get, "/get-session", &token))
         .await
         .expect("get-session should succeed");
-    let session_body: serde_json::Value =
-        serde_json::from_slice(&session_response.body).expect("valid session json");
+    let session_body: serde_json::Value = serde_json::from_slice(
+        &session_response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("valid session json");
     assert_eq!(session_body["user"]["id"], legacy_user_id.to_string());
     assert_eq!(
         session_body["session"]["userId"],

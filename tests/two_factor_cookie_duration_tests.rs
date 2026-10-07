@@ -193,7 +193,7 @@ async fn two_factor_cookie_issuance_preserves_pinned_fractional_lifetimes() {
             expected["status"],
             "{name}/{operation}"
         );
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let body = if operation == "challenge" {
             body
         } else {

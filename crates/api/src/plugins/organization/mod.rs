@@ -420,14 +420,21 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         {
             return Ok(());
         }
-        let mut value = serde_json::from_slice(&response.body)?;
+        if let better_auth_core::ResponseBody::Native(value) = &mut response.body {
+            fields::shape_native_session_teams(value, self.config.teams.enabled);
+            if response.status < 400 && req.path().starts_with("/organization/") {
+                fields::filter_native_response(req.path(), value, &self.config.schema);
+            }
+            return Ok(());
+        }
+        let mut value = serde_json::from_slice(&response.body.bytes()?)?;
         let changed = fields::shape_session_teams(&mut value, self.config.teams.enabled)?;
         if response.status < 400 && req.path().starts_with("/organization/") {
             let mut value = serde_json::from_str(value.get())?;
             fields::filter_response(req.path(), &mut value, &self.config.schema);
-            response.body = serde_json::to_vec(&value)?;
+            response.body = better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&value)?);
         } else if changed {
-            response.body = serde_json::to_vec(&value)?;
+            response.body = better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&value)?);
         }
         Ok(())
     }
@@ -558,7 +565,7 @@ fn shape_invitation_output(
     {
         return Ok(());
     }
-    let mut value: serde_json::Value = serde_json::from_slice(&response.body)?;
+    let mut value: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
     let shape = |invitation: &mut serde_json::Value| {
         if !fields::invitation_team_id_is_declared(config)
             && let Some(object) = invitation.as_object_mut()
@@ -587,6 +594,6 @@ fn shape_invitation_output(
         }
         _ => shape(&mut value),
     }
-    response.body = serde_json::to_vec(&value)?;
+    response.body = better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&value)?);
     Ok(())
 }

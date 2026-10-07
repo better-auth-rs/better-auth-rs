@@ -391,7 +391,7 @@ async fn preset_callback_persists_the_captured_subject_and_mapped_user() {
         let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
         let response = test_helpers::finalize_response(&ctx, &start, response);
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
         let state = url
             .query_pairs()

@@ -42,7 +42,9 @@ pub mod request_runtime;
 pub use request_runtime::{
     BaseUrl, BaseUrlProtocol, DynamicBaseUrl, NativeRequest, TrustedValues, TrustedValuesResolver,
 };
+mod response_body;
 mod runtime_extensions;
+pub use response_body::ResponseBody;
 pub mod schema;
 pub mod session;
 pub mod store;

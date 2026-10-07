@@ -470,7 +470,7 @@ async fn microsoft_signed_direct_and_code_success_persist_the_oid_account() -> T
             .ok_or("missing sign-in response")?;
         assert_eq!(response.status, 200);
         if !direct {
-            let body: Value = serde_json::from_slice(&response.body)?;
+            let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
             let url = url::Url::parse(body["url"].as_str().ok_or("missing authorization URL")?)?;
             let state = url
                 .query_pairs()

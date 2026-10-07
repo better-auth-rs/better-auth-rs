@@ -127,7 +127,7 @@ async fn phone_issuance_preserves_pinned_fractional_lifetimes() {
             "{name}/{operation}"
         );
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body).unwrap(),
+            serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
             expected["body"],
             "{name}/{operation}"
         );

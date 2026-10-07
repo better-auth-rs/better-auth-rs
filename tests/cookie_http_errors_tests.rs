@@ -238,7 +238,7 @@ async fn session_cookie_failure_retains_prior_header_and_does_not_publish_new_se
             ))
             .await
             .unwrap();
-        let actual = json!({ "status": response.status, "body": serde_json::from_slice::<Value>(&response.body).unwrap(), "headers": response.headers.get_all("set-cookie").map(|header| shape(header)).collect::<Vec<_>>() });
+        let actual = json!({ "status": response.status, "body": serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(), "headers": response.headers.get_all("set-cookie").map(|header| shape(header)).collect::<Vec<_>>() });
         assert_eq!(actual, *expected, "{name}");
     }
 }
@@ -299,7 +299,7 @@ async fn last_login_overrides_inherited_age_and_keeps_existing_http_error_policy
             ))
             .await
             .unwrap();
-        let actual = json!({ "status": response.status, "body": String::from_utf8(response.body).unwrap(), "events": *observer.0.lock().unwrap(), "headers": response.headers.get_all("set-cookie").map(|header| shape(header)).collect::<Vec<_>>() });
+        let actual = json!({ "status": response.status, "body": String::from_utf8(response.body.into_bytes().unwrap()).unwrap(), "events": *observer.0.lock().unwrap(), "headers": response.headers.get_all("set-cookie").map(|header| shape(header)).collect::<Vec<_>>() });
         assert_eq!(actual, *expected, "{name}");
     }
 }

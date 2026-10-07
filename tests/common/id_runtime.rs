@@ -57,7 +57,7 @@ pub(crate) async fn request(
         .join("; ");
     (
         response.status,
-        serde_json::from_slice(&response.body).unwrap(),
+        serde_json::from_slice(&response.body.bytes().unwrap()).unwrap(),
         cookie,
     )
 }

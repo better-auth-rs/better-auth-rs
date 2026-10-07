@@ -1,10 +1,15 @@
 use super::{AddMemberInput, EndpointContext, OrganizationPlugin};
 use better_auth_core::endpoint_input::ValidatedBody;
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthRoute, AuthSchema,
-    HttpMethod, NativeRequest,
+    AuthContext, AuthError, AuthRecordFields, AuthRequest, AuthResponse, AuthResult, AuthRoute,
+    AuthSchema, FieldValue, FromFieldMap, HttpMethod, NativeRequest,
 };
 use serde_json::Value;
+
+enum MemberInput {
+    Json(Option<Value>),
+    Native(FieldValue),
+}
 
 /// The registered pathless organization endpoint and its captured configuration.
 pub struct OrganizationApi<'a, S: AuthSchema> {
@@ -49,36 +54,53 @@ impl<'a, S: AuthSchema> OrganizationApi<'a, S> {
     /// Add a member through global hooks, configured validation, and organization lifecycle hooks.
     /// The result retains endpoint after-hook replacements.
     pub async fn add_member(&self, body: Option<Value>) -> AuthResult<Value> {
+        self.add_member_response(MemberInput::Json(body))
+            .await?
+            .body
+            .json()?
+            .ok_or_else(|| AuthError::internal("Native addMember returned undefined"))
+    }
+
+    pub(super) async fn add_member_value(&self, body: FieldValue) -> AuthResult<FieldValue> {
+        self.add_member_response(MemberInput::Native(body))
+            .await?
+            .body
+            .field_value()
+    }
+
+    async fn add_member_response(&self, body: MemberInput) -> AuthResult<AuthResponse> {
         let schema = self.plugin.config.schema.member.clone();
         let route = AuthRoute::server_only(HttpMethod::Post, "addMember")
             .body_validator(move |request| validate(request, &schema));
-        let response = self
-            .context
-            .dispatch_native(
-                self.source,
-                route,
-                body,
-                None,
-                |request, context| async move {
-                    let input = request
-                        .validated_body::<AddMemberInput>()
-                        .ok_or_else(|| AuthError::internal("Missing validated member input"))?;
-                    let mut endpoint = EndpointContext::native(
-                        Some(&request),
-                        request.original_request(),
-                        request.input_body()?.unwrap_or_default(),
-                        &context,
-                    );
-                    endpoint.transaction = self.transaction;
-                    let member = self
-                        .plugin
-                        .add_member_core(input.clone(), &request, &endpoint)
-                        .await?;
-                    AuthResponse::json(200, &member).map_err(Into::into)
-                },
-            )
-            .await?;
-        Ok(serde_json::from_slice(&response.body)?)
+        let handler = |request: AuthRequest, context: std::sync::Arc<AuthContext<S>>| async move {
+            let input = request
+                .validated_body::<AddMemberInput>()
+                .ok_or_else(|| AuthError::internal("Missing validated member input"))?;
+            let mut endpoint = EndpointContext::native(
+                Some(&request),
+                request.original_request(),
+                request.input_body()?.unwrap_or_default(),
+                &context,
+            );
+            endpoint.transaction = self.transaction;
+            let member = self
+                .plugin
+                .add_member_core(input.clone(), &request, &endpoint)
+                .await?;
+            Ok(AuthResponse::native(200, member.field_values()?.into()))
+        };
+        match body {
+            MemberInput::Json(body) => {
+                self.context
+                    .dispatch_native(self.source, route, body, None, handler)
+                    .await
+            }
+            MemberInput::Native(body) => {
+                self.context
+                    .dispatch_native_value(self.source, route, body, None, handler)
+                    .await
+            }
+        }
     }
 }
 
@@ -87,19 +109,31 @@ pub(super) fn validate(
     schema: &better_auth_core::user_fields::UserConfig,
 ) -> AuthResult<ValidatedBody> {
     use super::super::input::{self, BaseField};
-    let raw = request.input_body()?;
+    let raw = request.input_field_value()?;
     let mut errors = Vec::new();
-    let object = input::object(raw.as_ref(), "body", &mut errors);
-    input::finish(errors)?;
-    let body = input::validate(
+    let Some(object) = raw.as_object() else {
+        return Err(AuthError::FieldInput {
+            code: "VALIDATION_ERROR",
+            message: input::native_invalid_type("body", "object", Some(&raw)),
+        });
+    };
+    let body = input::native_fields(
         schema,
-        object.cloned().unwrap_or_default(),
+        object,
         &[
             ("userId", BaseField::CoercedString, true),
             ("role", BaseField::Roles, true),
             ("organizationId", BaseField::String, false),
             ("teamId", BaseField::String, false),
         ],
+        "body",
+        false,
+        false,
+        &mut errors,
     )?;
-    super::super::request::typed::<AddMemberInput>(body)
+    input::finish(errors)?;
+    Ok(ValidatedBody::native(
+        body.clone().into(),
+        AddMemberInput::from_field_values(body)?,
+    ))
 }

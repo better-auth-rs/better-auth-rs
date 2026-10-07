@@ -333,7 +333,7 @@ async fn sign_in(app: &App, direct: Option<Value>) -> AuthResponse {
     if direct.is_some() {
         return start;
     }
-    let body: Value = serde_json::from_slice(&start.body).unwrap();
+    let body: Value = serde_json::from_slice(&start.body.bytes().unwrap()).unwrap();
     let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
     let state = url
         .query_pairs()
@@ -399,7 +399,7 @@ async fn graph_code_and_opaque_direct_dispatch_persist_and_read_normal_accounts(
         info.query = Some(json!({"accountId":account["id"]}));
         let info = app.call(info).await.unwrap();
         assert_eq!(info.status, 200);
-        let info: Value = serde_json::from_slice(&info.body).unwrap();
+        let info: Value = serde_json::from_slice(&info.body.bytes().unwrap()).unwrap();
         assert_eq!(info["user"], sample["result"]["user"]);
         assert_eq!(info["data"], sample["result"]["data"]);
         if !direct {
@@ -412,7 +412,7 @@ async fn graph_code_and_opaque_direct_dispatch_persist_and_read_normal_accounts(
                 .await
                 .unwrap();
             assert_eq!(refresh.status, 200);
-            let result: Value = serde_json::from_slice(&refresh.body).unwrap();
+            let result: Value = serde_json::from_slice(&refresh.body.bytes().unwrap()).unwrap();
             assert_eq!(
                 result["accessToken"],
                 fixture["grants"][1]["response"]["accessToken"]

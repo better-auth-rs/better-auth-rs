@@ -111,11 +111,12 @@ pub(crate) async fn handle_sign_out(
         if redirect {
             _ = response.headers.insert("Location", url.as_str());
         }
-        response.body = serde_json::to_vec(&serde_json::json!({
-            "success": true,
-            "url": url.as_str(),
-            "redirect": redirect,
-        }))?;
+        response.body =
+            better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&serde_json::json!({
+                "success": true,
+                "url": url.as_str(),
+                "redirect": redirect,
+            }))?);
         break;
     }
     Ok(response)

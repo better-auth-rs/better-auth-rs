@@ -212,7 +212,8 @@ async fn native_totp_completion_rotates_sessions_only_for_incomplete_enrollment(
             .await
             .unwrap();
         assert_eq!(response.status, 200);
-        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(body["token"], fixture.session.token);
         assert_eq!(body["user"]["twoFactorEnabled"], false);
         let stored = fixture.record().await;
@@ -304,7 +305,8 @@ async fn native_pending_totp_accepts_null_but_rejects_explicit_false() {
         } else {
             let response = result.unwrap();
             assert_eq!(response.status, 200);
-            let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(body["user"]["twoFactorEnabled"], true);
             assert_ne!(body["token"], fixture.session.token);
             assert_eq!(fixture.record().await.verified, Some(true));

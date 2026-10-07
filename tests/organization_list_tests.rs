@@ -313,7 +313,7 @@ async fn check<S: AuthSchema>(
         ))
     };
     let response = call("/organization/list-user-invitations", "carol", None)?.await?;
-    let result: Vec<Value> = serde_json::from_slice(&response.body)?;
+    let result: Vec<Value> = serde_json::from_slice(&response.body.bytes()?)?;
     record(
         "received",
         json!(
@@ -331,7 +331,7 @@ async fn check<S: AuthSchema>(
         Some(json!({"organizationId":"org-a"})),
     )?
     .await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     record("full", full_projection(&body)?)?;
     let response = call(
         "/organization/get-full-organization",
@@ -339,7 +339,7 @@ async fn check<S: AuthSchema>(
         Some(json!({"organizationSlug":"org-a"})),
     )?
     .await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     record("fullSlug", full_projection(&body)?)?;
 
     assert_eq!(store.count_organization_teams("org-a").await?, 2);

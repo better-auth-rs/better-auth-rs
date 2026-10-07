@@ -99,7 +99,8 @@ async fn username_login_only_sends_verification_when_required_and_logs_async_del
             let response = result.unwrap_err().to_auth_response();
             assert_eq!(response.status, 403);
             assert_eq!(
-                serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+                serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap())
+                    .unwrap(),
                 serde_json::json!({"code":"EMAIL_NOT_VERIFIED","message":"Email not verified"})
             );
             assert_eq!(delivery.0.load(Ordering::SeqCst), 1);

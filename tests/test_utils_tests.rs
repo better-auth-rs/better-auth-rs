@@ -189,7 +189,7 @@ async fn contract<S: AuthSchema>(
         )
         .await?;
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body)?;
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(body["user"]["id"], "supplied-user");
     assert_eq!(body["session"]["token"], login.token);
     let header = test
@@ -753,7 +753,7 @@ async fn metadata_contract<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> Aut
         .get_auth_headers(TestAuthOptions::new(user.id.typed()?.clone()))
         .await?;
     let created=auth.call_endpoint(better_auth_core::HttpMethod::Post,"/organization/create",better_auth::server_api::EndpointInput {headers:Some(headers.clone()),body:Some(json!({"name":"Route metadata","slug":"route-metadata","metadata":{"nested":{"value":1}}})),..Default::default()}).await?;
-    let created: serde_json::Value = serde_json::from_slice(&created.body)?;
+    let created: serde_json::Value = serde_json::from_slice(&created.body.bytes()?)?;
     assert_eq!(created["metadata"], json!({"nested":{"value":1}}));
     let id = created["id"].as_str().unwrap();
     let raw = auth.store().get_organization_by_id(id).await?.unwrap();
@@ -772,7 +772,7 @@ async fn metadata_contract<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> Aut
             },
         )
         .await?;
-    let updated: serde_json::Value = serde_json::from_slice(&updated.body)?;
+    let updated: serde_json::Value = serde_json::from_slice(&updated.body.bytes()?)?;
     assert_eq!(updated["metadata"], json!({}));
     assert_eq!(
         serde_json::to_value(auth.store().get_organization_by_id(id).await?.unwrap())?["metadata"],

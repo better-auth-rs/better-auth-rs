@@ -130,7 +130,10 @@ async fn request<S: AuthSchema>(
             .with_url(format!("{ORIGIN}{path}").parse().unwrap()),
         )
         .await?;
-    Ok((response.status, serde_json::from_slice(&response.body)?))
+    Ok((
+        response.status,
+        serde_json::from_slice(&response.body.bytes()?)?,
+    ))
 }
 
 async fn scenario<S: AuthSchema>(

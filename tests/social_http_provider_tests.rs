@@ -440,7 +440,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                 .await
                 .unwrap();
             assert_eq!(start.status, 200);
-            let body: Value = serde_json::from_slice(&start.body).unwrap();
+            let body: Value = serde_json::from_slice(&start.body.bytes().unwrap()).unwrap();
             let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
             let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
             if matches!(
@@ -629,7 +629,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     .await
                     .unwrap();
                 assert_eq!(access.status, 200);
-                let access: Value = serde_json::from_slice(&access.body).unwrap();
+                let access: Value = serde_json::from_slice(&access.body.bytes().unwrap()).unwrap();
                 assert_eq!(access["accessToken"], "ordinary-access");
                 let refresh = auth
                     .call_endpoint(HttpMethod::Post, "/refresh-token", input())
@@ -637,7 +637,8 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     .unwrap_err()
                     .to_auth_response();
                 assert_eq!(refresh.status, 400);
-                let refresh: Value = serde_json::from_slice(&refresh.body).unwrap();
+                let refresh: Value =
+                    serde_json::from_slice(&refresh.body.bytes().unwrap()).unwrap();
                 assert_eq!(
                     refresh,
                     json!({
@@ -686,7 +687,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     .await
                     .unwrap();
                 assert_eq!(info.status, 200);
-                let info: Value = serde_json::from_slice(&info.body).unwrap();
+                let info: Value = serde_json::from_slice(&info.body.bytes().unwrap()).unwrap();
                 assert_eq!(info["user"], vk_sample["result"]["user"]);
                 assert_eq!(info["data"], vk_sample["profile"]);
                 assert_eq!(
@@ -834,7 +835,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     .await
                     .unwrap();
                 assert_eq!(refresh.status, 200);
-                let body: Value = serde_json::from_slice(&refresh.body).unwrap();
+                let body: Value = serde_json::from_slice(&refresh.body.bytes().unwrap()).unwrap();
                 assert_eq!(body["accessToken"], "refreshed-access");
                 assert_eq!(body["scope"], "ordinary-scope");
                 let accounts = auth

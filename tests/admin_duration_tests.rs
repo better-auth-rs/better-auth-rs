@@ -169,7 +169,7 @@ async fn admin_configuration_preserves_fractional_ban_and_impersonation_lifetime
             expected["status"],
             "{operation}/{name}"
         );
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let row = db
             .query_one_raw(Statement::from_string(DbBackend::Sqlite,
                 "SELECT id, name, email, role, banned, ban_reason, ban_expires FROM users WHERE id = 'ordinary'".to_owned()))

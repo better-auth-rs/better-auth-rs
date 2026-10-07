@@ -78,7 +78,7 @@ async fn sign_in_with_provider(
         .headers
         .insert("content-type".to_owned(), "application/json".to_owned());
     let response = plugin.on_request(&request, ctx).await.unwrap().unwrap();
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
     let state = url
         .query_pairs()

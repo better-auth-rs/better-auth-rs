@@ -109,13 +109,13 @@ pub async fn run() -> AuthResult<Value> {
             request
         };
         let response=auth.handle_request(request(json!({"provider":"google","idToken":{"token":json!({"id":format!("provider-{tenant}"),"email":email,"name":tenant,"emailVerified":false}).to_string()}}))).await?;
-        let body: Value = serde_json::from_slice(&response.body)?;
+        let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
         let accounts = auth
             .store()
             .get_user_accounts(user.id().typed().unwrap())
             .await?;
         let authorization=auth.handle_request(request(json!({"provider":"google","callbackURL":format!("https://{tenant}.tenant.test/done"),"disableRedirect":true}))).await?;
-        let data: Value = serde_json::from_slice(&authorization.body)?;
+        let data: Value = serde_json::from_slice(&authorization.body.bytes()?)?;
         let url = url::Url::parse(data["url"].as_str().unwrap()).unwrap();
         let query = url
             .query_pairs()

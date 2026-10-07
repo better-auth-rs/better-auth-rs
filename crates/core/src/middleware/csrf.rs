@@ -339,7 +339,8 @@ mod tests {
     async fn forbidden_message(response: Option<AuthResponse>) -> String {
         let response = response.expect("expected rejection response");
         assert_eq!(response.status, 403);
-        let body = serde_json::from_slice::<serde_json::Value>(&response.body).unwrap();
+        let body =
+            serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap();
         body["message"].as_str().unwrap().to_string()
     }
 

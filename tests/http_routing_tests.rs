@@ -253,11 +253,11 @@ async fn response_hooks_cover_router_errors_but_skip_disabled_and_early_response
             "{path}"
         );
         if path == "/disabled//" {
-            assert_eq!(response.body, b"Not Found");
+            assert_eq!(response.body.bytes().unwrap().as_ref(), b"Not Found");
         }
         if path == "/replace-response" {
             assert_eq!(
-                serde_json::from_slice::<Value>(&response.body).unwrap(),
+                serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
                 json!({"replaced":true})
             );
         }

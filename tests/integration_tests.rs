@@ -154,7 +154,7 @@ async fn test_revoke_session_integration() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
 
     assert_eq!(response_data["status"], true);
@@ -254,7 +254,7 @@ async fn test_reset_password_integration() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
 
     assert_eq!(response_data["status"], true);
@@ -419,7 +419,7 @@ async fn test_get_session_post_requires_defer_session_refresh() {
 
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 405);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["code"], "METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED");
 }
 
@@ -451,7 +451,7 @@ async fn test_delete_user_post_method() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(response_data["success"], true);
 }
@@ -652,7 +652,7 @@ async fn test_cookie_based_auth() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(response_data["user"]["email"], "integration@test.com");
 }
@@ -755,7 +755,7 @@ async fn test_change_email_success() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["status"], true);
     assert!(data.get("message").is_none());
@@ -812,7 +812,7 @@ async fn test_change_email_duplicate() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+        serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap(),
         serde_json::json!({"status":true})
     );
     let user = auth
@@ -902,7 +902,7 @@ async fn test_delete_user_callback_success() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["success"], true);
 
@@ -970,7 +970,7 @@ async fn test_list_accounts_empty() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
     assert_eq!(accounts.len(), 1); // Sign-up creates the credential account.
     assert_eq!(accounts[0]["providerId"], "credential");
@@ -1019,7 +1019,7 @@ async fn test_list_accounts_with_account() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let accounts: Vec<serde_json::Value> = serde_json::from_str(&body_str).unwrap();
     assert_eq!(accounts.len(), 2);
     let google_account = accounts
@@ -1670,7 +1670,7 @@ async fn test_sign_up_with_username_and_sign_in() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["user"]["username"], "cool_user");
     assert_eq!(data["user"]["displayUsername"], "Cool User");
@@ -1692,7 +1692,7 @@ async fn test_sign_up_with_username_and_sign_in() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert!(data["token"].is_string());
     assert_eq!(data["user"]["username"], "cool_user");
@@ -1811,7 +1811,7 @@ async fn create_api_key(
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
 
     let key = data["key"].as_str().unwrap().to_string();
@@ -1870,7 +1870,7 @@ async fn test_api_key_create_with_options() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
 
     assert!(data["key"].is_string());
@@ -1906,7 +1906,7 @@ async fn test_api_key_get() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
 
     assert_eq!(data["id"], id);
@@ -1944,7 +1944,7 @@ async fn test_api_key_list() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     // `/api-key/list` returns a paginated envelope: { apiKeys, total, .. }
     let envelope: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     let data = envelope["apiKeys"].as_array().unwrap().clone();
@@ -1984,7 +1984,7 @@ async fn test_api_key_update() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
 
     assert_eq!(data["id"], id);
@@ -2048,7 +2048,7 @@ async fn test_api_key_delete() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert_eq!(data["success"], true);
 
@@ -2065,7 +2065,8 @@ async fn test_api_key_delete() {
     );
 
     let list_response = auth.handle_request(list_request).await.unwrap();
-    let list_envelope: serde_json::Value = serde_json::from_slice(&list_response.body).unwrap();
+    let list_envelope: serde_json::Value =
+        serde_json::from_slice(&list_response.body.bytes().unwrap()).unwrap();
     assert_eq!(list_envelope["apiKeys"].as_array().unwrap().len(), 0);
     assert_eq!(list_envelope["total"], 0);
 }
@@ -2146,7 +2147,8 @@ async fn test_api_key_get_other_users_key() {
     );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
-    let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
+    let signup_body: serde_json::Value =
+        serde_json::from_slice(&signup_resp.body.bytes().unwrap()).unwrap();
     let token2 = signup_body["token"].as_str().unwrap();
 
     // Try to get user1's key with user2's token
@@ -2197,7 +2199,8 @@ async fn test_api_key_delete_other_users_key() {
     );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
-    let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
+    let signup_body: serde_json::Value =
+        serde_json::from_slice(&signup_resp.body.bytes().unwrap()).unwrap();
     let token2 = signup_body["token"].as_str().unwrap();
 
     // Try to delete user1's key with user2's token
@@ -2248,7 +2251,8 @@ async fn test_api_key_update_other_users_key() {
     );
 
     let signup_resp = auth.handle_request(signup_request).await.unwrap();
-    let signup_body: serde_json::Value = serde_json::from_slice(&signup_resp.body).unwrap();
+    let signup_body: serde_json::Value =
+        serde_json::from_slice(&signup_resp.body.bytes().unwrap()).unwrap();
     let token2 = signup_body["token"].as_str().unwrap();
 
     // Try to update user1's key with user2's token
@@ -2296,7 +2300,8 @@ async fn test_api_key_list_empty() {
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let envelope: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let envelope: serde_json::Value =
+        serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(envelope["apiKeys"].as_array().unwrap().len(), 0);
     assert_eq!(envelope["total"], 0);
 }

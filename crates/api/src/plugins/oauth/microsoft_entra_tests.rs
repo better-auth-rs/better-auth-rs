@@ -221,7 +221,7 @@ async fn signed_entra_direct_and_code_sign_in_verify_once_and_match_pinned_profi
             start.body = Some(serde_json::to_vec(&json!({"provider":"microsoft-entra-id","callbackURL":"http://localhost:3000/welcome","disableRedirect":true})).unwrap());
             let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
             assert_eq!(response.status, 200);
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
             let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
             *token_handler.0.lock().unwrap() = OAuthTokenSet {

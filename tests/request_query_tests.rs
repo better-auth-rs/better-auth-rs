@@ -78,7 +78,7 @@ async fn validated_query_keeps_original_http_and_native_request_provenance() {
     request.query = Some(raw.clone());
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(
-        serde_json::from_slice::<Value>(&response.body).unwrap(),
+        serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
         json!({"query":{"disableRefresh":true},"scope":{"disableRefresh":true},"original":raw})
     );
     assert_eq!(
@@ -104,7 +104,7 @@ async fn validated_query_keeps_original_http_and_native_request_provenance() {
             )
             .await
             .unwrap();
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(body["query"], json!({"disableRefresh":true}));
         assert_eq!(body["scope"], body["query"]);
         assert_eq!(

@@ -1,7 +1,9 @@
 //! Multiple signed device sessions with explicit active-session selection.
 
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema,
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldMap,
+    FieldValue,
+    session::SessionData,
     utils::cookie_utils::{
         create_clear_cookie, create_cookie, get_cookie, sign_cookie_value, verify_cookie_value,
     },
@@ -69,9 +71,9 @@ impl MultiSessionPlugin {
         let sessions: Vec<_> = sessions
             .into_iter()
             .filter(|(_, user)| users.insert(user.id.as_str().map(str::to_owned)))
-            .map(|(session, user)| serde_json::json!({ "session": session, "user": user }))
+            .map(|(session, user)| FieldValue::from(FieldMap::from(SessionData { session, user })))
             .collect();
-        Ok(AuthResponse::json(200, &sessions)?)
+        Ok(AuthResponse::native(200, sessions.into()))
     }
 
     async fn handle_set_active<S: AuthSchema>(

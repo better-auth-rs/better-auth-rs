@@ -165,7 +165,7 @@ async fn disabled_id_token_sign_in_rejects_before_callbacks() -> AuthResult<()> 
     request.body =
         Some(br#"{"provider":"google","idToken":{"token":"unused-normal-token"}}"#.to_vec());
     let response = auth.handle_request(request).await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(
         serde_json::json!(response.status),
         fixture

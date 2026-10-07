@@ -411,7 +411,13 @@ async fn native_signup<S: AuthSchema>(
         )
         .await
         .unwrap();
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(
+        &response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .unwrap();
     Json(
         json!({ "body":body, "cookies":response.headers.get_all("set-cookie").collect::<Vec<_>>() }),
     )

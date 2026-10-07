@@ -593,7 +593,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(first.body, duplicate.body);
+        assert_eq!(first.body.bytes().unwrap(), duplicate.body.bytes().unwrap());
         assert_eq!(
             ctx.database
                 .list_team_members(team.id.typed().unwrap())

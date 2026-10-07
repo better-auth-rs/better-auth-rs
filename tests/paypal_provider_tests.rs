@@ -161,7 +161,7 @@ async fn paypal_code_account_info_and_refresh_use_the_complete_sqlite_dispatcher
     assert_eq!(start.status, 200);
     let state_cookie = cookies(&start);
     assert!(!state_cookie.is_empty());
-    let body: Value = serde_json::from_slice(&start.body).unwrap();
+    let body: Value = serde_json::from_slice(&start.body.bytes().unwrap()).unwrap();
     let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
     let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
     assert_eq!(query["code_challenge_method"], "S256");
@@ -234,7 +234,7 @@ async fn paypal_code_account_info_and_refresh_use_the_complete_sqlite_dispatcher
         .await
         .unwrap();
     assert_eq!(info.status, 200);
-    let info: Value = serde_json::from_slice(&info.body).unwrap();
+    let info: Value = serde_json::from_slice(&info.body.bytes().unwrap()).unwrap();
     assert_eq!(info["user"], expected["user"]);
     assert_eq!(info["data"], expected["data"]);
     let refresh = auth
@@ -250,7 +250,7 @@ async fn paypal_code_account_info_and_refresh_use_the_complete_sqlite_dispatcher
         .await
         .unwrap();
     assert_eq!(refresh.status, 200);
-    let refreshed: Value = serde_json::from_slice(&refresh.body).unwrap();
+    let refreshed: Value = serde_json::from_slice(&refresh.body.bytes().unwrap()).unwrap();
     let updated = auth
         .context()
         .database
@@ -313,7 +313,7 @@ async fn paypal_code_account_info_and_refresh_use_the_complete_sqlite_dispatcher
             .to_auth_response();
         assert_eq!(error.status, 401);
         assert_eq!(
-            serde_json::from_slice::<Value>(&error.body).unwrap(),
+            serde_json::from_slice::<Value>(&error.body.bytes().unwrap()).unwrap(),
             json!({"code":"FAILED_TO_GET_USER_INFO","message":"Failed to get user info"})
         );
     }
@@ -333,7 +333,7 @@ async fn paypal_code_account_info_and_refresh_use_the_complete_sqlite_dispatcher
         .to_auth_response();
     assert_eq!(error.status, 418);
     assert_eq!(
-        serde_json::from_slice::<Value>(&error.body).unwrap(),
+        serde_json::from_slice::<Value>(&error.body.bytes().unwrap()).unwrap(),
         json!({"code":"ORDINARY_APPLICATION_ERROR","message":"Ordinary PayPal custom handler failure"})
     );
     assert_eq!(server.state.requests.lock().unwrap().len(), before);

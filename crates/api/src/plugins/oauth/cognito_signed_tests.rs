@@ -222,7 +222,7 @@ async fn signed_code_and_direct_success_persist_normal_users_in_sqlite() {
         let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
         assert_eq!(response.status, 200);
         if !direct {
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
             let state = url
                 .query_pairs()

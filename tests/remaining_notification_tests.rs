@@ -205,7 +205,7 @@ async fn run(
             .await
             .unwrap();
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         organization_id = body.get("id").and_then(Value::as_str).map(str::to_owned);
         if endpoint == "resend" {
             let response=auth.call_endpoint(HttpMethod::Post,"/organization/invite-member",EndpointInput{body:Some(json!({"email":"target@example.com","role":"member","organizationId":organization_id})),headers:Some([("cookie".into(),cookie.clone())].into()),..Default::default()}).await.unwrap();

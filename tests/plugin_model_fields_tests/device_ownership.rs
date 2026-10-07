@@ -276,7 +276,7 @@ async fn contract<S: AuthSchema>(
         Err(error @ AuthError::Response(_)) => {
             let response = error.to_auth_response();
             assert_eq!(response.status, 400);
-            let body: Value = serde_json::from_slice(&response.body)?;
+            let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
             (
                 Value::Null,
                 json!({"status": "BAD_REQUEST", "statusCode": response.status, "body": body}),

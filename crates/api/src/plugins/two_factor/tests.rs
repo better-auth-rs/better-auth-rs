@@ -108,7 +108,7 @@ async fn test_sign_in_after_hook_sets_pending_cookie_and_preserves_remember_choi
         .unwrap();
     manager.finish_response(&req, &mut response).unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap()["twoFactorRedirect"],
+        serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap()["twoFactorRedirect"],
         true
     );
     assert!(req.new_session().unwrap().is_none());
@@ -375,7 +375,8 @@ async fn body_schemas_keep_each_instances_global_and_nested_password_policy() {
                 .await;
             if required {
                 let response = result.unwrap_err().to_auth_response();
-                let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+                let body: serde_json::Value =
+                    serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
                 assert_eq!(
                     body["message"],
                     "[body.password] Invalid input: expected string, received undefined"

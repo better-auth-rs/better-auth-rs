@@ -68,6 +68,38 @@ pub struct SessionView {
     pub additional_fields: crate::FieldMap,
 }
 
+impl From<crate::session::SessionData> for crate::FieldMap {
+    fn from(data: crate::session::SessionData) -> Self {
+        Self::from([
+            ("session".into(), Self::from(data.session).into()),
+            ("user".into(), Self::from(data.user).into()),
+        ])
+    }
+}
+
+impl crate::FromFieldMap for crate::session::SessionData {
+    fn from_field_values(fields: crate::FieldMap) -> crate::AuthResult<Self> {
+        fn record<T: crate::FromFieldMap>(
+            fields: &crate::FieldMap,
+            name: &str,
+        ) -> crate::AuthResult<T> {
+            let fields = fields
+                .get(name)
+                .and_then(crate::FieldValue::as_object)
+                .ok_or_else(|| {
+                    crate::AuthError::internal(format!(
+                        "Session response must contain a `{name}` object"
+                    ))
+                })?;
+            T::from_field_values(fields.clone())
+        }
+        Ok(Self {
+            session: record(&fields, "session")?,
+            user: record(&fields, "user")?,
+        })
+    }
+}
+
 impl UserView {
     /// Read an application model without applying adapter output transforms.
     pub fn from_model<T: AuthUser>(user: &T) -> crate::AuthResult<Self> {

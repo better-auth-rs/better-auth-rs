@@ -532,7 +532,7 @@ async fn invoke<S: AuthSchema>(
             if response.status != 200 {
                 return Err(AuthError::from(response));
             }
-            Ok(serde_json::from_slice(&response.body)?)
+            Ok(serde_json::from_slice(&response.body.bytes()?)?)
         }
     }
 }
@@ -545,7 +545,13 @@ async fn native<S: AuthSchema>(
         Ok(body) => Json(json!({"status":200,"body":body})),
         Err(error) => {
             let response = error.to_auth_response();
-            let body: Value = serde_json::from_slice(&response.body).unwrap_or(Value::Null);
+            let body: Value = serde_json::from_slice(
+                &response
+                    .body
+                    .bytes()
+                    .expect("The fixture response must serialize"),
+            )
+            .unwrap_or(Value::Null);
             Json(json!({"status":response.status,"body":body}))
         }
     }

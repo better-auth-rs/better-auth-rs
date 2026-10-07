@@ -713,7 +713,8 @@ mod tests {
         assert!(!has_cookie, "auto_sign_in=false should not set a cookie");
 
         // Response body token should be null
-        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert!(
             body["token"].is_null(),
             "auto_sign_in=false should return null token"
@@ -741,7 +742,8 @@ mod tests {
         assert!(has_cookie, "auto_sign_in=true should set a cookie");
 
         // Response body token should be a string
-        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert!(
             body["token"].is_string(),
             "auto_sign_in=true should return a session token"
@@ -940,7 +942,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status, 200);
-        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(json["available"], true);
     }
 
@@ -982,7 +985,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status, 200);
-        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(json["available"], false);
     }
 
@@ -1008,7 +1012,8 @@ mod tests {
             .unwrap_err()
             .to_auth_response();
         assert_eq!(response.status, 422);
-        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(json["code"], "USERNAME_TOO_SHORT");
     }
 
@@ -1034,7 +1039,8 @@ mod tests {
             .unwrap_err()
             .to_auth_response();
         assert_eq!(response.status, 422);
-        let json: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(json["code"], "INVALID_USERNAME");
     }
 }

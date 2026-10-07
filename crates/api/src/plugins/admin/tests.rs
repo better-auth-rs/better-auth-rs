@@ -55,7 +55,7 @@ fn make_request(
 }
 
 fn json_body(resp: &AuthResponse) -> serde_json::Value {
-    serde_json::from_slice(&resp.body).unwrap()
+    serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap()
 }
 
 fn set_cookie_value(resp: &AuthResponse, name: &str) -> Option<String> {

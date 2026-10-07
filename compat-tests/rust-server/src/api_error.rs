@@ -150,7 +150,13 @@ impl AuthPlugin<StatelessSchema> for Fixture {
 }
 
 fn observe(response: AuthResponse, input: &Value, native: bool) -> Value {
-    let body = String::from_utf8(response.body).unwrap();
+    let body = String::from_utf8(
+        response
+            .body
+            .into_bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .unwrap();
     if native && input["page"] != true {
         return json!({"thrown":false,"value":serde_json::from_str::<Value>(&body).unwrap()});
     }
@@ -260,7 +266,7 @@ async fn run(base_url: &str, input: Value) -> AuthResult<Value> {
             let body = if response.body.is_empty() {
                 Value::String(String::new())
             } else {
-                serde_json::from_slice(&response.body)?
+                serde_json::from_slice(&response.body.bytes()?)?
             };
             json!({"thrown":true,"status":response.status,"body":body,"location":response.headers.get("location")})
         }

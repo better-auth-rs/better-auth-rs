@@ -137,7 +137,8 @@ async fn test_virtual_session_on_get_session() {
     match action.unwrap() {
         BeforeRequestAction::Respond(resp) => {
             assert_eq!(resp.status, 200);
-            let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
             // Should contain user data
             assert_eq!(body["user"]["id"], user.id.typed().unwrap().as_str());
             assert_eq!(body["user"]["email"], "test@example.com");

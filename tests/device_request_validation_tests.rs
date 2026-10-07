@@ -263,7 +263,7 @@ async fn observe(input: Input, asynchronous: bool) -> AuthResult<Value> {
         .map(|(name, value)| (name.to_ascii_lowercase(), value.clone()))
         .collect();
     headers.sort();
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     let stored = match auth
         .store()
         .get_device_code_by_device_code(DEVICE_CODE)

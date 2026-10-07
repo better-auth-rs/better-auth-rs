@@ -128,7 +128,7 @@ impl Fixture {
             ..Default::default()
         }).await.unwrap();
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let owner = body
             .get("user")
             .unwrap()
@@ -263,7 +263,7 @@ impl Fixture {
             .await
             .unwrap();
         assert_eq!(response.status, 200);
-        let value: Value = serde_json::from_slice(&response.body).unwrap();
+        let value: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         if endpoint == "list" {
             value
                 .get("apiKeys")

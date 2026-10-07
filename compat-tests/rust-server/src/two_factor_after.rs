@@ -90,7 +90,7 @@ impl Trace {
             return Ok(());
         }
         let (sessions, proofs) = self.counts(ctx).await?;
-        let body: Value = serde_json::from_slice(&response.body)?;
+        let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
         let returned = if response.is_api_error() {
             json!({"apiError":{"status":response.status,"body":body}})
         } else {
@@ -268,7 +268,7 @@ async fn build<S: AuthSchema>(builder: AuthBuilder<S>, trace: Trace) -> AuthResu
             },
         )
         .await?;
-    let body: Value = serde_json::from_slice(&created.body)?;
+    let body: Value = serde_json::from_slice(&created.body.bytes()?)?;
     let id = body["user"]["id"]
         .as_str()
         .expect("created user")
@@ -393,11 +393,11 @@ async fn control<S: AuthSchema>(
     };
     let mut result = match result {
         Ok(response) => {
-            json!({"status":response.status,"body":if response.body.is_empty(){Value::Null}else{shape(serde_json::from_slice(&response.body)?)},"cookies":cookies(&response)})
+            json!({"status":response.status,"body":if response.body.is_empty(){Value::Null}else{shape(serde_json::from_slice(&response.body.bytes()?)?)},"cookies":cookies(&response)})
         }
         Err(error) if error.is_api_error() => {
             let response = error.to_auth_response();
-            let body: Value = serde_json::from_slice(&response.body)?;
+            let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
             json!({"error":{"ordinary":false,"message":body["message"],"code":body["code"]}})
         }
         Err(AuthError::Internal(message)) => {

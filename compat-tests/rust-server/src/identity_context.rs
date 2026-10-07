@@ -57,9 +57,15 @@ impl Fixture {
 }
 
 fn context(endpoint: &EndpointContext<'_, StatelessSchema>) -> Value {
-    let returned: Option<Value> = endpoint
-        .response
-        .and_then(|response| serde_json::from_slice(&response.body).ok());
+    let returned: Option<Value> = endpoint.response.and_then(|response| {
+        serde_json::from_slice(
+            &response
+                .body
+                .bytes()
+                .expect("The fixture response must serialize"),
+        )
+        .ok()
+    });
     let mut keys: Vec<_> = endpoint
         .body
         .as_object()
@@ -250,7 +256,13 @@ fn observe(result: AuthResult<AuthResponse>) -> Value {
         Err(AuthError::Internal(message)) => return json!({"thrown":true,"message":message}),
         Err(error) => (error.to_auth_response(), true),
     };
-    let body: Option<Value> = serde_json::from_slice(&response.body).ok();
+    let body: Option<Value> = serde_json::from_slice(
+        &response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .ok();
     let mut keys: Vec<_> = body
         .as_ref()
         .and_then(Value::as_object)
@@ -287,7 +299,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                 &json!({}),
             )
             .await?;
-            let body: Value = serde_json::from_slice(&anonymous.body)?;
+            let body: Value = serde_json::from_slice(&anonymous.body.bytes()?)?;
             old_id = body["user"]["id"].as_str().map(str::to_owned);
             let cookie = anonymous
                 .headers

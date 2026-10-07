@@ -307,7 +307,7 @@ impl Fixture {
         );
         let start = self.auth.handle_request(sign_in).await.unwrap();
         assert_eq!(start.status, 200);
-        let body: Value = serde_json::from_slice(&start.body).unwrap();
+        let body: Value = serde_json::from_slice(&start.body.bytes().unwrap()).unwrap();
         let authorization = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
         let query: HashMap<_, _> = authorization.query_pairs().into_owned().collect();
         if matches!(
@@ -416,7 +416,7 @@ async fn account_info_profile_failures_return_401_and_preserve_rows() {
         let response = fixture.auth.handle_request(account_info).await.unwrap();
         assert_eq!(response.status, 401, "{failure:?}");
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body).unwrap(),
+            serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
             json!({
                 "code":"FAILED_TO_GET_USER_INFO", "message":"Failed to get user info",
             }),
@@ -576,7 +576,7 @@ async fn social_account_info_distinguishes_missing_profile_from_original_callbac
         {
             assert_eq!(response.status, 401);
             assert_eq!(
-                serde_json::from_slice::<Value>(&response.body).unwrap(),
+                serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
                 json!({"code":"FAILED_TO_GET_USER_INFO","message":"Failed to get user info"})
             );
         } else {
@@ -636,7 +636,7 @@ async fn userinfo_api_errors_preserve_status_body_and_headers_on_social_endpoint
             };
             assert_eq!(response.status, 429, "{provider_id} {endpoint}");
             assert_eq!(
-                serde_json::from_slice::<Value>(&response.body).unwrap(),
+                serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
                 json!({
                     "code": "PROFILE_BUSY", "message": "Profile service is busy", "retryAfter": 17,
                 })

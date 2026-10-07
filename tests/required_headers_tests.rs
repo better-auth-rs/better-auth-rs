@@ -132,7 +132,7 @@ async fn required_headers_preserve_schema_precedence_and_native_request_authorit
         let result: Value = if response.body.is_empty() {
             Value::Null
         } else {
-            serde_json::from_slice(&response.body)?
+            serde_json::from_slice(&response.body.bytes()?)?
         };
         if (response.status, &result) != (case.status, &case.result) {
             mismatches.push(format!(

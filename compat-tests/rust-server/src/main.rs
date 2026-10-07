@@ -1466,7 +1466,7 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
                 match plugin.add_member(body, Some(&request), auth.context()).await {
                     Ok(member) => Json(serde_json::to_value(member).unwrap()).into_response(),
                     Err(better_auth::AuthError::Unauthenticated) => (axum::http::StatusCode::UNAUTHORIZED, [(axum::http::header::CONTENT_TYPE, "application/json")]).into_response(),
-                    Err(error) => { let response = error.to_auth_response(); (axum::http::StatusCode::from_u16(response.status).unwrap(), [(axum::http::header::CONTENT_TYPE, "application/json")], response.body).into_response() }
+                    Err(error) => { let response = error.to_auth_response(); (axum::http::StatusCode::from_u16(response.status).unwrap(), [(axum::http::header::CONTENT_TYPE, "application/json")], response.body.into_bytes().expect("The fixture response must serialize")).into_response() }
                 }
             }
         }))
@@ -1537,7 +1537,7 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
                         Err(error) => {
                             let response = error.into_response().unwrap();
                             (axum::http::StatusCode::from_u16(response.status).unwrap(),
-                                [(axum::http::header::CONTENT_TYPE, "application/json")], response.body).into_response()
+                                [(axum::http::header::CONTENT_TYPE, "application/json")], response.body.into_bytes().expect("The fixture response must serialize")).into_response()
                         }
                     }
                 }

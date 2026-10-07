@@ -118,8 +118,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         } else {
             req.clone()
         };
-        let raw_body = internal_req.input_body()?;
-        internal_req.set_endpoint_body(crate::endpoint_input::ValidatedBody::unvalidated(raw_body));
+        internal_req.set_endpoint_body(internal_req.unvalidated_input()?);
         update_request_hook_context(&internal_req)?;
 
         let mut input_patch = crate::endpoint_input::EndpointInputPatch::default();
@@ -195,9 +194,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
                         .and_then(|route| route.body_validator.as_ref())
                     {
                         Some(validate) => validate.validate(&internal_req).await?,
-                        None => crate::endpoint_input::ValidatedBody::unvalidated(
-                            internal_req.input_body()?,
-                        ),
+                        None => internal_req.unvalidated_input()?,
                     };
                     let query = match route.as_ref().and_then(|route| route.query_validator) {
                         Some(validate) => validate(internal_req.query.clone())?,
@@ -343,17 +340,48 @@ impl<S: AuthSchema> AuthContext<S> {
         F: FnOnce(AuthRequest, Arc<AuthContext<S>>) -> Fut + Send,
         Fut: Future<Output = AuthResult<AuthResponse>> + Send,
     {
+        let mut request = native_request(source, &route);
+        request.body = body.as_ref().map(serde_json::to_vec).transpose()?;
+        request.set_endpoint_body(crate::endpoint_input::ValidatedBody::unvalidated(body));
+        request.query = query;
+        self.dispatch_native_request(source, route, request, handler)
+            .await
+    }
+
+    /// Invoke a native endpoint while retaining Date, undefined, and object identities.
+    pub async fn dispatch_native_value<F, Fut>(
+        &self,
+        source: crate::NativeRequest<'_>,
+        route: AuthRoute,
+        body: crate::FieldValue,
+        query: Option<serde_json::Value>,
+        handler: F,
+    ) -> AuthResult<AuthResponse>
+    where
+        F: FnOnce(AuthRequest, Arc<AuthContext<S>>) -> Fut + Send,
+        Fut: Future<Output = AuthResult<AuthResponse>> + Send,
+    {
+        let mut request = native_request(source, &route);
+        request.set_endpoint_body(crate::endpoint_input::ValidatedBody::unvalidated_native(
+            body,
+        ));
+        request.query = query;
+        self.dispatch_native_request(source, route, request, handler)
+            .await
+    }
+
+    async fn dispatch_native_request<F, Fut>(
+        &self,
+        source: crate::NativeRequest<'_>,
+        route: AuthRoute,
+        request: AuthRequest,
+        handler: F,
+    ) -> AuthResult<AuthResponse>
+    where
+        F: FnOnce(AuthRequest, Arc<AuthContext<S>>) -> Fut + Send,
+        Fut: Future<Output = AuthResult<AuthResponse>> + Send,
+    {
         self.with_native_context(source, |context| async move {
-            let method = source
-                .request
-                .map_or_else(|| route.method.clone(), |request| request.method.clone());
-            let mut request =
-                AuthRequest::new(method, "/").with_optional_headers(source.headers.cloned());
-            if let Some(original) = source.request {
-                request = request.with_original_request(original.clone());
-            }
-            request.body = body.map(|body| serde_json::to_vec(&body)).transpose()?;
-            request.query = query;
             let dispatcher = context
                 .extensions
                 .get::<Arc<EndpointDispatcher<S>>>()
@@ -366,4 +394,15 @@ impl<S: AuthSchema> AuthContext<S> {
         })
         .await
     }
+}
+
+fn native_request(source: crate::NativeRequest<'_>, route: &AuthRoute) -> AuthRequest {
+    let method = source
+        .request
+        .map_or_else(|| route.method.clone(), |request| request.method.clone());
+    let mut request = AuthRequest::new(method, "/").with_optional_headers(source.headers.cloned());
+    if let Some(original) = source.request {
+        request = request.with_original_request(original.clone());
+    }
+    request
 }

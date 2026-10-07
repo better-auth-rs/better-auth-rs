@@ -40,7 +40,7 @@ async fn configured_jwks_paths_preserve_the_pinned_openapi_operation()
                 "/api/auth/open-api/generate-schema",
             ))
             .await?;
-        let schema: Value = serde_json::from_slice(&response.body)?;
+        let schema: Value = serde_json::from_slice(&response.body.bytes()?)?;
         let paths = schema
             .get("paths")
             .and_then(Value::as_object)

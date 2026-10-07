@@ -77,7 +77,7 @@ impl<'a, S: AuthSchema> PhoneNumberApi<'a, S> {
         struct Result {
             status: bool,
         }
-        Ok(serde_json::from_slice::<Result>(&response.body)?.status)
+        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.status)
     }
 }
 

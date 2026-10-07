@@ -132,7 +132,7 @@ impl ApiKeyVerificationError {
             Self::Endpoint(error) => return Ok(error.to_auth_response()),
             Self::Rejected(error) => {
                 let body: serde_json::Value =
-                    serde_json::from_slice(&error.to_auth_response().body)?;
+                    serde_json::from_slice(&error.to_auth_response().body.bytes()?)?;
                 return Ok(AuthResponse::json(
                     200,
                     &serde_json::json!({"valid":false,"error":body,"key":null}),

@@ -73,7 +73,7 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                 },
             )
             .await?;
-        Ok(serde_json::from_slice(&response.body)?)
+        Ok(serde_json::from_slice(&response.body.bytes()?)?)
     }
 
     /// Read a live plaintext or decrypted code without consuming it or changing attempts.
@@ -129,7 +129,7 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
         struct Result {
             otp: Option<String>,
         }
-        Ok(serde_json::from_slice::<Result>(&response.body)?.otp)
+        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.otp)
     }
 }
 

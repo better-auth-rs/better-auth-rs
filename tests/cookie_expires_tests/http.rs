@@ -8,7 +8,7 @@ use better_auth::plugins::last_login_method::{
 fn response_shape(response: &AuthResponse) -> Value {
     json!({
         "status": response.status,
-        "body": String::from_utf8(response.body.clone()).unwrap(),
+        "body": String::from_utf8(response.body.clone().into_bytes().unwrap()).unwrap(),
         "headers": response.headers.get_all("set-cookie").map(|value| shape(value)).collect::<Vec<_>>(),
     })
 }

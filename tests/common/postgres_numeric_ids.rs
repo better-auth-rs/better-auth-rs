@@ -107,9 +107,9 @@ async fn verify_mode(database: DatabaseConnection, mode: IdGeneration) -> TestRe
         response.status,
         200,
         "{}",
-        String::from_utf8_lossy(&response.body)
+        String::from_utf8_lossy(&response.body.bytes()?)
     );
-    let body: serde_json::Value = serde_json::from_slice(&response.body)?;
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
     let public_id = body["user"]["id"]
         .as_str()
         .expect("public ID must be a string");
@@ -139,7 +139,7 @@ async fn verify_mode(database: DatabaseConnection, mode: IdGeneration) -> TestRe
         ))
         .await?;
     assert_eq!(session_response.status, 200);
-    let session_body: serde_json::Value = serde_json::from_slice(&session_response.body)?;
+    let session_body: serde_json::Value = serde_json::from_slice(&session_response.body.bytes()?)?;
     assert_eq!(session_body["user"]["id"], public_id);
     assert_eq!(session_body["session"]["id"], stored_session.id.to_string());
     assert_eq!(session_body["session"]["userId"], public_id);

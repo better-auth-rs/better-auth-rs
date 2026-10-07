@@ -165,7 +165,7 @@ async fn invitation_creation_and_resend_preserve_pinned_fractional_lifetimes() {
             expected["status"],
             "{name}/{operation}"
         );
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let rows = db.query_all_raw(Statement::from_string(DbBackend::Sqlite,
             "SELECT id, email, role, status, organization_id, inviter_id, team_id, expires_at, created_at FROM invitation".to_owned(),
         )).await.unwrap();

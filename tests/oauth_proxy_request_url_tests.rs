@@ -108,7 +108,13 @@ async fn direct_requests_preserve_url_across_normalization_without_trusting_head
             .expect("caller context");
         let response = auth.handle_request(request).await.expect("authorization");
         assert_eq!(response.status, 200);
-        assert_proxy(&response.body, proxied);
+        assert_proxy(
+            &response
+                .body
+                .bytes()
+                .expect("The fixture response must serialize"),
+            proxied,
+        );
     }
 }
 

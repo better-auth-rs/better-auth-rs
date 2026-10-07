@@ -59,7 +59,7 @@ async fn observe<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> AuthResult<Va
         body: Some(json!({"name":"Route metadata","slug":"route-metadata","metadata":{"nested":{"value":1}}})),
         ..Default::default()
     }).await?;
-    let created: Value = serde_json::from_slice(&created.body)?;
+    let created: Value = serde_json::from_slice(&created.body.bytes()?)?;
     let id = created["id"].as_str().unwrap();
     let read = |headers| EndpointInput {
         headers: Some(headers),
@@ -73,7 +73,7 @@ async fn observe<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> AuthResult<Va
             read(headers.clone()),
         )
         .await?;
-    let created_read: Value = serde_json::from_slice(&created_read.body)?;
+    let created_read: Value = serde_json::from_slice(&created_read.body.bytes()?)?;
     let updated = auth
         .call_endpoint(
             HttpMethod::Post,
@@ -85,7 +85,7 @@ async fn observe<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> AuthResult<Va
             },
         )
         .await?;
-    let updated: Value = serde_json::from_slice(&updated.body)?;
+    let updated: Value = serde_json::from_slice(&updated.body.bytes()?)?;
     let updated_read = auth
         .call_endpoint(
             HttpMethod::Get,
@@ -93,7 +93,7 @@ async fn observe<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> AuthResult<Va
             read(headers),
         )
         .await?;
-    let updated_read: Value = serde_json::from_slice(&updated_read.body)?;
+    let updated_read: Value = serde_json::from_slice(&updated_read.body.bytes()?)?;
     Ok(
         json!({"raw":raw,"route":{"created":created["metadata"],"createdRead":created_read["metadata"],"updated":updated["metadata"],"updatedRead":updated_read["metadata"]}}),
     )

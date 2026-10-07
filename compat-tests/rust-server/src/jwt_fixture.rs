@@ -65,7 +65,7 @@ impl JwtFixture {
             let remote = remote.clone();
             async move {
                 let response = JwtPlugin::new().on_request(&AuthRequest::new(HttpMethod::Get, "/jwks"), &remote).await.unwrap().unwrap();
-                Json(serde_json::from_slice::<Value>(&response.body).unwrap())
+                Json(serde_json::from_slice::<Value>(&response.body.bytes().expect("The fixture response must serialize")).unwrap())
             }
         })).route("/__test/jwt/action", post(move |Json(body): Json<Value>| {
             let auth = auth.clone();

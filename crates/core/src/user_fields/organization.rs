@@ -127,8 +127,8 @@ impl UserFieldConfig {
         if !self.input() || value.is_none() && (partial || self.required == Some(false)) {
             return Ok(None);
         }
-        if value == Some(&Value::Null) && self.required == Some(false) {
-            return Ok(Some(Value::Null));
+        if matches!(value, Some(Value::Null | Value::Undefined)) && self.required == Some(false) {
+            return Ok(value.cloned());
         }
         let expected = match &self.field_type {
             UserFieldType::Enum(_) => return Ok(value.cloned()),
@@ -142,9 +142,10 @@ impl UserFieldConfig {
         let mut errors = Vec::new();
         let valid = match (&self.field_type, value) {
             (UserFieldType::String, Some(Value::String(_) | Value::Utf16String(_)))
-            | (UserFieldType::Number, Some(Value::Number(_)))
-            | (UserFieldType::Boolean, Some(Value::Bool(_)))
-            | (UserFieldType::Json, Some(_)) => true,
+            | (UserFieldType::Boolean, Some(Value::Bool(_))) => true,
+            (UserFieldType::Number, Some(Value::Number(value))) => value.is_finite(),
+            (UserFieldType::Json, Some(value)) => json_input(value),
+            (UserFieldType::Date, Some(Value::Date(value))) => value.milliseconds().is_finite(),
             (
                 UserFieldType::StringArray | UserFieldType::NumberArray,
                 Some(Value::Array(values)),
@@ -155,7 +156,9 @@ impl UserFieldConfig {
                     "number"
                 };
                 for (index, value) in values.iter().enumerate() {
-                    if type_name(Some(value)) != item_type {
+                    if type_name(Some(value)) != item_type
+                        || matches!(value, Value::Number(number) if !number.is_finite())
+                    {
                         errors.push(invalid_type(
                             &format!("{location}.{index}"),
                             item_type,
@@ -185,14 +188,27 @@ impl UserFieldConfig {
     }
 }
 
+fn json_input(value: &Value) -> bool {
+    match value {
+        Value::Null | Value::Bool(_) | Value::String(_) | Value::Utf16String(_) => true,
+        Value::Number(value) => value.is_finite(),
+        Value::Array(values) => values.iter().all(json_input),
+        Value::Object(values) => values.values().all(json_input),
+        Value::Undefined | Value::Date(_) => false,
+    }
+}
+
 fn type_name(value: Option<&Value>) -> &'static str {
     match value {
         None | Some(Value::Undefined) => "undefined",
         Some(Value::Null) => "null",
         Some(Value::Bool(_)) => "boolean",
+        Some(Value::Number(value)) if value.is_nan() => "NaN",
+        Some(Value::Number(value)) if *value == f64::INFINITY => "Infinity",
+        Some(Value::Number(value)) if *value == f64::NEG_INFINITY => "-Infinity",
         Some(Value::Number(_)) => "number",
         Some(Value::String(_) | Value::Utf16String(_)) => "string",
-        Some(Value::Date(_)) => "date",
+        Some(Value::Date(_)) => "Date",
         Some(Value::Array(_)) => "array",
         Some(Value::Object(_)) => "object",
     }
@@ -213,6 +229,73 @@ mod tests {
         ($($token:tt)*) => { Value::from_json(serde_json::json!($($token)*)).expect("valid JSON field") };
     }
     use std::sync::Arc;
+
+    #[test]
+    fn native_json_fields_reject_values_that_json_would_omit_or_change() {
+        let field = UserFieldConfig {
+            field_type: UserFieldType::Json,
+            ..Default::default()
+        };
+        for value in [
+            Value::Undefined,
+            Value::from(crate::FieldDate::from_milliseconds(0.0)),
+            Value::from(f64::NAN),
+            Value::from(vec![Value::from(f64::INFINITY)]),
+            Value::from(FieldMap::from([("omitted".into(), Value::Undefined)])),
+        ] {
+            let error = field
+                .validate_organization_input(Some(&value), "body.payload", false)
+                .unwrap_err();
+            assert!(
+                matches!(error, AuthError::FieldInput { code: "VALIDATION_ERROR", message } if message == "[body.payload] Invalid input")
+            );
+        }
+        let lone_surrogate = Value::from(crate::Utf16String::from_units(vec![0xd800]));
+        let object = Value::from(FieldMap::from([("text".into(), lone_surrogate)]));
+        let output = field
+            .validate_organization_input(Some(&object), "body.payload", false)
+            .unwrap()
+            .unwrap();
+        assert!(output.strict_equals(&object));
+    }
+
+    #[test]
+    fn native_schema_validation_preserves_dates_and_rejects_nonfinite_numbers() {
+        let field = UserFieldConfig {
+            field_type: UserFieldType::Date,
+            required: Some(false),
+            ..Default::default()
+        };
+        let date = Value::from(crate::FieldDate::from_milliseconds(0.0));
+        let output = field
+            .validate_organization_input(Some(&date), "body.date", false)
+            .unwrap()
+            .unwrap();
+        assert!(output.strict_equals(&date));
+        assert_eq!(
+            field
+                .validate_organization_input(Some(&Value::Undefined), "body.date", false)
+                .unwrap(),
+            Some(Value::Undefined)
+        );
+        let invalid = Value::from(crate::FieldDate::invalid());
+        assert!(
+            matches!(field.validate_organization_input(Some(&invalid), "body.date", false).unwrap_err(), AuthError::FieldInput { message, .. } if message == "[body.date] Invalid input: expected date, received Date")
+        );
+        let field = UserFieldConfig {
+            field_type: UserFieldType::Number,
+            ..Default::default()
+        };
+        for (number, label) in [
+            (f64::NAN, "NaN"),
+            (f64::INFINITY, "Infinity"),
+            (f64::NEG_INFINITY, "-Infinity"),
+        ] {
+            assert!(
+                matches!(field.validate_organization_input(Some(&Value::from(number)), "body.number", false).unwrap_err(), AuthError::FieldInput { message, .. } if message == format!("[body.number] Invalid input: expected number, received {label}"))
+            );
+        }
+    }
 
     #[tokio::test]
     async fn organization_validation_keeps_route_and_adapter_policies_separate() {

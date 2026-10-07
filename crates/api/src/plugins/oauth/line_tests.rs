@@ -252,7 +252,7 @@ async fn line_code_login_uses_verified_claims_and_matches_pinned_profiles() {
         start.body = Some(serde_json::to_vec(&json!({"provider":"line-jp","callbackURL":"http://localhost:3000/welcome","disableRedirect":true})).unwrap());
         let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
         let params: HashMap<_, _> = url.query_pairs().into_owned().collect();
         assert_eq!(params["client_id"], CLIENT_ID);
@@ -461,7 +461,7 @@ async fn social_line_ordinary_direct_and_code_login_persist_the_profile() {
         let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
         assert_eq!(response.status, 200);
         if !direct {
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
             let params: HashMap<_, _> = url.query_pairs().into_owned().collect();
             let mut callback = AuthRequest::new(HttpMethod::Get, "/callback/line");

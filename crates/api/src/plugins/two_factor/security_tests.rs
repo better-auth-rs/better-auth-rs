@@ -236,7 +236,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     assert_ne!(first.totp_uri, second.totp_uri);
     let pending = make_challenge(&user, &ctx).await.unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&pending.body).unwrap()["twoFactorMethods"],
+        serde_json::from_slice::<serde_json::Value>(&pending.body.bytes().unwrap()).unwrap()["twoFactorMethods"],
         serde_json::json!([])
     );
     let unverified = verify_totp_core(

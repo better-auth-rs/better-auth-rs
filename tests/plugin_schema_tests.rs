@@ -201,7 +201,7 @@ async fn disabled_username_ignores_inputs_without_persisting_them()
     );
     let response = auth.handle_request(signup).await?;
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body)?;
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
     let token = body
         .get("token")
         .and_then(serde_json::Value::as_str)

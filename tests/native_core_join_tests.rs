@@ -385,7 +385,7 @@ async fn check_case(db: DatabaseConnection, fixture: &Value, limit: Option<f64>)
                 response.headers.get("x-ordinary-error").map(String::as_str),
                 Some("original")
             );
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(
                 json!({"status":"BAD_REQUEST", "code":body["code"], "message":body["message"]}),
                 fixture["error"]

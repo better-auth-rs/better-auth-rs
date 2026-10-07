@@ -76,7 +76,15 @@ impl BodyTrace {
             .original_request()
             .or_else(|| context.is_http.then_some(&context.request));
         let error = response
-            .and_then(|response| serde_json::from_slice::<Value>(&response.body).ok())
+            .and_then(|response| {
+                serde_json::from_slice::<Value>(
+                    &response
+                        .body
+                        .bytes()
+                        .expect("The fixture response must serialize"),
+                )
+                .ok()
+            })
             .and_then(|value| value.get("code").cloned());
         self.0.lock().unwrap().push(json!({
             "phase":phase, "body":super::snapshot(&context.body), "request":request.is_some(),

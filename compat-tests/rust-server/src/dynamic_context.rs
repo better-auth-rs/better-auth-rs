@@ -105,7 +105,7 @@ fn context_value(context: &AuthContext<StatelessSchema>) -> Value {
 fn error_value(error: AuthError) -> Value {
     if error.is_api_error() {
         let response = error.to_auth_response();
-        json!({"thrown":true,"kind":"APIError","status":response.status,"body":serde_json::from_slice::<Value>(&response.body).unwrap_or(Value::Null)})
+        json!({"thrown":true,"kind":"APIError","status":response.status,"body":serde_json::from_slice::<Value>(&response.body.bytes().expect("The fixture response must serialize")).unwrap_or(Value::Null)})
     } else {
         let (kind, message) = match error {
             AuthError::Config(message) => ("BetterAuthError", message),
@@ -303,7 +303,7 @@ async fn invoke(auth: &BetterAuth<StatelessSchema>, fixture: &Fixture, call: &Ca
     };
     let output = match result {
         Ok(response) => {
-            json!({"thrown":false,"status":response.status,"body":if response.body.is_empty(){Value::Null}else{serde_json::from_slice::<Value>(&response.body).unwrap()}})
+            json!({"thrown":false,"status":response.status,"body":if response.body.is_empty(){Value::Null}else{serde_json::from_slice::<Value>(&response.body.bytes().expect("The fixture response must serialize")).unwrap()}})
         }
         Err(error) => error_value(error),
     };

@@ -1,7 +1,10 @@
 use super::{OrganizationPlugin, hooks::*, types::RoleInput};
 use crate::plugins::endpoint_context::EndpointContext;
 use better_auth_core::entity::{AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, Member};
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, FieldMap, FieldValue,
+    FromFieldMap, Member,
+};
 mod native;
 mod store;
 pub use native::OrganizationApi;
@@ -43,6 +46,23 @@ super::request::from_fields!(AddMemberInput {
     user_id: "userId", organization_id: "organizationId", role: "role", team_id: "teamId",
 }; additional_fields);
 
+impl AddMemberInput {
+    fn into_field_values(self) -> FieldMap {
+        let mut fields = self.additional_fields;
+        for (name, value) in [
+            ("userId", self.user_id.field_value()),
+            ("organizationId", self.organization_id.field_value()),
+            ("role", self.role.field_value()),
+            ("teamId", self.team_id.field_value()),
+        ] {
+            if !value.is_undefined() {
+                let _ = fields.insert(name.into(), value);
+            }
+        }
+        fields
+    }
+}
+
 impl OrganizationPlugin {
     /// Add a member from a trusted server context, optionally using an authenticated request.
     pub async fn add_member<S: AuthSchema>(
@@ -56,9 +76,14 @@ impl OrganizationPlugin {
                 request,
                 headers: request.map(|request| &request.headers),
             })
-            .add_member(Some(serde_json::to_value(input)?))
+            .add_member_value(input.into_field_values().into())
             .await?;
-        Ok(serde_json::from_value(response)?)
+        match response {
+            FieldValue::Object(fields) => Member::from_field_values((*fields).clone()),
+            _ => Err(AuthError::internal(
+                "Native addMember did not return a member object",
+            )),
+        }
     }
 
     async fn add_member_core<S: AuthSchema>(
@@ -85,7 +110,7 @@ impl OrganizationPlugin {
                 session
                     .as_ref()
                     .and_then(|(_, session)| session.active_organization_id())
-                    .map(|id| better_auth_core::FieldValue::from(id))
+                    .map(better_auth_core::FieldValue::from)
             })
             .ok_or(AuthError::Upstream {
                 status: 400,

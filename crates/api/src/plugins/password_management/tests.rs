@@ -163,7 +163,7 @@ async fn test_request_password_reset_success() {
         .unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: RequestPasswordResetResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
     assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
@@ -258,7 +258,7 @@ async fn test_request_password_reset_unknown_email() {
         .unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: RequestPasswordResetResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
     assert_eq!(response_data.message, PASSWORD_RESET_SUCCESS_MESSAGE);
@@ -287,7 +287,7 @@ async fn test_reset_password_success() {
     let response = plugin.handle_reset_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
 
@@ -385,7 +385,7 @@ async fn test_change_password_success() {
     let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert!(response_data["token"].is_null()); // No new token when not revoking sessions
 
@@ -427,7 +427,7 @@ async fn test_change_password_with_session_revocation() {
     let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert!(response_data["token"].is_string()); // New token when revoking sessions
 }
@@ -540,7 +540,7 @@ async fn test_change_password_revoke_with_boolean() {
     let response = plugin.handle_change_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
     assert!(
         response_data["token"].is_string(),
@@ -613,7 +613,7 @@ async fn test_verify_password_success() {
     let response = plugin.handle_verify_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body_str = String::from_utf8(response.body).unwrap();
+    let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
     let response_data: StatusResponse = serde_json::from_str(&body_str).unwrap();
     assert!(response_data.status);
 }
@@ -685,7 +685,7 @@ async fn test_verify_password_requires_session() {
     let response = plugin.handle_verify_password(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 401);
     // Upstream returns better-call's default 401 body rather than an empty one.
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["code"], "UNAUTHORIZED");
     assert_eq!(body["message"], "Unauthorized");
 }

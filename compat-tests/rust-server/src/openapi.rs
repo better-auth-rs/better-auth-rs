@@ -220,10 +220,10 @@ async fn invoke(auth: &BetterAuth<StatelessSchema>, host: &str, reference_path: 
     );
     json!({
         "host":host,"status":schema.status,
-        "schema":serde_json::from_slice::<Value>(&schema.body).unwrap(),
-        "native":serde_json::from_slice::<Value>(&native.body).unwrap(),
-        "reference":{"status":reference.status,"body":String::from_utf8(reference.body).unwrap(),"contentType":reference.headers.get("content-type"),"csp":reference.headers.get("content-security-policy")},
-        "nativeReference":{"status":native_reference.status,"body":String::from_utf8(native_reference.body).unwrap(),"contentType":native_reference.headers.get("content-type")}
+        "schema":serde_json::from_slice::<Value>(&schema.body.bytes().expect("The fixture response must serialize")).unwrap(),
+        "native":serde_json::from_slice::<Value>(&native.body.bytes().expect("The fixture response must serialize")).unwrap(),
+        "reference":{"status":reference.status,"body":String::from_utf8(reference.body.into_bytes().expect("The fixture response must serialize")).unwrap(),"contentType":reference.headers.get("content-type"),"csp":reference.headers.get("content-security-policy")},
+        "nativeReference":{"status":native_reference.status,"body":String::from_utf8(native_reference.body.into_bytes().expect("The fixture response must serialize")).unwrap(),"contentType":native_reference.headers.get("content-type")}
     })
 }
 

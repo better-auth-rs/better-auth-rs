@@ -354,7 +354,8 @@ impl OAuthProxyPlugin {
         if response.status != 200 {
             return Ok(());
         }
-        let mut body: serde_json::Map<String, Value> = serde_json::from_slice(&response.body)?;
+        let mut body: serde_json::Map<String, Value> =
+            serde_json::from_slice(&response.body.bytes()?)?;
         let Some(url) = body
             .get("url")
             .and_then(Value::as_str)
@@ -413,7 +414,7 @@ impl OAuthProxyPlugin {
             .collect();
         let _ = url.query_pairs_mut().clear().extend_pairs(pairs);
         let _ = body.insert("url".into(), url.to_string().into());
-        response.body = serde_json::to_vec(&body)?;
+        response.body = better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&body)?);
         Ok(())
     }
 

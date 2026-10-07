@@ -36,7 +36,7 @@ async fn apple_direct_and_form_post_success_persist_user_account_and_session() -
         let mut statuses = vec![response.status];
         let mut location = None;
         if mode == "form_post" {
-            let body: Value = serde_json::from_slice(&response.body)?;
+            let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
             let url = url::Url::parse(text(&body, "/url")?)?;
             let state = url
                 .query_pairs()

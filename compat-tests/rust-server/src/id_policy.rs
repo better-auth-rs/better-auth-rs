@@ -100,7 +100,7 @@ pub async fn run(input: Value) -> AuthResult<Value> {
             .filter_map(|value| value.split(';').next())
             .collect::<Vec<_>>()
             .join("; ");
-        let body: Value = serde_json::from_slice(&response.body)?;
+        let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
         results.push(summary(response.status, &body, &cookie));
     }
     let cached_missing_user = cache.get("active-sessions-undefined").await?.is_some();

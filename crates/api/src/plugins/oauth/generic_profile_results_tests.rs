@@ -200,7 +200,7 @@ fn response_result(response: AuthResponse) -> TestResult<Value> {
     let body = if response.body.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&response.body)?
+        serde_json::from_slice(&response.body.bytes()?)?
     };
     let headers: BTreeMap<_, _> = ["retry-after", "x-profile-error"]
         .into_iter()
@@ -287,7 +287,7 @@ async fn generic_profile_results_match_pinned_helper_and_callback_contracts() ->
         ctx.session_manager()
             .finish_response(&start, &mut started)?;
         assert_eq!(started.status, 200);
-        let body: Value = serde_json::from_slice(&started.body)?;
+        let body: Value = serde_json::from_slice(&started.body.bytes()?)?;
         let url = url::Url::parse(
             body.get("url")
                 .and_then(Value::as_str)

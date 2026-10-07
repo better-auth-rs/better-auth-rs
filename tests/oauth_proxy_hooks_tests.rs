@@ -108,7 +108,13 @@ async fn proxy_environment_without_request_host() {
             .await
             .expect("sign in");
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).expect("authorization body");
+        let body: Value = serde_json::from_slice(
+            &response
+                .body
+                .bytes()
+                .expect("The fixture response must serialize"),
+        )
+        .expect("authorization body");
         let url =
             reqwest::Url::parse(body["url"].as_str().expect("authorization URL")).expect("URL");
         let state = url
@@ -228,7 +234,13 @@ async fn proxy_before_api_key_preserves_real_session_emulation() {
         .await
         .expect("create API key request");
     assert_eq!(created.status, 200);
-    let created: Value = serde_json::from_slice(&created.body).expect("API key body");
+    let created: Value = serde_json::from_slice(
+        &created
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("API key body");
     let mut link = request(
         "/link-social",
         json!({"provider":"google","callbackURL":"http://preview.example/done"}),
@@ -242,7 +254,13 @@ async fn proxy_before_api_key_preserves_real_session_emulation() {
         .await
         .expect("link-social request");
     assert_eq!(response.status, 200);
-    let body: Value = serde_json::from_slice(&response.body).expect("OAuth response");
+    let body: Value = serde_json::from_slice(
+        &response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("OAuth response");
     let url =
         reqwest::Url::parse(body["url"].as_str().expect("authorization URL")).expect("parse URL");
     let params: std::collections::HashMap<_, _> = url.query_pairs().collect();
@@ -263,7 +281,13 @@ async fn proxy_keeps_later_application_policy_and_rewritten_body() {
     let _ = req.headers.insert("x-deny-oauth".into(), "true".into());
     let response = auth.handle_request(req).await.expect("sign-in request");
     assert_eq!(response.status, 403);
-    let body: Value = serde_json::from_slice(&response.body).expect("error body");
+    let body: Value = serde_json::from_slice(
+        &response
+            .body
+            .bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .expect("error body");
     assert_eq!(body["message"], "OAuth disabled by application policy");
     assert!(!response.headers.contains_key("set-cookie"));
 }

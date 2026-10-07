@@ -169,7 +169,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
         struct Result {
             token: String,
         }
-        Ok(serde_json::from_slice::<Result>(&response.body)?.token)
+        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.token)
     }
 
     /// Provision a key using the registered storage callbacks and encryption policy.
@@ -222,7 +222,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
         struct Result {
             payload: Option<Map<String, Value>>,
         }
-        Ok(serde_json::from_slice::<Result>(&response.body)?.payload)
+        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.payload)
     }
 }
 

@@ -87,7 +87,7 @@ pub async fn run(base: &str, input: Value) -> AuthResult<Value> {
         .build()
         .await?;
     let signup = super::jwt_adapter::invoke(&auth, base, "/sign-up/email", Some(json!({"name":"Original user","email":"snapshot@example.com","password":"fixture-password"})), true, None).await?;
-    let body: Value = serde_json::from_slice(&signup.body)?;
+    let body: Value = serde_json::from_slice(&signup.body.bytes()?)?;
     let token = body["token"].as_str().unwrap();
     if input["state"] == "expired" {
         auth.store()
@@ -113,7 +113,7 @@ pub async fn run(base: &str, input: Value) -> AuthResult<Value> {
         Some(cookies),
     )
     .await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     let claims = response.headers.get("set-auth-jwt").map(|token| {
         let payload: Value = serde_json::from_slice(
             &URL_SAFE_NO_PAD

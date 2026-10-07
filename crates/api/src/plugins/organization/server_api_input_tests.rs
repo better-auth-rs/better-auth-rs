@@ -99,7 +99,7 @@ async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
             .to_auth_response();
         assert_eq!(response.status, 400);
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body).unwrap(),
+            serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
             json!({
                 "code":"VALIDATION_ERROR", "message":message
             })

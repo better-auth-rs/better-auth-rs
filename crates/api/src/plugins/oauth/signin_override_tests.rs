@@ -169,7 +169,7 @@ async fn only_normal_callback_applies_profile_override_for_linked_user() -> Test
         .await?;
         assert_eq!(first.status, 200);
         assert!(!cookies.is_empty());
-        let first_body: Value = serde_json::from_slice(&first.body)?;
+        let first_body: Value = serde_json::from_slice(&first.body.bytes()?)?;
         let registered = ctx
             .database
             .get_user_by_email(text(claims, "/email")?)
@@ -215,7 +215,7 @@ async fn only_normal_callback_applies_profile_override_for_linked_user() -> Test
                 )
                 .await?;
                 assert_eq!(response.status, 200);
-                let body: Value = serde_json::from_slice(&response.body)?;
+                let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
                 response_user = Some(profile(
                     body.get("user").ok_or("Missing direct response user")?,
                 ));
@@ -227,7 +227,7 @@ async fn only_normal_callback_applies_profile_override_for_linked_user() -> Test
                 }))).await?;
                 assert_eq!(start.status, 200);
                 statuses.push(start.status);
-                let body: Value = serde_json::from_slice(&start.body)?;
+                let body: Value = serde_json::from_slice(&start.body.bytes()?)?;
                 let url = url::Url::parse(text(&body, "/url")?)?;
                 let state = url
                     .query_pairs()

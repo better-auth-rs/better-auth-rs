@@ -69,7 +69,7 @@ async fn shared_store_keeps_each_route_schema_bound_to_its_auth_instance() {
             .unwrap_or_else(|error| error.to_auth_response());
         assert_eq!(response.status, status);
         if let Some(message) = message {
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(body, json!({"code":"VALIDATION_ERROR","message":message}));
         }
     }

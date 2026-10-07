@@ -75,7 +75,7 @@ async fn google_direct_and_code_sign_in_map_verified_claims_once() {
                 .unwrap()
                 .unwrap();
             assert_eq!(response.status, 200);
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(body["user"]["name"], "Mapped Google User");
             assert_eq!(body["user"]["image"], "https://images.test/verified.png");
         } else {
@@ -84,7 +84,7 @@ async fn google_direct_and_code_sign_in_map_verified_claims_once() {
                 "provider":"google","callbackURL":"http://localhost:3000/welcome","disableRedirect":true
             })).unwrap());
             let response = plugin.on_request(&start, &ctx).await.unwrap().unwrap();
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
             let state = url
                 .query_pairs()
@@ -201,7 +201,7 @@ async fn google_configured_verifier_keeps_claims_and_userinfo_priority() {
             .unwrap()
             .unwrap();
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(
             body["user"]["name"],
             if custom_userinfo {

@@ -343,7 +343,7 @@ async fn scenario<S: AuthSchema>(auth: Arc<BetterAuth<S>>, state: Arc<State>) ->
                     Ok(result) => result,
                     Err(error) if matches!(mode, "tx-team-catch" | "tx-team-reassign") => {
                         let response = error.to_auth_response();
-                        let body: Value = serde_json::from_slice(&response.body)?;
+                        let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
                         json!({"caught":body.get("code")})
                     }
                     Err(error) => return Err(error),
@@ -371,10 +371,10 @@ async fn scenario<S: AuthSchema>(auth: Arc<BetterAuth<S>>, state: Arc<State>) ->
             let response = error.to_auth_response();
             let mut error = json!({"status":response.status});
             if !response.body.is_empty() {
-                let _ = error
-                    .as_object_mut()
-                    .unwrap()
-                    .insert("body".into(), serde_json::from_slice(&response.body)?);
+                let _ = error.as_object_mut().unwrap().insert(
+                    "body".into(),
+                    serde_json::from_slice(&response.body.bytes()?)?,
+                );
             }
             json!({"error":error})
         }

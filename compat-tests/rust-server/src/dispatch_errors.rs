@@ -31,7 +31,14 @@ fn observe(response: AuthResponse, thrown: bool) -> Value {
     let mut value = observed_headers(&response.headers);
     value["thrown"] = thrown.into();
     value["status"] = response.status.into();
-    value["body"] = String::from_utf8(response.body).unwrap().into();
+    value["body"] = String::from_utf8(
+        response
+            .body
+            .into_bytes()
+            .expect("The fixture response must serialize"),
+    )
+    .unwrap()
+    .into();
     value
 }
 

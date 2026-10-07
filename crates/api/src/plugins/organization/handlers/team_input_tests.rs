@@ -110,7 +110,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
             .to_auth_response();
         assert_eq!(response.status, 400);
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body).unwrap(),
+            serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
             json!({
                 "code":"VALIDATION_ERROR",
                 "message":format!("[body.{field}] Invalid input: expected string, received {received}")
@@ -128,7 +128,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
     .unwrap();
     assert_eq!(response.status, 200);
     assert_eq!(callbacks.limits.load(Ordering::SeqCst), 1);
-    let team = serde_json::from_slice::<Value>(&response.body).unwrap();
+    let team = serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap();
     let update = |data| {
         create_auth_json_request_no_query(
             HttpMethod::Post,
@@ -155,7 +155,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
                 .to_auth_response();
             assert_eq!(response.status, 400);
             assert_eq!(
-                serde_json::from_slice::<Value>(&response.body).unwrap(),
+                serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
                 json!({
                     "code":"VALIDATION_ERROR",
                     "message":format!("[body.data.{field}] Invalid input: expected string, received null")
@@ -171,7 +171,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
     assert_eq!(response.status, 200);
     assert_eq!(callbacks.updates.load(Ordering::SeqCst), 1);
     assert_eq!(
-        serde_json::from_slice::<Value>(&response.body).unwrap()["name"],
+        serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap()["name"],
         "Team"
     );
 }

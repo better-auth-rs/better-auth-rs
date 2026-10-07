@@ -617,8 +617,12 @@ pub async fn rust_send(auth: &TestAuth, req: better_auth::prelude::AuthRequest) 
         }
     }
 
-    let body: Value = serde_json::from_slice(&resp.body)
-        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&resp.body).to_string()));
+    let bytes = resp
+        .body
+        .bytes()
+        .expect("The fixture response must serialize");
+    let body: Value = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).to_string()));
 
     FullResponse {
         status,

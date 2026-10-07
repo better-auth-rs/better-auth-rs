@@ -33,7 +33,7 @@ async fn identity_defaults_preserve_metadata_that_resembles_a_user() {
         .after_request(&request, &mut response, &ctx)
         .await
         .unwrap();
-    let actual: Value = serde_json::from_slice(&response.body).unwrap();
+    let actual: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(
         actual,
         json!({

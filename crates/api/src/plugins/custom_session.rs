@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, HttpMethod, session::SessionData,
+    AuthSchema, FieldValue, FromFieldMap, HttpMethod, ResponseBody, session::SessionData,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,6 +18,45 @@ pub struct CustomSessionInput {
     pub data: SessionData,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub needs_refresh: Option<bool>,
+}
+
+impl CustomSessionInput {
+    fn from_field_value(value: &FieldValue) -> AuthResult<Self> {
+        let fields = value.as_object().ok_or_else(|| {
+            better_auth_core::AuthError::internal("Custom session input must be an object")
+        })?;
+        Ok(Self {
+            data: SessionData::from_field_values(fields.clone())?,
+            needs_refresh: fields
+                .get("needsRefresh")
+                .cloned()
+                .unwrap_or_default()
+                .decode()?,
+        })
+    }
+
+    fn from_response(body: &ResponseBody) -> AuthResult<Option<Self>> {
+        match body {
+            ResponseBody::Native(FieldValue::Null | FieldValue::Undefined) => Ok(None),
+            ResponseBody::Native(value) => Self::from_field_value(value).map(Some),
+            ResponseBody::Bytes(bytes) => Ok(serde_json::from_slice(bytes)?),
+        }
+    }
+
+    fn list_from_response(body: &ResponseBody) -> AuthResult<Option<Vec<Self>>> {
+        match body {
+            ResponseBody::Native(FieldValue::Null | FieldValue::Undefined) => Ok(None),
+            ResponseBody::Native(FieldValue::Array(values)) => values
+                .iter()
+                .map(Self::from_field_value)
+                .collect::<AuthResult<_>>()
+                .map(Some),
+            ResponseBody::Native(_) => Err(better_auth_core::AuthError::internal(
+                "Device sessions response must be an array",
+            )),
+            ResponseBody::Bytes(bytes) => Ok(serde_json::from_slice(bytes)?),
+        }
+    }
 }
 
 /// Transform a public session with access to the request and typed runtime store.
@@ -77,10 +116,10 @@ impl<S: AuthSchema> CustomSessionPlugin<S> {
                 return Ok(AuthResponse::json(200, &Value::Null)?);
             }
         };
-        let data: Option<CustomSessionInput> = serde_json::from_slice(&response.body)?;
+        let data = CustomSessionInput::from_response(&response.body)?;
         if let Some(data) = data {
             let value = self.callback.customize(data, request, context).await?;
-            response.body = serde_json::to_vec(&value)?;
+            response.body = ResponseBody::Bytes(serde_json::to_vec(&value)?);
         }
         Ok(response)
     }
@@ -140,8 +179,7 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
                 {
                     return Ok(());
                 }
-                let sessions: Option<Vec<CustomSessionInput>> =
-                    serde_json::from_slice(&response.body)?;
+                let sessions = CustomSessionInput::list_from_response(&response.body)?;
                 if let Some(sessions) = sessions {
                     let context = Arc::new(context.clone());
                     let request = Arc::new(request.clone());
@@ -180,7 +218,7 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
                         },
                     ))
                     .await?;
-                    response.body = serde_json::to_vec(&values)?;
+                    response.body = ResponseBody::Bytes(serde_json::to_vec(&values)?);
                     for (name, value) in request.take_response_headers()? {
                         if name.eq_ignore_ascii_case("set-cookie") {
                             response.headers.append(name, value);

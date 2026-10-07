@@ -230,6 +230,6 @@ pub(super) async fn router(base: &str) -> AuthResult<Router> {
    _=>Err(AuthError::bad_request("Unknown native operation")),
   }}.await;
   let events=trace.0.lock().unwrap().events.clone();
-  Json(match result{Ok(result)=>json!({"result":result,"events":events}),Err(error) if error.is_api_error()=>{let response=error.to_auth_response();json!({"error":{"status":response.status,"body":serde_json::from_slice::<Value>(&response.body).unwrap()},"events":events,"errorHeaders":response.captured_headers().and_then(|headers|headers.get("x-native-error"))})},Err(AuthError::Internal(message))=>json!({"error":{"ordinary":true,"message":message},"events":events,"errorHeaders":Value::Null}),Err(error)=>json!({"error":{"ordinary":true,"message":error.to_string()},"events":events,"errorHeaders":Value::Null})})
+  Json(match result{Ok(result)=>json!({"result":result,"events":events}),Err(error) if error.is_api_error()=>{let response=error.to_auth_response();json!({"error":{"status":response.status,"body":serde_json::from_slice::<Value>(&response.body.bytes().expect("The fixture response must serialize")).unwrap()},"events":events,"errorHeaders":response.captured_headers().and_then(|headers|headers.get("x-native-error"))})},Err(AuthError::Internal(message))=>json!({"error":{"ordinary":true,"message":message},"events":events,"errorHeaders":Value::Null}),Err(error)=>json!({"error":{"ordinary":true,"message":error.to_string()},"events":events,"errorHeaders":Value::Null})})
  }})).merge(app))
 }

@@ -114,7 +114,7 @@ async fn run<S: AuthSchema>(
             },
         )
         .await?;
-    let list: Vec<Value> = serde_json::from_slice(&list.body)?;
+    let list: Vec<Value> = serde_json::from_slice(&list.body.bytes()?)?;
     let response = auth
         .call_endpoint(
             HttpMethod::Post,
@@ -140,7 +140,7 @@ async fn run<S: AuthSchema>(
     Ok(
         json!({"backend":case["backend"],"limit":case["limit"],"expired":expired,"missing":case["missing"],
         "listed":list.iter().map(|entry| &entry["session"]["token"]).collect::<Vec<_>>(),
-        "revoked":serde_json::from_slice::<Value>(&response.body)?,"active":active}),
+        "revoked":serde_json::from_slice::<Value>(&response.body.bytes()?)?,"active":active}),
     )
 }
 

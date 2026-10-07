@@ -291,7 +291,7 @@ async fn assert_http_metadata(
         .await
         .unwrap();
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body.get("metadata"), Some(&expected));
 }
 

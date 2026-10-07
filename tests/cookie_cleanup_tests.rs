@@ -159,7 +159,7 @@ async fn aggregate_cleanup_preserves_ordered_complete_headers() -> AuthResult<()
             let actual = auth.handle_request(request).await?;
             assert_eq!(json!(actual.status), case.response["status"], "{entry:?}");
             assert_eq!(
-                serde_json::from_slice::<Value>(&actual.body)?,
+                serde_json::from_slice::<Value>(&actual.body.bytes()?)?,
                 case.response["body"],
                 "{entry:?}"
             );

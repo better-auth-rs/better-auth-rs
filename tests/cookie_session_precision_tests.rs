@@ -130,7 +130,7 @@ async fn dispatcher_preserves_fractional_session_lifetime_until_cookie_validatio
             ))
             .await
             .unwrap();
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(json!(response.status), expected["status"], "{name}/status");
         assert_eq!(body["error"], expected["body"]["error"], "{name}/error");
         assert_eq!(

@@ -110,7 +110,7 @@ async fn run<S: AuthSchema>(
             },
         )
         .await?;
-    let passkeys: Vec<Value> = serde_json::from_slice(&response.body)?;
+    let passkeys: Vec<Value> = serde_json::from_slice(&response.body.bytes()?)?;
     let keys = store.list_jwks().await?;
     let signed = auth
         .jwt()?

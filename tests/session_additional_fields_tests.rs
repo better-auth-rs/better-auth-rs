@@ -158,7 +158,7 @@ async fn check_session_fields(alias: &str, secondary: Option<bool>) {
         "label": "Work laptop", "deviceColor": "silver", "token": "attacker", "expiresAt": "2099-01-01T00:00:00Z",
     })))).await.unwrap();
     assert_eq!(response.status, 200);
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["session"]["label"], "Work laptop");
     assert_ne!(body["session"]["token"], "attacker");
     assert!(body["session"].get("internalNote").is_none());
@@ -181,7 +181,7 @@ async fn check_session_fields(alias: &str, secondary: Option<bool>) {
         .handle_request(request("/get-session", cookie, None))
         .await
         .unwrap();
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["session"]["label"], "Work laptop");
     assert_eq!(body["session"]["deviceColor"], "silver");
     for (input, code) in [
@@ -197,7 +197,7 @@ async fn check_session_fields(alias: &str, secondary: Option<bool>) {
             .await
             .unwrap();
         assert_eq!(response.status, 400);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(body.get("code").and_then(Value::as_str), code);
     }
     if secondary != Some(false) {
@@ -222,13 +222,13 @@ async fn check_session_fields(alias: &str, secondary: Option<bool>) {
         .await
         .unwrap();
     assert_eq!(response.status, 200);
-    let cleared: Value = serde_json::from_slice(&response.body).unwrap();
+    let cleared: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(cleared["session"].get("label"), Some(&Value::Null));
     let response = auth
         .handle_request(request("/get-session", cookie, None))
         .await
         .unwrap();
-    let cleared: Value = serde_json::from_slice(&response.body).unwrap();
+    let cleared: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(cleared["session"].get("label"), Some(&Value::Null));
     assert_eq!(cleared["session"]["deviceColor"], "silver");
     if secondary != Some(false) {

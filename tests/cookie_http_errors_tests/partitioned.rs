@@ -96,7 +96,7 @@ async fn partitioned_attributes_follow_resolution_through_all_cookie_writers() -
             "clear": shapes(&cleared),
             "session": {
                 "status": response.status,
-                "body": serde_json::from_slice::<Value>(&response.body)?,
+                "body": serde_json::from_slice::<Value>(&response.body.bytes()?)?,
                 "events": *observer.0.lock().unwrap(),
                 "headers": shapes(response.headers.get_all("set-cookie")),
             },

@@ -1,6 +1,6 @@
 //! Endpoint input projection, separate from the original transport request.
 
-use crate::{AuthRequest, AuthResult, RuntimeExtensions};
+use crate::{AuthRequest, AuthResult, FieldValue, RuntimeExtensions};
 use serde_json::Value;
 
 mod body_validator;
@@ -9,8 +9,34 @@ pub use body_validator::BodyValidator;
 /// One schema result, retaining its typed input and exact callback projection.
 #[derive(Clone)]
 pub struct ValidatedBody {
-    pub(crate) projection: Option<Value>,
+    projection: InputValue,
     typed: RuntimeExtensions,
+}
+
+#[derive(Debug, Clone)]
+enum InputValue {
+    Json(Option<Value>),
+    Native(FieldValue),
+}
+
+impl InputValue {
+    fn json(&self) -> AuthResult<Option<Value>> {
+        match self {
+            Self::Json(value) => Ok(value.clone()),
+            Self::Native(value) => value.json(),
+        }
+    }
+
+    fn field_value(&self) -> AuthResult<FieldValue> {
+        match self {
+            Self::Json(value) => value
+                .clone()
+                .map(FieldValue::from_json)
+                .transpose()
+                .map(Option::unwrap_or_default),
+            Self::Native(value) => Ok(value.clone()),
+        }
+    }
 }
 
 impl std::fmt::Debug for ValidatedBody {
@@ -25,7 +51,19 @@ impl ValidatedBody {
     pub fn new<T: Send + Sync + 'static>(projection: Option<Value>, value: T) -> Self {
         let mut typed = RuntimeExtensions::default();
         typed.insert(value);
-        Self { projection, typed }
+        Self {
+            projection: InputValue::Json(projection),
+            typed,
+        }
+    }
+
+    pub fn native<T: Send + Sync + 'static>(projection: FieldValue, value: T) -> Self {
+        let mut typed = RuntimeExtensions::default();
+        typed.insert(value);
+        Self {
+            projection: InputValue::Native(projection),
+            typed,
+        }
     }
 
     /// Read the typed result without parsing the validated projection again.
@@ -36,7 +74,14 @@ impl ValidatedBody {
     /// Preserve input for endpoints without a body schema.
     pub fn unvalidated(projection: Option<Value>) -> Self {
         Self {
-            projection,
+            projection: InputValue::Json(projection),
+            typed: RuntimeExtensions::default(),
+        }
+    }
+
+    pub fn unvalidated_native(value: FieldValue) -> Self {
+        Self {
+            projection: InputValue::Native(value),
             typed: RuntimeExtensions::default(),
         }
     }
@@ -95,7 +140,7 @@ impl AuthRequest {
             .as_ref()
             .filter(|body| body.source == self.body)
         {
-            Ok(body.value.projection.clone())
+            body.value.projection.json()
         } else if let Some(body) = self.parsed_http_body() {
             Ok(Some(body.clone()))
         } else {
@@ -105,6 +150,37 @@ impl AuthRequest {
                 .map(serde_json::from_slice)
                 .transpose()
                 .map_err(Into::into)
+        }
+    }
+
+    /// Read endpoint fields without crossing a JSON boundary.
+    pub fn input_field_value(&self) -> AuthResult<FieldValue> {
+        if let Some(body) = self
+            .endpoint_body
+            .as_ref()
+            .filter(|body| body.source == self.body)
+        {
+            body.value.projection.field_value()
+        } else {
+            self.input_body()?
+                .map(FieldValue::from_json)
+                .transpose()
+                .map(Option::unwrap_or_default)
+        }
+    }
+
+    pub(crate) fn unvalidated_input(&self) -> AuthResult<ValidatedBody> {
+        if let Some(body) = self
+            .endpoint_body
+            .as_ref()
+            .filter(|body| body.source == self.body)
+        {
+            Ok(ValidatedBody {
+                projection: body.value.projection.clone(),
+                typed: RuntimeExtensions::default(),
+            })
+        } else {
+            Ok(ValidatedBody::unvalidated(self.input_body()?))
         }
     }
 
@@ -125,11 +201,11 @@ impl AuthRequest {
         });
     }
 
-    pub(crate) fn projected_body(&self) -> Option<&Option<Value>> {
+    pub(crate) fn projected_body(&self) -> Option<AuthResult<Option<Value>>> {
         self.endpoint_body
             .as_ref()
             .filter(|body| body.source == self.body)
-            .map(|body| &body.value.projection)
+            .map(|body| body.value.projection.json())
     }
 }
 
@@ -148,12 +224,43 @@ impl EndpointInputPatch {
 
     pub fn apply(self, request: &mut AuthRequest) -> AuthResult<()> {
         if self.body.is_some() {
-            let mut body = request.input_body()?;
-            merge_input(&mut body, self.body);
-            request.set_endpoint_body(ValidatedBody::unvalidated(body));
+            let mut body = request.unvalidated_input()?;
+            match &mut body.projection {
+                InputValue::Json(value) => merge_input(value, self.body),
+                InputValue::Native(value) => {
+                    if let Some(patch) = self.body {
+                        merge_field_value(value, FieldValue::from_json(patch)?);
+                    }
+                }
+            }
+            request.set_endpoint_body(body);
         }
         merge_input(&mut request.query, self.query);
         Ok(())
+    }
+}
+
+fn merge_field_value(target: &mut FieldValue, patch: FieldValue) {
+    if matches!(patch, FieldValue::Undefined | FieldValue::Null) {
+        return;
+    }
+    if let (FieldValue::Object(target), FieldValue::Object(patch)) = (&mut *target, &patch) {
+        let target = std::sync::Arc::make_mut(target);
+        for (name, value) in patch.iter() {
+            if matches!(value, FieldValue::Undefined | FieldValue::Null)
+                || matches!(name.as_str(), "__proto__" | "constructor")
+            {
+                continue;
+            }
+            match target.get_mut(name) {
+                Some(current) => merge_field_value(current, value.clone()),
+                None => {
+                    let _ = target.insert(name.clone(), value.clone());
+                }
+            }
+        }
+    } else {
+        *target = patch;
     }
 }
 

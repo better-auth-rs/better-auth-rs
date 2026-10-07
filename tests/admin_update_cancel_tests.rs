@@ -202,11 +202,11 @@ async fn observe<S: AuthSchema>(
             .collect();
         headers.sort();
         if response.status < 300 {
-            let body: Value = serde_json::from_slice(&response.body)?;
+            let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
             returned = Some(body.clone());
             json!({"status":response.status,"headers":headers,"body":response_user(body)?})
         } else {
-            json!({"status":response.status,"headers":headers,"bodyText":String::from_utf8(response.body)?})
+            json!({"status":response.status,"headers":headers,"bodyText":String::from_utf8(response.body.into_bytes()?)?})
         }
     } else {
         match auth
@@ -222,7 +222,7 @@ async fn observe<S: AuthSchema>(
             .await
         {
             Ok(response) => {
-                let body: Value = serde_json::from_slice(&response.body)?;
+                let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
                 returned = Some(body.clone());
                 json!({"body":response_user(body)?})
             }

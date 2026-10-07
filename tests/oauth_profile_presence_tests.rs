@@ -213,7 +213,7 @@ impl Fixture {
         })).unwrap());
         let start = self.auth.handle_request(start).await.unwrap();
         assert_eq!(start.status, 200);
-        let body: Value = serde_json::from_slice(&start.body).unwrap();
+        let body: Value = serde_json::from_slice(&start.body.bytes().unwrap()).unwrap();
         let authorization = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
         let query: HashMap<_, _> = authorization.query_pairs().into_owned().collect();
         assert!(!query["state"].is_empty());
@@ -339,7 +339,7 @@ async fn account_info_email_presence_matches_pinned_oracle_without_changing_sqli
             } else {
                 let _ = expected_user.as_object_mut().unwrap().remove("email");
             }
-            let actual: Value = serde_json::from_slice(&response.body).unwrap();
+            let actual: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(
                 actual,
                 json!({
@@ -391,7 +391,7 @@ async fn account_info_verification_presence_matches_pinned_oracle_without_changi
             input.query = Some(json!({"accountId":account.id}));
             let response = fixture.auth.handle_request(input).await.unwrap();
             assert_eq!(response.status, 200, "{case}");
-            let actual: Value = serde_json::from_slice(&response.body).unwrap();
+            let actual: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             let mut expected_user = fixture.data["defaultUser"].clone();
             let _ = expected_user
                 .as_object_mut()

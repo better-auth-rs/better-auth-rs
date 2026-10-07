@@ -258,7 +258,7 @@ async fn scenario<S: AuthSchema>(
         )
         .await?;
     assert_eq!(created.status, 200);
-    let created: Value = serde_json::from_slice(&created.body)?;
+    let created: Value = serde_json::from_slice(&created.body.bytes()?)?;
     let created_id = string(&created, "id")?;
     assert!(!created_id.is_empty());
     let _ = date(string(&created, "createdAt")?)?;
@@ -297,7 +297,7 @@ async fn scenario<S: AuthSchema>(
         )
         .await?;
     assert_eq!(removed.status, 200);
-    let removed: Value = serde_json::from_slice(&removed.body)?;
+    let removed: Value = serde_json::from_slice(&removed.body.bytes()?)?;
     let remaining: Vec<_> = store
         .list_organization_teams("org")
         .await?

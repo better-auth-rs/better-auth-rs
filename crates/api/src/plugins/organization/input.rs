@@ -32,17 +32,6 @@ pub(super) enum BaseField {
     Permissions,
 }
 
-pub(super) fn validate(
-    schema: &UserConfig,
-    body: Map<String, Value>,
-    base: &[(&str, BaseField, bool)],
-) -> AuthResult<FieldMap> {
-    let mut errors = Vec::new();
-    let output = fields(schema, &body, base, "body", false, false, &mut errors)?;
-    finish(errors)?;
-    Ok(output)
-}
-
 pub(super) fn finish(errors: Vec<String>) -> AuthResult<()> {
     if errors.is_empty() {
         Ok(())
@@ -78,6 +67,26 @@ pub(super) fn fields(
     base_wins: bool,
     errors: &mut Vec<String>,
 ) -> AuthResult<FieldMap> {
+    native_fields(
+        schema,
+        &FieldMap::from_json(body.clone())?,
+        base,
+        prefix,
+        partial,
+        base_wins,
+        errors,
+    )
+}
+
+pub(super) fn native_fields(
+    schema: &UserConfig,
+    body: &FieldMap,
+    base: &[(&str, BaseField, bool)],
+    prefix: &str,
+    partial: bool,
+    base_wins: bool,
+    errors: &mut Vec<String>,
+) -> AuthResult<FieldMap> {
     let mut names = indexmap::IndexSet::new();
     let configured = schema
         .fields()
@@ -97,12 +106,7 @@ pub(super) fn fields(
         let field = schema.fields().get(name).filter(|field| field.input());
         let location = format!("{prefix}.{name}");
         if let Some(field) = field.filter(|_| !base_wins || builtin.is_none()) {
-            let value = body
-                .get(name)
-                .cloned()
-                .map(FieldValue::from_json)
-                .transpose()?;
-            match field.validate_organization_input(value.as_ref(), &location, partial) {
+            match field.validate_organization_input(body.get(name), &location, partial) {
                 Ok(Some(value)) => {
                     let _ = output.insert(name.into(), value);
                 }
@@ -119,25 +123,25 @@ pub(super) fn fields(
                 errors,
             )?
         {
-            let _ = output.insert(name.into(), FieldValue::from_json(value)?);
+            let _ = output.insert(name.into(), value);
         }
     }
     Ok(output)
 }
 
 fn field_value(
-    value: Option<&Value>,
+    value: Option<&FieldValue>,
     kind: &BaseField,
     required: bool,
     location: &str,
     errors: &mut Vec<String>,
-) -> AuthResult<Option<Value>> {
-    if value.is_none() && !required {
-        return Ok(None);
+) -> AuthResult<Option<FieldValue>> {
+    if value.is_none_or(FieldValue::is_undefined) && !required {
+        return Ok(value.cloned());
     }
     if matches!(kind, BaseField::CoercedString) {
         return Ok(Some(
-            SchemaValue::<FieldValue>::from_json(value.cloned())?
+            SchemaValue::<FieldValue>::from_field(value.cloned().unwrap_or_default())
                 .display_string()?
                 .into(),
         ));
@@ -149,42 +153,42 @@ fn field_value(
     };
     let valid = match kind {
         BaseField::String | BaseField::NonemptyString | BaseField::CoercedString => {
-            value.is_some_and(Value::is_string)
+            value.is_some_and(FieldValue::is_string)
         }
         BaseField::NullableString => {
             value.is_some_and(|value| value.is_null() || value.is_string())
         }
-        BaseField::Boolean => value.is_some_and(Value::is_boolean),
+        BaseField::Boolean => value.is_some_and(|value| matches!(value, FieldValue::Bool(_))),
         BaseField::Roles => value.is_some_and(|value| {
             value.is_string()
                 || value
                     .as_array()
-                    .is_some_and(|values| values.iter().all(Value::is_string))
+                    .is_some_and(|values| values.iter().all(FieldValue::is_string))
         }),
-        BaseField::Record | BaseField::Permissions => value.is_some_and(Value::is_object),
+        BaseField::Record | BaseField::Permissions => value.is_some_and(FieldValue::is_object),
     };
     if !valid {
         errors.push(if matches!(kind, BaseField::Roles) {
             format!("[{location}] Invalid input")
         } else {
-            json_body::invalid_type(location, expected, value)
+            native_invalid_type(location, expected, value)
         });
         return Ok(None);
     }
-    if matches!(kind, BaseField::NonemptyString) && value.and_then(Value::as_str) == Some("") {
+    if matches!(kind, BaseField::NonemptyString) && value.and_then(FieldValue::as_str) == Some("") {
         errors.push(format!(
             "[{location}] Too small: expected string to have >=1 characters"
         ));
     }
     if matches!(kind, BaseField::Permissions)
-        && let Some(values) = value.and_then(Value::as_object)
+        && let Some(values) = value.and_then(FieldValue::as_object)
     {
         for (key, value) in values {
             let path = format!("{location}.{key}");
             if let Some(values) = value.as_array() {
                 for (index, value) in values.iter().enumerate() {
                     if !value.is_string() {
-                        errors.push(json_body::invalid_type(
+                        errors.push(native_invalid_type(
                             &format!("{path}.{index}"),
                             "string",
                             Some(value),
@@ -192,11 +196,32 @@ fn field_value(
                     }
                 }
             } else {
-                errors.push(json_body::invalid_type(&path, "array", Some(value)));
+                errors.push(native_invalid_type(&path, "array", Some(value)));
             }
         }
     }
     Ok(value.cloned())
+}
+
+pub(super) fn native_invalid_type(
+    location: &str,
+    expected: &str,
+    value: Option<&FieldValue>,
+) -> String {
+    let actual = match value {
+        None | Some(FieldValue::Undefined) => "undefined",
+        Some(FieldValue::Null) => "null",
+        Some(FieldValue::Bool(_)) => "boolean",
+        Some(FieldValue::Number(value)) if value.is_nan() => "NaN",
+        Some(FieldValue::Number(value)) if *value == f64::INFINITY => "Infinity",
+        Some(FieldValue::Number(value)) if *value == f64::NEG_INFINITY => "-Infinity",
+        Some(FieldValue::Number(_)) => "number",
+        Some(FieldValue::String(_) | FieldValue::Utf16String(_)) => "string",
+        Some(FieldValue::Date(_)) => "Date",
+        Some(FieldValue::Array(_)) => "array",
+        Some(FieldValue::Object(_)) => "object",
+    };
+    format!("[{location}] Invalid input: expected {expected}, received {actual}")
 }
 
 pub(super) fn parse_roles(value: &SchemaValue<RoleInput>) -> AuthResult<SchemaValue<String>> {

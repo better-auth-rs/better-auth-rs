@@ -82,7 +82,7 @@ async fn check<S: AuthSchema>(
         json!({"organizationId":organization.id,"limit":2}),
     )
     .await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(body["total"], 2);
     assert_eq!(body["members"].as_array().map(Vec::len), Some(2));
     let response = call(
@@ -90,7 +90,7 @@ async fn check<S: AuthSchema>(
         json!({"organizationId":organization.id,"limit":0}),
     )
     .await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(body["total"], 2);
     assert_eq!(
         body["members"].as_array().map(Vec::len),
@@ -103,7 +103,7 @@ async fn check<S: AuthSchema>(
     )
     .await;
     if database_limit == Some(0.0) {
-        let body: Value = serde_json::from_slice(&full?.body)?;
+        let body: Value = serde_json::from_slice(&full?.body.bytes()?)?;
         assert_eq!(body["members"], json!([]));
     } else if membership_limit == Some(1) {
         let Err(error) = full else {
@@ -116,7 +116,7 @@ async fn check<S: AuthSchema>(
             "Unexpected error: User not found for member"
         );
     } else {
-        let body: Value = serde_json::from_slice(&full?.body)?;
+        let body: Value = serde_json::from_slice(&full?.body.bytes()?)?;
         assert_eq!(body["members"].as_array().map(Vec::len), Some(2));
     }
     Ok(())

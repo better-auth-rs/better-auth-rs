@@ -32,7 +32,7 @@ async fn disabled_plugins_hide_stored_user_fields() {
         .await
         .unwrap();
     assert_eq!(response.status, 200);
-    let original: Value = serde_json::from_slice(&response.body).unwrap();
+    let original: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(original["user"]["isAnonymous"], true);
     let cookie = response
         .headers
@@ -51,7 +51,7 @@ async fn disabled_plugins_hide_stored_user_fields() {
     let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
     let _ = request.headers.insert("cookie".into(), cookie.into());
     let response = disabled.handle_request(request).await.unwrap();
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["user"]["id"], original["user"]["id"]);
     for field in [
         "isAnonymous",

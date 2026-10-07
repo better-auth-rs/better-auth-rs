@@ -498,8 +498,9 @@ async fn send_json_request(
         .await
         .expect("Request should not panic");
     let status = resp.status;
-    let json: Value = serde_json::from_slice(&resp.body)
-        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&resp.body).to_string()));
+    let bytes = resp.body.bytes().unwrap();
+    let json: Value = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).to_string()));
     (status, json)
 }
 
@@ -520,7 +521,8 @@ async fn test_contract_error_endpoint() {
         .with_url("http://localhost:3000/api/auth/error".parse().unwrap());
     let response = auth.handle_request(request).await.unwrap();
     assert_eq!(response.status, 200);
-    let html = std::str::from_utf8(&response.body).expect("/error should return HTML text");
+    let bytes = response.body.bytes().unwrap();
+    let html = std::str::from_utf8(&bytes).expect("/error should return HTML text");
     // The HTML page uses inline-styled elements matching the TS template
     // (not plain `<h1>ERROR</h1>` — both TS and Rust use styled tags).
     assert!(
@@ -647,7 +649,7 @@ async fn test_contract_signout_response_shape() {
         .expect("Sign-out should not panic");
 
     assert_eq!(resp.status, 200);
-    let body: Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["success"], true);
 }
 

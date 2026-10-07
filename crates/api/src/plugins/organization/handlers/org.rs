@@ -875,8 +875,8 @@ mod tests {
         let response = handle_create_organization(&request, &ctx, &config)
             .await
             .expect("request should succeed");
-        let body: serde_json::Value =
-            serde_json::from_slice(&response.body).expect("response should be JSON");
+        let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap())
+            .expect("response should be JSON");
         let created_id = body["id"]
             .as_str()
             .expect("response should contain organization id");

@@ -549,7 +549,7 @@ impl Fixture {
             format!("better-auth.session_token={cookie}"),
         );
         let response = self.auth.handle_request(request).await?;
-        let body: Vec<Value> = serde_json::from_slice(&response.body)?;
+        let body: Vec<Value> = serde_json::from_slice(&response.body.bytes()?)?;
         let body = body
             .into_iter()
             .map(|value| {

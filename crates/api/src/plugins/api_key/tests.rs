@@ -98,7 +98,7 @@ fn create_auth_request(
 }
 
 fn json_body(response: &AuthResponse) -> serde_json::Value {
-    serde_json::from_slice(&response.body).unwrap()
+    serde_json::from_slice(&response.body.bytes().unwrap()).unwrap()
 }
 
 /// Test helper: verify a key and return the same JSON shape the old HTTP
@@ -984,7 +984,8 @@ async fn native_schema_rejects_nonfinite_numbers_before_storage() {
             .await;
         let response = result.unwrap_err().to_auth_response();
         assert_eq!(response.status, 400);
-        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         assert_eq!(
             body["message"],
             format!(

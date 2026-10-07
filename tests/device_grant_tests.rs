@@ -204,7 +204,7 @@ fn response_value(response: AuthResponse) -> AuthResult<Response> {
     Ok(Response {
         status: response.status,
         headers,
-        body: serde_json::from_slice(&response.body)?,
+        body: serde_json::from_slice(&response.body.bytes()?)?,
     })
 }
 

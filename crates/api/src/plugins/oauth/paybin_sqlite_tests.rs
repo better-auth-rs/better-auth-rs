@@ -35,7 +35,7 @@ async fn signed_paybin_code_account_info_and_refresh_persist_normal_sqlite_recor
     assert_eq!(start_response.status, 200);
     let start_cookies = cookies(&start_response);
     assert!(!start_cookies.is_empty());
-    let start_body: Value = serde_json::from_slice(&start_response.body).unwrap();
+    let start_body: Value = serde_json::from_slice(&start_response.body.bytes().unwrap()).unwrap();
     let url = url::Url::parse(start_body["url"].as_str().unwrap()).unwrap();
     assert_eq!(url.path(), "/oauth2/authorize");
     let query: HashMap<String, String> = url.query_pairs().into_owned().collect();
@@ -117,7 +117,7 @@ async fn signed_paybin_code_account_info_and_refresh_persist_normal_sqlite_recor
         plugin.on_request(&info, &ctx).await.unwrap().unwrap(),
     );
     assert_eq!(response.status, 200);
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["user"], sample["result"]["user"]);
     assert_eq!(body["data"], server.claims);
     assert_eq!(
@@ -134,7 +134,7 @@ async fn signed_paybin_code_account_info_and_refresh_persist_normal_sqlite_recor
         plugin.on_request(&refresh, &ctx).await.unwrap().unwrap(),
     );
     assert_eq!(response.status, 200);
-    let body: Value = serde_json::from_slice(&response.body).unwrap();
+    let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     let expected = &fixture["grants"]
         .as_array()
         .unwrap()

@@ -315,7 +315,8 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
         .await
         .expect("sign-up request should succeed");
     assert_eq!(response.status, 200);
-    let response: serde_json::Value = serde_json::from_slice(&response.body).expect("signup body");
+    let response: serde_json::Value =
+        serde_json::from_slice(&response.body.bytes().unwrap()).expect("signup body");
     assert_eq!(response["user"]["name"], "Replaced Name");
 
     let _ = auth
@@ -374,7 +375,7 @@ async fn dynamic_request_context_keeps_route_params_when_body_is_replaced() {
     let response = auth.handle_request(request).await.expect("dynamic request");
     assert_eq!(response.status, 200);
     let response: serde_json::Value =
-        serde_json::from_slice(&response.body).expect("response body");
+        serde_json::from_slice(&response.body.bytes().unwrap()).expect("response body");
     assert_eq!(response["actualPath"], "/callback/Mock-ID_123");
     let seen = seen.lock().expect("request context mutex should lock");
     assert_eq!(seen.len(), 1);
@@ -424,8 +425,8 @@ async fn onboarding_hook_provisions_app_data_after_the_auth_transaction_commits(
         .expect("sign-up request should succeed");
     assert_eq!(response.status, 200);
 
-    let body: serde_json::Value =
-        serde_json::from_slice(&response.body).expect("response body should be valid JSON");
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap())
+        .expect("response body should be valid JSON");
     let user_id = body["user"]["id"]
         .as_str()
         .expect("user id should be present");

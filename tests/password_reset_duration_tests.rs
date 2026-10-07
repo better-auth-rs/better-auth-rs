@@ -84,7 +84,7 @@ async fn sqlite_reset_dates_preserve_pinned_fractional_lifetimes() {
         let after = chrono::Utc::now().timestamp_millis();
         assert_eq!(response.status, 200, "{name}");
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body).unwrap(),
+            serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
             expected["response"],
             "{name}"
         );

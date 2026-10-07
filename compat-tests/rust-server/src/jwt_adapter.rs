@@ -220,7 +220,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
         match input["operation"].as_str().unwrap() {
             "discovery" => {
                 let response = invoke(&auth, base, "/jwks", None, input["transport"] != "http", None).await?;
-                let body: Option<Value> = if response.body.is_empty() {None} else {Some(serde_json::from_slice(&response.body)?)};
+                let body: Option<Value> = if response.body.is_empty() {None} else {Some(serde_json::from_slice(&response.body.bytes()?)?)};
                 Ok(json!({"status":response.status,"keys":body.and_then(|body|body["keys"].as_array().map(Vec::len))}))
             }
             "sign" => {
@@ -245,7 +245,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
             }
             "native-token" => {
                 let signup = invoke(&auth, base, "/sign-up/email", Some(json!({"name":"JWT headers","email":"jwt-headers@example.com","password":"fixture-password"})), true, None).await?;
-                let user: Value = serde_json::from_slice(&signup.body)?;
+                let user: Value = serde_json::from_slice(&signup.body.bytes()?)?;
                 let cookie = signup.headers.get_all("set-cookie")
                     .filter(|value| value.starts_with("better-auth.session_token="))
                     .filter_map(|value| value.split(';').next())
@@ -262,7 +262,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                         Ok(response) => response,
                         Err(error) => error.to_auth_response(),
                     };
-                    let body: Value = serde_json::from_slice(&response.body)?;
+                    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
                     let body = match body["token"].as_str() {
                         Some(token) => {
                             let claims: Value = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(token.split('.').nth(1).unwrap()).unwrap())?;
@@ -343,7 +343,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                     events.lock().unwrap().push(json!({"event":"verify-cookie"}));
                     let response = invoke(&auth,base,"/get-session",None,false,Some(cookies)).await?;
                     result["verifyStatus"] = response.status.into();
-                    result["verifiedSession"] = (!serde_json::from_slice::<Value>(&response.body)?.is_null()).into();
+                    result["verifiedSession"] = (!serde_json::from_slice::<Value>(&response.body.bytes()?)?.is_null()).into();
                 }
                 Ok(result)
             }
@@ -354,7 +354,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
         Ok(output) => output,
         Err(AuthError::Internal(message)) => json!({"thrown":true,"message":message}),
         Err(error @ AuthError::Response(_)) => {
-            let body: Value = serde_json::from_slice(&error.to_auth_response().body)?;
+            let body: Value = serde_json::from_slice(&error.to_auth_response().body.bytes()?)?;
             json!({"thrown":true,"message":body["message"]})
         }
         Err(error) => json!({"thrown":true,"message":error.to_string()}),

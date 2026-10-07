@@ -5,6 +5,40 @@ use better_auth_core::{
 };
 use serde_json::Value;
 
+pub(super) fn shape_native_session_teams(value: &mut better_auth_core::FieldValue, enabled: bool) {
+    use better_auth_core::FieldValue;
+    use std::sync::Arc;
+    match value {
+        FieldValue::Array(values) => {
+            for value in Arc::make_mut(values) {
+                shape_native_session_teams(value, enabled);
+            }
+        }
+        FieldValue::Object(fields) => {
+            let fields = Arc::make_mut(fields);
+            if ["id", "token", "expiresAt", "userId"]
+                .iter()
+                .all(|key| fields.contains_key(*key))
+            {
+                if enabled {
+                    let _ = fields
+                        .entry("activeTeamId".into())
+                        .or_insert(FieldValue::Null);
+                } else {
+                    let _ = fields.remove("activeTeamId");
+                }
+            } else {
+                for key in ["session", "sessions"] {
+                    if let Some(session) = fields.get_mut(key) {
+                        shape_native_session_teams(session, enabled);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(super) fn shape_session_teams(
     value: &mut Box<serde_json::value::RawValue>,
     enabled: bool,
@@ -134,6 +168,80 @@ pub(super) fn team(mut team: Team, ctx: &AuthContext<impl AuthSchema>) -> Team {
     team
 }
 
+enum ResponseFields {
+    Organization,
+    FullOrganization,
+    Team,
+    Other,
+}
+
+fn response_fields(path: &str) -> ResponseFields {
+    match path {
+        "/organization/create"
+        | "/organization/update"
+        | "/organization/delete"
+        | "/organization/list"
+        | "/organization/get-organization"
+        | "/organization/set-active" => ResponseFields::Organization,
+        "/organization/get-full-organization" => ResponseFields::FullOrganization,
+        "/organization/create-team"
+        | "/organization/update-team"
+        | "/organization/list-teams"
+        | "/organization/list-user-teams"
+        | "/organization/set-active-team" => ResponseFields::Team,
+        _ => ResponseFields::Other,
+    }
+}
+
+pub(super) fn filter_native_response(
+    path: &str,
+    value: &mut better_auth_core::FieldValue,
+    fields: &OrganizationFields,
+) {
+    use better_auth_core::FieldValue;
+    use std::sync::Arc;
+    fn filter(
+        value: &mut FieldValue,
+        schema: &better_auth_core::user_fields::UserConfig,
+        team: bool,
+    ) {
+        match value {
+            FieldValue::Object(fields) => Arc::make_mut(fields).retain(|name, _| {
+                !(team && name == "memberCount")
+                    && schema
+                        .fields()
+                        .get(name)
+                        .is_none_or(|field| field.returned())
+            }),
+            FieldValue::Array(values) => {
+                for value in Arc::make_mut(values) {
+                    filter(value, schema, team);
+                }
+            }
+            _ => {}
+        }
+    }
+    match response_fields(path) {
+        ResponseFields::Organization => filter(value, &fields.organization, false),
+        ResponseFields::FullOrganization => {
+            filter(value, &fields.organization, false);
+            if let FieldValue::Object(record) = value {
+                for (name, schema) in [
+                    ("members", &fields.member),
+                    ("invitations", &fields.invitation),
+                    ("teams", &fields.team),
+                ] {
+                    if let Some(value) = Arc::make_mut(record).get_mut(name) {
+                        filter(value, schema, false);
+                    }
+                }
+            }
+        }
+        ResponseFields::Team => filter(value, &fields.team, true),
+        ResponseFields::Other => {}
+    }
+}
+
 pub(super) fn filter_response(path: &str, value: &mut Value, fields: &OrganizationFields) {
     fn filter(value: &mut Value, schema: &better_auth_core::user_fields::UserConfig) {
         match value {
@@ -151,14 +259,9 @@ pub(super) fn filter_response(path: &str, value: &mut Value, fields: &Organizati
             _ => {}
         }
     }
-    match path {
-        "/organization/create"
-        | "/organization/update"
-        | "/organization/delete"
-        | "/organization/list"
-        | "/organization/get-organization"
-        | "/organization/set-active" => filter(value, &fields.organization),
-        "/organization/get-full-organization" => {
+    match response_fields(path) {
+        ResponseFields::Organization => filter(value, &fields.organization),
+        ResponseFields::FullOrganization => {
             filter(value, &fields.organization);
             for (key, schema) in [
                 ("members", &fields.member),
@@ -170,11 +273,7 @@ pub(super) fn filter_response(path: &str, value: &mut Value, fields: &Organizati
                 }
             }
         }
-        "/organization/create-team"
-        | "/organization/update-team"
-        | "/organization/list-teams"
-        | "/organization/list-user-teams"
-        | "/organization/set-active-team" => {
+        ResponseFields::Team => {
             match value {
                 Value::Object(team) => {
                     let _ = team.remove("memberCount");
@@ -190,6 +289,6 @@ pub(super) fn filter_response(path: &str, value: &mut Value, fields: &Organizati
             }
             filter(value, &fields.team);
         }
-        _ => {}
+        ResponseFields::Other => {}
     }
 }

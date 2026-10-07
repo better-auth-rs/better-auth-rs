@@ -292,7 +292,7 @@ async fn account_info_does_not_resolve_a_new_subject_for_an_existing_account() {
         .unwrap()
         .unwrap();
     assert_eq!(response.status, 200);
-    let data: Value = serde_json::from_slice(&response.body).unwrap();
+    let data: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(data["account"]["id"], fixture.account_id);
     assert_eq!(data["account"]["accountId"], "provider-subject");
     assert_eq!(data["user"]["name"], "Updated operator");
@@ -349,7 +349,7 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
             .to_auth_response();
         assert_eq!(response.status, 400, "{path}");
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body).unwrap(),
+            serde_json::from_slice::<Value>(&response.body.bytes().unwrap()).unwrap(),
             json!({ "code": code, "message": message })
         );
     }
@@ -444,7 +444,7 @@ async fn sign_out_preserves_stored_id_token_and_revokes_session() {
             .finish_response(&request, &mut response)
             .unwrap();
         assert_eq!(response.status, 200);
-        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let url = url::Url::parse(body["url"].as_str().unwrap()).unwrap();
         assert_eq!(url.host_str(), Some("provider.example"));
         assert!(

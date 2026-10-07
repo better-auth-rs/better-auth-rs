@@ -195,7 +195,7 @@ async fn metadata_can_be_cleared_and_disabled_metadata_is_ignored_on_update() {
     );
     let response = enabled.handle_update(&update, &ctx).await.unwrap();
     assert!(
-        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap()["metadata"].is_null()
+        serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap()["metadata"].is_null()
     );
     let disabled = ApiKeyPlugin::builder().build();
     let update = request(
@@ -204,7 +204,8 @@ async fn metadata_can_be_cleared_and_disabled_metadata_is_ignored_on_update() {
         json!({"keyId":key.api_key.id,"metadata":{"ignored":true},"enabled":false}),
     );
     let response = disabled.handle_update(&update, &ctx).await.unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let result: serde_json::Value =
+        serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert!(result["metadata"].is_null());
     assert_eq!(result["enabled"], false);
     let update = request(
@@ -319,7 +320,7 @@ async fn list_rejects_invalid_pagination_instead_of_ignoring_it() {
         };
         assert_eq!(response.status, 400);
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&response.body).unwrap()["code"],
+            serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap()["code"],
             "VALIDATION_ERROR"
         );
     }

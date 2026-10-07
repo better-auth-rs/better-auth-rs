@@ -93,7 +93,7 @@ impl OAuthSignInError {
             Self::Banned(message) => ("BANNED_USER".into(), Some(message.clone())),
             Self::Admission(error) => (error.error.clone(), Some(error.message().to_owned())),
             Self::Endpoint(response) => {
-                let body: serde_json::Value = serde_json::from_slice(&response.body)?;
+                let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
                 (
                     body.get("code")
                         .and_then(serde_json::Value::as_str)

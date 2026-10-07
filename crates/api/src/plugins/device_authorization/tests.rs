@@ -16,7 +16,7 @@ use super::*;
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
 fn json_body(response: &AuthResponse) -> Value {
-    serde_json::from_slice(&response.body).unwrap()
+    serde_json::from_slice(&response.body.bytes().unwrap()).unwrap()
 }
 
 #[tokio::test]

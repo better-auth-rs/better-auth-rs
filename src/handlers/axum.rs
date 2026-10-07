@@ -297,6 +297,10 @@ fn transport_url(parts: &Parts) -> Result<Option<url::Url>, AuthError> {
 
 #[cfg(feature = "axum")]
 pub(super) fn convert_auth_response(auth_response: AuthResponse) -> Response {
+    let body = match auth_response.body.into_bytes() {
+        Ok(body) => body,
+        Err(error) => return error.into_response(),
+    };
     let mut response = Response::builder().status(
         StatusCode::from_u16(auth_response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
     );
@@ -311,7 +315,7 @@ pub(super) fn convert_auth_response(auth_response: AuthResponse) -> Response {
         }
     }
 
-    match response.body(axum::body::Body::from(auth_response.body)) {
+    match response.body(axum::body::Body::from(body)) {
         Ok(resp) => resp,
         Err(_) => {
             let (mut parts, _) = Response::new(()).into_parts();

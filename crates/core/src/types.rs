@@ -93,7 +93,7 @@ impl RequestMeta {
 pub struct AuthResponse {
     pub status: u16,
     pub headers: Headers,
-    pub body: Vec<u8>,
+    pub body: crate::ResponseBody,
     api_error: bool,
     error_headers: Option<Headers>,
     captured_headers: Option<Headers>,
@@ -689,7 +689,8 @@ impl AuthRequest {
 
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {
         if let Some(body) = self.projected_body() {
-            serde_json::from_value(body.clone().unwrap_or_else(|| serde_json::json!({})))
+            let body = body.map_err(<serde_json::Error as serde::ser::Error>::custom)?;
+            serde_json::from_value(body.unwrap_or_else(|| serde_json::json!({})))
         } else if let Some(body) = self.parsed_http_body() {
             serde_json::from_value(body.clone())
         } else if let Some(body) = &self.body {
@@ -734,7 +735,7 @@ impl AuthResponse {
         &mut self,
         value: &T,
     ) -> Result<(), serde_json::Error> {
-        self.body = serde_json::to_vec(value)?;
+        self.body = crate::ResponseBody::Bytes(serde_json::to_vec(value)?);
         self.api_error = false;
         self.error_headers = None;
         self.captured_headers = None;
@@ -753,15 +754,25 @@ impl AuthResponse {
         Self {
             status,
             headers: Headers::new(),
-            body: Vec::new(),
+            body: crate::ResponseBody::Bytes(Vec::new()),
             api_error: false,
             error_headers: None,
             captured_headers: None,
         }
     }
 
+    /// Retain runtime fields until an HTTP consumer requests bytes.
+    pub fn native(status: u16, value: crate::FieldValue) -> Self {
+        let mut response = Self::new(status);
+        response.body = crate::ResponseBody::Native(value);
+        let _ = response
+            .headers
+            .insert("content-type".into(), "application/json".into());
+        response
+    }
+
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
-        let body = serde_json::to_vec(data)?;
+        let body = crate::ResponseBody::Bytes(serde_json::to_vec(data)?);
         let mut headers = Headers::new();
         _ = headers.insert("content-type".to_string(), "application/json".to_string());
 
@@ -776,7 +787,7 @@ impl AuthResponse {
     }
 
     pub fn text(status: u16, text: impl Into<String>) -> Self {
-        let body = text.into().into_bytes();
+        let body = crate::ResponseBody::Bytes(text.into().into_bytes());
         let mut headers = Headers::new();
         _ = headers.insert("content-type".to_string(), "text/plain".to_string());
 
@@ -791,7 +802,7 @@ impl AuthResponse {
     }
 
     pub fn html(status: u16, html: impl Into<String>) -> Self {
-        let body = html.into().into_bytes();
+        let body = crate::ResponseBody::Bytes(html.into().into_bytes());
         let mut headers = Headers::new();
         _ = headers.insert(
             "content-type".to_string(),
@@ -1051,7 +1062,7 @@ mod tests {
             resp.headers.get("content-type").unwrap(),
             "application/json"
         );
-        let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
         assert_eq!(body["ok"], true);
     }
 
@@ -1061,7 +1072,10 @@ mod tests {
         let resp = AuthResponse::text(404, "Not found");
         assert_eq!(resp.status, 404);
         assert_eq!(resp.headers.get("content-type").unwrap(), "text/plain");
-        assert_eq!(std::str::from_utf8(&resp.body).unwrap(), "Not found");
+        assert_eq!(
+            std::str::from_utf8(&resp.body.bytes().unwrap()).unwrap(),
+            "Not found"
+        );
     }
 
     // Rust-specific surface: Rust request/response/type helpers are public library behavior with no direct TS analogue.

@@ -470,7 +470,8 @@ async fn test_encrypt_oauth_tokens_stored_encrypted_in_db() {
     match result {
         Ok(Some(resp)) => {
             assert_eq!(resp.status, 200);
-            let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
             // The access token returned should be the DECRYPTED plaintext
             assert_eq!(body["accessToken"], plaintext_access);
         }
@@ -563,7 +564,7 @@ async fn test_get_access_token_preserves_plaintext_when_encryption_is_enabled() 
 
     let response = oauth_plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["accessToken"], "plain-access-token");
 }
 
@@ -615,7 +616,7 @@ async fn test_refresh_token_migrates_plaintext_when_encryption_is_enabled() {
 
     let response = oauth_plugin.on_request(&req, &ctx).await.unwrap().unwrap();
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["accessToken"], "rotated-access-token");
     assert_eq!(body["idToken"], "plain-id-token");
     let account = db.get_user_accounts(&user_id).await.unwrap().remove(0);
@@ -701,7 +702,7 @@ async fn test_refresh_token_persists_rotated_tokens_for_cookie_matched_account()
     };
 
     assert_eq!(resp.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["refreshToken"], "rotated-refresh-token");
 
     let updated_account = db
@@ -784,7 +785,7 @@ async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matche
     };
 
     assert_eq!(resp.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["accessToken"], "rotated-access-token");
 
     let updated_account = db
@@ -854,7 +855,7 @@ async fn test_account_info_returns_provider_user_info_for_local_account_id() {
     };
 
     assert_eq!(resp.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["user"]["id"], "mock-user-id-123");
     assert_eq!(body["data"]["sub"], "mock-user-id-123");
     assert_eq!(body["account"]["id"], account_id);
@@ -907,7 +908,7 @@ async fn test_get_access_token_without_cookie_returns_account_not_found() {
     };
 
     assert_eq!(resp.status, 400);
-    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["code"], "ACCOUNT_NOT_FOUND");
     assert_eq!(body["message"], "Account not found");
 }
@@ -982,7 +983,7 @@ async fn test_get_access_token_rejects_cookie_for_the_wrong_user() {
     };
 
     assert_eq!(resp.status, 400);
-    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["code"], "ACCOUNT_NOT_FOUND");
     assert_eq!(body["message"], "Account not found");
 }
@@ -1027,7 +1028,7 @@ async fn test_account_info_returns_provider_not_configured_message() {
     };
 
     assert_eq!(resp.status, 400);
-    let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
     assert_eq!(body["code"], "PROVIDER_NOT_CONFIGURED");
     assert_eq!(
         body["message"],
@@ -1080,7 +1081,8 @@ async fn test_account_info_rejects_missing_access_token() {
         Err(error) => assert_eq!(error.to_string(), "Access token not found"),
         Ok(Some(resp)) => {
             assert_eq!(resp.status, 400);
-            let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
             assert_eq!(body["message"], "Access token not found");
         }
         Ok(None) => panic!("Expected an account-info error response"),
@@ -1178,7 +1180,8 @@ async fn test_unlink_last_account_allowed_when_configured() {
     match result {
         Ok(Some(resp)) => {
             assert_eq!(resp.status, 200, "Unlinking should succeed");
-            let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
             assert_eq!(body["status"], true);
         }
         Err(e) => panic!(
@@ -1384,7 +1387,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
                 resp.status,
                 200,
                 "Should not succeed when linking is disabled. Body: {}",
-                String::from_utf8_lossy(&resp.body),
+                String::from_utf8_lossy(&resp.body.bytes().unwrap()),
             );
         }
         Ok(None) => panic!("Expected a response from callback"),
@@ -1445,7 +1448,8 @@ async fn test_link_social_returns_redirect_url_with_state() {
     match result {
         Ok(Some(resp)) => {
             assert_eq!(resp.status, 200);
-            let body: serde_json::Value = serde_json::from_slice(&resp.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(&resp.body.bytes().unwrap()).unwrap();
             assert!(
                 body["url"].as_str().is_some(),
                 "Response should contain URL"

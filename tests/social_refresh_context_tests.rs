@@ -122,7 +122,7 @@ fn response(response: AuthResponse) -> Result<Value, Box<dyn Error>> {
     headers.sort();
     Ok(json!({
         "status": response.status, "headers": headers,
-        "body": serde_json::from_slice::<Value>(&response.body)?,
+        "body": serde_json::from_slice::<Value>(&response.body.bytes()?)?,
     }))
 }
 

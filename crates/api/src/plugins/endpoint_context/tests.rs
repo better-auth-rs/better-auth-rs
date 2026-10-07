@@ -64,7 +64,7 @@ async fn callback_wrapper_preserves_http_response_mutations_replacement_and_erro
                 replace.then_some(202)
             );
             if let Some(replacement) = replacement {
-                assert_eq!(replacement.body, b"replacement");
+                assert_eq!(replacement.body.bytes().unwrap().as_ref(), b"replacement");
             }
         }
     }

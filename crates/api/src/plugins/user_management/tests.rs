@@ -555,7 +555,7 @@ async fn test_on_request_disabled_change_email_rejects_after_authentication() {
     let response = error.to_auth_response();
     assert_eq!(response.status, 400);
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+        serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap(),
         serde_json::json!({"code":"CHANGE_EMAIL_DISABLED","message":"Change email is disabled"})
     );
 }

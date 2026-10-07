@@ -97,7 +97,7 @@ async fn ordinary_device_issuance_matches_pinned_code_and_uri_contract()
             .map(|(name, value)| (name.to_ascii_lowercase(), value.clone()))
             .collect();
         headers.sort();
-        let mut body: Value = serde_json::from_slice(&response.body)?;
+        let mut body: Value = serde_json::from_slice(&response.body.bytes()?)?;
         let device_code = body["device_code"]
             .as_str()
             .expect("issued device code")

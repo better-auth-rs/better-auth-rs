@@ -249,7 +249,7 @@ async fn observe(
     )
     .await?;
     assert_eq!(response.status, 200);
-    let mut result = json!({ "status": response.status, "body": serde_json::from_slice::<Value>(&response.body)? });
+    let mut result = json!({ "status": response.status, "body": serde_json::from_slice::<Value>(&response.body.bytes()?)? });
     assert_eq!(context.database.list_users(Default::default()).await?.1, 1);
     let user = context
         .database
@@ -574,7 +574,7 @@ async fn exercise_endpoint_verifier(
     } else {
         assert_eq!(response.status, if disabled { 404 } else { 401 });
         assert_eq!(
-            serde_json::from_slice::<Value>(&response.body)?,
+            serde_json::from_slice::<Value>(&response.body.bytes()?)?,
             if disabled {
                 json!({ "code": "ID_TOKEN_NOT_SUPPORTED", "message": "id_token not supported" })
             } else {

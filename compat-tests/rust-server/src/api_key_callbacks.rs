@@ -175,7 +175,8 @@ impl ApiKeyCallbacks {
                                     error @ (ApiKeyVerificationError::Internal(_)
                                     | ApiKeyVerificationError::Rejected(_)),
                                 ) => error.into_response().and_then(|response| {
-                                    serde_json::from_slice(&response.body).map_err(Into::into)
+                                    serde_json::from_slice(&response.body.bytes()?)
+                                        .map_err(Into::into)
                                 }),
                             },
                         };
@@ -186,7 +187,13 @@ impl ApiKeyCallbacks {
                                 let response = error.to_auth_response();
                                 NativeResult::Thrown {
                                     status: response.status,
-                                    body: serde_json::from_slice(&response.body).unwrap(),
+                                    body: serde_json::from_slice(
+                                        &response
+                                            .body
+                                            .bytes()
+                                            .expect("The fixture response must serialize"),
+                                    )
+                                    .unwrap(),
                                 }
                             }
                         })

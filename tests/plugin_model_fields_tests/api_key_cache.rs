@@ -28,7 +28,7 @@ async fn read<S: AuthSchema>(
         )
         .await?;
     assert_eq!(response.status, 200);
-    Ok(serde_json::from_slice(&response.body)?)
+    Ok(serde_json::from_slice(&response.body.bytes()?)?)
 }
 
 async fn cached_name(cache: &dyn SecondaryStorage, id: &str, expected: &str) -> AuthResult<()> {

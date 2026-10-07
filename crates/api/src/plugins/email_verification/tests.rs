@@ -513,7 +513,7 @@ async fn test_verify_email_basic_flow() {
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
 
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["status"], true);
     assert!(body["user"].is_null());
 
@@ -797,7 +797,7 @@ async fn test_verify_email_auto_sign_in_creates_session() {
     let response = test_helpers::finalize_response(&ctx, &req, response);
 
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["status"], true);
     assert!(body["user"].is_null());
 
@@ -833,7 +833,7 @@ async fn test_verify_email_no_auto_sign_in_no_session() {
     let response = test_helpers::finalize_response(&ctx, &req, response);
 
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["status"], true);
     // No session field expected
     assert!(body.get("session").is_none());
@@ -982,7 +982,7 @@ async fn test_verify_email_already_verified_returns_ok() {
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let response = plugin.handle_verify_email(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["status"], true);
 }
 

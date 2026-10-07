@@ -51,9 +51,10 @@ impl<S: AuthSchema> AuthPlugin<S> for OpenApiPlugin {
         if request.path() == "/open-api/generate-schema" {
             let mut response =
                 AuthResponse::new(200).with_header("content-type", "application/json");
-            response.body =
+            response.body = better_auth_core::ResponseBody::Bytes(
                 better_auth_core::utils::json::stringify(&schema(context)?.to_value()?)?
-                    .into_bytes();
+                    .into_bytes(),
+            );
             return Ok(Some(response));
         }
         if request.path() != self.config.path {

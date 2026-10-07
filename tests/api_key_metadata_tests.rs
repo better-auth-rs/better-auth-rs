@@ -115,7 +115,7 @@ async fn list_pages_schedule_once_and_only_repair_the_returned_legacy_page() {
             .unwrap();
         assert_eq!(response.status, 200);
         assert_eq!(fixture.finish().await, vec!["fulfilled"]);
-        let response: Value = serde_json::from_slice(&response.body).unwrap();
+        let response: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
         let metadata: Vec<_> = response
             .get("apiKeys")
             .unwrap()

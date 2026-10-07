@@ -75,7 +75,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
     assert_eq!(response.status, 200);
     assert!(cookie_header(&response).contains("better-auth-passkey="));
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert!(body["challenge"].is_string());
     assert_eq!(body["user"]["name"], "Custom Account Label");
     assert_eq!(
@@ -107,7 +107,7 @@ async fn test_generate_authenticate_options_is_get_and_sets_cookie_without_auth(
     assert_eq!(response.status, 200);
     assert!(cookie_header(&response).contains("better-auth-passkey="));
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert!(body["challenge"].is_string());
     assert!(body.get("allowCredentials").is_none());
 }
@@ -153,7 +153,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
         .unwrap();
     assert_eq!(response.status, 200);
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(
         body["allowCredentials"][0]["id"],
         credential_id("cred-auth")
@@ -195,7 +195,7 @@ async fn test_verify_registration_without_challenge_cookie_returns_challenge_not
     let response = plugin.handle_verify_registration(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 400);
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["message"], "Challenge not found");
 }
 
@@ -231,7 +231,7 @@ async fn test_verify_authentication_without_challenge_cookie_returns_challenge_n
         .unwrap();
     assert_eq!(response.status, 400);
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(body["message"], "Challenge not found");
 }
 
@@ -272,7 +272,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
     let response = plugin.handle_list_user_passkeys(&req, &ctx).await.unwrap();
     assert_eq!(response.status, 200);
 
-    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert!(body[0].get("updatedAt").is_none());
     assert_eq!(body[0]["aaguid"], "00000000-0000-0000-0000-000000000000");
     assert_eq!(body[0].get("name"), Some(&serde_json::Value::Null));

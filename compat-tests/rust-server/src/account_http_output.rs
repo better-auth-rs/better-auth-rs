@@ -155,7 +155,7 @@ async fn run(input: Input) -> AuthResult<Value> {
         request.body = Some(serde_json::to_vec(&json!({"accountId":account.id}))?);
     }
     let response = auth.handle_request(request).await?;
-    let body: Value = serde_json::from_slice(&response.body)?;
+    let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     let body = if list {
         let row = body
             .as_array()

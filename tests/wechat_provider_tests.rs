@@ -181,7 +181,7 @@ async fn wechat_login_saved_account_info_and_refresh_use_normal_sqlite_lifecycle
         .await
         .unwrap();
     assert_eq!(start.status, 200);
-    let start_body: Value = serde_json::from_slice(&start.body).unwrap();
+    let start_body: Value = serde_json::from_slice(&start.body.bytes().unwrap()).unwrap();
     let url = url::Url::parse(start_body["url"].as_str().unwrap()).unwrap();
     let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
     let callback = auth
@@ -258,7 +258,7 @@ async fn wechat_login_saved_account_info_and_refresh_use_normal_sqlite_lifecycle
         .to_auth_response();
     assert_eq!(info.status, 401);
     assert_eq!(
-        serde_json::from_slice::<Value>(&info.body).unwrap(),
+        serde_json::from_slice::<Value>(&info.body.bytes().unwrap()).unwrap(),
         json!({"code":"FAILED_TO_GET_USER_INFO","message":"Failed to get user info"})
     );
     assert_eq!(
@@ -302,7 +302,7 @@ async fn wechat_login_saved_account_info_and_refresh_use_normal_sqlite_lifecycle
         .await
         .unwrap();
     assert_eq!(response.status, 200);
-    let response: Value = serde_json::from_slice(&response.body).unwrap();
+    let response: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
     assert_eq!(response["accessToken"], refresh["response"]["accessToken"]);
     assert_eq!(
         response["refreshToken"],

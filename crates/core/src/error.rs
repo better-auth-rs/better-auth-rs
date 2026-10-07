@@ -134,16 +134,18 @@ impl AuthError {
     /// Diagnostic message for tracing. Response headers are never included.
     pub fn instrumentation_message(&self) -> String {
         match self {
-            Self::Response(response) => {
-                serde_json::from_slice::<serde_json::Value>(&response.0.body)
-                    .ok()
-                    .and_then(|body| {
-                        body.get("message")
-                            .and_then(serde_json::Value::as_str)
-                            .map(str::to_owned)
-                    })
-                    .unwrap_or_else(|| self.to_string())
-            }
+            Self::Response(response) => response
+                .0
+                .body
+                .json()
+                .ok()
+                .flatten()
+                .and_then(|body| {
+                    body.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                })
+                .unwrap_or_else(|| self.to_string()),
             Self::Internal(message) | Self::Config(message) | Self::PasswordHash(message) => {
                 message.clone()
             }
@@ -444,9 +446,13 @@ impl From<crate::types::AuthResponse> for AuthError {
 impl axum::response::IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
         let response = self.to_auth_response();
+        let body = match response.body.into_bytes() {
+            Ok(body) => body,
+            Err(error) => return error.into_response(),
+        };
         let status = axum::http::StatusCode::from_u16(response.status)
             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        let mut output = axum::response::Response::new(axum::body::Body::from(response.body));
+        let mut output = axum::response::Response::new(axum::body::Body::from(body));
         *output.status_mut() = status;
         for (name, value) in response.headers {
             if let (Ok(name), Ok(value)) = (
@@ -534,7 +540,7 @@ mod tests {
         assert!(!format!("{error:?} {error}").contains("tryAgainIn"));
         let response = error.to_auth_response();
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&response.body).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap(),
             body
         );
         assert_eq!(
@@ -771,8 +777,8 @@ mod tests {
     fn to_auth_response_body_contains_code_and_message() {
         let resp = AuthError::UserNotFound.to_auth_response();
         assert_eq!(resp.status, 404);
-        let body: serde_json::Value =
-            serde_json::from_slice(&resp.body).expect("response body should be valid JSON");
+        let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap())
+            .expect("response body should be valid JSON");
         assert_eq!(body["code"], "USER_NOT_FOUND");
         assert_eq!(body["message"], "User not found");
     }
@@ -832,8 +838,8 @@ mod tests {
 
         let resp = validation_error_response(&errors);
         assert_eq!(resp.status, 400);
-        let body: serde_json::Value =
-            serde_json::from_slice(&resp.body).expect("response body should be valid JSON");
+        let body: serde_json::Value = serde_json::from_slice(&resp.body.bytes().unwrap())
+            .expect("response body should be valid JSON");
         assert_eq!(body["code"], "VALIDATION_ERROR");
         assert_eq!(body["message"], "[body.email] Email is invalid");
     }

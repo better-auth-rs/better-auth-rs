@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[cfg(test)]
 use better_auth_core::config::AuthConfig;
@@ -8,7 +8,7 @@ use better_auth_core::wire::SessionView;
 use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
 
 use better_auth_core::{AuthError, AuthResult};
-use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
+use better_auth_core::{AuthRequest, AuthResponse, FieldMap, FieldValue, HttpMethod};
 
 use super::StatusResponse;
 use super::helpers::admin_plugin_enabled;
@@ -45,14 +45,6 @@ fn revoke_session_body(
         Some(projection),
         typed,
     ))
-}
-
-#[derive(Debug, Serialize)]
-struct GetSessionResponse<S: Serialize, U: Serialize> {
-    session: S,
-    user: U,
-    #[serde(rename = "needsRefresh", skip_serializing_if = "Option::is_none")]
-    needs_refresh: Option<bool>,
 }
 
 #[async_trait]
@@ -217,15 +209,14 @@ impl SessionManagementPlugin {
             }
         };
         let mut response = match resolved.data {
-            Some(data) => AuthResponse::json(
-                200,
-                &GetSessionResponse {
-                    session: data.session,
-                    user: data.user,
-                    needs_refresh: resolved.needs_refresh,
-                },
-            )?,
-            None => AuthResponse::json(200, &serde_json::Value::Null)?,
+            Some(data) => {
+                let mut fields = FieldMap::from(data);
+                if let Some(needs_refresh) = resolved.needs_refresh {
+                    let _ = fields.insert("needsRefresh".into(), needs_refresh.into());
+                }
+                AuthResponse::native(200, fields.into())
+            }
+            None => AuthResponse::native(200, FieldValue::Null),
         };
         let _ = response.headers.insert("Cache-Control", "no-store");
         let _ = response.headers.insert("Pragma", "no-cache");
@@ -344,7 +335,8 @@ mod tests {
             );
             let response = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
             assert_eq!(response.status, 400);
-            let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+            let body: serde_json::Value =
+                serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
             assert_eq!(body["code"], "VALIDATION_ERROR");
             assert!(
                 ctx.database
@@ -393,7 +385,8 @@ mod tests {
             response.headers.get("Pragma").map(String::as_str),
             Some("no-cache")
         );
-        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
         assert_eq!(body["code"], "FAILED_TO_GET_SESSION");
         assert_eq!(body["message"], "Failed to get session");
     }
@@ -420,7 +413,7 @@ mod tests {
 
         assert_eq!(response.status, 200);
 
-        let body_str = String::from_utf8(response.body).unwrap();
+        let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
         let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
         assert_eq!(
             response_data["session"]["token"].as_str().unwrap(),
@@ -451,7 +444,8 @@ mod tests {
             test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", None, None);
         let response = plugin.handle_get_session(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
-        let body: serde_json::Value = serde_json::from_slice(&response.body).expect("valid JSON");
+        let body: serde_json::Value =
+            serde_json::from_slice(response.body.bytes().unwrap().as_ref()).expect("valid JSON");
         assert!(body.is_null());
     }
 
@@ -476,7 +470,7 @@ mod tests {
 
         assert_eq!(response.status, 200);
 
-        let body_str = String::from_utf8(response.body).unwrap();
+        let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
         let response_data: SuccessResponse = serde_json::from_str(&body_str).unwrap();
         assert!(response_data.success);
 
@@ -579,7 +573,7 @@ mod tests {
 
         assert_eq!(response.status, 200);
 
-        let body_str = String::from_utf8(response.body).unwrap();
+        let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
         let sessions: Vec<SessionView> = serde_json::from_str(&body_str).unwrap();
         assert_eq!(sessions.len(), 2);
     }
@@ -632,7 +626,7 @@ mod tests {
 
         assert_eq!(response.status, 200);
 
-        let body_str = String::from_utf8(response.body).unwrap();
+        let body_str = String::from_utf8(response.body.into_bytes().unwrap()).unwrap();
         let sessions: Vec<SessionView> = serde_json::from_str(&body_str).unwrap();
         assert_eq!(sessions.len(), 2);
         assert!(
@@ -723,7 +717,8 @@ mod tests {
         let response = plugin.handle_revoke_session(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
-        let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
         assert_eq!(body["status"], true);
 
         let still_exists = ctx.database.get_session(&session2.token).await.unwrap();

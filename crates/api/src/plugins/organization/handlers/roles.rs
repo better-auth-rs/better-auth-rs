@@ -743,7 +743,8 @@ mod tests {
                 .unwrap()
                 .unwrap();
         assert_eq!(denied.status, 403);
-        let denied: serde_json::Value = serde_json::from_slice(&denied.body).unwrap();
+        let denied: serde_json::Value =
+            serde_json::from_slice(&denied.body.bytes().unwrap()).unwrap();
         assert_eq!(denied["missingPermissions"], json!(["organization:delete"]));
         assert!(
             ctx.database

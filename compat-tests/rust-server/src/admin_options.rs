@@ -124,7 +124,7 @@ impl AdminOptionsFixture {
                             better_auth::plugins::EmailPasswordPlugin::new().on_request(&request, auth.context())
                         ).await;
                         return Ok(Json(match result {
-                            Ok(Some(response)) => json!({"result":serde_json::from_slice::<Value>(&response.body)?}),
+                            Ok(Some(response)) => json!({"result":serde_json::from_slice::<Value>(&response.body.bytes()?)?}),
                             Ok(None) => return Err(AuthError::internal("Native sign-in route did not match")),
                             Err(error) => native_error(error)?,
                         }));
@@ -159,7 +159,7 @@ fn native_error(error: AuthError) -> AuthResult<Value> {
     let body = if response.body.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&response.body)?
+        serde_json::from_slice(&response.body.bytes()?)?
     };
     Ok(json!({"error":{"kind":"api","status":response.status,"body":body}}))
 }

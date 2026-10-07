@@ -51,7 +51,7 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
         struct Result {
             code: String,
         }
-        Ok(serde_json::from_slice::<Result>(&response.body)?.code)
+        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.code)
     }
     /// Validate and coerce the supplied user ID, then read the stored backup codes.
     pub async fn view_backup_codes(&self, body: Option<Value>) -> AuthResult<Vec<String>> {
@@ -84,6 +84,6 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
             #[serde(rename = "backupCodes")]
             backup_codes: Vec<String>,
         }
-        Ok(serde_json::from_slice::<Result>(&response.body)?.backup_codes)
+        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.backup_codes)
     }
 }
