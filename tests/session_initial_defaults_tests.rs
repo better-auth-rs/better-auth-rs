@@ -257,6 +257,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
     let _ = raw
         .create_user(CreateUser {
             id: Some("owner".into()),
+            name: Some("Owner".into()),
             email: Some("owner@session-defaults.test".into()),
             ..Default::default()
         })

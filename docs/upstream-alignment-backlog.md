@@ -12,6 +12,8 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+User-fields CI 37626300123 at `88da707` passed the upstream contracts, both Clippy checks, core/SeaORM regressions, and the complete Memory Session-default matrix. The SQL default matrix stopped during User setup because its new input omitted the bundled schema's required `name`. The input now supplies `Owner`, matching the upstream setup; all Session assertions remain unchanged. Runtime-values CI 37625615484 at `fe3feb5` passed 56 core tests, the complete Session Undefined-alias fixture, the zero-alias regression, and every selected integration target.
+
 User-fields CI 37625609987 at `fe3feb5` passed all 23 upstream contracts with 637 assertions, including Session defaults and literal/factory Undefined reference behavior. Production Clippy passed. Test Clippy then found that the new SQL defaults test passed generic `DatabaseHooks` to the SeaORM-specific hook method. The test now uses the existing `RuntimeStore::with_runtime` adapter, preserving every case and assertion. Rust behavior acceptance remains pending.
 
 Consumer CI 37621056491 attempt 2 reproduced exit 143 during generated-consumer compilation. GitHub's native worker log records `Runner will be shutdown for UserCancelled` and skips every post-job step; the runner renewed the job lease thirty seconds earlier. This classification does not identify the actor or establish OOM. Focused consumer CI now records memory, disk, process RSS/CPU, and available cgroup memory counters without changing compiler resources, test commands, or exit status. Complete acceptance remains pending.
