@@ -228,9 +228,19 @@ async fn additional_field_metadata_matches_real_initialization() -> AuthResult<(
             !matches!(name, "omitted" | "plugin")
         );
         for model in ["user", "session"] {
+            let config = reports.config()?;
+            let actual = config
+                .get(model)
+                .ok_or_else(|| AuthError::internal(format!("Missing {model} telemetry")))?;
+            let expected = expected
+                .get(name)
+                .and_then(|case| case.get(model))
+                .ok_or_else(|| {
+                    AuthError::internal(format!("Missing fixture case {name}/{model}"))
+                })?;
             assert_eq!(
-                reports.config()?[model].get("additionalFields"),
-                expected[name][model].get("additionalFields"),
+                actual.get("additionalFields"),
+                expected.get("additionalFields"),
                 "{name}/{model}"
             );
         }

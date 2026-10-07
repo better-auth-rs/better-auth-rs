@@ -149,7 +149,7 @@ async fn two_factor_cookie_issuance_preserves_pinned_fractional_lifetimes() {
             .context()
             .database
             .update_user(
-                &USER_ID.to_owned(),
+                USER_ID,
                 better_auth_core::UpdateUser {
                     two_factor_enabled: Some(true),
                     ..Default::default()

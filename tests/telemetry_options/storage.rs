@@ -22,7 +22,13 @@ async fn storage_context_matches_real_initialization() -> AuthResult<()> {
             assert_eq!(auth.store().adapter_id(), "memory");
             let config = reports.config()?;
             assert!(auth.store().rate_limit_model_declaration().is_none());
-            assert!(config["rateLimit"].get("modelName").is_none());
+            assert!(
+                config
+                    .get("rateLimit")
+                    .ok_or_else(|| AuthError::internal("Missing rate-limit telemetry"))?
+                    .get("modelName")
+                    .is_none()
+            );
             let case = format!(
                 "{}-{}",
                 if database { "database" } else { "stateless" },
@@ -34,7 +40,9 @@ async fn storage_context_matches_real_initialization() -> AuthResult<()> {
                     "adapter": config.get("adapter"),
                     "secondaryStorage": config.get("secondaryStorage"),
                 }),
-                fixture[case],
+                *fixture
+                    .get(&case)
+                    .ok_or_else(|| AuthError::internal(format!("Missing fixture case {case}")))?,
             );
         }
     }
