@@ -41,21 +41,67 @@ const operations = [
     { name: value === token ? "internal-existing" : "internal-missing", surface: "internal", joined: true, token: value },
   ]),
 ];
+const selectedScenarios = [
+  {
+    name: "alternate-session-reference",
+    sessionFields: { userId: { required: true, index: true }, ownerRef: reference },
+  },
+  {
+    name: "session-output-selects-fallback-owner",
+    sessionFields: { userId: { required: true, index: true }, ownerRef: reference },
+    replacements: { "session.ownerRef": ["user-b", "user-c"] },
+  },
+  {
+    name: "reverse-user-reference-many", reverse: true, many: true,
+    userFields: { image: { references: { model: "session", field: "id" } } },
+  },
+  {
+    name: "reverse-user-reference-many-limit", reverse: true, many: true, limit: 1,
+    userFields: { image: { references: { model: "session", field: "id" } } },
+  },
+  {
+    name: "reverse-user-reference-many-empty", reverse: true, many: true, missingChild: true,
+    userFields: { image: { references: { model: "session", field: "id" } } },
+  },
+  {
+    name: "reverse-user-reference-unique", reverse: true,
+    userFields: { image: { references: { model: "session", field: "id" }, unique: true } },
+  },
+  {
+    name: "reverse-user-reference-unique-missing", reverse: true, missingChild: true,
+    userFields: { image: { references: { model: "session", field: "id" }, unique: true } },
+  },
+];
+const secondToken = `${token}-b`;
+const batchTokens = [secondToken, missingToken, token];
+const selectedOperations = [
+  { name: "adapter-find-one", surface: "adapter", joined: true,
+    input: { model: "session", where: [{ field: "token", value: token }], join: { user: true } } },
+  { name: "internal-find-session", surface: "internal", joined: true, token },
+  { name: "adapter-find-many", surface: "adapter", joined: true, batch: true,
+    input: { model: "session", where: [{ field: "token", value: batchTokens, operator: "in" }], join: { user: true } } },
+  { name: "internal-find-sessions", surface: "internal", joined: true, batch: true, tokens: batchTokens },
+];
+
+function replace(scenario, model, field, value) {
+  const replacement = scenario.replacements?.[`${model}.${field}`];
+  return replacement && value === replacement[0] ? replacement[1] : value;
+}
 
 function optionsFor(scenario, joins, state) {
   const fields = (model, declarations) => Object.fromEntries(Object.entries(declarations).map(([name, declaration]) => [name, {
     type: "string", required: false, ...declaration,
     transform: { output(value) {
       if (state.enabled) state.events.push(["output", `${model}.${name}`, observeValue(value)]);
-      return value;
+      return replace(scenario, model, name, value);
     } },
   }]));
   return {
     baseURL: "http://session-user-join-reference.test",
     secret: "session-user-join-reference-contract-at-least-thirty-two-characters",
     logger: { disabled: true }, telemetry: { enabled: false },
-    advanced: { database: { joins } },
-    user: { additionalFields: fields("user", { name: { required: true }, image: {} }) },
+    advanced: { database: { joins, ...(scenario.limit === undefined ? {} : { defaultFindManyLimit: scenario.limit }) } },
+    user: { additionalFields: fields("user", { name: { required: true }, image: {}, ...scenario.userFields }) },
     session: { additionalFields: fields("session", {
       token: { required: true, unique: true },
       userId: { required: true, index: true, references: { ...reference.references, onDelete: "cascade" } },
@@ -76,6 +122,96 @@ function rows() {
       ownerRef: "user-b", id: "session-a",
     }],
   };
+}
+
+function selectedRows(scenario) {
+  return {
+    user: ["a", "b", "c"].map(suffix => ({
+      name: `User ${suffix}`, email: `${suffix}@session-user-join-reference.test`, emailVerified: true,
+      image: !scenario.reverse ? `image-${suffix}` : suffix === "a" ? "session-b"
+        : !scenario.missingChild && (suffix === "b" || scenario.many) ? "session-a" : null,
+      createdAt: date, updatedAt: date, id: `user-${suffix}`,
+    })),
+    session: ["a", "b"].map(suffix => ({
+      expiresAt: expiry, token: suffix === "a" ? token : secondToken, createdAt: date, updatedAt: date,
+      ipAddress: "203.0.113.8", userAgent: "session-user-join-reference", userId: `user-${suffix}`,
+      ownerRef: suffix === "a" ? "user-b" : "user-a", id: `session-${suffix}`,
+    })),
+  };
+}
+
+function selectedRelation(scenario, joins, operation, seed) {
+  const tokens = operation.batch ? batchTokens : [token];
+  const parents = seed.session.filter(row => tokens.includes(row.token)).slice(0, operation.batch ? scenario.limit ?? 100 : 1);
+  const children = parents.map(parent => {
+    const value = scenario.reverse ? parent.id
+      : joins ? parent.ownerRef : replace(scenario, "session", "ownerRef", parent.ownerRef);
+    const matches = seed.user.filter(user => (scenario.reverse ? user.image : user.id) === value);
+    if (!scenario.many) assert.ok(matches.length <= 1, "A unique relation must have at most one matching User");
+    return matches.slice(0, scenario.many ? scenario.limit ?? 100 : 1);
+  });
+  return { parents, children };
+}
+
+function selectedResult(scenario, operation, relation) {
+  const project = (model, row) => Object.fromEntries(Object.entries(row)
+    .map(([name, value]) => [name, replace(scenario, model, name, value)]));
+  const joined = relation.parents.map((parent, index) => {
+    const users = relation.children[index].map(user => project("user", user));
+    return { ...project("session", parent), user: scenario.many ? users : users[0] ?? null };
+  });
+  if (operation.surface === "adapter") return operation.batch ? joined : joined[0] ?? null;
+  if (operation.batch) {
+    if (joined.some(row => row.user === null)) return [];
+    return joined.map(({ user, ...session }) => ({ session, user }));
+  }
+  const row = joined[0];
+  if (!row || row.user === null) return null;
+  const { user, ...session } = row;
+  // Single lookup converts a User array to an object; batch lookup preserves the array.
+  return { session, user: { ...user } };
+}
+
+function selectedEvents(backend, scenario, joins, operation, relation) {
+  const { parents, children } = relation;
+  const event = (model, row, field) => ["output", `${model}.${field}`, observeValue(row[field])];
+  const events = [["query", operation.batch ? "findMany" : "findOne", "session"]];
+  for (const field of ["token", "userId", "ownerRef"]) for (const parent of parents) {
+    events.push(event("session", parent, field));
+  }
+  if (!joins) for (const _ of parents) events.push(["query", scenario.many ? "findMany" : "findOne", "user"]);
+  // For this two-child seed, SQLite fallback finishes the first child group before projecting the second group.
+  if (backend === "sqlite" && !joins) {
+    for (const users of children) for (const user of users) for (const field of ["name", "image"]) {
+      events.push(event("user", user, field));
+    }
+  } else {
+    const childCount = Math.max(0, ...children.map(users => users.length));
+    for (let index = 0; index < childCount; index++) for (const field of ["name", "image"]) for (const users of children) {
+      if (users[index]) events.push(event("user", users[index], field));
+    }
+  }
+  return events;
+}
+
+function assertSelectedOperation(backend, scenario, joins, operation, observed, events, seed) {
+  const relation = selectedRelation(scenario, joins, operation, seed);
+  assert.equal(relation.parents.length, operation.batch && scenario.limit !== 1 ? 2 : 1);
+  const expected = selectedResult(scenario, operation, relation);
+  assert.deepEqual(observed, {
+    returned: true, result: observeValue(expected), json: JSON.parse(JSON.stringify(expected)), keyOrder: keyOrder(expected),
+  }, "Compare the complete selected relation, cardinality, runtime fields, JSON, and own-key sequences");
+  assert.deepEqual(events, selectedEvents(backend, scenario, joins, operation, relation),
+    "Compare every raw query and original output callback value in operation order");
+}
+
+function execute(context, operation) {
+  if (operation.surface === "internal") return operation.batch
+    ? context.internalAdapter.findSessions([...operation.tokens])
+    : context.internalAdapter.findSession(operation.token);
+  return operation.batch
+    ? context.adapter.findMany(structuredClone(operation.input))
+    : context.adapter.findOne(structuredClone(operation.input));
 }
 
 function keyOrder(value, path = []) {
@@ -133,12 +269,12 @@ function assertOperation(scenario, joins, operation, observed, events, seed) {
   assert.deepEqual(events, expectedEvents, "Compare every query and original callback value in operation order");
 }
 
-async function runtime(backend, scenario, joins, recorder, diagnostics) {
+async function runtime(backend, scenario, joins, recorder, diagnostics, selected = false) {
   const state = { enabled: false, events: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const memory = Object.fromEntries(tables.map(model => [model, []]));
   const database = sqlite ?? memoryAdapter(memory);
-  const seed = rows();
+  const seed = selected ? selectedRows(scenario) : rows();
   const baseline = { ...optionsFor(scenarios[0], joins, state), database };
   const stored = () => Object.fromEntries(tables.map(model => [model, observeValue(sqlite
     ? sqlite.query(`SELECT * FROM "${model}" ORDER BY "id"`).all() : memory[model]) ]));
@@ -151,23 +287,22 @@ async function runtime(backend, scenario, joins, recorder, diagnostics) {
     }
     const before = stored();
     const captured = [];
-    for (const operation of operations) {
+    for (const operation of selected ? selectedOperations : operations) {
       const context = await betterAuth({ ...optionsFor(scenario, joins, state), database }).$context;
       state.events = [];
       state.enabled = true;
       recorder.events = state.events;
       let observed;
       try {
-        observed = await outcome(() => operation.surface === "internal"
-          ? context.internalAdapter.findSession(operation.token)
-          : context.adapter.findOne(structuredClone(operation.input)), diagnostics, {
+        observed = await outcome(() => execute(context, operation), diagnostics, {
           backend, scenario: scenario.name, joins, operation: operation.name,
         });
       } finally { state.enabled = false; recorder.events = null; }
       const after = stored();
       try {
         assert.deepEqual(after, before, "Every successful read and reference error must preserve all stored tables");
-        assertOperation(scenario, joins, operation, observed, state.events, seed);
+        if (selected) assertSelectedOperation(backend, scenario, joins, operation, observed, state.events, seed);
+        else assertOperation(scenario, joins, operation, observed, state.events, seed);
       } catch (error) {
         diagnostics.push({ backend, scenario: scenario.name, joins, operation, before, events: state.events,
           observed, after, assertion: rawError(error) });
@@ -204,7 +339,16 @@ export async function captureSessionUserJoinReferences({ diagnostics = [] } = {}
     }
     assert.equal(cases.length, 12);
     assert.equal(cases.reduce((total, value) => total + value.operations.length, 0), 72);
-    return { version, scenarios, cases };
+    const selectedCases = [];
+    for (const scenario of selectedScenarios) for (const backend of ["memory", "sqlite"]) for (const joins of [false, true]) {
+      selectedCases.push(await runtime(backend, scenario, joins, recorder, diagnostics, true));
+    }
+    assert.equal(selectedCases.length, 28);
+    assert.equal(selectedCases.reduce((total, value) => total + value.operations.length, 0), 112);
+    cases.push(...selectedCases);
+    assert.equal(cases.length, 40);
+    assert.equal(cases.reduce((total, value) => total + value.operations.length, 0), 184);
+    return { version, scenarios: [...scenarios, ...selectedScenarios], cases };
   } finally { trace.disable(); }
 }
 

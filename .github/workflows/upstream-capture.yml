@@ -42,6 +42,9 @@ on:
       - compat-tests/reference-server/contracts/memory-name-coercion-capture.mjs
       - compat-tests/reference-server/contracts/custom-model-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
+      - compat-tests/reference-server/contracts/totp-period-nan-capture.mjs
+      - compat-tests/reference-server/contracts/oauth-proxy-max-age-capture.mjs
+      - tests/fixtures/cookie-cache-cleanup.capture.mjs
 
 permissions:
   contents: read
@@ -52,14 +55,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: email-verification-payload
-            regressions: [email-verification-duration]
+          - contract: cookie-attribute-mutation
+            regressions: [cookie-partitioned, cookie-lifetime, cookie-http-errors, cookie-expires]
             backend: ''
-          - contract: memory-name-coercion
-            regressions: [api-key-number-name-order]
+          - contract: cookie-cache-cleanup
+            script: tests/fixtures/cookie-cache-cleanup.capture.mjs
+            regressions: [cookie-cleanup]
             backend: ''
-          - contract: custom-model-join-reference
-            regressions: [schema-join-reference]
+          - contract: session-user-join-reference
+            regressions: [schema-join-reference, account-user-selected-relations, custom-model-join-reference]
+            backend: ''
+          - contract: totp-period-nan
+            regressions: [totp-period, two-factor-cookie-duration]
+            backend: ''
+          - contract: oauth-proxy-max-age
+            regressions: [social-profile-errors]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -100,6 +110,7 @@ jobs:
         shell: devenv shell -- bash -e {0}
         env:
           CAPTURE_CONTRACT: ${{ matrix.contract }}
+          CAPTURE_SCRIPT: ${{ matrix.script || format('compat-tests/reference-server/contracts/{0}-capture.mjs', matrix.contract) }}
           CAPTURE_REGRESSIONS: ${{ join(matrix.regressions, ' ') }}
           CAPTURE_BACKEND: ${{ matrix.backend }}
           BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
@@ -126,9 +137,9 @@ jobs:
             export NODE_ENV=production TEST=''
             export BETTER_AUTH_TELEMETRY_ENDPOINT=https://telemetry-fields-unique.test/capture
           fi
-          bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "${capture_args[@]}" "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
+          bun --no-install "$CAPTURE_SCRIPT" "${capture_args[@]}" "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
           mkdir -p "$capture_dir/replay"
-          bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "${capture_args[@]}" "$capture_dir/replay/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/replay.log"
+          bun --no-install "$CAPTURE_SCRIPT" "${capture_args[@]}" "$capture_dir/replay/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/replay.log"
           cmp "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" "$capture_dir/replay/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json"
           (
             cd "$capture_dir"

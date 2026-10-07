@@ -122,6 +122,69 @@ async function chunks() {
         before, prepared, afterPrepare, writes, headers: responseHeaders.getSetCookie(), after: cookieSnapshot(resolved) });
     }
   }
+  cases.push(...await integerNameChunks());
+  return cases;
+}
+
+async function integerNameChunks() {
+  const cases = [];
+  for (const { name, incoming, valueLength, names, payloadCount } of [
+    { name: "0", incoming: [["0.5", "old-five"], ["0.0", "old-zero"]], valueLength: 32,
+      names: ["0", "0.5", "0.0"], payloadCount: 1 },
+    { name: "4294967294", incoming: [["4294967294.5", "old-five"], ["4294967294", "old-base"]], valueLength: 8000,
+      names: ["4294967294", "4294967294.5", "4294967294.0", "4294967294.1", "4294967294.2"], payloadCount: 3 },
+    { name: "4294967295", incoming: [["4294967295.5", "old-five"], ["4294967295", "old-base"]], valueLength: 32,
+      names: ["4294967295.5", "4294967295"], payloadCount: 1 },
+    { name: "01", incoming: [["01.5", "old-five"], ["01", "old-base"]], valueLength: 32,
+      names: ["01.5", "01"], payloadCount: 1 },
+  ]) {
+    const config = options(false, true);
+    config.advanced.cookies = { ordinary: { name } };
+    const context = await betterAuth(config).$context;
+    const resolved = context.createAuthCookie("ordinary", { maxAge: 45.5 });
+    assert.equal(resolved.name, name);
+    const before = cookieSnapshot(resolved);
+    const writes = [];
+    const groups = new Map();
+    const group = attrs => {
+      if (!groups.has(attrs)) groups.set(attrs, groups.size);
+      return groups.get(attrs);
+    };
+    const responseHeaders = new Headers();
+    const ctx = {
+      headers: new Headers({ cookie: incoming.map(([key, value]) => `${key}=${value}`).join("; ") }),
+      context: { logger: context.logger },
+      setCookie(name, value, attrs) {
+        const before = attributes(attrs);
+        const header = serializeCookie(name, value, attrs);
+        responseHeaders.append("set-cookie", header);
+        writes.push({ name, attributeGroup: group(attrs), before, header, after: attributes(attrs) });
+        return header;
+      },
+    };
+    const store = createSessionStore(resolved.name, resolved.attributes, ctx);
+    const value = "x".repeat(valueLength);
+    const cookies = store.chunk(value);
+    const prepared = cookies.map(cookie => ({ name: cookie.name, valueLength: cookie.value.length,
+      attributeGroup: group(cookie.attributes), attributes: attributes(cookie.attributes) }));
+    const afterPrepare = cookieSnapshot(resolved);
+    assert.deepEqual(prepared.map(cookie => cookie.name), names);
+    assert.equal(cookies.map(cookie => cookie.value).join(""), value);
+    store.setCookies(cookies);
+    assert.deepEqual(writes.map(write => write.name), names);
+    const payloads = writes.filter(write => !write.header.includes("; Max-Age=0"));
+    assert.equal(payloads.length, payloadCount);
+    assert.ok(payloads.every(write => write.attributeGroup === payloads[0].attributeGroup));
+    assert.ok(!payloads[0].header.includes("; Secure"));
+    assert.ok(payloads.slice(1).every(write => write.header.includes("; Secure")));
+    assert.ok(writes.filter(write => write.header.includes("; Max-Age=0"))
+      .every(write => !write.header.includes("; Secure")));
+    assert.deepEqual(responseHeaders.getSetCookie(), writes.map(write => write.header));
+    assert.deepEqual(afterPrepare, before);
+    assert.deepEqual(cookieSnapshot(resolved), before);
+    cases.push({ input: { secure: false, partitioned: true, action: "replace", incoming, valueLength, name },
+      before, prepared, afterPrepare, writes, headers: responseHeaders.getSetCookie(), after: cookieSnapshot(resolved) });
+  }
   return cases;
 }
 
