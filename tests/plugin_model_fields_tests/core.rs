@@ -215,40 +215,45 @@ async fn unsupported_model_fields_fail_during_initialization() {
     let cases = [
         (
             EntityRole::Passkey,
-            fields("credential", UserFieldConfig::default()),
+            "credential",
+            UserFieldType::String,
+            Some("Passkey additional field credential cannot replace native field credential"),
         ),
-        (
-            EntityRole::Passkey,
-            fields(
-                "name",
-                UserFieldConfig {
-                    field_type: UserFieldType::Json,
-                    ..Default::default()
-                },
-            ),
-        ),
+        (EntityRole::Passkey, "name", UserFieldType::Json, None),
         (
             EntityRole::ApiKey,
-            fields("key", UserFieldConfig::default()),
+            "key",
+            UserFieldType::String,
+            Some("ApiKey additional field key cannot replace native field key"),
         ),
-        (
-            EntityRole::ApiKey,
-            fields(
-                "name",
-                UserFieldConfig {
-                    field_type: UserFieldType::Json,
-                    ..Default::default()
-                },
-            ),
-        ),
+        (EntityRole::ApiKey, "name", UserFieldType::Json, None),
     ];
-    for registration in cases {
+    for (role, name, field_type, expected_error) in cases {
         let result = BetterAuth::new(config())
             .store_arc(memory())
-            .plugin(Fields(vec![registration]))
+            .plugin(Fields(vec![(
+                role,
+                fields(
+                    name,
+                    UserFieldConfig {
+                        field_type,
+                        ..Default::default()
+                    },
+                ),
+            )]))
             .build()
             .await;
-        assert!(matches!(result, Err(AuthError::Config(_))));
+        let error = result.err();
+        match expected_error {
+            Some(expected) => assert!(
+                matches!(&error, Some(AuthError::Config(actual)) if actual == expected),
+                "registration: {role:?}.{name}, expected configuration error {expected:?}, got {error:?}"
+            ),
+            None => assert!(
+                error.is_none(),
+                "registration: {role:?}.{name}, expected successful initialization, got {error:?}"
+            ),
+        }
     }
 }
 
