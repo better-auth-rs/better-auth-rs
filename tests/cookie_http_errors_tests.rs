@@ -8,6 +8,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use better_auth::SessionData;
 use better_auth::plugins::endpoint_context::EndpointContext;
 use better_auth::plugins::last_login_method::{
     BeforeStoreLastLoginCookie, LastLoginMethodConfig, LastLoginMethodPlugin,
@@ -15,7 +16,6 @@ use better_auth::plugins::last_login_method::{
 };
 use better_auth::{AuthConfig, BetterAuth};
 use better_auth_core::api_error::{ApiErrorHandler, ApiErrorTask};
-use better_auth_core::session::SessionData;
 use better_auth_core::store::StatelessSchema;
 use better_auth_core::utils::cookie_utils::{
     create_chunked_cookies, create_clear_cookie, create_cookie, create_session_like_cookie,

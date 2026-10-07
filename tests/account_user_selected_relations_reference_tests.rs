@@ -1,9 +1,9 @@
 #![cfg(feature = "seaorm2")]
 
+use better_auth::store::{AccountOwner, EphemeralStore, JoinValue, UserAccounts};
 use better_auth_core::{
     AuthConfig, AuthError, AuthRecordFields, AuthResult, AuthSchema, AuthStore, CreateAccount,
     CreateUser, FieldDate, FieldMap, FieldValue, ListUsersParams,
-    store::{AccountOwner, EphemeralStore, JoinValue, UserAccounts},
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform,
     },

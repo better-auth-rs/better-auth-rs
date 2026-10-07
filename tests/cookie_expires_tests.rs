@@ -8,10 +8,10 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use better_auth::SessionData;
 use better_auth::{AuthConfig, BetterAuth};
 use better_auth_core::api_error::{ApiErrorHandler, ApiErrorTask};
 use better_auth_core::observability::{LogArgument, LogLevel, LogSink};
-use better_auth_core::session::SessionData;
 use better_auth_core::store::StatelessSchema;
 use better_auth_core::utils::cookie_utils::{
     create_clear_cookie, remove_set_cookie_entries, render_cookie,

@@ -28,7 +28,7 @@ Dynamic fields are replaced only after checks against actual observations. The c
 
 The following boundaries are retained in the upstream fixture but are not paired with Rust:
 
-- JavaScript error names, messages, enumerable properties, property order, and `console.error` arguments. Rust checks the native error category, failure condition, API error callback count, and callback position. CI output retains Rust diagnostics.
+- JavaScript error names, messages, enumerable properties, property order, and `console.error` arguments. Rust checks the native error category, failure condition, API error callback count, and callback position. The test records Rust diagnostics and prints them when test output is enabled.
 - Fetch `statusText`. Axum exposes the numeric status without the captured Fetch reason phrase.
 - JSON object property order and nested record enumeration order. The HTTP comparison checks complete parsed JSON values and exact empty failure bodies.
 - The upstream global `fetch` trap. Rust installs custom provider verification and profile callbacks and checks their complete inputs. The test does not claim a process-wide network trap.

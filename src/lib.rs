@@ -56,6 +56,7 @@ pub mod server_api;
 pub mod store;
 pub mod wire;
 
+pub use better_auth_core::session::{NativeSessionData, SessionData};
 pub use better_auth_core::{
     ApiKeyStart, Argon2PasswordHasher, AuthConfig, AuthError, AuthRecordFields, AuthResult,
     AuthSchema, FieldDate, FieldMap, FieldValue, FromFieldMap, PasswordHasher, ResponseBody,

@@ -6,8 +6,8 @@
 )]
 
 use async_trait::async_trait;
+use better_auth::SessionData;
 use better_auth::{AuthConfig, BetterAuth};
-use better_auth_core::session::SessionData;
 use better_auth_core::store::StatelessSchema;
 use better_auth_core::utils::cookie_utils::{
     create_cookie, create_session_cookie, create_session_cookie_with_max_age,
