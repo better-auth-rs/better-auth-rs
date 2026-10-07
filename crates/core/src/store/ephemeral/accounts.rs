@@ -139,6 +139,15 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             let _ = fields.insert("id".into(), Value::String(id));
         }
         self.raw("account", "create", |state| {
+            if matches!(
+                self.config.advanced.database.generate_id(),
+                crate::id::IdGeneration::Serial
+            ) {
+                let _ = fields.insert(
+                    "id".into(),
+                    Value::Number((state.accounts.len() + 1) as f64),
+                );
+            }
             state.accounts.push(fields.clone());
             Ok(())
         })
@@ -308,13 +317,15 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
+        let id = self.memory_user_id_query(&Value::from(id))?;
         let record = self
             .raw("account", "update", |state| {
                 Ok({
-                    if let Some(mut fields) = state
-                        .accounts
-                        .find_mut(|row| row.get("id").and_then(Value::as_str) == Some(id))?
-                    {
+                    if let Some(mut fields) = state.accounts.find_mut(|row| {
+                        row.get("id")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&id)
+                    })? {
                         fields.extend(patch);
                         Some(fields.clone())
                     } else {
@@ -335,13 +346,18 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
+        let id = self.memory_user_id_query(&Value::from(id))?;
         let record = self
             .raw("account", "findOne", |state| {
                 Ok(state
                     .accounts
                     .snapshot()?
                     .iter()
-                    .find(|row| row.get("id").and_then(Value::as_str) == Some(id))
+                    .find(|row| {
+                        row.get("id")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&id)
+                    })
                     .cloned())
             })
             .await?;
@@ -370,9 +386,11 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("account", "delete", |state| {
-            let _ = state
-                .accounts
-                .remove_first(|row| row.get("id").and_then(Value::as_str) == Some(id))?;
+            let _ = state.accounts.remove_first(|row| {
+                row.get("id")
+                    .unwrap_or(&Value::Undefined)
+                    .strict_equals(&id)
+            })?;
             Ok(())
         })
         .await?;

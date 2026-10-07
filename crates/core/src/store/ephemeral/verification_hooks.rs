@@ -93,6 +93,15 @@ impl EphemeralStore {
                 },
             )
             .await?;
+        self.finish_verification_delete(rows, predicate, many).await
+    }
+
+    pub(super) async fn finish_verification_delete(
+        &self,
+        rows: Vec<FieldMap>,
+        predicate: impl Fn(&FieldMap) -> AuthResult<bool> + Send + Sync,
+        many: bool,
+    ) -> AuthResult<usize> {
         // Single and batch delete both catch snapshot output errors; only batch still deletes on an empty snapshot.
         let rows = self.output_verifications(&rows).await.unwrap_or_default();
         if !many && rows.is_empty() {
@@ -143,9 +152,12 @@ impl EphemeralStore {
         identifier: &str,
         value: Option<&str>,
     ) -> AuthResult<Option<VerificationView>> {
-        let Some(snapshot) = self.get_verification_including_expired(identifier).await? else {
+        let Some(record) = self.latest_verification_record(identifier).await? else {
             return Ok(None);
         };
+        // Preserve numeric Serial IDs and deterministic reservation IDs before output projection.
+        let id = record.get("id").cloned().unwrap_or_default();
+        let snapshot = self.output_verification(&record).await?;
         if value.is_some_and(|value| snapshot.value != value) {
             return Ok(None);
         }
@@ -166,7 +178,6 @@ impl EphemeralStore {
                 return Ok(None);
             }
         }
-        let id = snapshot.id.field_value();
         let Some(consumed) = self
             .raw("verification", "consumeOne", |state| {
                 state.verifications.remove_first(|row| {

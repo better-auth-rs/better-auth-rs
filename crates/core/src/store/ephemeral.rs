@@ -50,6 +50,8 @@ mod passkeys;
 mod rate_limits;
 mod rows;
 mod runtime;
+#[cfg(test)]
+mod serial_primary_tests;
 mod session_hooks;
 mod sessions;
 mod state;

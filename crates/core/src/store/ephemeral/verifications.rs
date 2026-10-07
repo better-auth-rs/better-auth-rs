@@ -54,6 +54,46 @@ impl EphemeralStore {
                 .record_storage_key(name),
         )
     }
+
+    pub(super) async fn latest_verification_record(
+        &self,
+        identifier: &str,
+    ) -> AuthResult<Option<FieldMap>> {
+        let bound_identifier = self.verification_query("identifier", identifier)?;
+        let records: Vec<_> = self
+            .raw("verification", "findMany", |state| {
+                Ok(state
+                    .verifications
+                    .snapshot()?
+                    .iter()
+                    .filter(|row| {
+                        self.verification_field(row, "identifier")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_identifier)
+                    })
+                    .cloned()
+                    .collect())
+            })
+            .await?;
+        let mut latest = None;
+        for row in &records {
+            let newer = match latest {
+                None => true,
+                Some(current) => {
+                    crate::query::field_compare(
+                        self.verification_field(row, "createdAt")
+                            .unwrap_or(&Value::Undefined),
+                        self.verification_field(current, "createdAt")
+                            .unwrap_or(&Value::Undefined),
+                    )? == Some(std::cmp::Ordering::Greater)
+                }
+            };
+            if newer {
+                latest = Some(row);
+            }
+        }
+        Ok(latest.cloned())
+    }
 }
 
 #[async_trait]
@@ -155,6 +195,15 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             let _ = record.insert("id".into(), Value::String(id));
         }
         self.raw("verification", "create", |state| {
+            if matches!(
+                self.config.advanced.database.generate_id(),
+                crate::id::IdGeneration::Serial
+            ) {
+                let _ = record.insert(
+                    "id".into(),
+                    Value::Number((state.verifications.len() + 1) as f64),
+                );
+            }
             state.verifications.push(record.clone());
             Ok(())
         })
@@ -175,42 +224,12 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         &self,
         identifier: &str,
     ) -> AuthResult<Option<VerificationView>> {
-        let bound_identifier = self.verification_query("identifier", identifier)?;
-        let records: Vec<_> = self
-            .raw("verification", "findMany", |state| {
-                Ok(state
-                    .verifications
-                    .snapshot()?
-                    .iter()
-                    .filter(|row| {
-                        self.verification_field(row, "identifier")
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_identifier)
-                    })
-                    .cloned()
-                    .collect())
-            })
-            .await?;
-        let mut latest = None;
-        for row in &records {
-            let newer = match latest {
-                None => true,
-                Some(current) => {
-                    crate::query::field_compare(
-                        self.verification_field(row, "createdAt")
-                            .unwrap_or(&Value::Undefined),
-                        self.verification_field(current, "createdAt")
-                            .unwrap_or(&Value::Undefined),
-                    )? == Some(std::cmp::Ordering::Greater)
-                }
-            };
-            if newer {
-                latest = Some(row);
-            }
-        }
-        futures_util::future::OptionFuture::from(latest.map(|row| self.output_verification(row)))
-            .await
-            .transpose()
+        let record = self.latest_verification_record(identifier).await?;
+        futures_util::future::OptionFuture::from(
+            record.as_ref().map(|row| self.output_verification(row)),
+        )
+        .await
+        .transpose()
     }
     async fn get_verification(
         &self,
@@ -339,9 +358,38 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
+        let bound_id = self.memory_user_id_query(&Value::from(id))?;
+        let (id, rows) = self
+            .raw("verification", "findOne", |state| {
+                let records = state.verifications.snapshot()?;
+                // Explicit textual IDs take precedence over the Serial numeric binding.
+                let id = records
+                    .iter()
+                    .filter_map(|row| row.get("id"))
+                    .find(|stored| stored.as_str() == Some(id))
+                    .cloned()
+                    .unwrap_or(bound_id);
+                let rows = records
+                    .into_iter()
+                    .filter(|row| {
+                        row.get("id")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&id)
+                    })
+                    .take(1)
+                    .collect();
+                Ok((id, rows))
+            })
+            .await?;
         let _ = self
-            .delete_verifications_with_hooks(
-                |row| Ok(row.get("id").and_then(Value::as_str) == Some(id)),
+            .finish_verification_delete(
+                rows,
+                |row| {
+                    Ok(row
+                        .get("id")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&id))
+                },
                 false,
             )
             .await?;
