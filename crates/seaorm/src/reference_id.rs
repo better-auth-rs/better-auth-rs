@@ -26,7 +26,7 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
     // RecordWrite serializes native JSON columns. Only text columns need an encoded array here.
     if backend != sea_orm::DbBackend::Postgres
         && matches!(field.field_type, UserFieldType::Json)
-        && (!native_json_field(name) || field.references_id())
+        && (value.is_null() || !native_json_field(name) || field.references_id())
         && matches!(
             value,
             FieldValue::Null | FieldValue::Object(_) | FieldValue::Array(_) | FieldValue::Date(_)

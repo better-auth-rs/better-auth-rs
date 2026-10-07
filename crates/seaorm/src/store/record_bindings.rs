@@ -20,9 +20,16 @@ impl Binding {
         if matches!(
             column.def().get_column_type(),
             sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+        ) && !matches!(
+            value,
+            FieldValue::Undefined
+                | FieldValue::Null
+                | FieldValue::String(_)
+                | FieldValue::Utf16String(_)
         ) {
             Self::Json(value)
         } else {
+            // Preserve SQL NULL and JSON text that the declared field policy has already encoded.
             Self::Raw(value)
         }
     }
