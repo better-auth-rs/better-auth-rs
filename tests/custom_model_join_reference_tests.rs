@@ -293,6 +293,10 @@ async fn contract<S: AuthSchema>(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract asserts complete fixture inventory before pairing native reads"
+)]
 async fn custom_model_references_preserve_native_user_account_reads() -> TestResult {
     let fixture: Value = serde_json::from_str(include_str!(
         "fixtures/custom-model-join-reference-1.7.6.json"

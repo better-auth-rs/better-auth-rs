@@ -365,6 +365,10 @@ async fn contract<S: AuthSchema>(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract asserts fixture inventory before comparing complete refresh observations"
+)]
 async fn oauth_duration_refresh_matches_captured_http_callbacks_and_storage() -> TestResult {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/oauth-token-duration-1.7.6.json"))?;

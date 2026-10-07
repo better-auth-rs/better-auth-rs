@@ -25,24 +25,28 @@ pub(super) async fn projected<S: AuthSchema>(store: &dyn AuthStore<S>) -> TestRe
 }
 
 pub(super) fn assert_projected(actual: &Value, expected: &Value) {
-    let mut users = expected["user"].clone();
+    let mut users = required(expected, "/user").clone();
     for user in users.as_array_mut().expect("Captured User rows") {
         // Revive SQLite booleans and upstream Date observations at the adapter projection boundary.
-        if let Some(value) = user["emailVerified"].as_i64() {
+        let email_verified = user
+            .get_mut("emailVerified")
+            .expect("Captured User emailVerified");
+        if let Some(value) = email_verified.as_i64() {
             assert!(matches!(value, 0 | 1));
-            user["emailVerified"] = json!(value == 1);
+            *email_verified = json!(value == 1);
         }
         for field in ["createdAt", "updatedAt"] {
-            if user[field].get("type").and_then(Value::as_str) == Some("date") {
-                user[field] = user[field]["value"].clone();
+            let date = user.get_mut(field).expect("Captured User date");
+            if date.get("type").and_then(Value::as_str) == Some("date") {
+                *date = required(date, "/value").clone();
             }
         }
     }
     assert_eq!(
         actual,
-        &json!({"user": users, "session": expected["session"], "account": expected["account"]})
+        &json!({"user": users, "session": required(expected, "/session"), "account": required(expected, "/account")})
     );
-    assert_eq!(expected["verification"], json!([]));
+    assert_eq!(required(expected, "/verification"), &json!([]));
 }
 
 pub(super) async fn sqlite(database: &DatabaseConnection) -> TestResult<Value> {

@@ -36,6 +36,12 @@ const ORIGIN: &str = "http://email-verification-payload.test";
 const SECRET: &str = "email-verification-payload-contract-secret-at-least-32-characters";
 const EMAIL: &str = "owner@verify-payload.test";
 
+fn required<'a>(value: &'a Value, pointer: &str) -> &'a Value {
+    value
+        .pointer(pointer)
+        .expect("Required JSON contract field")
+}
+
 fn config() -> AuthConfig {
     let mut config = AuthConfig::new(SECRET).base_url(ORIGIN);
     config.telemetry.enabled = false;
@@ -52,10 +58,10 @@ fn config() -> AuthConfig {
     reason = "Fixture assertions panic while request URL parsing propagates errors"
 )]
 fn request(case: &Value) -> TestResult<AuthRequest> {
-    let input = &case["request"];
-    assert_eq!(input["method"], "GET");
+    let input = required(case, "/request");
+    assert_eq!(required(input, "/method"), "GET");
     let mut request = AuthRequest::new(HttpMethod::Get, "/api/auth/verify-email").with_url(
-        input["url"]
+        required(input, "/url")
             .as_str()
             .expect("Captured request URL")
             .parse()?,
@@ -67,15 +73,18 @@ fn request(case: &Value) -> TestResult<AuthRequest> {
         url.query_pairs()
             .find(|(name, _)| name == "token")
             .map(|(_, value)| value.into_owned()),
-        case["token"].as_str().map(str::to_owned)
+        required(case, "/token").as_str().map(str::to_owned)
     );
-    for header in input["headers"]
+    for header in required(input, "/headers")
         .as_array()
         .expect("Captured request headers")
     {
         let _ = request.headers.insert(
-            header[0].as_str().expect("Header name").into(),
-            header[1].as_str().expect("Header value").into(),
+            required(header, "/0").as_str().expect("Header name").into(),
+            required(header, "/1")
+                .as_str()
+                .expect("Header value")
+                .into(),
         );
     }
     Ok(request)
@@ -86,8 +95,12 @@ fn request(case: &Value) -> TestResult<AuthRequest> {
     reason = "Contract assertions panic while response decoding propagates errors"
 )]
 fn assert_response(response: &AuthResponse, case: &Value) -> TestResult {
-    let expected = &case["response"];
-    assert_eq!(u64::from(response.status), expected["status"], "{case}");
+    let expected = required(case, "/response");
+    assert_eq!(
+        u64::from(response.status),
+        *required(expected, "/status"),
+        "{case}"
+    );
     let mut headers = response
         .headers
         .iter()
@@ -95,14 +108,16 @@ fn assert_response(response: &AuthResponse, case: &Value) -> TestResult {
         .collect::<Vec<_>>();
     // Web Headers iterates by lowercase name; preserve every header value.
     headers.sort();
-    assert_eq!(json!(headers), expected["headers"], "{case}");
+    assert_eq!(&json!(headers), required(expected, "/headers"), "{case}");
     assert_eq!(
-        json!(response.headers.get_all("set-cookie").collect::<Vec<_>>()),
-        expected["cookies"],
+        &json!(response.headers.get_all("set-cookie").collect::<Vec<_>>()),
+        required(expected, "/cookies"),
         "{case}"
     );
     let body = response.body.bytes()?;
-    let expected_body = expected["body"].as_str().expect("Captured response body");
+    let expected_body = required(expected, "/body")
+        .as_str()
+        .expect("Captured response body");
     if expected_body.is_empty() {
         assert!(body.is_empty(), "{case}");
     } else {
@@ -123,12 +138,14 @@ async fn pairing<S: AuthSchema>(
     let fixture: Value = serde_json::from_str(include_str!(
         "fixtures/email-verification-payload-1.7.6.json"
     ))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let cases = fixture["cases"].as_array().expect("Captured payload cases");
+    assert_eq!(required(&fixture, "/version"), "1.7.6");
+    let cases = required(&fixture, "/cases")
+        .as_array()
+        .expect("Captured payload cases");
     assert_eq!(cases.len(), 20);
     let cases = cases
         .iter()
-        .filter(|case| case["backend"] == backend)
+        .filter(|case| required(case, "/backend") == backend)
         .collect::<Vec<_>>();
     assert_eq!(cases.len(), 10);
     let events = Events::default();
@@ -174,12 +191,13 @@ async fn pairing<S: AuthSchema>(
     assert!(
         setup_events
             .iter()
-            .any(|event| event["kind"] == "query" && event["operation"] == "create")
+            .any(|event| required(event, "/kind") == "query"
+                && required(event, "/operation") == "create")
     );
     assert_eq!(
         setup_events
             .iter()
-            .filter(|event| event["kind"] == "hook")
+            .filter(|event| required(event, "/kind") == "hook")
             .cloned()
             .collect::<Vec<_>>(),
         vec![
@@ -196,7 +214,7 @@ async fn pairing<S: AuthSchema>(
     };
     let _ = events.take()?;
     for case in cases {
-        storage::assert_projected(&initial, &case["before"]);
+        storage::assert_projected(&initial, required(case, "/before"));
         let response = auth
             .handle_request(request(case)?)
             .with_subscriber(tracing_subscriber::registry().with(events.clone()))
@@ -206,17 +224,18 @@ async fn pairing<S: AuthSchema>(
         recorder::assert_events(&observed, case)?;
         let after = storage::projected(raw.as_ref()).await?;
         assert_eq!(
-            after, initial,
+            after,
+            initial,
             "{}: projected stored values",
-            case["scenario"]
+            required(case, "/scenario")
         );
-        storage::assert_projected(&after, &case["after"]);
+        storage::assert_projected(&after, required(case, "/after"));
         if let Some(database) = database {
             assert_eq!(
                 Some(storage::sqlite(database).await?),
                 initial_sql,
                 "{}: all stored SQLite columns",
-                case["scenario"]
+                required(case, "/scenario")
             );
         }
     }

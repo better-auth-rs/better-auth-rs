@@ -98,13 +98,16 @@ impl<S: Subscriber> Layer<S> for Events {
     reason = "Contract assertions panic while missing diagnostic fields propagate errors"
 )]
 pub(super) fn assert_events(actual: &[Value], case: &Value) -> TestResult {
-    let expected = case["events"].as_array().expect("Captured request events");
+    let expected = required(case, "/events")
+        .as_array()
+        .expect("Captured request events");
     let paired = |events: &[Value]| {
         events
             .iter()
             .map(|event| {
-                if matches!(event["kind"].as_str(), Some("api-error" | "console.error")) {
-                    json!({"kind": event["kind"]})
+                let kind = required(event, "/kind");
+                if matches!(kind.as_str(), Some("api-error" | "console.error")) {
+                    json!({"kind": kind})
                 } else {
                     event.clone()
                 }
@@ -115,28 +118,28 @@ pub(super) fn assert_events(actual: &[Value], case: &Value) -> TestResult {
         paired(actual),
         paired(expected),
         "{}: complete callback/log/query sequence",
-        case["scenario"]
+        required(case, "/scenario")
     );
     for event in actual {
-        if event["kind"] == "api-error" {
-            assert_eq!(event["isApiError"], false);
-            assert_eq!(event["native"]["variant"], "serialization");
-            assert_eq!(event["native"]["category"], "Data");
+        if required(event, "/kind") == "api-error" {
+            assert_eq!(required(event, "/isApiError"), false);
+            assert_eq!(required(event, "/native/variant"), "serialization");
+            assert_eq!(required(event, "/native/category"), "Data");
             assert!(
-                !event["native"]["message"]
+                !required(event, "/native/message")
                     .as_str()
                     .ok_or("Missing native error message")?
                     .is_empty()
             );
-        } else if event["kind"] == "console.error" {
+        } else if required(event, "/kind") == "console.error" {
             assert!(
-                event["native"]["message"]
+                required(event, "/native/message")
                     .as_str()
                     .ok_or("Missing native logger message")?
                     .contains("Authentication request failed")
             );
             assert!(
-                event["native"]["arguments"]
+                required(event, "/native/arguments")
                     .as_str()
                     .ok_or("Missing native logger error arguments")?
                     .contains("Serialization")
@@ -146,7 +149,8 @@ pub(super) fn assert_events(actual: &[Value], case: &Value) -> TestResult {
     if !actual.is_empty() {
         eprintln!(
             "Email payload native diagnostics {}/{}: Rust={actual:?}; upstream={expected:?}",
-            case["backend"], case["scenario"]
+            required(case, "/backend"),
+            required(case, "/scenario")
         );
     }
     Ok(())
