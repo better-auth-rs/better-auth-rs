@@ -234,6 +234,56 @@ async function captureCreateAlias(model, slot, serial) {
   };
 }
 
+async function captureUndefinedIdAliasUpdate() {
+  const memory = { user: [], account: [], session: [], verification: [], jwks: [], walletAddress: [] };
+  const events = [];
+  const context = await betterAuth(options(memory, "session", {
+    aliasId: {
+      type: "string", fieldName: "id", references: { model: "session", field: "id" },
+      transform: {
+        input(value) {
+          events.push(["input", "aliasId", observeValue(value)]);
+          return undefined;
+        },
+        output(value) {
+          events.push(["output", "aliasId", observeValue(value)]);
+          return value;
+        },
+      },
+    },
+  }, "serial")).$context;
+  const values = data("session", "undefined-alias", "001");
+  delete values.label;
+  values.aliasId = "seed";
+  const create = { model: "session", data: values };
+  const step = { input: observeValue(create), before: observeValue(memory), result: null, after: null };
+  let seedEvents = [];
+  let before = observeValue(memory);
+  let input = null;
+  let result = null;
+  let error = null;
+  let phase = "create";
+  try {
+    step.result = observeValue(await context.adapter.create(create));
+    step.after = observeValue(memory);
+    seedEvents = events.splice(0);
+    before = observeValue(memory);
+    phase = "update";
+    const update = {
+      model: "session", where: [{ field: "token", value: values.token }],
+      update: { aliasId: "clear", updatedAt: changedAt },
+    };
+    input = observeValue(update);
+    result = observeValue(await context.adapter.update(update));
+  } catch (caught) {
+    error = observedError(caught, phase);
+  }
+  return {
+    model: "session", slot: "after-alias", operation: "update-undefined-id-alias", idGeneration: "serial",
+    setup: [step], seedEvents, before, input, events, result, error, after: observeValue(memory),
+  };
+}
+
 export async function captureAdapterIdSlots() {
   const cases = [];
   for (const model of models) {
@@ -248,6 +298,8 @@ export async function captureAdapterIdSlots() {
     }
   }
   assert.equal(cases.length, 24);
+  cases.push(await captureUndefinedIdAliasUpdate());
+  assert.equal(cases.length, 25);
   return { version, backend: "memory", cases };
 }
 
