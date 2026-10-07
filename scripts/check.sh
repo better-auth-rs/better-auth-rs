@@ -62,6 +62,15 @@ run_stage() {
         --test cookie_expires_tests --test cookie_cleanup_tests \
         --test cookie_lifetime_tests --test cookie_session_precision_tests
       ;;
+    memory-sorting)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-core --lib -- -D warnings
+      cargo test --locked -p better-auth-core --lib store::ephemeral::api_keys::tests::sorting::
+      cargo test --locked -p better-auth-api --lib plugins::api_key::tests::list_tests::
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/memory-sort.test.ts \
+        ./compat-tests/reference-server/contracts/memory-name-coercion.test.ts
+      ;;
     plugin-display-values)
       cargo fmt --all -- --check
       bun --no-install test \

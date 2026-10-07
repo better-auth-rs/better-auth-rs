@@ -98,44 +98,36 @@ impl ApiKeyStore for EphemeralStore {
                     })
                     .collect::<AuthResult<Vec<_>>>()?;
                 if let Some(("name", direction)) = sort.filter(|_| keys.len() > 1) {
-                    // With at most one non-nullish name, distinct rows use nullish comparison branches.
-                    // FieldValue conversion has no callbacks, so precompute text only when needed.
-                    let compare_text = keys
-                        .iter()
-                        .map(|(key, _)| key.name.field_value())
-                        .filter(|name| !name.is_null() && !name.is_undefined())
-                        .take(2)
-                        .count()
-                        == 2;
-                    let mut named = keys
+                    let mut named: Vec<_> = keys
                         .into_iter()
                         .map(|key| {
                             let name = key.0.name.field_value();
-                            let text = compare_text.then(|| name.display_utf16()).transpose()?;
-                            Ok((name, text, key))
+                            (name, key)
                         })
-                        .collect::<AuthResult<Vec<_>>>()?;
-                    named.sort_by(|a, b| {
-                        use std::cmp::Ordering;
-                        let order = match (&a.0, &b.0) {
-                            (
-                                FieldValue::Null | FieldValue::Undefined,
-                                FieldValue::Null | FieldValue::Undefined,
-                            ) => Ordering::Equal,
-                            (FieldValue::Null | FieldValue::Undefined, _) => Ordering::Less,
-                            (_, FieldValue::Null | FieldValue::Undefined) => Ordering::Greater,
-                            (FieldValue::Number(left), FieldValue::Number(right)) => {
-                                (left - right).partial_cmp(&0.0).unwrap_or(Ordering::Equal)
+                        .collect();
+                    // Mixed values need not form a total order, and conversion errors must stop comparisons.
+                    // ponytail: O(n²) over all matching keys before pagination; use a fallible stable sorter for large collections.
+                    #[expect(
+                        clippy::indexing_slicing,
+                        reason = "The outer range bounds current; current only decreases while positive"
+                    )]
+                    for index in 1..named.len() {
+                        let mut current = index;
+                        while current > 0 {
+                            let order = compare_names(&named[current].0, &named[current - 1].0)?;
+                            let order = if direction == "desc" {
+                                order.reverse()
+                            } else {
+                                order
+                            };
+                            if !order.is_lt() {
+                                break;
                             }
-                            _ => a.1.cmp(&b.1),
-                        };
-                        if direction == "desc" {
-                            order.reverse()
-                        } else {
-                            order
+                            named.swap(current - 1, current);
+                            current -= 1;
                         }
-                    });
-                    keys = named.into_iter().map(|(_, _, key)| key).collect();
+                    }
+                    keys = named.into_iter().map(|(_, key)| key).collect();
                 } else if let Some((field @ ("enabled" | "rateLimitEnabled"), direction)) =
                     sort.filter(|_| keys.len() > 1)
                 {
@@ -395,6 +387,28 @@ impl ApiKeyStore for EphemeralStore {
         })
         .await
     }
+}
+
+fn compare_names(left: &FieldValue, right: &FieldValue) -> AuthResult<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+
+    Ok(match (left, right) {
+        (FieldValue::Null | FieldValue::Undefined, FieldValue::Null | FieldValue::Undefined) => {
+            Ordering::Equal
+        }
+        (FieldValue::Null | FieldValue::Undefined, _) => Ordering::Less,
+        (_, FieldValue::Null | FieldValue::Undefined) => Ordering::Greater,
+        (FieldValue::Date(left), FieldValue::Date(right)) => (left.milliseconds()
+            - right.milliseconds())
+        .partial_cmp(&0.0)
+        .unwrap_or(Ordering::Equal),
+        (FieldValue::Number(left), FieldValue::Number(right)) => {
+            (left - right).partial_cmp(&0.0).unwrap_or(Ordering::Equal)
+        }
+        (FieldValue::Bool(left), FieldValue::Bool(right)) => left.cmp(right),
+        // Ordinal UTF-16 comparison does not yet implement Memory locale collation.
+        _ => left.display_utf16()?.cmp(&right.display_utf16()?),
+    })
 }
 
 #[cfg(test)]
