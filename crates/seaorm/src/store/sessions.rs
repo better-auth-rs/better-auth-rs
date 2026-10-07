@@ -631,6 +631,11 @@ where
             Option<better_auth_core::session::SessionData>,
         )>,
     > {
+        better_auth_core::session::SessionData::validate_schema(
+            self.config(),
+            &self.model_fields,
+            super::model_names::table_matches::<S, O, P>,
+        )?;
         if self.config().advanced.database.joins != Some(true) {
             return Ok(self
                 .get_session(token)

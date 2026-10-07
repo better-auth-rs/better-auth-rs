@@ -481,7 +481,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
         UserFieldConfig {
             references: Some(UserFieldReference {
                 model: "user".into(),
-                field: "id".into(),
+                field: "email".into(),
             }),
             required: Some(false),
             ..Default::default()
@@ -493,7 +493,8 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
         .get_device_code_by_device_code(&observation.seeded.device_code)
         .await?
         .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
-    let unsupported_type = "DeviceCode FieldEquals supports only declared string, number, and boolean fields without references";
+    let unsupported_type =
+        "DeviceCode FieldEquals supports only declared string, number, and boolean fields";
     let non_scalar =
         "DeviceCode FieldEquals requires a scalar null, string, number, or boolean value";
     for (field, value, message) in [
@@ -512,7 +513,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
         (
             "referenceKey",
             json!(observation.owner.id.typed()?),
-            unsupported_type,
+            "DeviceCode ownership reference fields require the String type and an id target",
         ),
     ] {
         let error = auth

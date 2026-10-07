@@ -19,6 +19,9 @@ use std::sync::{Arc, Mutex};
 #[path = "device_where_values.rs"]
 mod values;
 use values::{observe, revive};
+#[path = "device_where_references.rs"]
+mod references;
+pub(crate) use references::load_references;
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 const FIELDS: [(&str, UserFieldType); 7] = [
@@ -37,6 +40,8 @@ pub(crate) struct Fixture {
     pub(crate) version: String,
     pub(crate) backend: String,
     pub(crate) groups: Vec<Group>,
+    #[serde(rename = "idGeneration")]
+    id_generation: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -46,7 +51,7 @@ pub(crate) struct Group {
     pub(crate) cases: Vec<Case>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(crate) struct Case {
     pub(crate) name: String,
@@ -60,9 +65,13 @@ pub(crate) struct Case {
     result: Value,
     error: Option<CapturedError>,
     after: Vec<Value>,
+    rollback: Option<references::Rollback>,
+    storage: Option<references::Storage>,
+    #[serde(skip)]
+    entry: references::Entry,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CapturedError {
     name: String,
@@ -254,15 +263,17 @@ fn stored_semantics(rows: &[Value], backend: &str) -> AuthResult<Vec<Value>> {
     reason = "Captured query shape and scalar input values must be complete before consumption"
 )]
 fn condition(case: &Case, source: &DeviceCode) -> AuthResult<DeviceCodeOwnership> {
-    assert_eq!(case.condition.len(), 3);
-    assert_eq!(
-        case.condition.first(),
-        Some(&json!({"field":"id", "value":"<device-id>"}))
-    );
-    assert_eq!(
-        case.condition.last(),
-        Some(&json!({"field":"status", "value":"approved"}))
-    );
+    if case.storage.is_none() {
+        assert_eq!(case.condition.len(), 3);
+        assert_eq!(
+            case.condition.first(),
+            Some(&json!({"field":"id", "value":"<device-id>"}))
+        );
+        assert_eq!(
+            case.condition.last(),
+            Some(&json!({"field":"status", "value":"approved"}))
+        );
+    }
     let query = case.condition.get(1).expect("ownership predicate");
     let operator = match query
         .get("operator")
@@ -309,11 +320,21 @@ fn condition(case: &Case, source: &DeviceCode) -> AuthResult<DeviceCodeOwnership
         use_returned_value(&mut condition, source)?;
     }
     assert_eq!(
-        observe(&condition.value)?,
-        query["value"],
+        Some(&observe(&condition.value)?),
+        query.get("value"),
         "captured ownership value"
     );
-    Ok(DeviceCodeOwnership::Where(condition))
+    Ok(match case.entry {
+        references::Entry::Where => DeviceCodeOwnership::Where(condition),
+        references::Entry::FieldEquals => {
+            assert_eq!(condition.operator, WhereOperator::Eq);
+            assert_eq!(condition.mode, WhereMode::Sensitive);
+            DeviceCodeOwnership::FieldEquals {
+                field: condition.field,
+                value: condition.value,
+            }
+        }
+    })
 }
 
 fn use_returned_value(condition: &mut DeviceCodeWhere, source: &DeviceCode) -> AuthResult<()> {
@@ -355,14 +376,11 @@ pub(crate) async fn run<S: AuthSchema>(
         .plugin(Fields(policies(&storage_trace)))
         .build()
         .await?;
-    let owner = auth
-        .store()
-        .create_user(
-            CreateUser::new()
-                .with_name("Where owner")
-                .with_email("owner@device-where.test"),
-        )
-        .await?;
+    let mut owner_input = CreateUser::new()
+        .with_name("Where owner")
+        .with_email("owner@device-where.test");
+    owner_input.id = (!serial).then(|| "ordinary-owner".into());
+    let owner = auth.store().create_user(owner_input).await?;
     if serial {
         assert_eq!(owner.id.typed()?, "1", "Serial fixtures start with owner 1");
     }
@@ -423,7 +441,9 @@ pub(crate) async fn run<S: AuthSchema>(
             case.name
         );
         let mut ownership = condition(case, &seeded)?;
-        let consumed = if case.transaction {
+        let consumed = if case.storage.is_some() {
+            references::consume(auth.store().as_ref(), case, &seeded, ownership).await
+        } else if case.transaction {
             let expected = seeded.clone();
             let select_source = case.name.starts_with("transaction-selected-");
             transaction(auth.store().as_ref(), move |tx| {
@@ -451,6 +471,11 @@ pub(crate) async fn run<S: AuthSchema>(
         };
         let result = match (&case.error, consumed) {
             (None, result) => result?,
+            (Some(expected), Err(AuthError::Internal(message))) if case.rollback.is_some() => {
+                assert_eq!(expected.name, "Error");
+                assert_eq!(message, expected.message);
+                None
+            }
             (Some(expected), Err(AuthError::Internal(message))) if backend == "memory" => {
                 assert_eq!(expected.name, "TypeError");
                 assert_eq!(
@@ -580,6 +605,14 @@ pub(crate) async fn run<S: AuthSchema>(
             assert!(
                 after.is_empty(),
                 "successful consumption must delete the row"
+            );
+        }
+        if case.storage.is_some() {
+            assert_eq!(
+                auth.store().get_user_by_id(owner.id.typed()?).await?,
+                Some(owner.clone()),
+                "{backend}/{} must retain the complete owner view",
+                case.name
             );
         }
         auth.store().delete_device_code(&seeded.id).await?;

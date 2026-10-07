@@ -109,7 +109,7 @@ Set `EndpointContext.transaction` when the caller runs inside an active transact
 
 Use `DeviceCodeOwnership::Where(DeviceCodeWhere)` to add one `AND` condition to consumption. Every condition retains the original ID, device code, client, user, and approved-status bindings. The condition cannot select a different code or replace those bindings. Configured grant callbacks and direct transaction calls use the same consumption path.
 
-`DeviceCodeWhere` accepts native `scope` without registration. Other fields must be declared through a custom plugin or grant. Use the logical name or the configured physical column name. Supported field types are String, Number, Boolean, Date, Enum, StringArray, NumberArray, and Json, without references. String fields that reference `id` also support Serial ID generation. Use `DeviceCodeOwnership::ClientId` for the native client binding.
+`DeviceCodeWhere` accepts native `scope` without registration. Other fields must be declared through a custom plugin or grant. Use the logical name or the configured physical column name. Supported field types are String, Number, Boolean, Date, Enum, StringArray, NumberArray, and Json, without references. String fields that reference `id` also support default String IDs and Serial ID generation. Use `DeviceCodeOwnership::ClientId` for the native client binding.
 
 For a declared String field named `tenantKey`, return this ownership condition from the redemption authorization callback:
 
@@ -143,12 +143,14 @@ With Serial ID generation, a String reference to `id` uses the shared numeric re
 
 The following predicates remain unsupported:
 
-- Reference fields outside String references to `id` with Serial ID generation.
+- Reference fields outside String references to `id`.
 - Undeclared fields, other native DeviceCode fields through `Where`, and `OR` or multiple caller-supplied conditions.
 
-The Memory comparison includes the captured Date, non-finite-number, array-identity, and transaction cases. CI acceptance is pending. The corresponding native-value database comparisons remain unpaired; binding errors and database coercion can differ across SQLite, PostgreSQL, and MySQL.
+The accepted Memory, SQLite, PostgreSQL, and MySQL contracts include 90 ordinary and 23 transaction observations per backend, including Date, non-finite-number, and array-identity cases. Database binding errors and coercion remain specific to each backend. An additional 18 default String-ID reference observations per backend cover logical and physical field names, owner mismatch, every native binding, commit, and rollback. Rust runs each reference observation through both `Where` and `FieldEquals`; focused CI acceptance of this addition is pending.
 
-The `ClientId`, `FieldEquals`, `FieldIn`, and `FieldNotIn` variants remain available. `FieldEquals` accepts `scope` or a declared String, Number, or Boolean field and a scalar or null operand. `FieldIn` and `FieldNotIn` accept `scope` or declared String or Number fields, with null, string, or number candidates. These variants do not accept reference fields.
+The reference contract compares complete Device values, field callbacks, consumed records, rollback restoration, and the original rollback error allocation. Rust also checks that the complete owner view remains unchanged. Raw User, Session, Account, and Verification table snapshots, plus complete Device table enumeration inside the transaction, remain upstream-only observations because the public Rust Store does not expose those reads.
+
+The `ClientId`, `FieldEquals`, `FieldIn`, and `FieldNotIn` variants remain available. `FieldEquals` accepts `scope` or a declared String, Number, or Boolean field and a scalar or null operand. String references to `id` use the same validation and Serial conversion as `Where`. `FieldIn` and `FieldNotIn` accept `scope` or declared non-reference String or Number fields, with null, string, or number candidates.
 
 ## Atomic consumption and transactions
 

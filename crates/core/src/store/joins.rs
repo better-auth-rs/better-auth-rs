@@ -53,6 +53,25 @@ impl AccountOwner {
     }
 }
 
+impl crate::session::SessionData {
+    /// Validate final Session/User references before reading either model.
+    #[doc(hidden)]
+    pub fn validate_schema(
+        config: &AuthConfig,
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<()> {
+        let fields = super::session_create_schema(&config.session, &crate::FieldMap::new());
+        resolve_references(
+            (EntityRole::Session, "session", &fields),
+            (EntityRole::User, "user", &config.user),
+            schema,
+            table_matches,
+        )
+        .map(|_| ())
+    }
+}
+
 /// A user and the Account relationship selected by the active schema.
 #[derive(Debug, Clone)]
 pub struct UserAccounts {

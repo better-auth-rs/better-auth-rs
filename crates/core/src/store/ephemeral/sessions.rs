@@ -344,6 +344,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         &self,
         token: &str,
     ) -> AuthResult<Option<(SessionView, Option<crate::session::SessionData>)>> {
+        crate::session::SessionData::validate_schema(&self.config, &self.model_fields, |_, _| {
+            false
+        })?;
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_session_snapshot(token).await;
         }

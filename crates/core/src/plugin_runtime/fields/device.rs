@@ -79,7 +79,7 @@ impl ModelFields {
             }
             DeviceCodeOwnership::Where(query) => {
                 let (logical, field) = self.declared_device_code_ownership_field(&query.field)?;
-                validate_reference(field, policy)?;
+                validate_reference(field)?;
                 (query.clone(), logical, field)
             }
         };
@@ -115,14 +115,13 @@ impl ModelFields {
         value: &Value,
     ) -> AuthResult<(&str, &UserFieldConfig)> {
         let (logical, field) = self.declared_device_code_ownership_field(name)?;
-        if field.references.is_some()
-            || !matches!(
-                field.field_type,
-                UserFieldType::String | UserFieldType::Number | UserFieldType::Boolean
-            )
-        {
+        validate_reference(field)?;
+        if !matches!(
+            field.field_type,
+            UserFieldType::String | UserFieldType::Number | UserFieldType::Boolean
+        ) {
             return Err(AuthError::config(
-                "DeviceCode FieldEquals supports only declared string, number, and boolean fields without references",
+                "DeviceCode FieldEquals supports only declared string, number, and boolean fields",
             ));
         }
         if !matches!(
@@ -268,14 +267,12 @@ impl ModelFields {
     }
 }
 
-fn validate_reference(field: &UserFieldConfig, policy: &IdGeneration) -> AuthResult<()> {
+fn validate_reference(field: &UserFieldConfig) -> AuthResult<()> {
     if field.references.is_some()
-        && !(matches!(policy, IdGeneration::Serial)
-            && field.references_id()
-            && matches!(field.field_type, UserFieldType::String))
+        && !(field.references_id() && matches!(field.field_type, UserFieldType::String))
     {
         return Err(AuthError::config(
-            "DeviceCode Where reference fields require the String type, an id target, and Serial ID generation",
+            "DeviceCode ownership reference fields require the String type and an id target",
         ));
     }
     Ok(())

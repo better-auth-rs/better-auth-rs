@@ -18,9 +18,11 @@ async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -
     let captured = contract::load("memory")?;
     let transactions = contract::load_transactions("memory")?;
     let transaction_cases = inventory::paired_transactions(&transactions, "memory");
+    let references = contract::load_references("memory")?;
     for (serial, mut cases) in inventory::paired(&captured, "memory") {
         if !serial {
             cases.extend(transaction_cases.iter().copied());
+            cases.extend(references.iter());
         }
         let config = contract::config(serial);
         contract::run(
@@ -38,9 +40,11 @@ async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult
     let captured = contract::load(backend)?;
     let transactions = contract::load_transactions(backend)?;
     let transaction_cases = inventory::paired_transactions(&transactions, backend);
+    let references = contract::load_references(backend)?;
     for (serial, mut cases) in inventory::paired(&captured, backend) {
         if !serial {
             cases.extend(transaction_cases.iter().copied());
+            cases.extend(references.iter());
         }
         let config = contract::config(serial);
         if serial {
