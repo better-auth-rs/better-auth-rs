@@ -168,6 +168,14 @@ jobs:
       - name: Check upstream alignment
         if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh alignment
+      - name: Capture upstream telemetry environment
+        if: env.CHECK_STAGE == 'telemetry'
+        env:
+          TELEMETRY_ENVIRONMENT_OUTPUT: ${{ runner.temp }}/telemetry-host-observations/upstream.json
+        run: |
+          mkdir -p "$RUNNER_TEMP/telemetry-host-observations"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/telemetry-host-observations/source-sha.txt"
+          devenv shell -- bun --no-install compat-tests/reference-server/contracts/telemetry-environment.mjs
       - name: Run focused check
         if: env.CHECK_STAGE != 'all'
         env:
@@ -175,6 +183,10 @@ jobs:
         run: |
           if [[ "$CHECK_STAGE" == "client-configuration" && -n "$CHECK_COMPAT_PROFILE" ]]; then
             export COMPAT_TEST_PROFILE="$CHECK_COMPAT_PROFILE"
+          fi
+          if [[ "$CHECK_STAGE" == "telemetry" ]]; then
+            export BETTER_AUTH_TELEMETRY_OBSERVATION_DIR="$RUNNER_TEMP/telemetry-host-observations/rust"
+            mkdir -p "$BETTER_AUTH_TELEMETRY_OBSERVATION_DIR"
           fi
           if [[ "$CHECK_STAGE" == "consumer" || "$CHECK_STAGE" == "consumer-schema" ]]; then
             # Record runner resources before shutdown can skip post-job diagnostics.
@@ -197,6 +209,14 @@ jobs:
             trap 'consumer_status=$?; printf "Consumer command exit: %s\n" "$consumer_status"; kill "$consumer_sampler" 2>/dev/null || true; wait "$consumer_sampler" 2>/dev/null || true; exit "$consumer_status"' EXIT
           fi
           devenv shell -- ./scripts/check.sh "$CHECK_STAGE"
+      - name: Preserve telemetry host observations
+        if: always() && env.CHECK_STAGE == 'telemetry'
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-host-observations-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/telemetry-host-observations/
+          if-no-files-found: error
+          retention-days: 14
       - name: Save Rust cache
         if: ${{ !cancelled() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6.1.0

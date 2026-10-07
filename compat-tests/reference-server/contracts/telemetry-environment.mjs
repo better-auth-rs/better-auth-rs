@@ -26,31 +26,36 @@ function publicMetadata(payload) {
 }
 
 if (process.argv[2] === "--observe") {
-  const direct = [];
-  const http = [];
-  const fetches = [];
-  const endpoint = "https://telemetry-environment.test/capture";
+  const observation = {
+    runtime: { name: typeof Bun === "undefined" ? "node" : "bun", version: typeof Bun === "undefined" ? process.versions.node : Bun.version, versions: process.versions },
+    packages: {},
+    stdout: { mode: "pipe", isTTY: process.stdout.isTTY ?? null },
+    direct: [],
+    auth: [],
+    fetches: [],
+  };
   globalThis.fetch = async (input, init) => {
-    fetches.push(String(input));
-    assert.equal(String(input), endpoint);
-    http.push(JSON.parse(init.body));
+    observation.fetches.push(String(input));
+    observation.auth.push(JSON.parse(init.body));
     return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
   };
-  const { createTelemetry } = await import("@better-auth/telemetry");
-  const { isTest } = await import("@better-auth/core/env");
-  const { betterAuth } = await import("better-auth");
-  const options = { secret: "telemetry-environment-normal-secret-0123456789", baseURL: "https://example.test", logger: { disabled: true }, telemetry: { enabled: true } };
-  await createTelemetry(options, { customTrack: async event => { direct.push(event); }, skipTestCheck: true });
-  assert.equal(direct.length, 1);
-  const metadata = publicMetadata(direct[0].payload);
-  assert.equal(direct[0].payload.runtime.name, typeof Bun === "undefined" ? "node" : "bun");
-  const auth = betterAuth(options);
-  await auth.$context;
-  const emits = !isTest();
-  assert.deepEqual(fetches, emits ? [endpoint] : []);
-  assert.equal(http.length, emits ? 1 : 0);
-  if (emits) assert.deepEqual(publicMetadata(http[0].payload), metadata);
-  process.stdout.write(JSON.stringify({ metadata, authEvents: http.length, nativeSystemInfo: direct[0].payload.systemInfo, nativeRuntime: direct[0].payload.runtime }));
+  try {
+    for (const name of ["better-auth", "@better-auth/telemetry"]) {
+      const entrypoint = import.meta.resolve(name);
+      const { version } = JSON.parse(readFileSync(new URL("../package.json", entrypoint), "utf8"));
+      observation.packages[name] = { version, entrypoint };
+    }
+    const { createTelemetry } = await import("@better-auth/telemetry");
+    const { isTest } = await import("@better-auth/core/env");
+    const { betterAuth } = await import("better-auth");
+    const options = { secret: "telemetry-environment-normal-secret-0123456789", baseURL: "https://example.test", logger: { disabled: true }, telemetry: { enabled: true } };
+    await createTelemetry(options, { customTrack: async event => { observation.direct.push(event); }, skipTestCheck: true });
+    const auth = betterAuth(options);
+    await auth.$context;
+    observation.emits = !isTest();
+  } finally {
+    process.stdout.write(JSON.stringify(observation));
+  }
 } else {
   const cases = {
     omitted: {},
@@ -81,21 +86,36 @@ if (process.argv[2] === "--observe") {
     cases[`package-${name}`] = { npm_config_user_agent: agent };
   }
   const results = { clearedKeys, cases: {} };
-  let nativeObservation;
+  const nativeObservations = { clearedKeys, cases: {} };
+  const saveObservations = () => {
+    if (process.env.TELEMETRY_ENVIRONMENT_OUTPUT) {
+      writeFileSync(process.env.TELEMETRY_ENVIRONMENT_OUTPUT + ".system-observation.json", JSON.stringify(nativeObservations, null, 2) + "\n");
+    }
+  };
   for (const [name, overrides] of Object.entries(cases)) {
     const env = { ...process.env };
     for (const key of clearedKeys) delete env[key];
     Object.assign(env, overrides, { BETTER_AUTH_TELEMETRY_ENDPOINT: "https://telemetry-environment.test/capture" });
     const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--observe"], { env, encoding: "utf8" });
+    const captured = { env: overrides, status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr, error: result.error?.message };
+    nativeObservations.cases[name] = captured;
+    saveObservations();
     assert.equal(result.status, 0, `${name}: ${result.stderr}`);
     const observed = JSON.parse(result.stdout);
-    nativeObservation ??= { runtime: observed.nativeRuntime, systemInfo: observed.nativeSystemInfo };
-    results.cases[name] = { env: overrides, metadata: observed.metadata, authEvents: observed.authEvents };
+    captured.observation = observed;
+    saveObservations();
+    assert.equal(observed.direct.length, 1);
+    const metadata = publicMetadata(observed.direct[0].payload);
+    assert.equal(observed.direct[0].payload.runtime.name, typeof Bun === "undefined" ? "node" : "bun");
+    for (const endpoint of observed.fetches) assert.equal(endpoint, "https://telemetry-environment.test/capture");
+    assert.deepEqual(observed.fetches, observed.emits ? ["https://telemetry-environment.test/capture"] : []);
+    assert.equal(observed.auth.length, observed.emits ? 1 : 0);
+    if (observed.emits) assert.deepEqual(publicMetadata(observed.auth[0].payload), metadata);
+    results.cases[name] = { env: overrides, metadata, authEvents: observed.auth.length };
   }
   const fixture = new URL("../../../tests/fixtures/telemetry-environment-1.7.6.json", import.meta.url);
   if (process.env.TELEMETRY_ENVIRONMENT_OUTPUT) {
     writeFileSync(process.env.TELEMETRY_ENVIRONMENT_OUTPUT, JSON.stringify(results, null, 2) + "\n");
-    writeFileSync(process.env.TELEMETRY_ENVIRONMENT_OUTPUT + ".system-observation.json", JSON.stringify(nativeObservation, null, 2) + "\n");
     console.log(`Wrote ${Object.keys(cases).length} telemetry environment cases`);
   } else {
     assert.deepEqual(results, JSON.parse(readFileSync(fixture, "utf8")));

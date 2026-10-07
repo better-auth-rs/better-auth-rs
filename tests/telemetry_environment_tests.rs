@@ -7,7 +7,11 @@ use async_trait::async_trait;
 use better_auth::observability::{TelemetryEvent, TelemetryTransport};
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth};
 use serde_json::{Value, json};
+use std::io::IsTerminal;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+const OBSERVATION_DIR_ENV: &str = "BETTER_AUTH_TELEMETRY_OBSERVATION_DIR";
 
 fn fixture() -> Result<Value, serde_json::Error> {
     serde_json::from_str(include_str!("fixtures/telemetry-environment-1.7.6.json"))
@@ -25,6 +29,10 @@ fn initialization_metadata_matches_upstream_in_independent_processes()
         .get("cases")
         .and_then(Value::as_object)
         .ok_or("missing environment cases")?;
+    let observation_dir = std::env::var_os(OBSERVATION_DIR_ENV).map(PathBuf::from);
+    if let Some(directory) = &observation_dir {
+        std::fs::create_dir_all(directory)?;
+    }
     for (name, case) in cases {
         let mut child = std::process::Command::new(std::env::current_exe()?);
         let _ = child.args(["--exact", "environment_case", "--ignored"]);
@@ -39,6 +47,9 @@ fn initialization_metadata_matches_upstream_in_independent_processes()
             let _ = child.env(key, value.as_str().ok_or("invalid environment value")?);
         }
         let _ = child.env("BETTER_AUTH_TEST_TELEMETRY_CASE", name);
+        if let Some(directory) = &observation_dir {
+            let _ = child.env(OBSERVATION_DIR_ENV, directory);
+        }
         let output = child.output()?;
         assert!(
             output.status.success(),
@@ -51,14 +62,14 @@ fn initialization_metadata_matches_upstream_in_independent_processes()
 }
 
 #[derive(Default)]
-struct Reports(Mutex<Vec<Value>>);
+struct Reports(Mutex<Vec<TelemetryEvent>>);
 #[async_trait]
 impl TelemetryTransport for Reports {
     async fn send(&self, event: &TelemetryEvent) -> AuthResult<()> {
         self.0
             .lock()
             .map_err(|_| AuthError::internal("telemetry capture poisoned"))?
-            .push(event.payload.clone());
+            .push(event.clone());
         Ok(())
     }
 }
@@ -109,9 +120,8 @@ async fn environment_case() -> AuthResult<()> {
     let expected = case
         .get("metadata")
         .ok_or_else(|| AuthError::internal("missing expected metadata"))?;
-    compare_metadata(
-        &Value::Object(better_auth::__private_core::observability::telemetry::Telemetry::initialization_metadata()),
-        expected,
+    let metadata = Value::Object(
+        better_auth::__private_core::observability::telemetry::Telemetry::initialization_metadata(),
     );
     let reports = Arc::new(Reports::default());
     let mut config = AuthConfig::new("telemetry-environment-normal-secret-0123456789")
@@ -119,17 +129,37 @@ async fn environment_case() -> AuthResult<()> {
     config.logger.disabled = Some(true);
     config.telemetry.enabled = true;
     config.telemetry.track = Some(reports.clone());
-    let _auth = BetterAuth::stateless(config).build().await?;
+    let auth = BetterAuth::stateless(config).build().await;
     let events = reports
         .0
         .lock()
         .map_err(|_| AuthError::internal("telemetry capture poisoned"))?;
+    if let Some(directory) = std::env::var_os(OBSERVATION_DIR_ENV) {
+        let path = PathBuf::from(directory).join(format!("rust-{name}.json"));
+        let observation = json!({
+            "case": name,
+            "env": case.get("env"),
+            "package": {"name": env!("CARGO_PKG_NAME"), "version": env!("CARGO_PKG_VERSION")},
+            "stdout": {"mode": "pipe", "isTerminal": std::io::stdout().is_terminal()},
+            "initializationMetadata": metadata,
+            "auth": &*events,
+            "buildError": auth.as_ref().err().map(ToString::to_string),
+        });
+        std::fs::write(&path, serde_json::to_vec_pretty(&observation)?).map_err(|error| {
+            AuthError::internal(format!(
+                "cannot write telemetry observation {}: {error}",
+                path.display()
+            ))
+        })?;
+    }
+    let _auth = auth?;
+    compare_metadata(&metadata, expected);
     assert_eq!(
         Some(events.len() as u64),
         case.get("authEvents").and_then(Value::as_u64)
     );
     for event in events.iter() {
-        compare_metadata(event, expected);
+        compare_metadata(&event.payload, expected);
     }
     Ok(())
 }
