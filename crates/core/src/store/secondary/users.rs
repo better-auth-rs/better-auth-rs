@@ -1,11 +1,14 @@
-use super::{SecondaryStore, decode, ttl};
+use super::{SecondaryStore, decode};
 use crate::entity::AuthUser;
-use crate::store::{UserStore, VerificationCleanup, VerificationSessionCleanup};
+use crate::store::{AuthTransaction, UserStore, VerificationCleanup, VerificationSessionCleanup};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::wire::UserView;
-use crate::{AuthResult, AuthSchema};
+use crate::{AuthError, AuthResult, AuthSchema};
 use async_trait::async_trait;
 use serde_json::json;
+
+#[cfg(test)]
+mod tests;
 
 struct CachedVerificationSessions<'a, S: AuthSchema> {
     store: &'a SecondaryStore<S>,
@@ -23,13 +26,34 @@ impl<S: AuthSchema> VerificationSessionCleanup for CachedVerificationSessions<'_
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
-    pub(super) async fn refresh_user_sessions(
+    pub(super) async fn queue_user_session_refresh(
         &self,
-        user: &crate::wire::UserView,
+        user: Option<UserView>,
+        transaction: Option<&dyn AuthTransaction<S>>,
     ) -> AuthResult<()> {
+        let runtime = self.clone();
+        let effect = Box::pin(async move {
+            // Only refresh failures use the upstream onError policy; ordinary after hooks propagate.
+            if let Err(error) = runtime.refresh_user_sessions(user.as_ref()).await {
+                runtime.config.logger.error(
+                    "Failed to refresh committed user sessions in secondary storage",
+                    &[crate::observability::LogArgument::Error(&error)],
+                );
+            }
+            Ok(())
+        });
+        match transaction {
+            Some(transaction) => transaction.queue_after_commit(effect),
+            None => effect.await,
+        }
+    }
+
+    async fn refresh_user_sessions(&self, user: Option<&UserView>) -> AuthResult<()> {
         if self.storage.is_none() {
             return Ok(());
         }
+        let user =
+            user.ok_or_else(|| AuthError::internal("Cannot refresh sessions for a missing user"))?;
         let user = UserView::with_internal_fields_for_adapter(
             user,
             &self.config.user,
@@ -37,31 +61,69 @@ impl<S: AuthSchema> SecondaryStore<S> {
             self.inner.supports_native_json(),
         )
         .await?;
-        for reference in self.references(&user.id.display_string()?).await? {
-            if reference.expires_at <= chrono::Utc::now().timestamp_millis() {
-                continue;
-            }
-            let Some(mut cached) = decode(self.secondary()?.get(&reference.token).await?) else {
-                continue;
+        let mut references = self.references(&user.id.display_string()?).await?;
+        let now = chrono::Utc::now().timestamp_millis();
+        references.retain(|reference| reference.expires_at > now);
+        let count = references.len();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let runtime = self.clone();
+        // Promise.all rejects on the first failure while already-started peers continue.
+        let task = crate::request_runtime::spawn_with_request_context(async move {
+            let runtime = &runtime;
+            let user = &user;
+            let _ = futures_util::future::join_all(references.into_iter().map(|reference| {
+                let sender = sender.clone();
+                async move {
+                    let result = runtime
+                        .refresh_cached_user_session(&reference.token, user, now)
+                        .await;
+                    let _ = sender.send(result);
+                }
+            }))
+            .await;
+        });
+        for _ in 0..count {
+            let Some(result) = receiver.recv().await else {
+                break;
             };
-            let Some(session) = cached.get("session") else {
-                continue;
-            };
-            let expires = serde_json::from_value::<chrono::DateTime<chrono::Utc>>(
-                session.get("expiresAt").cloned().unwrap_or_default(),
-            )?;
-            let _ = cached
-                .as_object_mut()
-                .ok_or_else(|| crate::AuthError::internal("Cached session must be an object"))?
-                .insert("user".into(), json!(user));
-            self.secondary()?
-                .set(
-                    &reference.token,
-                    &serde_json::to_string(&cached)?,
-                    Some(ttl(expires.into())),
-                )
-                .await?;
+            result?;
         }
+        match task.await {
+            Ok(()) => Ok(()),
+            Err(error) if error.is_panic() => std::panic::resume_unwind(error.into_panic()),
+            Err(error) => Err(AuthError::internal(format!(
+                "User session refresh task: {error}"
+            ))),
+        }
+    }
+
+    async fn refresh_cached_user_session(
+        &self,
+        token: &str,
+        user: &UserView,
+        now: i64,
+    ) -> AuthResult<()> {
+        let Some(cached) = decode(self.secondary()?.get(token).await?) else {
+            return Ok(());
+        };
+        if !crate::FieldValue::from_json(cached.clone())?.is_truthy() {
+            return Ok(());
+        }
+        let session = cached.get("session").ok_or_else(|| {
+            AuthError::internal("Cached user session refresh requires a session object")
+        })?;
+        let expires = serde_json::from_value::<chrono::DateTime<chrono::Utc>>(
+            session.get("expiresAt").cloned().unwrap_or_default(),
+        )?;
+        let seconds =
+            u64::try_from((expires.timestamp_millis() - now).div_euclid(1000)).unwrap_or(0);
+        self.secondary()?
+            .set(
+                token,
+                &serde_json::to_string(&json!({"session": session, "user": user}))?,
+                Some(seconds),
+            )
+            .await?;
         Ok(())
     }
 }
@@ -123,9 +185,7 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
             .inner
             .verify_user_with_cleanup(user_id, cleanup, Some(&sessions))
             .await?;
-        if let Some(user) = &user {
-            self.refresh_user_sessions(user).await?;
-        }
+        self.queue_user_session_refresh(user.clone(), None).await?;
         Ok(user)
     }
     async fn create_user_optional(
@@ -176,7 +236,8 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
     }
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<crate::wire::UserView> {
         let user = self.inner.update_user(id, update).await?;
-        self.refresh_user_sessions(&user).await?;
+        self.queue_user_session_refresh(Some(user.clone()), None)
+            .await?;
         Ok(user)
     }
     async fn update_user_optional(
@@ -193,9 +254,7 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         update: UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
         let user = self.inner.update_user_by_id_value(id, update).await?;
-        if let Some(user) = &user {
-            self.refresh_user_sessions(user).await?;
-        }
+        self.queue_user_session_refresh(user.clone(), None).await?;
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {

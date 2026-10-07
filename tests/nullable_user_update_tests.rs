@@ -1,4 +1,11 @@
 #![cfg(feature = "seaorm2")]
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions define the regression contract; Result propagates setup and observation failures."
+)]
+
+#[path = "nullable_user_update_tests/refresh_contract.rs"]
+mod refresh_contract;
 
 use async_trait::async_trait;
 use better_auth::config::{FieldTransforms, UserFieldTransform};
@@ -15,13 +22,20 @@ use better_auth_core::{
     CreateUser, UpdateUser,
 };
 use chrono::{Duration, Utc};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU8, Ordering},
 };
 
 type Events = Arc<Mutex<Vec<&'static str>>>;
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+fn lock<T>(mutex: &Mutex<T>) -> AuthResult<std::sync::MutexGuard<'_, T>> {
+    mutex
+        .lock()
+        .map_err(|_| AuthError::internal("Test recorder mutex is poisoned"))
+}
 #[derive(Default)]
 struct Cache {
     inner: MemoryCacheAdapter,
@@ -34,8 +48,8 @@ impl SecondaryStorage for Cache {
         SecondaryStorage::get(&self.inner, key).await
     }
     async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
-        if key == *self.watched.lock().unwrap() {
-            self.events.lock().unwrap().push("cache");
+        if key == *lock(&self.watched)? {
+            lock(&self.events)?.push("cache");
         }
         SecondaryStorage::set(&self.inner, key, value, ttl).await
     }
@@ -58,7 +72,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Observer {
         _: &UpdateUser,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        self.events.lock().unwrap().push("before");
+        lock(&self.events)?.push("before");
         match self.mode.load(Ordering::SeqCst) {
             1 => Ok(DatabaseHookUpdate::Cancel),
             2 => Err(AuthError::UserNotFound),
@@ -70,7 +84,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Observer {
         user: Option<&better_auth_core::UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
-        self.events.lock().unwrap().push(if user.is_some() {
+        lock(&self.events)?.push(if user.is_some() {
             "after"
         } else {
             "after-null"
@@ -121,24 +135,29 @@ fn update(name: &str) -> UpdateUser {
         ..Default::default()
     }
 }
-async fn cached_name(cache: &Cache, token: &str) -> String {
-    let cached = cache.get(token).await.unwrap().unwrap();
-    let value: Value = serde_json::from_str(cached.as_str().unwrap()).unwrap();
+async fn cached_name(cache: &Cache, token: &str) -> AuthResult<String> {
+    let cached = cache
+        .get(token)
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected cached session"))?;
+    let text = cached
+        .as_str()
+        .ok_or_else(|| AuthError::internal("Expected cache JSON string"))?;
+    let value: Value = serde_json::from_str(text)?;
     value
         .pointer("/user/name")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_owned()
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| AuthError::internal("Expected cached User name"))
 }
 async fn native_missing_user<S: AuthSchema>(
     auth: &BetterAuth<S>,
     observer: &Observer,
     cache: &Cache,
     token: &str,
-) {
+) -> TestResult {
     for mode in 0..=3 {
-        observer.events.lock().unwrap().clear();
+        lock(&observer.events)?.clear();
         observer.mode.store(mode, Ordering::SeqCst);
         let result = auth
             .store()
@@ -148,23 +167,23 @@ async fn native_missing_user<S: AuthSchema>(
             )
             .await;
         if mode < 2 {
-            assert!(result.unwrap().is_none());
+            assert!(result?.is_none());
         } else {
             assert!(matches!(result, Err(AuthError::UserNotFound)));
         }
         assert_eq!(
-            *observer.events.lock().unwrap(),
+            *lock(&observer.events)?,
             if mode == 1 || mode == 2 {
                 vec!["before"]
             } else {
                 vec!["before", "after-null"]
             },
         );
-        assert_eq!(cached_name(cache, token).await, "Original");
+        assert_eq!(cached_name(cache, token).await?, "Original");
     }
     observer.mode.store(0, Ordering::SeqCst);
     for commit in [false, true] {
-        observer.events.lock().unwrap().clear();
+        lock(&observer.events)?.clear();
         let events = observer.events.clone();
         let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
             Box::pin(async move {
@@ -176,7 +195,7 @@ async fn native_missing_user<S: AuthSchema>(
                     .await?
                     .is_none()
                 );
-                assert_eq!(*events.lock().unwrap(), ["before"]);
+                assert_eq!(*lock(&events)?, ["before"]);
                 if commit {
                     Ok(())
                 } else {
@@ -187,17 +206,22 @@ async fn native_missing_user<S: AuthSchema>(
         .await;
         assert_eq!(result.is_ok(), commit);
         assert_eq!(
-            *observer.events.lock().unwrap(),
+            *lock(&observer.events)?,
             if commit {
                 vec!["before", "after-null"]
             } else {
                 vec!["before"]
             },
         );
-        assert_eq!(cached_name(cache, token).await, "Original");
+        assert_eq!(cached_name(cache, token).await?, "Original");
     }
+    Ok(())
 }
-async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache: Arc<Cache>) {
+async fn exercise<S: AuthSchema>(
+    auth: BetterAuth<S>,
+    observer: Observer,
+    cache: Arc<Cache>,
+) -> TestResult {
     let user = auth
         .store()
         .create_user(
@@ -205,9 +229,8 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
                 .with_email("optional@example.test")
                 .with_name("Original"),
         )
-        .await
-        .unwrap();
-    let id = user.id().typed().unwrap().to_string();
+        .await?;
+    let id = user.id().typed()?.to_string();
     let session = auth
         .store()
         .create_session(CreateSession {
@@ -219,48 +242,43 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             impersonated_by: None,
             active_organization_id: None,
         })
-        .await
-        .unwrap();
+        .await?;
     let token = session.token().to_owned();
-    *cache.watched.lock().unwrap() = token.clone();
-    native_missing_user(&auth, &observer, &cache, &token).await;
-    observer.events.lock().unwrap().clear();
+    *lock(&cache.watched)? = token.clone();
+    native_missing_user(&auth, &observer, &cache, &token).await?;
+    lock(&observer.events)?.clear();
     assert!(
         auth.store()
             .update_user_optional(&uuid::Uuid::new_v4().to_string(), update("Missing"))
-            .await
-            .unwrap()
+            .await?
             .is_none()
     );
-    assert_eq!(*observer.events.lock().unwrap(), ["before", "after-null"]);
-    observer.events.lock().unwrap().clear();
+    assert_eq!(*lock(&observer.events)?, ["before", "after-null"]);
+    lock(&observer.events)?.clear();
     observer.mode.store(1, Ordering::SeqCst);
     assert!(
         auth.store()
             .update_user_optional(&id, update("Cancelled"))
-            .await
-            .unwrap()
+            .await?
             .is_none()
     );
-    assert_eq!(*observer.events.lock().unwrap(), ["before"]);
+    assert_eq!(*lock(&observer.events)?, ["before"]);
     assert_eq!(
         auth.store()
             .get_user_by_id(&id)
-            .await
-            .unwrap()
-            .unwrap()
+            .await?
+            .ok_or("Expected stored User")?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Original")
     );
-    assert_eq!(cached_name(&cache, &token).await, "Original");
+    assert_eq!(cached_name(&cache, &token).await?, "Original");
     assert!(matches!(
         auth.store().update_user(&id, update("Strict cancelled")).await,
         Err(AuthError::Forbidden(message)) if message == "user update cancelled by database hook"
     ));
-    observer.events.lock().unwrap().clear();
+    lock(&observer.events)?.clear();
     observer.mode.store(2, Ordering::SeqCst);
     assert!(matches!(
         auth.store()
@@ -268,8 +286,8 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             .await,
         Err(AuthError::UserNotFound)
     ));
-    assert_eq!(*observer.events.lock().unwrap(), ["before"]);
-    observer.events.lock().unwrap().clear();
+    assert_eq!(*lock(&observer.events)?, ["before"]);
+    lock(&observer.events)?.clear();
     observer.mode.store(3, Ordering::SeqCst);
     assert!(matches!(
         auth.store()
@@ -277,23 +295,21 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             .await,
         Err(AuthError::UserNotFound)
     ));
-    assert_eq!(*observer.events.lock().unwrap(), ["before", "after"]);
+    assert_eq!(*lock(&observer.events)?, ["before", "after"]);
     assert_eq!(
         auth.store()
             .get_user_by_id(&id)
-            .await
-            .unwrap()
-            .unwrap()
+            .await?
+            .ok_or("Expected stored User")?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("After error")
     );
-    assert_eq!(cached_name(&cache, &token).await, "Original");
+    assert_eq!(cached_name(&cache, &token).await?, "Original");
     observer.mode.store(0, Ordering::SeqCst);
     for commit in [false, true] {
-        observer.events.lock().unwrap().clear();
+        lock(&observer.events)?.clear();
         let tx_id = id.clone();
         let observed = observer.events.clone();
         let cache_inner = cache.clone();
@@ -302,8 +318,8 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             Box::pin(async move {
                 let user = tx.update_user_optional(&tx_id, update("Committed")).await?;
                 assert!(user.is_some());
-                assert_eq!(*observed.lock().unwrap(), ["before"]);
-                assert_eq!(cached_name(&cache_inner, &token_inner).await, "Original");
+                assert_eq!(*lock(&observed)?, ["before"]);
+                assert_eq!(cached_name(&cache_inner, &token_inner).await?, "Original");
                 if commit {
                     Ok(())
                 } else {
@@ -316,21 +332,19 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
         assert_eq!(
             auth.store()
                 .get_user_by_id(&id)
-                .await
-                .unwrap()
-                .unwrap()
+                .await?
+                .ok_or("Expected stored User")?
                 .name
-                .typed()
-                .unwrap()
+                .typed()?
                 .as_deref(),
             Some(if commit { "Committed" } else { "After error" })
         );
         assert_eq!(
-            cached_name(&cache, &token).await,
+            cached_name(&cache, &token).await?,
             if commit { "Committed" } else { "Original" }
         );
         assert_eq!(
-            *observer.events.lock().unwrap(),
+            *lock(&observer.events)?,
             if commit {
                 vec!["before", "after", "cache"]
             } else {
@@ -338,17 +352,16 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
             }
         );
     }
+    Ok(())
 }
 #[tokio::test]
-async fn sqlite_nullable_updates_preserve_hooks_transactions_and_cache_order() {
+async fn sqlite_nullable_updates_preserve_hooks_transactions_and_cache_order() -> TestResult {
     use better_auth_seaorm::store::__private_test_support::{
         bundled_schema::BundledSchema, migrator,
     };
     let config = AuthConfig::new("nullable-update-test-secret-at-least-32-characters");
-    let database = better_auth_seaorm::Database::connect("sqlite::memory:")
-        .await
-        .unwrap();
-    migrator::run_migrations(&database).await.unwrap();
+    let database = better_auth_seaorm::Database::connect("sqlite::memory:").await?;
+    migrator::run_migrations(&database).await?;
     let (observer, cache) = state();
     let auth = AuthBuilder::<BundledSchema>::new(config.clone())
         .store(better_auth_seaorm::SeaOrmStore::<BundledSchema>::new(
@@ -357,12 +370,11 @@ async fn sqlite_nullable_updates_preserve_hooks_transactions_and_cache_order() {
         .secondary_storage(cache.clone())
         .plugin(observer.clone())
         .build()
-        .await
-        .unwrap();
-    exercise(auth, observer, cache).await;
+        .await?;
+    exercise(auth, observer, cache).await
 }
 #[tokio::test]
-async fn ephemeral_nullable_updates_preserve_hooks_transactions_and_cache_order() {
+async fn ephemeral_nullable_updates_preserve_hooks_transactions_and_cache_order() -> TestResult {
     let (observer, cache) = state();
     let auth = BetterAuth::<StatelessSchema>::stateless(AuthConfig::new(
         "nullable-update-test-secret-at-least-32-characters",
@@ -370,12 +382,12 @@ async fn ephemeral_nullable_updates_preserve_hooks_transactions_and_cache_order(
     .secondary_storage(cache.clone())
     .plugin(observer.clone())
     .build()
-    .await
-    .unwrap();
-    exercise(auth, observer, cache).await;
+    .await?;
+    exercise(auth, observer, cache).await
 }
 #[tokio::test]
-async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_not_found() {
+async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_not_found()
+-> TestResult {
     let mode = Arc::new(AtomicU8::new(0));
     let input_mode = mode.clone();
     let output_mode = mode.clone();
@@ -409,8 +421,7 @@ async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_no
                 .with_email("transform@example.test")
                 .with_name("Original"),
         )
-        .await
-        .unwrap();
+        .await?;
     for phase in [1, 2] {
         mode.store(phase, Ordering::SeqCst);
         let mut change = update("Written");
@@ -418,23 +429,20 @@ async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_no
             .additional_fields
             .insert("marker".into(), "value".into());
         assert!(matches!(
-            store
-                .update_user_optional(user.id.typed().unwrap(), change)
-                .await,
+            store.update_user_optional(user.id.typed()?, change).await,
             Err(AuthError::UserNotFound)
         ));
         mode.store(0, Ordering::SeqCst);
         assert_eq!(
             store
-                .get_user_by_id(user.id.typed().unwrap())
-                .await
-                .unwrap()
-                .unwrap()
+                .get_user_by_id(user.id.typed()?)
+                .await?
+                .ok_or("Expected stored User")?
                 .name
-                .typed()
-                .unwrap()
+                .typed()?
                 .as_deref(),
             Some(if phase == 1 { "Original" } else { "Written" })
         );
     }
+    Ok(())
 }

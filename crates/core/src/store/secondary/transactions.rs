@@ -198,18 +198,9 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
         update: crate::UpdateUser,
     ) -> AuthResult<crate::wire::UserView> {
         let user = self.inner.update_user(id, update).await?;
-        let runtime = self.runtime.clone();
-        let updated = user.clone();
-        self.inner.queue_after_commit(Box::pin(async move {
-            // Upstream logs a committed cache refresh failure and continues the hook queue.
-            if let Err(error) = runtime.refresh_user_sessions(&updated).await {
-                crate::observability::logger::current().error(
-                    "Failed to refresh committed user sessions in secondary storage",
-                    &[crate::observability::LogArgument::Error(&error)],
-                );
-            }
-            Ok(())
-        }))?;
+        self.runtime
+            .queue_user_session_refresh(Some(user.clone()), Some(self.inner.as_ref()))
+            .await?;
         Ok(user)
     }
     async fn update_user_optional(
@@ -226,16 +217,9 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
         update: crate::UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
         let user = self.inner.update_user_by_id_value(id, update).await?;
-        if let Some(updated) = user.clone() {
-            let runtime = self.runtime.clone();
-            self.inner.queue_after_commit(Box::pin(async move {
-                // Upstream logs a committed cache refresh failure and continues the hook queue.
-                if let Err(error)=runtime.refresh_user_sessions(&updated).await {
-                    tracing::error!(%error,"Failed to refresh committed user sessions in secondary storage");
-                }
-                Ok(())
-            }))?;
-        }
+        self.runtime
+            .queue_user_session_refresh(user.clone(), Some(self.inner.as_ref()))
+            .await?;
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {

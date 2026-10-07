@@ -1,0 +1,3712 @@
+{
+  "version": "1.7.6",
+  "contract": {
+    "errors": "name, message, enumerable own properties, and injected identity; stack formatting is excluded",
+    "clocks": "updatedAt and TTL are checked against the operation window before normalization",
+    "parallel": "release token-a failure, observe the returned update, then release token-b and await its cache write"
+  },
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": "immediate-refresh-error",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.throw",
+          "key": "active-sessions-owner",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-cache-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "cache"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "Error",
+              "message": "refresh-cache-failure",
+              "keys": [],
+              "properties": {},
+              "injected": "cache"
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "committed-refresh-error",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Memory Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "transaction.work.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.throw",
+          "key": "active-sessions-owner",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-cache-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "cache"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "Error",
+              "message": "refresh-cache-failure",
+              "keys": [],
+              "properties": {},
+              "injected": "cache"
+            }
+          ]
+        },
+        {
+          "kind": "transaction.after"
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "missing-immediate",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": null,
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "TypeError",
+              "message": "null is not an object (evaluating 'user.id')",
+              "keys": [],
+              "properties": {},
+              "injected": null
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": null
+        },
+        {
+          "kind": "operation.return",
+          "value": null
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": null
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "cancel-committed",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Memory Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": null
+        },
+        {
+          "kind": "transaction.work.return",
+          "value": null
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "TypeError",
+              "message": "null is not an object (evaluating 'user.id')",
+              "keys": [],
+              "properties": {},
+              "injected": null
+            }
+          ]
+        },
+        {
+          "kind": "transaction.after"
+        },
+        {
+          "kind": "operation.return",
+          "value": null
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": null
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "after-error-immediate",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-after-hook-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "after"
+          }
+        },
+        {
+          "kind": "operation.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-after-hook-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "after"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "thrown",
+        "error": {
+          "type": "error",
+          "name": "Error",
+          "message": "refresh-after-hook-failure",
+          "keys": [],
+          "properties": {},
+          "injected": "after"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "after-error-committed",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Memory Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "transaction.work.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "operation.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-after-hook-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "after"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "thrown",
+        "error": {
+          "type": "error",
+          "name": "Error",
+          "message": "refresh-after-hook-failure",
+          "keys": [],
+          "properties": {},
+          "injected": "after"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "rollback",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Memory Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "transaction.work.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-transaction-rollback",
+            "keys": [],
+            "properties": {},
+            "injected": "rollback"
+          }
+        },
+        {
+          "kind": "operation.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-transaction-rollback",
+            "keys": [],
+            "properties": {},
+            "injected": "rollback"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "thrown",
+        "error": {
+          "type": "error",
+          "name": "Error",
+          "message": "refresh-transaction-rollback",
+          "keys": [],
+          "properties": {},
+          "injected": "rollback"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "parallel-partial",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "active-sessions-owner",
+          "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "token-a"
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "token-b"
+        },
+        {
+          "kind": "gate.release",
+          "token": "token-a"
+        },
+        {
+          "kind": "cache.get.throw",
+          "key": "token-a",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-cache-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "cache"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "Error",
+              "message": "refresh-cache-failure",
+              "keys": [],
+              "properties": {},
+              "injected": "cache"
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "gate.release",
+          "token": "token-b"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "token-b",
+          "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+        },
+        {
+          "kind": "cache.set.start",
+          "key": "token-b",
+          "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"name\":\"Updated\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"<user.updatedAt>\",\"id\":\"owner\"}}",
+          "ttl": "<validated-session-ttl>"
+        },
+        {
+          "kind": "cache.set.return",
+          "key": "token-b",
+          "value": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"name\":\"Updated\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"<user.updatedAt>\",\"id\":\"owner\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "malformed-cache-envelope",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "active-sessions-owner",
+          "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "token-a"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "token-a",
+          "value": "{}"
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "TypeError",
+              "message": "undefined is not an object (evaluating 'parsed.session.expiresAt')",
+              "keys": [],
+              "properties": {},
+              "injected": null
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "<user.updatedAt>"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "immediate-refresh-error",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.throw",
+          "key": "active-sessions-owner",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-cache-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "cache"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "Error",
+              "message": "refresh-cache-failure",
+              "keys": [],
+              "properties": {},
+              "injected": "cache"
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "committed-refresh-error",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Kysely Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "transaction.work.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.throw",
+          "key": "active-sessions-owner",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-cache-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "cache"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "Error",
+              "message": "refresh-cache-failure",
+              "keys": [],
+              "properties": {},
+              "injected": "cache"
+            }
+          ]
+        },
+        {
+          "kind": "transaction.after"
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "missing-immediate",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": null,
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "TypeError",
+              "message": "null is not an object (evaluating 'user.id')",
+              "keys": [],
+              "properties": {},
+              "injected": null
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": null
+        },
+        {
+          "kind": "operation.return",
+          "value": null
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": null
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "cancel-committed",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Kysely Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": null
+        },
+        {
+          "kind": "transaction.work.return",
+          "value": null
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "TypeError",
+              "message": "null is not an object (evaluating 'user.id')",
+              "keys": [],
+              "properties": {},
+              "injected": null
+            }
+          ]
+        },
+        {
+          "kind": "transaction.after"
+        },
+        {
+          "kind": "operation.return",
+          "value": null
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": null
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "after-error-immediate",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-after-hook-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "after"
+          }
+        },
+        {
+          "kind": "operation.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-after-hook-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "after"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "thrown",
+        "error": {
+          "type": "error",
+          "name": "Error",
+          "message": "refresh-after-hook-failure",
+          "keys": [],
+          "properties": {},
+          "injected": "after"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "after-error-committed",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Kysely Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "transaction.work.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "operation.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-after-hook-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "after"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "thrown",
+        "error": {
+          "type": "error",
+          "name": "Error",
+          "message": "refresh-after-hook-failure",
+          "keys": [],
+          "properties": {},
+          "injected": "after"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "rollback",
+      "transaction": true,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "logger",
+          "level": "debug",
+          "message": "[Kysely Adapter] - Using provided transaction implementation.",
+          "args": []
+        },
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "transaction.work.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-transaction-rollback",
+            "keys": [],
+            "properties": {},
+            "injected": "rollback"
+          }
+        },
+        {
+          "kind": "operation.throw",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-transaction-rollback",
+            "keys": [],
+            "properties": {},
+            "injected": "rollback"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "thrown",
+        "error": {
+          "type": "error",
+          "name": "Error",
+          "message": "refresh-transaction-rollback",
+          "keys": [],
+          "properties": {},
+          "injected": "rollback"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "parallel-partial",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "active-sessions-owner",
+          "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "token-a"
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "token-b"
+        },
+        {
+          "kind": "gate.release",
+          "token": "token-a"
+        },
+        {
+          "kind": "cache.get.throw",
+          "key": "token-a",
+          "error": {
+            "type": "error",
+            "name": "Error",
+            "message": "refresh-cache-failure",
+            "keys": [],
+            "properties": {},
+            "injected": "cache"
+          }
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "Error",
+              "message": "refresh-cache-failure",
+              "keys": [],
+              "properties": {},
+              "injected": "cache"
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "gate.release",
+          "token": "token-b"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "token-b",
+          "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+        },
+        {
+          "kind": "cache.set.start",
+          "key": "token-b",
+          "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"name\":\"Updated\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"<user.updatedAt>\",\"id\":\"owner\"}}",
+          "ttl": "<validated-session-ttl>"
+        },
+        {
+          "kind": "cache.set.return",
+          "key": "token-b",
+          "value": {
+            "type": "undefined"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000},{\"token\":\"token-b\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{\"session\":{\"id\":\"session-a\",\"token\":\"token-a\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-a\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"name\":\"Updated\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"<user.updatedAt>\",\"id\":\"owner\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "malformed-cache-envelope",
+      "transaction": false,
+      "before": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Original",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "events": [
+        {
+          "kind": "hook.before",
+          "data": {
+            "name": "Updated"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "hook.after",
+          "data": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          },
+          "context": {
+            "type": "undefined"
+          }
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "active-sessions-owner"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "active-sessions-owner",
+          "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+        },
+        {
+          "kind": "cache.get.start",
+          "key": "token-a"
+        },
+        {
+          "kind": "cache.get.return",
+          "key": "token-a",
+          "value": "{}"
+        },
+        {
+          "kind": "logger",
+          "level": "error",
+          "message": "Failed to refresh committed user sessions in secondary storage",
+          "args": [
+            {
+              "type": "error",
+              "name": "TypeError",
+              "message": "undefined is not an object (evaluating 'parsed.session.expiresAt')",
+              "keys": [],
+              "properties": {},
+              "injected": null
+            }
+          ]
+        },
+        {
+          "kind": "update.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        },
+        {
+          "kind": "operation.return",
+          "value": {
+            "name": "Updated",
+            "email": "owner@secondary-user-refresh.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<user.updatedAt>"
+            },
+            "id": "owner"
+          }
+        }
+      ],
+      "outcome": {
+        "kind": "returned",
+        "value": {
+          "name": "Updated",
+          "email": "owner@secondary-user-refresh.test",
+          "emailVerified": true,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "<user.updatedAt>"
+          },
+          "id": "owner"
+        }
+      },
+      "afterReturn": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      },
+      "after": {
+        "database": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Updated",
+              "email": "owner@secondary-user-refresh.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "<user.updatedAt>"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "cache": [
+          {
+            "key": "active-sessions-owner",
+            "value": "[{\"token\":\"token-a\",\"expiresAt\":4102542245000}]"
+          },
+          {
+            "key": "token-a",
+            "value": "{}"
+          },
+          {
+            "key": "token-b",
+            "value": "{\"session\":{\"id\":\"session-b\",\"token\":\"token-b\",\"userId\":\"owner\",\"expiresAt\":\"2100-01-02T03:04:05.000Z\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"ipAddress\":null,\"userAgent\":\"agent-b\"},\"user\":{\"id\":\"owner\",\"name\":\"Original\",\"email\":\"owner@secondary-user-refresh.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\"}}"
+          }
+        ]
+      }
+    }
+  ]
+}

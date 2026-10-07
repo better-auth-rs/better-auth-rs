@@ -167,6 +167,14 @@ run_stage() {
       cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests -- serial_session_update_ids_reach_the_numeric_column_after_conversion legacy_numeric_session_rejects_invalid_user_id_before_constructor
       ./scripts/consumer-check.sh --test user_session_fields
       ;;
+    secondary-user-refresh)
+      cargo fmt --all -- --check
+      bun --no-install test ./compat-tests/reference-server/contracts/secondary-user-refresh.test.ts
+      cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test nullable_user_update_tests --test secondary_storage_hooks_tests --test background_transaction_tests -- -D warnings
+      cargo test --locked -p better-auth-core --lib store::secondary::users::tests::
+      cargo test --locked --features axum,seaorm2,redis-cache --test nullable_user_update_tests --test secondary_storage_hooks_tests --test background_transaction_tests
+      ;;
     schema-joins)
       cargo fmt --all -- --check
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
