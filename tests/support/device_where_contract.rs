@@ -384,6 +384,12 @@ pub(crate) async fn run<S: AuthSchema>(
     if serial {
         assert_eq!(owner.id.typed()?, "1", "Serial fixtures start with owner 1");
     }
+    // Compare the same read projection before and after Device consumption.
+    let owner_before = auth
+        .store()
+        .get_user_by_id(owner.id.typed()?)
+        .await?
+        .ok_or_else(|| AuthError::internal("The created owner must exist before consumption"))?;
     for case in cases {
         let mut additional_fields = FieldMap::new();
         let inputs = case
@@ -610,7 +616,7 @@ pub(crate) async fn run<S: AuthSchema>(
         if case.storage.is_some() {
             assert_eq!(
                 auth.store().get_user_by_id(owner.id.typed()?).await?,
-                Some(owner.clone()),
+                Some(owner_before.clone()),
                 "{backend}/{} must retain the complete owner view",
                 case.name
             );
