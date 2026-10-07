@@ -5,7 +5,7 @@ use better_auth_core::{
     UserView,
     id::{IdGeneration, IdGenerator},
     plugin_runtime::ModelFields,
-    store::{EphemeralStore, StatelessSchema, UserStore},
+    store::{EphemeralStore, RuntimeStore, StatelessSchema, UserStore},
     user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
 };
 use better_auth_seaorm::{
