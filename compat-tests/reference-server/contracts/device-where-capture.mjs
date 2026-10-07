@@ -24,7 +24,7 @@ export const observeValue = value => {
   return value;
 };
 
-export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios()) {
+export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios(), { diagnostics = [] } = {}) {
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const events = [];
@@ -125,17 +125,19 @@ export async function captureDeviceWhereGroup(backend, serial, scenarios = devic
         error = { name: caught.name, message: caught.message };
       }
       const after = await raw();
-      if (error || result === null) assert.deepEqual(after, before, "An error or mismatch must preserve the complete stored row");
-      else assert.deepEqual(after, [], "A successful consumption must remove the selected row");
-      assert.ok(events.every(event => event.phase === "output"), "Where conversion must not call field input transforms");
-      cases.push({
+      const observation = {
         name: scenario.name, transaction: Boolean(scenario.transaction),
         where: observeValue(where.map(condition => condition.field === "id" && condition.value === seeded.id
           ? { ...condition, value: "<device-id>" } : condition)),
         seeded: row(seeded), seedEvents, before, events: events.splice(0), result, error, after,
         ...(scenario.rollback ? { rollback: { result: rollbackResult, afterConsume: transactionAfterConsume, originalError: true } } : {}),
         ...(scenario.observeStorage ? { storage: { before: storageBefore, after: await storage() } } : {}),
-      });
+      };
+      diagnostics.push({ backend, serial, observation });
+      if (error || result === null) assert.deepEqual(after, before, "An error or mismatch must preserve the complete stored row");
+      else assert.deepEqual(after, [], "A successful consumption must remove the selected row");
+      assert.ok(observation.events.every(event => event.phase === "output"), "Where conversion must not call field input transforms");
+      cases.push(observation);
     }
     return { serial, cases };
   };

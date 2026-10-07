@@ -37,6 +37,7 @@ on:
       - compat-tests/reference-server/contracts/cookie-attribute-mutation-capture.mjs
       - compat-tests/reference-server/contracts/session-user-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/device-where-references-capture.mjs
+      - compat-tests/reference-server/contracts/device-reference-sets-capture.mjs
       - compat-tests/reference-server/contracts/email-verification-payload-capture.mjs
       - compat-tests/reference-server/contracts/oauth-token-duration-capture.mjs
       - compat-tests/reference-server/contracts/memory-name-coercion-capture.mjs
@@ -55,22 +56,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: cookie-attribute-mutation
-            regressions: [cookie-partitioned, cookie-lifetime, cookie-http-errors, cookie-expires]
-            backend: ''
-          - contract: cookie-cache-cleanup
-            script: tests/fixtures/cookie-cache-cleanup.capture.mjs
-            regressions: [cookie-cleanup]
-            backend: ''
-          - contract: session-user-join-reference
-            regressions: [schema-join-reference, account-user-selected-relations, custom-model-join-reference]
-            backend: ''
-          - contract: totp-period-nan
-            regressions: [totp-period, two-factor-cookie-duration]
-            backend: ''
-          - contract: oauth-proxy-max-age
-            regressions: [social-profile-errors]
-            backend: ''
+          - contract: device-reference-sets
+            regressions: [device-where, device-where-transactions, device-where-references]
+            backend: memory
+          - contract: device-reference-sets
+            regressions: [device-where, device-where-transactions, device-where-references]
+            backend: sqlite
+          - contract: device-reference-sets
+            regressions: [device-where, device-where-transactions, device-where-references]
+            backend: postgres
+          - contract: device-reference-sets
+            regressions: [device-where, device-where-transactions, device-where-references]
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
