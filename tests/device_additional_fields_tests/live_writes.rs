@@ -61,7 +61,7 @@ async fn observations<S: AuthSchema>(
                 events
                     .lock()
                     .expect("ordinary trace lock")
-                    .push(json!(["label", value]));
+                    .push(json!(["label", value.json()?]));
                 let stored = writer
                     .get_device_code_by_device_code("ordinary-device:live-writes")
                     .await?
@@ -102,7 +102,7 @@ async fn observations<S: AuthSchema>(
             note_events
                 .lock()
                 .expect("ordinary trace lock")
-                .push(json!(["note", value]));
+                .push(json!(["note", value.json()?]));
             Ok(FieldValue::from(format!(
                 "{}:out",
                 value.as_str().expect("string note")
@@ -152,8 +152,8 @@ async fn observations<S: AuthSchema>(
             "backend": backend,
             "operation": operation,
             "events": *events.lock().expect("ordinary trace lock"),
-            "result": returned.additional_fields,
-            "stored": stored.additional_fields,
+            "result": returned.additional_fields.json()?,
+            "stored": stored.additional_fields.json()?,
         }));
     }
     Ok(cases)

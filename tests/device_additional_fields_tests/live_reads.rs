@@ -68,7 +68,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
                 events
                     .lock()
                     .expect("ordinary trace lock")
-                    .push(json!(["label", value]));
+                    .push(json!(["label", value.json()?]));
                 let _ = writer
                     .update_device_code(
                         &id,
@@ -101,7 +101,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
             note_events
                 .lock()
                 .expect("ordinary trace lock")
-                .push(json!(["note", value]));
+                .push(json!(["note", value.json()?]));
             Ok(FieldValue::from(format!(
                 "{}:out",
                 value.as_str().expect("string note")
@@ -162,8 +162,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
                 "backend": backend,
                 "selector": selector,
                 "events": *events.lock().expect("ordinary trace lock"),
-                "result": selected.additional_fields,
-                "stored": stored.additional_fields,
+                "result": selected.additional_fields.json()?,
+                "stored": stored.additional_fields.json()?,
             }),
             *expected
         );

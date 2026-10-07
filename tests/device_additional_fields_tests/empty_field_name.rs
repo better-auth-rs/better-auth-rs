@@ -27,11 +27,11 @@ fn policies(alias: Option<&str>) -> UserConfig {
     }
 }
 
-fn display(row: &DeviceCode) -> Value {
-    json!({
+fn display(row: &DeviceCode) -> AuthResult<Value> {
+    Ok(json!({
         "hasLabel": row.additional_fields.contains_key("label"),
-        "label": row.additional_fields.get("label").cloned().unwrap_or(FieldValue::Null),
-    })
+        "label": row.additional_fields.get("label").cloned().unwrap_or(FieldValue::Null).json()?,
+    }))
 }
 
 #[expect(
@@ -81,10 +81,10 @@ async fn observations<S: AuthSchema>(
         .expect("ordinary display-field row exists");
     Ok(json!({
         "backend": backend,
-        "createdByEmpty": display(&created),
-        "readByOmitted": display(&read_by_omitted),
-        "updatedByOmitted": display(&updated),
-        "readByEmpty": display(&read_by_empty),
+        "createdByEmpty": display(&created)?,
+        "readByOmitted": display(&read_by_omitted)?,
+        "updatedByOmitted": display(&updated)?,
+        "readByEmpty": display(&read_by_empty)?,
     }))
 }
 

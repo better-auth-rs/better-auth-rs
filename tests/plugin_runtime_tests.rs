@@ -6,7 +6,7 @@ use better_auth::plugins::{
     LastLoginMethodConfig, LastLoginMethodPlugin, LastLoginMethodResolver,
     endpoint_context::EndpointContext,
 };
-use better_auth::{AuthBuilder, AuthConfig, AuthResult, AuthSchema, BetterAuth};
+use better_auth::{AuthBuilder, AuthConfig, AuthResult, AuthSchema, BetterAuth, FieldValue};
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute,
     AuthUser, CreateSession, CreateUser, HttpMethod,
@@ -49,9 +49,11 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
                 field_name: Some(field.into()),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(value.map(|value| {
-                            serde_json::json!(format!("{}:out", value.as_str().unwrap()))
-                        }))
+                        Ok(if value.is_undefined() {
+                            value
+                        } else {
+                            FieldValue::from(format!("{}:out", value.as_str().unwrap()))
+                        })
                     })),
                     ..Default::default()
                 }),
@@ -97,7 +99,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
             .await
             .unwrap()
             .additional_fields["lastLoginMethod"],
-        "http://first.example:out"
+        FieldValue::from("http://first.example:out")
     );
     assert_eq!(
         second
@@ -106,7 +108,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
             .await
             .unwrap()
             .additional_fields["lastLoginMethod"],
-        "http://second.example:out"
+        FieldValue::from("http://second.example:out")
     );
     assert_eq!(store.list_users(Default::default()).await.unwrap().1, 2);
 
@@ -136,11 +138,11 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
         .unwrap();
     assert_eq!(
         one.additional_fields["lastLoginMethod"],
-        "http://first.example:out"
+        FieldValue::from("http://first.example:out")
     );
     assert_eq!(
         two.additional_fields["lastLoginMethod"],
-        "http://second.example:out"
+        FieldValue::from("http://second.example:out")
     );
     assert!(
         first

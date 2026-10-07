@@ -7,7 +7,7 @@ use better_auth_api::plugins::device_authorization::{
 };
 use better_auth_core::{
     AuthError, AuthRequest, AuthResponse, AuthResult, AuthSession, AuthUser, CreateUser,
-    DeviceCode, HttpMethod,
+    DeviceCode, FieldMap, HttpMethod,
     middleware::RateLimitConfig,
     store::{EphemeralStore, StatelessSchema},
     user_fields::{UserConfig, UserFieldConfig},
@@ -134,7 +134,7 @@ fn record(sender: &mpsc::Sender<Value>, event: Value) -> AuthResult<()> {
 fn observe_row(row: &DeviceCode) -> AuthResult<Value> {
     Ok(json!({
         "clientId": row.client_id.json()?, "scope": row.scope.json()?, "status": row.status,
-        "pollingInterval": row.polling_interval, "label": row.additional_fields.get("label"),
+        "pollingInterval": row.polling_interval, "label": row.additional_fields.json()?.get("label"),
         "hasOwner": row.user_id.is_some(),
     }))
 }
@@ -238,12 +238,12 @@ async fn observe(input: Input) -> AuthResult<Value> {
                         Mode::Fallback => Ok(None),
                         Mode::Authorized => Ok(Some(DeviceGrantAuthorization {
                             client_id: "ordinary-grant-client".into(),
-                            additional_fields: Map::from_iter([(
+                            additional_fields: FieldMap::from_json(Map::from_iter([(
                                 "label".into(),
                                 request.additional_fields.get("label").cloned().ok_or_else(
                                     || AuthError::internal("Authorized display label is missing"),
                                 )?,
-                            )]),
+                            )]))?,
                         })),
                     }
                 })
@@ -279,7 +279,7 @@ async fn observe(input: Input) -> AuthResult<Value> {
                     "label".into(),
                     UserFieldConfig {
                         required: Some(false),
-                        default_value: Some(json!("Stored display")),
+                        default_value: Some("Stored display".into()),
                         ..Default::default()
                     },
                 )]
@@ -291,13 +291,16 @@ async fn observe(input: Input) -> AuthResult<Value> {
                 &verification_events,
                 json!({"phase":"getVerificationContext", "row":observe_row(row)?}),
             )?;
-            Ok(Some(Map::from_iter([(
-                "label".into(),
-                row.additional_fields
-                    .get("label")
-                    .cloned()
-                    .ok_or_else(|| AuthError::internal("Stored display label is missing"))?,
-            )])))
+            Ok(Some(
+                FieldMap::from_iter([(
+                    "label".into(),
+                    row.additional_fields
+                        .get("label")
+                        .cloned()
+                        .ok_or_else(|| AuthError::internal("Stored display label is missing"))?,
+                )])
+                .json()?,
+            ))
         });
     let validate_events = sender.clone();
     let request_events = sender.clone();
@@ -435,7 +438,11 @@ async fn observe(input: Input) -> AuthResult<Value> {
         .get_session(token)
         .await?
         .ok_or_else(|| AuthError::internal("Device access token has no persisted session"))?;
-    let expiry = session.expires_at().timestamp_millis();
+    let expiry = session
+        .expires_at()
+        .to_datetime()?
+        .ok_or_else(|| AuthError::internal("Device session expiration is invalid"))?
+        .timestamp_millis();
     let remaining = field(&redemption.body, "expires_in")?
         .as_i64()
         .ok_or_else(|| AuthError::internal("Device expires_in is not an integer"))?;

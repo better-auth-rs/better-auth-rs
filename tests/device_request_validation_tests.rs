@@ -169,7 +169,7 @@ impl<S: AuthSchema> AuthPlugin<S> for StoredDisplay {
                         "label".into(),
                         UserFieldConfig {
                             required: Some(false),
-                            default_value: Some(json!("Stored display")),
+                            default_value: Some("Stored display".into()),
                             ..Default::default()
                         },
                     )]
@@ -190,38 +190,38 @@ impl<S: AuthSchema> AuthPlugin<S> for StoredDisplay {
 async fn observe(input: Input, asynchronous: bool) -> AuthResult<Value> {
     let (sender, receiver) = mpsc::channel();
     let callback_sender = sender.clone();
-    let plugin = DeviceAuthorizationPlugin::new()
-        .request_fields(fields(&sender, asynchronous, input.translate_error)?)
-        .generate_device_code_with(|| async { Ok(DEVICE_CODE.into()) })
-        .generate_user_code_with(|| async { Ok(USER_CODE.into()) })
-        .validate_client(|client| async move { Ok(client == "ordinary-client") })
-        .on_device_auth_request(move |client_id, scope| {
-            let sender = callback_sender.clone();
-            async move {
-                let context = current_request_hook_context().ok_or_else(|| {
-                    AuthError::internal("Device callback request context is missing")
-                })?;
-                let original = context.request.original_request().ok_or_else(|| {
-                    AuthError::internal("Device HTTP original request is missing")
-                })?;
-                let bytes = original
-                    .body
-                    .as_deref()
-                    .ok_or_else(|| AuthError::internal("Device HTTP original body is missing"))?;
-                let original_body = std::str::from_utf8(bytes).map_err(|error| {
-                    AuthError::internal(format!("Read original Device body: {error}"))
-                })?;
-                record(&sender, Event::OriginalBody(original_body.into()))?;
-                let body = context
-                    .body
-                    .ok_or_else(|| AuthError::internal("Device callback projection is missing"))?;
-                record(&sender, Event::Request(body))?;
-                record(
-                    &sender,
-                    Event::Hook(json!({"clientId":client_id,"scope":scope})),
-                )
-            }
-        });
+    let plugin =
+        DeviceAuthorizationPlugin::new()
+            .request_fields(fields(&sender, asynchronous, input.translate_error)?)
+            .generate_device_code_with(|| async { Ok(DEVICE_CODE.into()) })
+            .generate_user_code_with(|| async { Ok(USER_CODE.into()) })
+            .validate_client(|client| async move { Ok(client == "ordinary-client") })
+            .on_device_auth_request(move |client_id, scope| {
+                let sender = callback_sender.clone();
+                async move {
+                    let context = current_request_hook_context().ok_or_else(|| {
+                        AuthError::internal("Device callback request context is missing")
+                    })?;
+                    let original = context.request.original_request().ok_or_else(|| {
+                        AuthError::internal("Device HTTP original request is missing")
+                    })?;
+                    let bytes = original.body.as_deref().ok_or_else(|| {
+                        AuthError::internal("Device HTTP original body is missing")
+                    })?;
+                    let original_body = std::str::from_utf8(bytes).map_err(|error| {
+                        AuthError::internal(format!("Read original Device body: {error}"))
+                    })?;
+                    record(&sender, Event::OriginalBody(original_body.into()))?;
+                    let body = context.body.json()?.ok_or_else(|| {
+                        AuthError::internal("Device callback projection is missing")
+                    })?;
+                    record(&sender, Event::Request(body))?;
+                    record(
+                        &sender,
+                        Event::Hook(json!({"clientId":client_id,"scope":scope})),
+                    )
+                }
+            });
     let mut config =
         AuthConfig::new("ordinary-device-request-fields-secret-at-least-32-characters")
             .base_url(ORIGIN);
@@ -271,7 +271,7 @@ async fn observe(input: Input, asynchronous: bool) -> AuthResult<Value> {
     {
         Some(row) => json!({
             "clientId": row.client_id.json()?, "scope": row.scope.json()?, "status": row.status,
-            "pollingInterval":row.polling_interval, "label":row.additional_fields.get("label"),
+            "pollingInterval":row.polling_interval, "label":row.additional_fields.json()?.get("label"),
         }),
         None => Value::Null,
     };

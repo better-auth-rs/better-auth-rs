@@ -69,14 +69,14 @@ fn policies(trace: Option<&Trace>) -> UserConfig {
                                 input_events
                                     .lock()
                                     .expect("ordinary Device input trace")
-                                    .push(json!(["input", name, value]));
+                                    .push(json!(["input", name, value.json()?]));
                                 Ok(value)
                             })),
                             output: Some(UserFieldTransform::new(move |value| {
                                 output_events
                                     .lock()
                                     .expect("ordinary Device output trace")
-                                    .push(json!(["output", name, value]));
+                                    .push(json!(["output", name, value.json()?]));
                                 Ok(value)
                             })),
                         }
@@ -214,7 +214,7 @@ async fn direct_observation(
         "name":name,
         "events":take_events(trace),
         "result":result,
-        "storedPhysical":stored_physical(&stored),
+        "storedPhysical":stored_physical(&stored).json()?,
         "nativeUnchanged":true,
     }))
 }
@@ -259,7 +259,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
             reader.store().as_ref(),
             "create",
             &trace,
-            json!(created.additional_fields),
+            json!(created.additional_fields.json()?),
             &expected_native,
         )
         .await?,
@@ -294,7 +294,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
                     .expect("ordinary Device row exists"),
             };
             assert_eq!(native(&row), expected_native);
-            json!(row.additional_fields)
+            json!(row.additional_fields.json()?)
         };
         operations.push(
             direct_observation(
@@ -318,7 +318,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
             let expected_native = native(&created);
             let mut operations = vec![json!({
                 "name":"create", "events":take_events(&transaction_trace),
-                "result":created.additional_fields, "nativeUnchanged":true,
+                "result":created.additional_fields.json()?, "nativeUnchanged":true,
             })];
             let read = tx
                 .get_device_code_by_device_code(&created.device_code)
@@ -327,7 +327,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
             assert_eq!(native(&read), expected_native);
             operations.push(json!({
                 "name":"read-device", "events":take_events(&transaction_trace),
-                "result":read.additional_fields, "nativeUnchanged":true,
+                "result":read.additional_fields.json()?, "nativeUnchanged":true,
             }));
             let updated = tx
                 .update_device_code(&created.id, update("transaction"))
@@ -335,7 +335,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
             assert_eq!(native(&updated), expected_native);
             operations.push(json!({
                 "name":"update", "events":take_events(&transaction_trace),
-                "result":updated.additional_fields, "nativeUnchanged":true,
+                "result":updated.additional_fields.json()?, "nativeUnchanged":true,
             }));
             Ok((operations, expected_native))
         })
@@ -353,7 +353,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
         "operations":operations,
         "transaction":{
             "operations":transaction_operations,
-            "storedPhysical":stored_physical(&committed),
+            "storedPhysical":stored_physical(&committed).json()?,
             "nativeUnchanged":true,
         },
     }))

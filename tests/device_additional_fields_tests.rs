@@ -104,7 +104,7 @@ async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResu
                             output
                                 .lock()
                                 .expect("ordinary output trace lock")
-                                .push(value.clone());
+                                .push(value.json()?);
                             Ok(value)
                         })),
                         ..Default::default()
@@ -133,8 +133,8 @@ async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResu
     let expected: Value =
         serde_json::from_str(include_str!("fixtures/device-additional-fields-1.7.6.json"))?;
     let actual = json!({
-        "created":created.additional_fields.get("target").expect("created reference field exists"),
-        "read":read.additional_fields.get("target").expect("read reference field exists"),
+        "created":created.additional_fields.get("target").expect("created reference field exists").json()?,
+        "read":read.additional_fields.get("target").expect("read reference field exists").json()?,
         "outputInputs":*observed.lock().expect("ordinary output trace lock"),
     });
     assert_eq!(

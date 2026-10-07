@@ -82,12 +82,15 @@ async fn run<S: AuthSchema>(
                 additional_fields: Default::default(),
                 public_key: material.public_key.clone(),
                 private_key: material.private_key.clone(),
-                created_at: date(&format!("{}-01-01T00:00:00Z", 2000 + index))?,
-                expires_at: Some(date(if index == 0 {
-                    "2001-01-01T00:00:00Z"
-                } else {
-                    "2099-01-01T00:00:00Z"
-                })?),
+                created_at: date(&format!("{}-01-01T00:00:00Z", 2000 + index))?.into(),
+                expires_at: Some(
+                    date(if index == 0 {
+                        "2001-01-01T00:00:00Z"
+                    } else {
+                        "2099-01-01T00:00:00Z"
+                    })?
+                    .into(),
+                ),
                 alg: "EdDSA".into(),
                 crv: Some("Ed25519".into()),
             })
