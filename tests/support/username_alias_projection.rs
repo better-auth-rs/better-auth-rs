@@ -85,11 +85,18 @@ async fn raw_username_projection_resolves_empty_aliases_and_preserves_serialized
                     } else {
                         observed.clone()
                     };
-                    let expected_field = expected
-                        .clone()
-                        .map(FieldValue::from_json)
-                        .transpose()
-                        .expect("expected projection field imports");
+                    let expected_field = if public && !returned {
+                        None
+                    } else {
+                        Some(
+                            observed
+                                .clone()
+                                .map(FieldValue::from_json)
+                                .transpose()
+                                .expect("expected projection field imports")
+                                .unwrap_or(FieldValue::Undefined),
+                        )
+                    };
                     assert_eq!(
                         projected.additional_fields.get(name).cloned(),
                         expected_field,

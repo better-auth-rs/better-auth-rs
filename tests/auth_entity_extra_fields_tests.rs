@@ -100,7 +100,8 @@ fn typed_user_models_preserve_omission_and_null_and_reject_incompatible_fields()
     let incompatible = serde_json::from_value::<CreateUser>(json!({"name":{"raw":true}}))?;
     assert!(matches!(
         user_with_extras::Model::new_active(None, incompatible, now),
-        Err(better_auth::AuthError::Serialization(_))
+        Err(better_auth::AuthError::Internal(message))
+            if message == "Adapter field cannot be decoded as SQL String"
     ));
     Ok(())
 }

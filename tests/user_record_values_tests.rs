@@ -152,7 +152,7 @@ async fn sqlite_record_array_cannot_replace_the_authenticated_identity_binding()
         .await
         .unwrap_err();
     assert!(
-        matches!(error,better_auth_core::AuthError::Internal(message) if message=="SQLite non-JSON fields do not accept arrays or objects")
+        matches!(error,better_auth_core::AuthError::Internal(message) if message=="Binding expected string, TypedArray, boolean, number, bigint or null")
     );
     for user in [a, b] {
         let stored = store

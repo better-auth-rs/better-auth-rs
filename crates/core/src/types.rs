@@ -1169,24 +1169,31 @@ mod tests {
     #[test]
     fn nullable_user_updates_preserve_omission_null_and_values() {
         let cases = [
-            serde_json::json!({}),
-            serde_json::json!({
-                "phone_number": null,
-                "ban_reason": null,
-                "ban_expires": null,
-            }),
-            serde_json::json!({
-                "phone_number": "+12025550123",
-                "ban_reason": "review",
-                "ban_expires": "2030-01-01T00:00:00Z",
-            }),
+            (serde_json::json!({}), None),
+            (
+                serde_json::json!({
+                    "phone_number": null,
+                    "ban_reason": null,
+                    "ban_expires": null,
+                }),
+                Some(serde_json::Value::Null),
+            ),
+            (
+                serde_json::json!({
+                    "phone_number": "+12025550123",
+                    "ban_reason": "review",
+                    "ban_expires": "2030-01-01T00:00:00Z",
+                }),
+                Some(serde_json::json!("2030-01-01T00:00:00.000Z")),
+            ),
         ];
-        for input in cases {
+        for (input, expected_date) in cases {
             let patch: UpdateUser = serde_json::from_value(input.clone()).unwrap();
             let output = serde_json::to_value(&patch).unwrap();
-            for field in ["phone_number", "ban_reason", "ban_expires"] {
+            for field in ["phone_number", "ban_reason"] {
                 assert_eq!(output.get(field), input.get(field));
             }
+            assert_eq!(output.get("ban_expires"), expected_date.as_ref());
             let restored: UpdateUser = serde_json::from_value(output).unwrap();
             assert_eq!(restored.phone_number, patch.phone_number);
             assert_eq!(restored.ban_reason, patch.ban_reason);

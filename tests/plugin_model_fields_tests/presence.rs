@@ -187,19 +187,27 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         assert_eq!(row.aaguid.json()?, expected_output);
     }
     *output.lock().unwrap() = Some(42.0.into());
-    assert!(
-        auth.store()
-            .update_passkey_name(created.id.typed()?, "Updated display")
-            .await
-            .is_err()
-    );
+    let updated = auth
+        .store()
+        .update_passkey_name(created.id.typed()?, "Updated display")
+        .await?;
+    assert_eq!(updated.name.field_value(), FieldValue::Number(42.0));
+    assert_eq!(updated.aaguid.field_value(), FieldValue::Number(42.0));
+    let view = serde_json::to_value(PasskeyView::from(&updated))?;
+    for field in ["name", "aaguid"] {
+        assert_display(&view, field, Some(json!(42)));
+    }
     assert_eq!(
-        raw.get_passkey_by_id(created.id.typed()?)
-            .await?
-            .unwrap()
-            .name,
-        Some("Updated display".into())
+        *trace.lock().unwrap(),
+        [
+            "input:name:\"Updated display\"",
+            "output:name:\"Updated display\"",
+            &format!("output:aaguid:\"{AAGUID}\"")
+        ]
     );
+    let stored = raw.get_passkey_by_id(created.id.typed()?).await?.unwrap();
+    assert_eq!(stored.name, Some("Updated display".into()));
+    assert_eq!(stored.aaguid, Some(AAGUID.into()));
     Ok(())
 }
 

@@ -7,7 +7,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 
 type Backend = "memory" | "sqlite";
-type Display = string | null | undefined;
+type Display = string | number | null | undefined;
 const AAGUID = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
 const baseURL = "http://display-presence.test";
 const describe = (value: Display) => value === undefined ? "undefined" : JSON.stringify(value);
@@ -47,7 +47,7 @@ test("display presence contracts use pinned Better Auth plugins 1.7.6", async ()
 for (const backend of ["memory", "sqlite"] as const) {
   test(`Passkey display outputs and omitted/null create inputs retain presence (${backend})`, async () => {
     const trace: string[] = [];
-    let output: "identity" | "string" | "empty" | "null" | "undefined" = "identity";
+    let output: "identity" | "string" | "empty" | "null" | "undefined" | "number" = "identity";
     const field = (name: "name" | "aaguid") => ({
       type: "string" as const, required: false,
       transform: {
@@ -58,6 +58,7 @@ for (const backend of ["memory", "sqlite"] as const) {
           if (output === "empty") return "";
           if (output === "null") return null;
           if (output === "undefined") return undefined;
+          if (output === "number") return 42;
           return value;
         },
       },
@@ -106,6 +107,19 @@ for (const backend of ["memory", "sqlite"] as const) {
         ]);
         for (const name of ["name", "aaguid"] as const) expectDisplay(row, name, storedValue);
       }
+      output = "number";
+      const renamed = await f.adapter.update<any>({
+        model: "passkey", where: [{field: "id", value: created.id}], update: {name: "Updated display"},
+      });
+      for (const name of ["name", "aaguid"] as const) expectDisplay(renamed, name, 42);
+      expect(trace.splice(0)).toStrictEqual([
+        'input:name:"Updated display"', 'output:name:"Updated display"', `output:aaguid:${JSON.stringify(AAGUID)}`,
+      ]);
+      const updatedRaw = f.database
+        ? f.database.query<any, [string]>('SELECT name,aaguid FROM passkey WHERE id=?').get(created.id)
+        : f.memory.passkey.find(row => row.id === created.id);
+      expect(updatedRaw.name).toBe("Updated display");
+      expect(updatedRaw.aaguid).toBe(AAGUID);
     } finally { f.close(); }
   });
 }
