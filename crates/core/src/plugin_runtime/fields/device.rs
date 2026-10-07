@@ -79,11 +79,10 @@ impl ModelFields {
             }
             DeviceCodeOwnership::Where(query) => {
                 let (logical, field) = self.declared_device_code_ownership_field(&query.field)?;
-                validate_query(field, query, policy)?;
+                validate_reference(field, policy)?;
                 (query.clone(), logical, field)
             }
         };
-        validate_finite_binding(field, &query.value)?;
         if field.references_id() && matches!(policy, IdGeneration::Serial) {
             query.value = crate::id::serial_reference_query_value(query.value)?;
         }
@@ -254,11 +253,7 @@ impl ModelFields {
     }
 }
 
-fn validate_query(
-    field: &UserFieldConfig,
-    query: &DeviceCodeWhere,
-    policy: &IdGeneration,
-) -> AuthResult<()> {
+fn validate_reference(field: &UserFieldConfig, policy: &IdGeneration) -> AuthResult<()> {
     if field.references.is_some()
         && !(matches!(policy, IdGeneration::Serial)
             && field.references_id()
@@ -266,90 +261,6 @@ fn validate_query(
     {
         return Err(AuthError::config(
             "DeviceCode Where reference fields require the String type, an id target, and Serial ID generation",
-        ));
-    }
-    if !matches!(
-        field.field_type,
-        UserFieldType::String
-            | UserFieldType::Number
-            | UserFieldType::Boolean
-            | UserFieldType::StringArray
-            | UserFieldType::NumberArray
-            | UserFieldType::Json
-            | UserFieldType::Enum(_)
-    ) {
-        return Err(AuthError::config(
-            "DeviceCode Where supports scope and declared scalar, array, or JSON fields; Date fields require a query representation that preserves adapter semantics",
-        ));
-    }
-    let scalar = |value: &Value| {
-        matches!(
-            value,
-            Value::Null
-                | Value::Bool(_)
-                | Value::String(_)
-                | Value::Utf16String(_)
-                | Value::Number(_)
-        )
-    };
-    if matches!(query.operator, WhereOperator::In | WhereOperator::NotIn) {
-        if !query
-            .value
-            .as_array()
-            .is_some_and(|values| values.iter().all(scalar))
-        {
-            return Err(AuthError::config(
-                "DeviceCode In and NotIn require flat arrays of finite scalar or null values",
-            ));
-        }
-    } else if !scalar(&query.value)
-        && !(matches!(field.field_type, UserFieldType::Json)
-            && matches!(query.operator, WhereOperator::Eq | WhereOperator::Ne))
-    {
-        return Err(AuthError::config(
-            "DeviceCode Where requires a finite scalar or null operand outside JSON equality and membership; native array and object identity cannot be represented",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_finite_binding(field: &UserFieldConfig, value: &Value) -> AuthResult<()> {
-    if !field.references_id() && !matches!(field.field_type, UserFieldType::Number) {
-        return Ok(());
-    }
-    let parsed = |value: &Value| {
-        value
-            .as_str()
-            .and_then(crate::organization_fields::numeric_filter)
-    };
-    let nonfinite = if field.references_id() {
-        value
-            .as_array()
-            .unwrap_or_else(|| std::slice::from_ref(value))
-            .iter()
-            .try_fold(false, |nonfinite, value| {
-                crate::query::field_number(value).map(|number| nonfinite || !number.is_finite())
-            })?
-    } else {
-        match value {
-            Value::Number(value) => !value.is_finite(),
-            Value::String(_) => parsed(value).is_some_and(|number| !number.is_finite()),
-            Value::Array(values) => {
-                values
-                    .iter()
-                    .any(|value| matches!(value, Value::Number(number) if !number.is_finite()))
-                    || values
-                        .iter()
-                        .map(parsed)
-                        .collect::<Option<Vec<_>>>()
-                        .is_some_and(|values| values.iter().any(|number| !number.is_finite()))
-            }
-            _ => false,
-        }
-    };
-    if nonfinite {
-        return Err(AuthError::config(
-            "DeviceCode Where cannot represent a non-finite number after query conversion",
         ));
     }
     Ok(())

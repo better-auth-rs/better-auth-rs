@@ -34,6 +34,7 @@ on:
           - plugin-fields
           - schema-joins
           - user-fields
+          - runtime-values
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string
@@ -180,3 +181,6 @@ jobs:
       - name: Check User fields and ID generation
         if: env.CHECK_STAGE == 'user-fields'
         run: devenv shell -- ./scripts/check.sh user-fields
+      - name: Check native runtime values
+        if: env.CHECK_STAGE == 'runtime-values'
+        run: devenv shell -- ./scripts/check.sh runtime-values

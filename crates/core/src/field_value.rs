@@ -173,7 +173,7 @@ impl<'a> IntoIterator for &'a mut FieldMap {
 
 /// A field value before adapter conversion or JSON serialization.
 /// `PartialEq` is Rust structural comparison. Use `strict_equals` or `same_value_zero` for JavaScript comparisons.
-/// Transaction change detection must compare `stringify` results instead of `PartialEq`.
+/// Memory row merge detection compares `stringify` results; credential guards preserve native value distinctions.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum FieldValue {
     #[default]

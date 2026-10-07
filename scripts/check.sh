@@ -60,6 +60,17 @@ run_stage() {
         ./compat-tests/reference-server/api-key-metadata.test.ts \
         ./compat-tests/reference-server/api-key-metadata-pages.test.ts
       ;;
+    runtime-values)
+      cargo clippy --locked --features axum,seaorm2,redis-cache \
+        --test custom_session_fields_tests --test organization_native_fields_tests \
+        --test device_runtime_transaction_tests --test device_where_tests -- -D warnings
+      cargo test --locked -p better-auth-core --lib -- field_value::
+      cargo test --locked --features axum,seaorm2,redis-cache \
+        --test custom_session_fields_tests --test organization_native_fields_tests \
+        --test device_runtime_transaction_tests --test native_endpoint_tests --test test_utils_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests -- \
+        --exact memory_device_where_matches_upstream_rows_callbacks_and_consumption
+      ;;
     user-fields)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings

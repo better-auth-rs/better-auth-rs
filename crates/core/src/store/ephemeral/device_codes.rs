@@ -19,11 +19,49 @@ impl DeviceCodeConsumption {
             && self.ownership_field.as_deref().is_none_or(|field| {
                 // Compare against the baseline because prepare may change the transaction's field.
                 if field == "scope" {
-                    live.scope == baseline.scope
+                    match (&live.scope, &baseline.scope) {
+                        (
+                            crate::SchemaValue::Dynamic(live),
+                            crate::SchemaValue::Dynamic(baseline),
+                        ) => same_snapshot_value(live, baseline),
+                        _ => live.scope == baseline.scope,
+                    }
                 } else {
-                    live.additional_fields.get(field) == baseline.additional_fields.get(field)
+                    match (
+                        live.additional_fields.get(field),
+                        baseline.additional_fields.get(field),
+                    ) {
+                        (Some(live), Some(baseline)) => same_snapshot_value(live, baseline),
+                        (None, None) => true,
+                        _ => false,
+                    }
                 }
             })
+    }
+}
+
+// Snapshot copies have distinct object handles. Preserve native values that JSON would merge with null or omission.
+fn same_snapshot_value(live: &Value, baseline: &Value) -> bool {
+    match (live, baseline) {
+        (Value::Number(live), Value::Number(baseline)) => {
+            live == baseline || (live.is_nan() && baseline.is_nan())
+        }
+        (Value::Array(live), Value::Array(baseline)) => {
+            live.len() == baseline.len()
+                && live
+                    .iter()
+                    .zip(baseline.iter())
+                    .all(|(live, baseline)| same_snapshot_value(live, baseline))
+        }
+        (Value::Object(live), Value::Object(baseline)) => {
+            live.len() == baseline.len()
+                && live.iter().all(|(field, live)| {
+                    baseline
+                        .get(field)
+                        .is_some_and(|baseline| same_snapshot_value(live, baseline))
+                })
+        }
+        _ => live == baseline,
     }
 }
 

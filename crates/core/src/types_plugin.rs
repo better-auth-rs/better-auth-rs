@@ -250,18 +250,17 @@ pub enum DeviceCodeOwnership {
     Where(DeviceCodeWhere),
 }
 
-/// A DeviceCode ownership condition over scope or a declared scalar, array, or JSON field.
+/// A DeviceCode ownership condition over scope or a declared field.
 /// String fields that reference `id` support Serial ID generation.
-/// Date fields and other references require query representations that preserve their adapter semantics.
+/// Other references require their adapter-specific query binding.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceCodeWhere {
     /// Native `scope`, a registered logical field name, or a configured storage field name.
     pub field: String,
     /// Comparison operator. The default is equality.
     pub operator: WhereOperator,
-    /// A finite JSON scalar or null. `In` and `NotIn` require flat scalar arrays.
-    /// JSON fields also accept arrays and objects with `Eq` and `Ne`.
-    /// Native array identity cannot be expressed by this value representation.
+    /// Native operand, retaining Date and array identity and non-finite numbers.
+    /// The selected adapter determines comparison, conversion, and binding errors.
     pub value: crate::FieldValue,
     /// String comparison mode. Range comparisons ignore this setting.
     pub mode: WhereMode,
