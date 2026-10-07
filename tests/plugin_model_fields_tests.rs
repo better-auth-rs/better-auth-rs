@@ -5,7 +5,7 @@ use better_auth::{AuthConfig, BetterAuth};
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
     AuthRoute, AuthSchema, AuthStore, CreateAccount, CreatePasskey, CreateSession, CreateUser,
-    CreateVerification, UpdatePasskeyAuthentication,
+    CreateVerification, FieldDate, FieldMap, FieldValue, UpdatePasskeyAuthentication,
     store::{EphemeralStore, StatelessSchema, schema::EntityRole},
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -153,27 +153,33 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     let input_events = events.clone();
     let output_events = events.clone();
     let policy = UserFieldConfig {
-        on_update: Some(Arc::new(|| json!("Renewed"))),
+        on_update: Some(Arc::new(|| "Renewed".into())),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 input_events
                     .lock()
                     .unwrap()
-                    .push(format!("input:{}", value.as_ref().unwrap()));
-                if value == Some(json!("input-error")) {
+                    .push(format!("input:{}", value.json()?.unwrap()));
+                if value == FieldValue::from("input-error") {
                     return Err(AuthError::internal("ordinary input error"));
                 }
-                Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => value.as_str().unwrap().trim().into(),
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 output_events
                     .lock()
                     .unwrap()
-                    .push(format!("output:{}", value.as_ref().unwrap()));
-                if value == Some(json!("output-error")) {
+                    .push(format!("output:{}", value.json()?.unwrap()));
+                if value == FieldValue::from("output-error") {
                     return Err(AuthError::internal("ordinary output error"));
                 }
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                })
             })),
         }),
         ..Default::default()
@@ -364,8 +370,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
 
 struct Call {
     stage: &'static str,
-    value: Option<Value>,
-    reply: oneshot::Sender<AuthResult<Option<Value>>>,
+    value: FieldValue,
+    reply: oneshot::Sender<AuthResult<FieldValue>>,
 }
 
 fn awaited(sender: mpsc::UnboundedSender<Call>, stage: &'static str) -> UserFieldTransform {
@@ -406,16 +412,16 @@ async fn async_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult
     let pending = tokio::spawn(async move { store.create_passkey(input(&owner, "Waiting")).await });
     let call = calls.recv().await.unwrap();
     assert_eq!(call.stage, "input");
-    assert_eq!(call.value, Some(json!("Waiting")));
+    assert_eq!(call.value, FieldValue::from("Waiting"));
     assert!(
         raw.get_passkey_by_credential_id("credential:Waiting")
             .await?
             .is_none()
     );
-    call.reply.send(Ok(Some(json!("Stored")))).unwrap();
+    call.reply.send(Ok(FieldValue::from("Stored"))).unwrap();
     let call = calls.recv().await.unwrap();
     assert_eq!(call.stage, "output");
-    assert_eq!(call.value, Some(json!("Stored")));
+    assert_eq!(call.value, FieldValue::from("Stored"));
     assert_eq!(
         raw.get_passkey_by_credential_id("credential:Waiting")
             .await?
@@ -426,7 +432,7 @@ async fn async_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult
             .as_deref(),
         Some("Stored")
     );
-    call.reply.send(Ok(Some(json!("Projected")))).unwrap();
+    call.reply.send(Ok(FieldValue::from("Projected"))).unwrap();
     assert_eq!(
         pending.await.unwrap()?.name.typed().unwrap().as_deref(),
         Some("Projected")

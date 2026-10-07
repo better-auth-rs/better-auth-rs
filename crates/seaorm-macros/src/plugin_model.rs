@@ -71,7 +71,7 @@ pub(super) fn generate(
             adapter_record::decode_field(field, seaorm_root)
         };
         assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
-        let stored_value = adapter_record::field_value(field, seaorm_root);
+        let stored_value = adapter_record::field_value(ident, seaorm_root);
         values.push(quote!(Column::#column => #stored_value,));
         if !core.contains(&name.as_str()) {
             core_columns.push(quote!(Column::#column => None,));

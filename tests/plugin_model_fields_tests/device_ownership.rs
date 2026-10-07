@@ -73,9 +73,9 @@ impl Observation {
         let mut value = serde_json::to_value(row)?;
         value["id"] = json!("<device-id>");
         value["userId"] = json!("<owner-id>");
-        if let Some(polled) = row.last_polled_at {
-            assert!(polled.timestamp_millis() >= self.started_at.timestamp_millis());
-            assert!(polled.timestamp_millis() <= Utc::now().timestamp_millis());
+        if let Some(polled) = &row.last_polled_at {
+            assert!(polled.milliseconds() >= self.started_at.timestamp_millis() as f64);
+            assert!(polled.milliseconds() <= Utc::now().timestamp_millis() as f64);
             assert!(value.get("lastPolledAt").is_some_and(Value::is_string));
             value["lastPolledAt"] = json!("<polled-at>");
         } else {
@@ -138,8 +138,8 @@ async fn setup<S: AuthSchema>(
             email: Some("owner@device-ownership.test".into()),
             email_verified: Some(false),
             image: None.into(),
-            created_at: Some(owner_time),
-            updated_at: Some(owner_time),
+            created_at: Some(owner_time.into()),
+            updated_at: Some(owner_time.into()),
             ..CreateUser::new()
         })
         .await?;
@@ -149,13 +149,16 @@ async fn setup<S: AuthSchema>(
             device_code: "ordinary-device".into(),
             user_code: "ordinary-user".into(),
             user_id: Some(owner.id.typed()?.clone()),
-            expires_at: "2100-01-01T00:00:00Z".parse().unwrap(),
+            expires_at: "2100-01-01T00:00:00Z"
+                .parse::<DateTime<Utc>>()
+                .unwrap()
+                .into(),
             status: "approved".into(),
             last_polled_at: None,
             polling_interval: Some(5000.0),
             client_id: Some("ordinary-client".into()),
             scope: Some("initial".into()).into(),
-            additional_fields: [("tenantKey".into(), json!("tenant-before"))]
+            additional_fields: [("tenantKey".into(), "tenant-before".into())]
                 .into_iter()
                 .collect(),
         })
@@ -200,7 +203,7 @@ async fn redeem<S: AuthSchema>(
                 Ok(DeviceCodeRedemptionAuthorization {
                     ownership: DeviceCodeOwnership::FieldEquals {
                         field: field.into(),
-                        value: json!(target),
+                        value: target.into(),
                     },
                     context: json!({"issuer": "ordinary-issuer"}),
                 })
@@ -222,7 +225,7 @@ async fn redeem<S: AuthSchema>(
                         &row.id,
                         UpdateDeviceCode {
                             scope: Some("prepared".into()).into(),
-                            additional_fields: [("tenantKey".into(), json!("tenant-after"))]
+                            additional_fields: [("tenantKey".into(), "tenant-after".into())]
                                 .into_iter()
                                 .collect(),
                             ..Default::default()
@@ -380,7 +383,7 @@ async fn memory_device_ownership_change_before_commit_preserves_external_record(
         } else {
             let _ = update
                 .additional_fields
-                .insert(field.into(), json!(external_value));
+                .insert(field.into(), external_value.into());
         }
         let external = auth
             .store()
@@ -461,7 +464,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
                 &before,
                 &DeviceCodeOwnership::FieldEquals {
                     field: field.into(),
-                    value,
+                    value: FieldValue::from_json(value)?,
                 },
             )
             .await
@@ -491,7 +494,7 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
                 }
             } else {
                 UpdateDeviceCode {
-                    additional_fields: [(logical.into(), json!(value))].into_iter().collect(),
+                    additional_fields: [(logical.into(), value.into())].into_iter().collect(),
                     ..Default::default()
                 }
             }
@@ -508,7 +511,7 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
                         &expected,
                         &DeviceCodeOwnership::FieldIn {
                             field: field.into(),
-                            values: vec![json!("candidate-before"), json!("candidate-after")],
+                            values: vec!["candidate-before".into(), "candidate-after".into()],
                         },
                     )
                     .await?;
@@ -535,7 +538,7 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
         } else {
             let _ = expected
                 .additional_fields
-                .insert(logical.into(), json!("candidate-after"));
+                .insert(logical.into(), "candidate-after".into());
         }
         assert_eq!(
             auth.store()
@@ -625,11 +628,11 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
         for ownership in [
             DeviceCodeOwnership::FieldIn {
                 field: field.into(),
-                values: vec![value.clone()],
+                values: vec![FieldValue::from_json(value.clone())?],
             },
             DeviceCodeOwnership::FieldNotIn {
                 field: field.into(),
-                values: vec![value.clone()],
+                values: vec![FieldValue::from_json(value.clone())?],
             },
         ] {
             calls.store(0, Ordering::SeqCst);

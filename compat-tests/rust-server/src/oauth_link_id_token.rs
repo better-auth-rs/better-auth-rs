@@ -112,7 +112,7 @@ impl OAuthLinkIdTokenFixture {
             better_auth::config::UserFieldConfig {
                 required: Some(false),
                 input: Some(false),
-                default_value: Some(json!("protected")),
+                default_value: Some("protected".into()),
                 ..Default::default()
             },
         );

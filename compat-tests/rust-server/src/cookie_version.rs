@@ -57,7 +57,7 @@ impl CookieVersionFixture {
             "secretNote".into(),
             UserFieldConfig {
                 returned: Some(false),
-                default_value: Some(json!("user-secret")),
+                default_value: Some("user-secret".into()),
                 ..Default::default()
             },
         );
@@ -65,7 +65,7 @@ impl CookieVersionFixture {
             "internalNote".into(),
             UserFieldConfig {
                 returned: Some(false),
-                default_value: Some(json!("session-secret")),
+                default_value: Some("session-secret".into()),
                 ..Default::default()
             },
         );

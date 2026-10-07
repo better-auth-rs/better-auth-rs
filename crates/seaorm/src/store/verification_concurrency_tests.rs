@@ -278,6 +278,10 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
     let factor = factor
         .ok_or_else(|| std::io::Error::other("two-factor record must survive verification"))?;
     assert_eq!(factor.failed_verification_count, Some(32));
-    assert!(factor.locked_until.is_some_and(|until| until > Utc::now()));
+    assert!(
+        factor
+            .locked_until
+            .is_some_and(|until| until.milliseconds() > Utc::now().timestamp_millis() as f64)
+    );
     Ok(())
 }

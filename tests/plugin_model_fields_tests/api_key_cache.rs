@@ -77,7 +77,7 @@ async fn contract<S: AuthSchema>(
             .store()
             .create_session(CreateSession {
                 user_id: owner.clone().into(),
-                expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+                expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                 ip_address: None,
                 user_agent: None,
                 impersonated_by: None,

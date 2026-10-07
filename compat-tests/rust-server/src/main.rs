@@ -476,8 +476,8 @@ impl OAuthRefreshTokenHandler for CompatGoogleRefreshHandler {
             token_type: Some("Bearer".to_string()),
             access_token: token("google-access-token"),
             refresh_token: token("google-refresh-token"),
-            access_token_expires_at: Some(Utc::now() + chrono::Duration::hours(1)),
-            refresh_token_expires_at: Some(Utc::now() + chrono::Duration::hours(2)),
+            access_token_expires_at: Some((Utc::now() + chrono::Duration::hours(1)).into()),
+            refresh_token_expires_at: Some((Utc::now() + chrono::Duration::hours(2)).into()),
             scopes: vec![
                 "openid".to_string(),
                 "email".to_string(),
@@ -879,7 +879,7 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
             "secretNote".into(),
             better_auth::config::UserFieldConfig {
                 returned: Some(false),
-                default_value: Some(serde_json::json!("hidden")),
+                default_value: Some("hidden".into()),
                 ..Default::default()
             },
         );
@@ -2172,8 +2172,8 @@ provider_id: (provider_id).into(),
 access_token: (body.access_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
 refresh_token: (body.refresh_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
 id_token: (body.id_token).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
-access_token_expires_at: (access_token_expires_at).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
-refresh_token_expires_at: (refresh_token_expires_at).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
+access_token_expires_at: (access_token_expires_at).map(|value| better_auth_core::SchemaValue::Typed(Some(value.into()))).unwrap_or_default(),
+refresh_token_expires_at: (refresh_token_expires_at).map(|value| better_auth_core::SchemaValue::Typed(Some(value.into()))).unwrap_or_default(),
 scope: (body.scope).map(|value| better_auth_core::SchemaValue::Typed(Some(value))).unwrap_or_default(),
 password: Default::default(),
 ..Default::default()

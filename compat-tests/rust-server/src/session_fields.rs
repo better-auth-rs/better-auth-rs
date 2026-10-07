@@ -1,17 +1,15 @@
 use better_auth::config::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType};
-use better_auth::{AuthConfig, AuthError};
+use better_auth::{AuthConfig, AuthError, FieldMap};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn suffix(suffix: &'static str) -> UserFieldTransform {
     UserFieldTransform::new(move |value| {
-        Ok(value.map(|value| {
-            if value.is_null() {
-                value
-            } else {
-                json!(format!("{}{suffix}", value.as_str().unwrap_or_default()))
-            }
-        }))
+        Ok(if value.is_null() || value.is_undefined() {
+            value
+        } else {
+            format!("{}{suffix}", value.as_str().unwrap_or_default()).into()
+        })
     })
 }
 
@@ -24,8 +22,8 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
             (
                 "deviceLabel".into(),
                 UserFieldConfig {
-                    default_value_fn: Some(Arc::new(|| json!("factory"))),
-                    on_update: Some(Arc::new(|| json!("tick"))),
+                    default_value_fn: Some(Arc::new(|| "factory".into())),
+                    on_update: Some(Arc::new(|| "tick".into())),
                     transform: Some(FieldTransforms {
                         input: Some(suffix(":input")),
                         output: Some(suffix(":output")),
@@ -37,7 +35,7 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
                 "validatedLabel".into(),
                 UserFieldConfig {
                     validator: Some(Arc::new(|value| match value.as_str() {
-                        Some(value) if value.len() >= 2 => Ok(json!(format!("{value}:validated"))),
+                        Some(value) if value.len() >= 2 => Ok(format!("{value}:validated").into()),
                         _ => Err(AuthError::BadRequest("label too short".into())),
                     })),
                     transform: Some(FieldTransforms {
@@ -52,7 +50,7 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
                 UserFieldConfig {
                     input: Some(false),
                     returned: Some(false),
-                    default_value: Some(json!("hidden")),
+                    default_value: Some("hidden".into()),
                     ..Default::default()
                 },
             ),
@@ -60,21 +58,20 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
                 "settings".into(),
                 UserFieldConfig {
                     field_type: UserFieldType::Json,
-                    default_value: Some(json!({ "stage": "created" })),
+                    default_value: Some(
+                        FieldMap::from([("stage".into(), "created".into())]).into(),
+                    ),
                     transform: Some(FieldTransforms {
                         output: Some(UserFieldTransform::new(|value| {
-                            let Some(value) = value else {
-                                return Ok(None);
-                            };
-                            if value.is_null() {
-                                return Ok(Some(value));
+                            if value.is_null() || value.is_undefined() {
+                                return Ok(value);
                             }
                             let text = value.as_str().ok_or_else(|| {
                                 AuthError::internal("SQLite JSON output must receive text")
                             })?;
                             let mut value: Value = serde_json::from_str(text)?;
                             value["output"] = json!(true);
-                            Ok(Some(json!(value.to_string())))
+                            Ok(value.to_string().into())
                         })),
                         ..Default::default()
                     }),

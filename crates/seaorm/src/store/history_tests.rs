@@ -138,7 +138,7 @@ async fn schema_history_sqlite_input_failure_preserves_callback_and_mutation() {
                     captured
                         .lock()
                         .unwrap()
-                        .push(json!(["input", "user.name", value]));
+                        .push(json!(["input", "user.name", value.json()?]));
                     Err(AuthError::internal("history-input-failure"))
                 })),
                 ..Default::default()

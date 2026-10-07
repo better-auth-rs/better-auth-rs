@@ -64,7 +64,7 @@ pub(super) fn generate(
         if is_core {
             core_columns.push(quote!(Column::#column));
             core_names.push(quote!(Column::#column => Some(#public_name),));
-            let value = adapter_record::field_value(field, seaorm_root);
+            let value = adapter_record::field_value(ident, seaorm_root);
             core_values.push(quote!((#public_name.to_owned(), #value)));
         } else {
             core_names.push(quote!(Column::#column => None,));

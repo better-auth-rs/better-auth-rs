@@ -8,7 +8,7 @@ use std::sync::{
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
-    CreateUser, store::EphemeralStore, user_fields::UserFieldConfig,
+    CreateUser, FieldMap, store::EphemeralStore, user_fields::UserFieldConfig,
 };
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -41,10 +41,7 @@ fn config(limit: Option<f64>, events: &Events, reject_user: &Arc<AtomicBool>) ->
             required: Some(false),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(move |value| {
-                    let value_text = value
-                        .as_ref()
-                        .and_then(Value::as_str)
-                        .unwrap_or("undefined");
+                    let value_text = value.as_str().unwrap_or("undefined");
                     events
                         .lock()
                         .map_err(|error| AuthError::internal(error.to_string()))?
@@ -102,8 +99,9 @@ async fn run<S: AuthSchema>(
                 user_id: name.into(),
                 user_agent: Some(name.into()),
                 expires_at: "2099-01-01T00:00:00Z"
-                    .parse()
-                    .map_err(|error: chrono::ParseError| AuthError::internal(error.to_string()))?,
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .map_err(|error| AuthError::internal(error.to_string()))?
+                    .into(),
                 additional_fields: Default::default(),
                 ip_address: None,
                 impersonated_by: None,
@@ -256,7 +254,7 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
             field_name: Some("user_agent".into()),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(|value| {
-                    Ok(Some(json!({"observed":value})))
+                    Ok(FieldMap::from([("observed".into(), value)]).into())
                 })),
                 ..Default::default()
             }),
@@ -269,8 +267,10 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
             field_name: Some("stored_label".into()),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(|value| {
-                    Ok(value
-                        .map(|value| json!(format!("{}:out", value.as_str().unwrap_or_default()))))
+                    if value.is_undefined() {
+                        return Ok(value);
+                    }
+                    Ok(format!("{}:out", value.as_str().unwrap_or_default()).into())
                 })),
                 ..Default::default()
             }),
@@ -290,8 +290,8 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
         .create_session(CreateSession {
             user_id: "alice".into(),
             user_agent: Some("browser".into()),
-            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
-            additional_fields: [("label".into(), json!("work"))].into_iter().collect(),
+            expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),
+            additional_fields: [("label".into(), "work".into())].into_iter().collect(),
             ip_address: None,
             impersonated_by: None,
             active_organization_id: None,
@@ -306,8 +306,8 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
         .update_session_fields(
             &session.token,
             [
-                ("userAgent".into(), json!("updated")),
-                ("label".into(), json!("home")),
+                ("userAgent".into(), "updated".into()),
+                ("label".into(), "home".into()),
             ]
             .into_iter()
             .collect(),
@@ -456,13 +456,7 @@ async fn oauth_owner_projection_failure_precedes_token_write() -> AuthResult<()>
                         captured_events
                             .lock()
                             .map_err(|error| AuthError::internal(error.to_string()))?
-                            .push(format!(
-                                "account:{}",
-                                value
-                                    .as_ref()
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("undefined")
-                            ));
+                            .push(format!("account:{}", value.as_str().unwrap_or("undefined")));
                         if captured_reject.load(Ordering::SeqCst) {
                             return Err(AuthError::internal("account projection rejected"));
                         }

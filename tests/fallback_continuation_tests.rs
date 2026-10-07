@@ -16,7 +16,8 @@ mod session;
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResponse, AuthResult, AuthSchema, AuthStore, CreateInvitation,
-    CreateOrganization, CreateSession, CreateUser, UpdateOrganization, UpdateUser,
+    CreateOrganization, CreateSession, CreateUser, FieldDate, FieldValue, UpdateOrganization,
+    UpdateUser,
     organization_fields::OrganizationFields,
     store::EphemeralStore,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
@@ -57,7 +58,7 @@ struct State {
     finished: mpsc::UnboundedSender<()>,
 }
 impl State {
-    fn text(&self, value: &Value) -> String {
+    fn text(&self, value: &FieldValue) -> String {
         let text = value.as_str().unwrap();
         if *self.first_source.lock().unwrap() != "B" {
             return text.into();
@@ -145,7 +146,7 @@ fn transform<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
                 if !state.enabled.load(Ordering::Relaxed) {
                     return Ok(value);
                 }
-                let text = state.text(value.as_ref().unwrap());
+                let text = state.text(&value);
                 let _ = state.event(stage, &text);
                 if (stage == "name" && mode == "async")
                     || (stage == "parent" && mode == "parent-async")
@@ -172,7 +173,7 @@ fn transform<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
                 if stage == "name" && mode == "output-error" && text == "A" {
                     return Err(failure());
                 }
-                Ok(Some(json!(format!("{text}-visible"))))
+                Ok(format!("{text}-visible").into())
             }
         });
     }
@@ -180,7 +181,7 @@ fn transform<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
         if !state.enabled.load(Ordering::Relaxed) {
             return Ok(value);
         }
-        let text = state.text(value.as_ref().unwrap());
+        let text = state.text(&value);
         let index = state.event(stage, &text);
         if stage == "parent" && mode == "parent-error" && text == "A-parent" {
             return Err(failure());
@@ -188,11 +189,12 @@ fn transform<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
         if stage == "detail" && text == "B-detail" {
             state.finished.send(()).unwrap();
         }
-        Ok(Some(json!(if mode == "sync" {
+        Ok(if mode == "sync" {
             format!("{text}:{index}")
         } else {
             format!("{text}-visible")
-        })))
+        }
+        .into())
     })
 }
 
@@ -221,15 +223,15 @@ async fn rows<S: AuthSchema>(
                 None => store.get_user_by_id_field(&session.user_id).await?.unwrap(),
             };
             assert_eq!(session.user_id, user.id);
-            result.push((user.id.typed()?.clone(), json!({"parent":session.additional_fields["label"], "parentDetail":session.additional_fields["marker"], "name":user.name, "detail":user.image})));
+            result.push((user.id.typed()?.clone(), json!({"parent":session.additional_fields["label"].json()?, "parentDetail":session.additional_fields["marker"].json()?, "name":user.name, "detail":user.image})));
         }
         Ok(result)
     } else {
-        Ok(store.list_user_invitations("GUEST@ordinary-fallback.test").await?.into_iter().map(|row| {
+        store.list_user_invitations("GUEST@ordinary-fallback.test").await?.into_iter().map(|row| {
             let child = row.organization.unwrap();
             assert_eq!(row.invitation.organization_id, child.id);
-            (child.id.typed().unwrap().clone(), json!({"parent":row.invitation.additional_fields["label"], "parentDetail":row.invitation.additional_fields["marker"], "name":child.name}))
-        }).collect())
+            Ok((child.id.typed().unwrap().clone(), json!({"parent":row.invitation.additional_fields["label"].json()?, "parentDetail":row.invitation.additional_fields["marker"].json()?, "name":child.name})))
+        }).collect()
     }
 }
 
@@ -297,16 +299,20 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
         organization.logo = Some(format!("{label}-detail")).into();
         let organization = store.create_organization(organization).await.unwrap();
         let additional_fields = [
-            ("label".into(), json!(format!("{label}-parent"))),
-            ("marker".into(), json!(format!("{label}-marker"))),
+            ("label".into(), format!("{label}-parent").into()),
+            ("marker".into(), format!("{label}-marker").into()),
         ]
         .into_iter()
         .collect();
-        let expires_at = "2099-01-01T00:00:00Z".parse().unwrap();
+        let expires_at = FieldDate::from(
+            "2099-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap(),
+        );
         let session = store
             .create_session(CreateSession {
                 user_id: user.id,
-                expires_at,
+                expires_at: expires_at.clone(),
                 ip_address: None,
                 user_agent: None,
                 impersonated_by: None,
@@ -324,8 +330,8 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
             expires_at,
         );
         invitation.additional_fields = [
-            ("label".into(), json!(format!("{label}-parent"))),
-            ("marker".into(), json!(format!("{label}-marker"))),
+            ("label".into(), format!("{label}-parent").into()),
+            ("marker".into(), format!("{label}-marker").into()),
         ]
         .into_iter()
         .collect();
@@ -377,14 +383,14 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
     let mut stored = Vec::new();
     let ids = state.ids.lock().unwrap().clone();
     for id in ids {
-        let row = if kind == Kind::Session {
+        let (name, detail) = if kind == Kind::Session {
             let row = store.get_user_by_id(&id).await.unwrap().unwrap();
-            json!({"name":row.name, "detail":row.image})
+            (row.name.field_value(), row.image.field_value())
         } else {
             let row = store.get_organization_by_id(&id).await.unwrap().unwrap();
-            json!({"name":row.name, "detail":row.logo})
+            (row.name.field_value(), row.logo.field_value())
         };
-        stored.push(json!({"name":state.text(&row["name"]), "detail":state.text(&row["detail"])}));
+        stored.push(json!({"name":state.text(&name), "detail":state.text(&detail)}));
     }
     stored.sort_by_key(|row| row["name"].as_str().unwrap().to_owned());
     assert_eq!(json!(stored), fixture["stored"]);

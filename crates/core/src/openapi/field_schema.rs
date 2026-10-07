@@ -26,10 +26,9 @@ pub(super) fn component_property(field: &UserFieldConfig) -> crate::AuthResult<V
     }
     if field.default_value_fn.is_none()
         && let Some(default) = &field.default_value
+        && let Some(default) = default.json()?
     {
-        if let Some(default) = default.json()? {
-            let _ = schema.insert("default".into(), default);
-        }
+        let _ = schema.insert("default".into(), default);
     }
     if !field.input() {
         let _ = schema.insert("readOnly".into(), Value::Bool(true));

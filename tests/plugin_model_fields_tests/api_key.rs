@@ -5,28 +5,34 @@ pub(super) fn policy(events: Arc<Mutex<Vec<String>>>) -> UserFieldConfig {
     let output = events.clone();
     UserFieldConfig {
         required: Some(true),
-        default_value: Some(json!("Fallback")),
-        on_update: Some(Arc::new(|| json!("Renewed"))),
+        default_value: Some("Fallback".into()),
+        on_update: Some(Arc::new(|| "Renewed".into())),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 events
                     .lock()
                     .unwrap()
-                    .push(format!("input:{}", value.as_ref().unwrap()));
-                if value == Some(json!("input-error")) {
+                    .push(format!("input:{}", value.json()?.unwrap()));
+                if value == FieldValue::from("input-error") {
                     return Err(AuthError::internal("ordinary API Key input error"));
                 }
-                Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => value.as_str().unwrap().trim().into(),
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 output
                     .lock()
                     .unwrap()
-                    .push(format!("output:{}", value.as_ref().unwrap()));
-                if value == Some(json!("output-error")) {
+                    .push(format!("output:{}", value.json()?.unwrap()));
+                if value == FieldValue::from("output-error") {
                     return Err(AuthError::internal("ordinary API Key output error"));
                 }
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                })
             })),
         }),
         ..Default::default()
@@ -107,7 +113,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         .update_api_key(
             &created.id,
             UpdateApiKey {
-                name: Some("  Mobile  ".into()),
+                name: Some(Some("  Mobile  ".into()).into()),
                 ..Default::default()
             },
         )
@@ -209,7 +215,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             .update_api_key(
                 &created.id,
                 UpdateApiKey {
-                    name: Some("input-error".into()),
+                    name: Some(Some("input-error".into()).into()),
                     ..Default::default()
                 },
             )
@@ -232,7 +238,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             .update_api_key(
                 &created.id,
                 UpdateApiKey {
-                    name: Some("output-error".into()),
+                    name: Some(Some("output-error".into()).into()),
                     ..Default::default()
                 },
             )
@@ -302,11 +308,17 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .await
     });
     let call = calls.recv().await.unwrap();
-    assert_eq!((call.stage, call.value), ("input", Some(json!("Waiting"))));
+    assert_eq!(
+        (call.stage, call.value),
+        ("input", FieldValue::from("Waiting"))
+    );
     assert!(raw.get_api_key_by_hash("ordinary-await").await?.is_none());
-    call.reply.send(Ok(Some(json!("Stored")))).unwrap();
+    call.reply.send(Ok(FieldValue::from("Stored"))).unwrap();
     let call = calls.recv().await.unwrap();
-    assert_eq!((call.stage, call.value), ("output", Some(json!("Stored"))));
+    assert_eq!(
+        (call.stage, call.value),
+        ("output", FieldValue::from("Stored"))
+    );
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-await")
             .await?
@@ -317,7 +329,7 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .as_deref(),
         Some("Stored")
     );
-    call.reply.send(Ok(Some(json!("Projected")))).unwrap();
+    call.reply.send(Ok(FieldValue::from("Projected"))).unwrap();
     assert_eq!(
         pending.await.unwrap()?.name.typed().unwrap().as_deref(),
         Some("Projected")

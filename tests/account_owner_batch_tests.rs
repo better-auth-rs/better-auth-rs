@@ -7,7 +7,8 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser,
+    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser, FieldMap,
+    FieldValue,
     store::EphemeralStore,
     user_fields::{
         AdapterRecord, FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform,
@@ -19,7 +20,7 @@ use better_auth_seaorm::{
     sea_orm::Database,
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::{
     future::Future,
     sync::{Arc, Mutex},
@@ -28,21 +29,21 @@ use tokio::sync::{mpsc, oneshot};
 
 type Events = Arc<Mutex<Vec<String>>>;
 
-fn accounts() -> Vec<Map<String, Value>> {
+fn accounts() -> Vec<FieldMap> {
     ["A", "B"]
         .into_iter()
         .map(|name| {
-            json!({
-                "id": format!("account-{name}"),
-                "accountId": format!("provider-account-{name}"),
-                "providerId": "ordinary-provider",
-                "userId": format!("user-{name}"),
-                "accessToken": format!("access-{name}"),
-                "refreshToken": format!("refresh-{name}"),
-            })
-            .as_object()
-            .unwrap()
-            .clone()
+            FieldMap::from_iter([
+                ("id".into(), format!("account-{name}").into()),
+                (
+                    "accountId".into(),
+                    format!("provider-account-{name}").into(),
+                ),
+                ("providerId".into(), "ordinary-provider".into()),
+                ("userId".into(), format!("user-{name}").into()),
+                ("accessToken".into(), format!("access-{name}").into()),
+                ("refreshToken".into(), format!("refresh-{name}").into()),
+            ])
         })
         .collect()
 }
@@ -107,12 +108,12 @@ fn sync_fields(events: &Events, reject: bool) -> UserConfig {
                 returned: Some(false),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(move |value| {
-                        let text = value.as_ref().and_then(Value::as_str).unwrap();
+                        let text = value.as_str().unwrap();
                         events.lock().unwrap().push(format!("{name}:{text}"));
                         if reject && name == "accessToken" && text == "access-A" {
                             return Err(AuthError::Config("projection-A".into()));
                         }
-                        Ok(Some(json!(format!("{text}:out"))))
+                        Ok(format!("{text}:out").into())
                     })),
                     ..Default::default()
                 }),
@@ -195,8 +196,8 @@ async fn synchronous_account_errors_preserve_successful_row_continuations() {
 #[derive(Debug)]
 struct Call {
     name: &'static str,
-    value: Value,
-    reply: oneshot::Sender<AuthResult<Option<Value>>>,
+    value: FieldValue,
+    reply: oneshot::Sender<AuthResult<FieldValue>>,
 }
 
 #[derive(Debug)]
@@ -219,11 +220,7 @@ fn async_fields(sender: &mpsc::UnboundedSender<Event>) -> UserConfig {
                         async move {
                             let (reply, result) = oneshot::channel();
                             sender
-                                .send(Event::Field(Call {
-                                    name,
-                                    value: value.unwrap(),
-                                    reply,
-                                }))
+                                .send(Event::Field(Call { name, value, reply }))
                                 .map_err(|_| AuthError::internal("Field controller closed"))?;
                             result
                                 .await
@@ -247,16 +244,13 @@ async fn next_field(
     let Some(Event::Field(call)) = receiver.recv().await else {
         panic!("Expected {name}:{value} before continuation");
     };
-    assert_eq!((call.name, &call.value), (name, &json!(value)));
+    assert_eq!((call.name, &call.value), (name, &FieldValue::from(value)));
     call
 }
 
 fn answer(call: Call) {
     call.reply
-        .send(Ok(Some(json!(format!(
-            "{}:out",
-            call.value.as_str().unwrap()
-        )))))
+        .send(Ok(format!("{}:out", call.value.as_str().unwrap()).into()))
         .unwrap();
 }
 
@@ -344,12 +338,12 @@ fn owner_config(trace: &Arc<Mutex<OwnerTrace>>) -> AuthConfig {
                     if !trace.armed {
                         return Ok(value);
                     }
-                    let text = value.as_ref().and_then(Value::as_str).unwrap();
+                    let text = value.as_str().unwrap();
                     trace.events.push(format!("{name}:{text}"));
                     if trace.reject == Some(name) {
                         return Err(AuthError::Config(format!("{name} rejected")));
                     }
-                    Ok(Some(json!(format!("{text}:out"))))
+                    Ok(format!("{text}:out").into())
                 })),
                 ..Default::default()
             }),
@@ -469,12 +463,8 @@ async fn ready_account_rows_batch_multifield_owner_projection() {
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(move |value| {
                     let mut events = events.lock().unwrap();
-                    events.push(json!([name, value]));
-                    Ok(Some(json!(format!(
-                        "{}:{}",
-                        value.unwrap().as_str().unwrap(),
-                        events.len()
-                    ))))
+                    events.push(json!([name, value.json()?]));
+                    Ok(format!("{}:{}", value.as_str().unwrap(), events.len()).into())
                 })),
                 ..Default::default()
             }),
@@ -498,14 +488,24 @@ async fn ready_account_rows_batch_multifield_owner_projection() {
         ),
     };
     let fields = config.account.field_schema();
-    let accounts = ["A", "B"].into_iter().map(|label| json!({"id":format!("account-{label}"),"accessToken":format!("{label}-access"),"refreshToken":format!("{label}-refresh")} ).as_object().unwrap().clone()).collect::<Vec<_>>();
+    let accounts = ["A", "B"]
+        .into_iter()
+        .map(|label| {
+            FieldMap::from_iter([
+                ("id".into(), format!("account-{label}").into()),
+                ("accessToken".into(), format!("{label}-access").into()),
+                ("refreshToken".into(), format!("{label}-refresh").into()),
+            ])
+        })
+        .collect::<Vec<_>>();
     let owners = ["A", "B"]
         .into_iter()
         .map(|label| {
-            json!({"id":format!("user-{label}"),"name":label,"image":format!("{label}-image")})
-                .as_object()
-                .unwrap()
-                .clone()
+            FieldMap::from_iter([
+                ("id".into(), format!("user-{label}").into()),
+                ("name".into(), label.into()),
+                ("image".into(), format!("{label}-image").into()),
+            ])
         })
         .collect::<Vec<_>>();
     let rows = fields.project_records_batches_then(&accounts, true, true, |ready| {
@@ -514,9 +514,9 @@ async fn ready_account_rows_batch_multifield_owner_projection() {
         async move {
             let raw = ready.iter().map(|(index, _)| owners[*index].clone()).collect::<Vec<_>>();
             let projected = user.project_records(&raw, true, true).await?;
-            Ok(ready.into_iter().zip(projected).map(|((index, account), owner)| (index, json!({
-                "accessToken":account["accessToken"], "refreshToken":account["refreshToken"], "name":owner["name"], "image":owner["image"]
-            }))).collect())
+            ready.into_iter().zip(projected).map(|((index, account), owner)| Ok((index, json!({
+                "accessToken":account["accessToken"].json()?, "refreshToken":account["refreshToken"].json()?, "name":owner["name"].json()?, "image":owner["image"].json()?
+            })))).collect::<AuthResult<Vec<_>>>()
         }
     }).await.unwrap();
     assert_eq!(json!(rows), fixture["rows"]);

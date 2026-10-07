@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 #[derive(Default)]
 struct Trace {
     events: Vec<String>,
-    projected: Option<Value>,
+    projected: FieldValue,
 }
 
 fn describe(value: &Option<Value>) -> String {
@@ -18,10 +18,10 @@ fn policy(trace: Arc<Mutex<Trace>>, failure: Arc<AtomicU8>) -> UserFieldConfig {
     let output_failure = failure.clone();
     UserFieldConfig {
         required: Some(false),
-        default_value: Some(json!(" Default ")),
+        default_value: Some(" Default ".into()),
         on_update: Some(Arc::new(move || {
             update_trace.lock().unwrap().events.push("onUpdate".into());
-            json!(" Renewed ")
+            " Renewed ".into()
         })),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
@@ -29,25 +29,27 @@ fn policy(trace: Arc<Mutex<Trace>>, failure: Arc<AtomicU8>) -> UserFieldConfig {
                     .lock()
                     .unwrap()
                     .events
-                    .push(format!("input:{}", describe(&value)));
+                    .push(format!("input:{}", describe(&value.json()?)));
                 if failure.load(Ordering::SeqCst) == 1 {
                     return Err(AuthError::internal("ordinary scope input error"));
                 }
-                Ok(value.map(|value| match value {
-                    Value::String(text) => json!(text.trim()),
+                Ok(match value {
+                    FieldValue::String(text) => text.trim().into(),
                     other => other,
-                }))
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 let mut trace = output_trace.lock().unwrap();
-                trace.events.push(format!("output:{}", describe(&value)));
+                trace
+                    .events
+                    .push(format!("output:{}", describe(&value.json()?)));
                 if output_failure.load(Ordering::SeqCst) == 2 {
                     return Err(AuthError::internal("ordinary scope output error"));
                 }
-                let projected = value.map(|value| match value {
-                    Value::String(text) => json!(format!("{text}:out")),
+                let projected = match value {
+                    FieldValue::String(text) => format!("{text}:out").into(),
                     other => other,
-                });
+                };
                 trace.projected.clone_from(&projected);
                 Ok(projected)
             })),
@@ -64,7 +66,8 @@ fn input(label: &str, scope: SchemaValue<Option<String>>) -> CreateDeviceCode {
         user_id: None,
         expires_at: chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00Z")
             .unwrap()
-            .with_timezone(&chrono::Utc),
+            .with_timezone(&chrono::Utc)
+            .into(),
         status: "pending".into(),
         last_polled_at: None,
         polling_interval: None,
@@ -78,7 +81,7 @@ fn observation(name: &str, row: Option<&DeviceCode>, trace: &Mutex<Trace>) -> Au
     // Boolean store methods expose projection through the callback, not their return value.
     let scope = match row {
         Some(row) => row.scope.json()?,
-        None => trace.projected,
+        None => trace.projected.json()?,
     };
     Ok(json!({"name": name, "scope": describe(&scope), "events": trace.events}))
 }
@@ -142,7 +145,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
                 last_polled_at: Some(Some(
                     chrono::DateTime::parse_from_rfc3339("2029-01-01T00:00:00Z")
                         .unwrap()
-                        .with_timezone(&chrono::Utc),
+                        .with_timezone(&chrono::Utc)
+                        .into(),
                 )),
                 ..Default::default()
             },
@@ -215,7 +219,7 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     let (sender, mut calls) = mpsc::unbounded_channel();
     let policy = UserFieldConfig {
         required: Some(false),
-        on_update: Some(Arc::new(|| json!("Renewed"))),
+        on_update: Some(Arc::new(|| "Renewed".into())),
         transform: Some(FieldTransforms {
             input: Some(awaited(sender.clone(), "input")),
             output: Some(awaited(sender, "output")),
@@ -238,19 +242,25 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .await
     });
     let call = calls.recv().await.unwrap();
-    assert_eq!((call.stage, call.value), ("input", Some(json!("Waiting"))));
+    assert_eq!(
+        (call.stage, call.value),
+        ("input", FieldValue::from("Waiting"))
+    );
     assert!(
         raw.get_device_code_by_device_code("ordinary-device:await")
             .await?
             .is_none()
     );
     assert!(!pending.is_finished());
-    call.reply.send(Ok(Some(json!("Stored")))).unwrap();
+    call.reply.send(Ok(FieldValue::from("Stored"))).unwrap();
     let call = calls.recv().await.unwrap();
-    assert_eq!((call.stage, call.value), ("output", Some(json!("Stored"))));
+    assert_eq!(
+        (call.stage, call.value),
+        ("output", FieldValue::from("Stored"))
+    );
     assert_eq!(stored_scope(raw.as_ref(), "await").await?, "\"Stored\"");
     assert!(!pending.is_finished());
-    call.reply.send(Ok(Some(json!("Projected")))).unwrap();
+    call.reply.send(Ok(FieldValue::from("Projected"))).unwrap();
     let row = pending.await.unwrap()?;
     assert_eq!(row.scope.json()?, Some(json!("Projected")));
 
@@ -275,21 +285,27 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             }
         });
         let call = calls.recv().await.unwrap();
-        assert_eq!((call.stage, call.value), ("input", Some(json!("Renewed"))));
+        assert_eq!(
+            (call.stage, call.value),
+            ("input", FieldValue::from("Renewed"))
+        );
         assert_eq!(
             stored_scope(raw.as_ref(), "await").await?,
             json!(previous).to_string()
         );
         assert!(!pending.is_finished());
-        call.reply.send(Ok(Some(json!(stored)))).unwrap();
+        call.reply.send(Ok(FieldValue::from(stored))).unwrap();
         let call = calls.recv().await.unwrap();
-        assert_eq!((call.stage, call.value), ("output", Some(json!(stored))));
+        assert_eq!(
+            (call.stage, call.value),
+            ("output", FieldValue::from(stored))
+        );
         assert_eq!(
             stored_scope(raw.as_ref(), "await").await?,
             json!(stored).to_string()
         );
         assert!(!pending.is_finished());
-        call.reply.send(Ok(Some(json!("Projected")))).unwrap();
+        call.reply.send(Ok(FieldValue::from("Projected"))).unwrap();
         assert!(pending.await.unwrap()?);
     }
     Ok(())

@@ -60,7 +60,7 @@ pub(super) fn generate(
         setters.push(
             quote!(#(#aliases)|* => active.#ident = #seaorm::sea_orm::ActiveValue::Set(#decoded),),
         );
-        let value = field_value(field, seaorm);
+        let value = field_value(ident, seaorm);
         values.push(quote!(Column::#column => #value,));
         if known.contains(&rust_name.as_str()) {
             core_values.push(quote!((#logical.to_owned(), #value),));
@@ -165,8 +165,7 @@ pub(super) fn generate(
     })
 }
 
-pub(super) fn field_value(field: &syn::Field, seaorm: &TokenStream) -> TokenStream {
-    let ident = field.ident.as_ref().expect("named model field");
+pub(super) fn field_value(ident: &syn::Ident, seaorm: &TokenStream) -> TokenStream {
     let column = format_ident!(
         "{}",
         serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())

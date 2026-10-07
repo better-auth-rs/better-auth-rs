@@ -1,15 +1,15 @@
+use better_auth::FieldValue;
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
-use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn replace(from: &'static str, to: &'static str) -> better_auth::config::UserFieldTransform {
     UserFieldTransform::new(move |value| {
-        Ok(value.map(|value| match value {
-            Value::String(value) => json!(value.replace(from, to)),
+        Ok(match value {
+            FieldValue::String(value) => value.replace(from, to).into(),
             value => value,
-        }))
+        })
     })
 }
 
@@ -28,14 +28,14 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                         UserFieldType::String
                     },
                     required: Some(false),
-                    default_value: Some(json!(r#"{"source":"default"}"#)),
+                    default_value: Some(r#"{"source":"default"}"#.into()),
                     transform: Some(FieldTransforms {
                         input: Some(replace("source", "stored")),
                         output: Some(UserFieldTransform::new(move |value| {
                             if json_type
-                                && value
-                                    .as_ref()
-                                    .is_some_and(|value| !value.is_null() && !value.is_string())
+                                && !value.is_undefined()
+                                && !value.is_null()
+                                && !value.is_string()
                             {
                                 return Err(better_auth::AuthError::internal(
                                     "JSON output callback requires stored text",
@@ -66,7 +66,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                             input: Some(replace("create", "delete")),
                             output: Some(replace("delete", "update")),
                         }),
-                        on_update: Some(Arc::new(|| json!(r#"{"member":["create"]}"#))),
+                        on_update: Some(Arc::new(|| r#"{"member":["create"]}"#.into())),
                         ..Default::default()
                     },
                 ),
@@ -110,10 +110,10 @@ impl better_auth::plugins::organization::hooks::OrganizationHooks for JsonHooks 
         if data
             .metadata
             .as_ref()
-            .and_then(Value::as_object)
+            .and_then(FieldValue::as_object)
             .is_some_and(|value| value.contains_key("clear"))
         {
-            data.metadata = Some(Value::Null);
+            data.metadata = Some(FieldValue::Null);
         }
         Ok(())
     }

@@ -13,24 +13,25 @@ fn policy(
     let output_failure = failure.clone();
     UserFieldConfig {
         required: Some(true),
-        default_value: (field == "aaguid").then(|| json!(FIRST)),
+        default_value: (field == "aaguid").then(|| FIRST.into()),
         on_update: (field == "aaguid")
-            .then(|| Arc::new(|| json!(UPDATED)) as Arc<dyn Fn() -> Value + Send + Sync>),
+            .then(|| Arc::new(|| UPDATED.into()) as Arc<dyn Fn() -> FieldValue + Send + Sync>),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 trace.lock().unwrap().push(format!("input:{field}"));
                 if field == "aaguid" && failure.load(Ordering::SeqCst) == 1 {
                     return Err(AuthError::internal("ordinary AAGUID input error"));
                 }
-                let text = value.unwrap().as_str().unwrap().trim().to_owned();
-                Ok(Some(json!(if field == "aaguid" {
+                let text = value.as_str().unwrap().trim().to_owned();
+                Ok(if field == "aaguid" {
                     text.to_ascii_lowercase()
                 } else {
                     text
-                })))
+                }
+                .into())
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                let text = value.unwrap().as_str().unwrap().to_owned();
+                let text = value.as_str().unwrap().to_owned();
                 output_trace
                     .lock()
                     .unwrap()
@@ -38,11 +39,12 @@ fn policy(
                 if field == "aaguid" && output_failure.load(Ordering::SeqCst) == 2 {
                     return Err(AuthError::internal("ordinary AAGUID output error"));
                 }
-                Ok(Some(json!(if field == "aaguid" {
+                Ok(if field == "aaguid" {
                     text.to_ascii_uppercase()
                 } else {
                     format!("{text}:out")
-                })))
+                }
+                .into())
             })),
         }),
         ..Default::default()
@@ -265,18 +267,18 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         store.create_passkey(data).await
     });
     let call = calls.recv().await.unwrap();
-    assert_eq!((call.stage, call.value), ("input", Some(json!(FIRST))));
+    assert_eq!((call.stage, call.value), ("input", FieldValue::from(FIRST)));
     assert!(
         raw.get_passkey_by_credential_id("credential:AaguidAwait")
             .await?
             .is_none()
     );
-    let stored_aaguid = json!(FIRST.to_ascii_lowercase());
-    call.reply.send(Ok(Some(stored_aaguid))).unwrap();
+    let stored_aaguid = FieldValue::from(FIRST.to_ascii_lowercase());
+    call.reply.send(Ok(stored_aaguid)).unwrap();
     let call = calls.recv().await.unwrap();
     assert_eq!(
         (call.stage, call.value),
-        ("output", Some(json!(FIRST.to_ascii_lowercase())))
+        ("output", FieldValue::from(FIRST.to_ascii_lowercase()))
     );
     assert_eq!(
         raw.get_passkey_by_credential_id("credential:AaguidAwait")
@@ -285,7 +287,7 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .aaguid,
         Some(FIRST.to_ascii_lowercase())
     );
-    call.reply.send(Ok(Some(json!(FIRST)))).unwrap();
+    call.reply.send(Ok(FieldValue::from(FIRST))).unwrap();
     let row = pending.await.unwrap()?;
     assert_eq!(row.name.typed().unwrap().as_deref(), Some("AaguidAwait"));
     assert_eq!(row.aaguid.typed().unwrap().as_deref(), Some(FIRST));

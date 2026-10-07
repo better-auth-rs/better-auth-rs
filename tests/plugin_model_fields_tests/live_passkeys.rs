@@ -86,7 +86,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
                     "aaguid",
                     UserFieldConfig {
                         required: Some(false),
-                        on_update: Some(Arc::new(move || json!(after))),
+                        on_update: Some(Arc::new(move || after.into())),
                         ..Default::default()
                     },
                 ),
@@ -115,10 +115,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
                 let writers = writers.clone();
                 let events = name_events.clone();
                 async move {
-                    let name = value
-                        .as_ref()
-                        .and_then(Value::as_str)
-                        .expect("stored Passkey name");
+                    let name = value.as_str().expect("stored Passkey name");
                     let (key, _, after) = ROWS
                         .iter()
                         .find(|(key, _, _)| name == *key || name == format!("{key}-renamed"))
@@ -137,7 +134,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
                         key,
                         json!(["write", {"name": updated.name, "aaguid": updated.aaguid}]),
                     );
-                    Ok(Some(json!(format!("{name}:out"))))
+                    Ok(format!("{name}:out").into())
                 }
             })),
             ..Default::default()
@@ -153,10 +150,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
                 required: Some(false),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(move |value| {
-                        let aaguid = value
-                            .as_ref()
-                            .and_then(Value::as_str)
-                            .expect("stored Passkey AAGUID");
+                        let aaguid = value.as_str().expect("stored Passkey AAGUID");
                         let (key, _, _) = ROWS
                             .iter()
                             .find(|(_, before, after)| aaguid == *before || aaguid == *after)
@@ -165,7 +159,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
                         if failure {
                             return Err(AuthError::internal(OUTPUT_ERROR));
                         }
-                        Ok(Some(json!(aaguid.to_ascii_uppercase())))
+                        Ok(aaguid.to_ascii_uppercase().into())
                     })),
                     ..Default::default()
                 }),

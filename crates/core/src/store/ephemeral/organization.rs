@@ -638,7 +638,7 @@ impl MemberStore for EphemeralStore {
                 match (field_type, expected) {
                     (Some(UserFieldType::Number), Value::String(value)) => {
                         crate::organization_fields::numeric_filter(value)
-                            .map_or_else(|| expected.clone(), |number| Value::Number(number))
+                            .map_or_else(|| expected.clone(), Value::Number)
                     }
                     (Some(UserFieldType::Boolean), Value::String(value)) => {
                         Value::Bool(value == "true")

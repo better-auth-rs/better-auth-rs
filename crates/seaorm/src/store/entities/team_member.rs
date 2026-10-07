@@ -22,7 +22,7 @@ impl From<Model> for better_auth_core::TeamMember {
             id: model.id.into(),
             team_id: model.team_id.into(),
             user_id: model.user_id,
-            created_at: model.created_at,
+            created_at: model.created_at.into(),
         }
     }
 }

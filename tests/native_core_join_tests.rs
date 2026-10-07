@@ -87,7 +87,7 @@ fn field(state: &Arc<State>, path: &str, mode: &str, name: &'static str) -> User
                 if !state.enabled.load(Ordering::Relaxed) || state.nested.load(Ordering::Relaxed) {
                     return Ok(value);
                 }
-                let text = value.as_ref().unwrap().as_str().unwrap().to_owned();
+                let text = value.as_str().unwrap().to_owned();
                 state.event(name, &text);
                 if mode == "parent-wait" && text == "A-agent" {
                     let gate = state.gate.lock().unwrap().take().unwrap();
@@ -105,7 +105,7 @@ fn field(state: &Arc<State>, path: &str, mode: &str, name: &'static str) -> User
                                 UpdateAccount {
                                     additional_fields: [(
                                         "displayLabel".into(),
-                                        json!("A-label-0-after"),
+                                        "A-label-0-after".into(),
                                     )]
                                     .into_iter()
                                     .collect(),
@@ -129,7 +129,7 @@ fn field(state: &Arc<State>, path: &str, mode: &str, name: &'static str) -> User
                     state.nested.store(false, Ordering::Relaxed);
                     state.event("display-write", result?);
                 }
-                Ok(Some(json!(format!("{text}-visible"))))
+                Ok(format!("{text}-visible").into())
             }
         })
     } else {
@@ -137,7 +137,7 @@ fn field(state: &Arc<State>, path: &str, mode: &str, name: &'static str) -> User
             if !state.enabled.load(Ordering::Relaxed) || state.nested.load(Ordering::Relaxed) {
                 return Ok(value);
             }
-            let text = value.as_ref().unwrap().as_str().unwrap();
+            let text = value.as_str().unwrap();
             state.event(name, text);
             if (mode == "parent-error" && name == parent && text == "A-agent")
                 || (mode == "child-error" && name == "account.displayLabel" && text == "A-label-0")
@@ -147,7 +147,7 @@ fn field(state: &Arc<State>, path: &str, mode: &str, name: &'static str) -> User
             if name == "user.image" && text == "B-image" {
                 state.finished.send(()).unwrap();
             }
-            Ok(Some(json!(format!("{text}-visible"))))
+            Ok(format!("{text}-visible").into())
         })
     };
     UserFieldConfig {
@@ -174,14 +174,19 @@ async fn create_tables(db: &DatabaseConnection) {
 }
 
 async fn seed(store: &Store, labels: &[&str], account_count: usize) {
-    let now = "2025-01-01T00:00:00Z".parse().unwrap();
+    let now = "2025-01-01T00:00:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .unwrap();
+    let expires_at = "2099-01-01T00:00:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .unwrap();
     for &label in labels {
         let suffix = label.to_lowercase();
         let user = store
             .create_user(CreateUser {
                 id: Some(format!("user-{suffix}")),
-                created_at: Some(now),
-                updated_at: Some(now),
+                created_at: Some(now.into()),
+                updated_at: Some(now.into()),
                 image: Some(format!("{label}-image")).into(),
                 email_verified: Some(true),
                 ..CreateUser::new()
@@ -191,12 +196,12 @@ async fn seed(store: &Store, labels: &[&str], account_count: usize) {
             .await
             .unwrap();
         // The public session constructor generates tokens. Seed fixed ordinary rows to match the oracle's query order.
-        let _ = entities::session::Model::new_active(
+        let mut session = entities::session::Model::new_active(
             Some(format!("session-{suffix}")),
             format!("ordinary-session-{suffix}"),
             CreateSession {
                 user_id: user.id.clone(),
-                expires_at: "2099-01-01T00:00:00Z".parse().unwrap(),
+                expires_at: expires_at.into(),
                 ip_address: None,
                 user_agent: Some(format!("{label}-agent")),
                 impersonated_by: None,
@@ -205,9 +210,9 @@ async fn seed(store: &Store, labels: &[&str], account_count: usize) {
             },
             now,
         )
-        .insert(store.connection())
-        .await
         .unwrap();
+        entities::session::Model::set_expires_at(&mut session, expires_at);
+        let _ = session.insert(store.connection()).await.unwrap();
         for index in 0..account_count {
             let _ = store
                 .create_account(CreateAccount {
@@ -219,7 +224,7 @@ async fn seed(store: &Store, labels: &[&str], account_count: usize) {
                     updated_at: now.into(),
                     additional_fields: [(
                         "displayLabel".into(),
-                        json!(format!("{label}-label-{index}")),
+                        format!("{label}-label-{index}").into(),
                     )]
                     .into_iter()
                     .collect(),
@@ -278,7 +283,7 @@ async fn query(store: &Store, path: &str) -> AuthResult<Value> {
                 .await?
                 .unwrap();
             Ok(
-                json!({"kind":"owned", "displayLabel":owner.account.additional_fields["displayLabel"],
+                json!({"kind":"owned", "displayLabel":owner.account.additional_fields["displayLabel"].json()?,
                 "user":owner.user.as_ref().map(display_user)}),
             )
         }
@@ -289,7 +294,7 @@ async fn query(store: &Store, path: &str) -> AuthResult<Value> {
                 .unwrap();
             Ok(
                 json!({"user":display_user(&row.user), "accounts":row.accounts.into_iter()
-                .map(|account| account.additional_fields["displayLabel"].clone()).collect::<Vec<_>>()}),
+                .map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?}),
             )
         }
     }

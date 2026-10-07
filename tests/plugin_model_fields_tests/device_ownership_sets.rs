@@ -50,28 +50,34 @@ enum SetOperator {
 }
 
 impl OwnershipWhere {
-    fn condition(&self, shared_where: bool) -> DeviceCodeOwnership {
+    fn condition(&self, shared_where: bool) -> AuthResult<DeviceCodeOwnership> {
+        let values = self
+            .value
+            .iter()
+            .cloned()
+            .map(FieldValue::from_json)
+            .collect::<AuthResult<Vec<_>>>()?;
         if shared_where {
-            return DeviceCodeOwnership::Where(DeviceCodeWhere {
+            return Ok(DeviceCodeOwnership::Where(DeviceCodeWhere {
                 field: self.field.clone(),
-                value: Value::Array(self.value.clone()),
+                value: values.into(),
                 operator: match self.operator {
                     SetOperator::In => WhereOperator::In,
                     SetOperator::NotIn => WhereOperator::NotIn,
                 },
                 mode: WhereMode::Sensitive,
-            });
+            }));
         }
-        match self.operator {
+        Ok(match self.operator {
             SetOperator::In => DeviceCodeOwnership::FieldIn {
                 field: self.field.clone(),
-                values: self.value.clone(),
+                values,
             },
             SetOperator::NotIn => DeviceCodeOwnership::FieldNotIn {
                 field: self.field.clone(),
-                values: self.value.clone(),
+                values,
             },
-        }
+        })
     }
 }
 
@@ -116,9 +122,9 @@ impl Observation {
         let object = value.as_object_mut().expect("complete Device object");
         let _ = object.insert("id".into(), json!(id));
         let _ = object.insert("userId".into(), json!(owner_id));
-        if let Some(polled) = row.last_polled_at {
-            assert!(polled.timestamp_millis() >= self.started_at.timestamp_millis());
-            assert!(polled.timestamp_millis() <= Utc::now().timestamp_millis());
+        if let Some(polled) = &row.last_polled_at {
+            assert!(polled.milliseconds() >= self.started_at.timestamp_millis() as f64);
+            assert!(polled.milliseconds() <= Utc::now().timestamp_millis() as f64);
             assert!(object.get("lastPolledAt").is_some_and(Value::is_string));
             let _ = object.insert("lastPolledAt".into(), json!("<polled-at>"));
         } else {
@@ -196,8 +202,8 @@ fn owner_input(name: &str, email: &str) -> CreateUser {
         email: Some(email.into()),
         email_verified: Some(false),
         image: None.into(),
-        created_at: Some(time),
-        updated_at: Some(time),
+        created_at: Some(time.into()),
+        updated_at: Some(time.into()),
         ..CreateUser::new()
     }
 }
@@ -213,15 +219,18 @@ fn device_input(
         device_code: format!("{prefix}-device"),
         user_code: format!("{prefix}-user"),
         user_id: Some(owner.id.typed()?.clone()),
-        expires_at: "2100-01-01T00:00:00Z".parse().expect("fixed Device expiry"),
+        expires_at: "2100-01-01T00:00:00Z"
+            .parse::<DateTime<Utc>>()
+            .expect("fixed Device expiry")
+            .into(),
         status: "approved".into(),
         last_polled_at: None,
         polling_interval: Some(5000.0),
         client_id: Some(format!("{prefix}-client")),
         scope: Some(scope.into()).into(),
         additional_fields: [
-            ("tenantKey".into(), json!(tenant)),
-            ("revision".into(), revision),
+            ("tenantKey".into(), tenant.into()),
+            ("revision".into(), FieldValue::from_json(revision)?),
         ]
         .into_iter()
         .collect(),
@@ -351,8 +360,8 @@ async fn redeem<S: AuthSchema>(
                         UpdateDeviceCode {
                             scope: Some("prepared".into()).into(),
                             additional_fields: [
-                                ("tenantKey".into(), prepared_tenant),
-                                ("revision".into(), json!(2.5)),
+                                ("tenantKey".into(), FieldValue::from_json(prepared_tenant)?),
+                                ("revision".into(), 2.5.into()),
                             ]
                             .into_iter()
                             .collect(),
@@ -394,7 +403,7 @@ async fn observe<S: AuthSchema>(
     let (auth, observation) = setup(raw, &case.name).await?;
     let before = observation.device(&observation.seeded)?;
     let before_rows = json!([observation.device(&observation.decoy)?, before]);
-    let ownership = case.ownership_where.condition(shared_where);
+    let ownership = case.ownership_where.condition(shared_where)?;
     let prepared_tenant = if case.name == "tenant-null-not-in" {
         Value::Null
     } else {

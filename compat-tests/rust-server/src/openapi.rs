@@ -278,7 +278,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                     required: Some(true),
                     default_value_fn: Some(Arc::new(move || {
                         let _ = counter.fetch_add(1, Ordering::SeqCst);
-                        json!("factory")
+                        "factory".into()
                     })),
                     ..Default::default()
                 },
@@ -287,7 +287,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                 "array".into(),
                 UserFieldConfig {
                     field_type: UserFieldType::NumberArray,
-                    default_value: Some(json!([1])),
+                    default_value: Some(vec![better_auth::FieldValue::from(1)].into()),
                     ..Default::default()
                 },
             ),
@@ -295,7 +295,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                 "jsonOracle".into(),
                 UserFieldConfig {
                     field_type: UserFieldType::Json,
-                    default_value: Some(serde_json::from_str(r#"{"4294967295":"last-index","01":"leading-zero","4294967294":1e21,"0":-0.0,"numbers":[0.0,-0.0,1e-7,1e-6,1e20,1e21],"nested":{"2":2.0,"1":1.0,"01":1.0}}"#).unwrap()),
+                    default_value: Some(better_auth::FieldValue::from_json(serde_json::from_str(r#"{"4294967295":"last-index","01":"leading-zero","4294967294":1e21,"0":-0.0,"numbers":[0.0,-0.0,1e-7,1e-6,1e20,1e21],"nested":{"2":2.0,"1":1.0,"01":1.0}}"#).unwrap())?),
                     ..Default::default()
                 },
             ),
@@ -322,7 +322,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                 "username".into(),
                 UserFieldConfig {
                     required: Some(true),
-                    default_value: Some(json!("app-username")),
+                    default_value: Some("app-username".into()),
                     ..Default::default()
                 },
             )]
@@ -333,7 +333,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                 "tenantLabel".into(),
                 UserFieldConfig {
                     required: Some(true),
-                    default_value: Some(json!("session")),
+                    default_value: Some("session".into()),
                     ..Default::default()
                 },
             )]
@@ -359,7 +359,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                             "label".into(),
                             UserFieldConfig {
                                 required: Some(true),
-                                default_value: Some(json!("org-default")),
+                                default_value: Some("org-default".into()),
                                 ..Default::default()
                             },
                         ),
@@ -383,7 +383,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                             UserFieldConfig {
                                 default_value_fn: Some(Arc::new(move || {
                                     let _ = counter.fetch_add(1, Ordering::SeqCst);
-                                    json!("factory")
+                                    "factory".into()
                                 })),
                                 ..Default::default()
                             },
@@ -434,7 +434,7 @@ async fn run(input: Input) -> AuthResult<Value> {
                         "roleTag".into(),
                         UserFieldConfig {
                             required: Some(true),
-                            default_value: Some(json!("role-default")),
+                            default_value: Some("role-default".into()),
                             ..Default::default()
                         },
                     )]

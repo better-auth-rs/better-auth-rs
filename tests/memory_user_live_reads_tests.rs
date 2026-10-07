@@ -46,7 +46,11 @@ fn configured(case: &Value, trace: &Arc<Trace>) -> Arc<EphemeralStore> {
                         {
                             return Ok(value);
                         }
-                        trace.events.lock().unwrap().push(json!(["name", value]));
+                        trace
+                            .events
+                            .lock()
+                            .unwrap()
+                            .push(json!(["name", value.json()?]));
                         trace.nested.store(true, Ordering::SeqCst);
                         let store = trace.store.lock().unwrap().upgrade().unwrap();
                         let changed = store
@@ -65,10 +69,7 @@ fn configured(case: &Value, trace: &Arc<Trace>) -> Arc<EphemeralStore> {
                             .lock()
                             .unwrap()
                             .push(json!(["display-write", "image-after"]));
-                        Ok(Some(json!(format!(
-                            "{}-visible",
-                            value.unwrap().as_str().unwrap()
-                        ))))
+                        Ok(format!("{}-visible", value.as_str().unwrap()).into())
                     }
                 })),
                 ..Default::default()
@@ -100,7 +101,10 @@ async fn seed(store: &EphemeralStore) -> AuthResult<String> {
             impersonated_by: None,
             active_organization_id: None,
             additional_fields: Default::default(),
-            expires_at: "2099-01-01T00:00:00Z".parse().unwrap(),
+            expires_at: "2099-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+                .into(),
         })
         .await?;
     let _ = store
@@ -138,7 +142,7 @@ async fn ordinary_user_reads_keep_later_display_fields_live() -> AuthResult<()> 
                         .await?
                         .unwrap(),
                     "value" => store
-                        .get_user_by_id_value(&json!("ordinary-user"))
+                        .get_user_by_id_value(&"ordinary-user".into())
                         .await?
                         .unwrap(),
                     _ => store.get_user_by_id("ordinary-user").await?.unwrap(),

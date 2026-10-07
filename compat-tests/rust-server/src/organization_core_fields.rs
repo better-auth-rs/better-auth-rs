@@ -1,16 +1,16 @@
+use better_auth::FieldValue;
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
-use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn text(input: &'static str, output: &'static str) -> UserFieldConfig {
     let suffix = |suffix: &'static str| {
-        UserFieldTransform::new(move |value: Option<Value>| {
+        UserFieldTransform::new(move |value: FieldValue| {
             let value = value
-                .and_then(|value| value.as_str().map(str::to_owned))
+                .as_str()
                 .ok_or_else(|| better_auth::AuthError::bad_request("Expected a string field"))?;
-            Ok(Some(json!(format!("{value}{suffix}"))))
+            Ok(format!("{value}{suffix}").into())
         })
     };
     UserFieldConfig {
@@ -36,7 +36,7 @@ pub fn configure(config: &mut OrganizationConfig) {
                     UserFieldConfig {
                         required: Some(false),
                         input: Some(false),
-                        default_value: Some(json!("default-logo")),
+                        default_value: Some("default-logo".into()),
                         ..Default::default()
                     },
                 ),
@@ -85,7 +85,7 @@ pub fn configure(config: &mut OrganizationConfig) {
                         field_type: UserFieldType::Date,
                         required: Some(false),
                         input: Some(false),
-                        on_update: Some(Arc::new(|| json!("2020-01-02T03:04:05.000Z"))),
+                        on_update: Some(Arc::new(|| "2020-01-02T03:04:05.000Z".into())),
                         ..Default::default()
                     },
                 ),
@@ -102,7 +102,7 @@ fn id() -> UserFieldConfig {
     UserFieldConfig {
         required: Some(false),
         field_name: Some("unused_id".into()),
-        default_value: Some(json!("unused-default")),
+        default_value: Some("unused-default".into()),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|_| {
                 Err(better_auth::AuthError::bad_request(

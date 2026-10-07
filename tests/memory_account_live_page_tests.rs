@@ -50,8 +50,8 @@ async fn account_children_read_the_selected_live_page_sequentially() -> AuthResu
                                 .events
                                 .lock()
                                 .unwrap()
-                                .push(json!(["displayLabel", value]));
-                            if value.as_ref() == Some(&json!("label-a-before")) {
+                                .push(json!(["displayLabel", value.json()?]));
+                            if value.as_str() == Some("label-a-before") {
                                 trace.nested.store(true, Ordering::SeqCst);
                                 let store = trace.store.lock().unwrap().upgrade().unwrap();
                                 let changed = store
@@ -60,7 +60,7 @@ async fn account_children_read_the_selected_live_page_sequentially() -> AuthResu
                                         UpdateAccount {
                                             additional_fields: [(
                                                 "displayLabel".into(),
-                                                json!("label-b-after"),
+                                                "label-b-after".into(),
                                             )]
                                             .into_iter()
                                             .collect(),
@@ -76,10 +76,7 @@ async fn account_children_read_the_selected_live_page_sequentially() -> AuthResu
                                     .unwrap()
                                     .push(json!(["display-write", "label-b-after"]));
                             }
-                            Ok(Some(json!(format!(
-                                "{}-visible",
-                                value.unwrap().as_str().unwrap()
-                            ))))
+                            Ok(format!("{}-visible", value.as_str().unwrap()).into())
                         }
                     })),
                     ..Default::default()
@@ -107,7 +104,7 @@ async fn account_children_read_the_selected_live_page_sequentially() -> AuthResu
                     user_id: "ordinary-user".into(),
                     additional_fields: [(
                         "displayLabel".into(),
-                        json!(format!("label-{suffix}-before")),
+                        format!("label-{suffix}-before").into(),
                     )]
                     .into_iter()
                     .collect(),
@@ -126,8 +123,8 @@ async fn account_children_read_the_selected_live_page_sequentially() -> AuthResu
             json!({
                 "joins": case["joins"],
                 "events": *trace.events.lock().unwrap(),
-                "result": joined.accounts.iter().map(|account| &account.additional_fields["displayLabel"]).collect::<Vec<_>>(),
-                "stored": stored.iter().map(|account| &account.additional_fields["displayLabel"]).collect::<Vec<_>>()
+                "result": joined.accounts.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?,
+                "stored": stored.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()?
             }),
             *case
         );

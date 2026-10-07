@@ -17,7 +17,7 @@ use better_auth::{
 };
 use better_auth_core::{
     AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, AuthUser, BeforeRequestAction,
-    CreateSession, CreateUser, UpdateUser,
+    CreateSession, CreateUser, FieldValue, UpdateUser,
     config::{CookieCacheConfig, UserFieldConfig},
     hooks::RequestHookContext,
     middleware::RateLimitConfig,
@@ -147,12 +147,12 @@ macro_rules! hooks {
         #[better_auth::database_hooks]
         impl<S: AuthSchema> $hook<S> for Events {
             async fn before_create_user(&self, user: &mut CreateUser, context: &$context<'_,S>) -> AuthResult<$control> {
-                self.record("user.before", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").cloned().unwrap_or(Value::Null)));
+                self.record("user.before", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
                 Ok($control::Continue)
             }
             async fn after_create_user(&self, _: &better_auth_core::wire::UserView, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
             async fn before_update_user(&self, $($id: &str,)? user: &UpdateUser, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-                self.record("user.update", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").cloned().unwrap_or(Value::Null)));
+                self.record("user.update", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
                 if self.fails("update") { return Err(rejected()); }
                 Ok(DatabaseHookUpdate::Continue)
             }
@@ -217,20 +217,10 @@ fn configure(profile: &str, base_url: &str) -> AuthConfig {
                 field_name: Some("alias".into()),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(|value| {
-                        Ok(Some(json!(format!(
-                            "{}:in",
-                            value
-                                .and_then(|value| value.as_str().map(str::to_owned))
-                                .unwrap_or("undefined".into())
-                        ))))
+                        Ok(format!("{}:in", value.as_str().unwrap_or("undefined")).into())
                     })),
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(Some(json!(format!(
-                            "{}:out",
-                            value
-                                .and_then(|value| value.as_str().map(str::to_owned))
-                                .unwrap_or("undefined".into())
-                        ))))
+                        Ok(format!("{}:out", value.as_str().unwrap_or("undefined")).into())
                     })),
                 }),
                 ..Default::default()
@@ -355,7 +345,7 @@ async fn snapshot<S: AuthSchema>(State(fixture): State<Fixture<S>>) -> Json<Valu
             .await
             .unwrap();
         users.push(
-            json!({"email":user.email(),"method":view.additional_fields.get("lastLoginMethod")}),
+            json!({"email":user.email(),"method":view.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose().unwrap()}),
         );
     }
     let events = fixture.events.0.lock().unwrap().events.clone();

@@ -27,24 +27,25 @@ impl<S: AuthSchema> AuthPlugin<S> for LegacyFields {
 async fn legacy_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let events = Arc::new(Mutex::new(Vec::new()));
     let initializations = Arc::new(Mutex::new(Vec::new()));
-    let policy =
-        |label: &'static str| {
-            let events = events.clone();
-            fields(
-                "name",
-                UserFieldConfig {
-                    transform: Some(FieldTransforms {
-                        input: Some(UserFieldTransform::new(move |value| {
-                            events.lock().unwrap().push(label);
-                            Ok(value
-                                .map(|value| json!(format!("{label}:{}", value.as_str().unwrap()))))
-                        })),
-                        ..Default::default()
-                    }),
+    let policy = |label: &'static str| {
+        let events = events.clone();
+        fields(
+            "name",
+            UserFieldConfig {
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(move |value| {
+                        events.lock().unwrap().push(label);
+                        Ok(match value {
+                            FieldValue::Undefined => FieldValue::Undefined,
+                            value => format!("{label}:{}", value.as_str().unwrap()).into(),
+                        })
+                    })),
                     ..Default::default()
-                },
-            )
-        };
+                }),
+                ..Default::default()
+            },
+        )
+    };
     let auth = BetterAuth::new(config())
         .store_arc(raw)
         .plugin(LegacyFields(
@@ -86,7 +87,10 @@ fn prefix(prefix: &'static str) -> UserFieldConfig {
     UserFieldConfig {
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                Ok(value.map(|value| json!(format!("{prefix}:{}", value.as_str().unwrap()))))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => format!("{prefix}:{}", value.as_str().unwrap()).into(),
+                })
             })),
             ..Default::default()
         }),
@@ -157,12 +161,12 @@ async fn core_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<
             .store()
             .create_session(CreateSession {
                 user_id: user.id,
-                expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+                expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                 ip_address: None,
                 user_agent: Some("Agent".into()),
                 impersonated_by: None,
                 active_organization_id: None,
-                additional_fields: serde_json::from_value(json!({"userAgent":"Agent"}))?,
+                additional_fields: [("userAgent".into(), "Agent".into())].into(),
             })
             .await?;
         assert_eq!(

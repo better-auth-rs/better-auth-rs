@@ -1,6 +1,6 @@
 use super::*;
 use better_auth_core::id::{IdGeneration, IdGenerator};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
@@ -19,12 +19,18 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                     let (reply, result) = oneshot::channel();
                     sender.send((entered_at, reply)).unwrap();
                     result.await.unwrap();
-                    Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                    Ok(match value {
+                        FieldValue::Undefined => FieldValue::Undefined,
+                        value => value.as_str().unwrap().trim().into(),
+                    })
                 }
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 output_trace.lock().unwrap().push("name:output".to_owned());
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                })
             })),
         }),
         ..Default::default()
@@ -62,6 +68,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 Ok((
                     row.created_at
                         .typed()?
+                        .clone()
                         .expect("Legacy passkey creation returns createdAt"),
                     row.name,
                 ))
@@ -69,12 +76,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 let row = store
                     .create_api_key(api_key::input(Some(" Desk "), "ordinary-order"))
                     .await?;
-                Ok::<_, AuthError>((
-                    DateTime::parse_from_rfc3339(&row.created_at)
-                        .unwrap()
-                        .to_utc(),
-                    row.name,
-                ))
+                Ok::<_, AuthError>((row.created_at, row.name))
             }
         });
         let (entered_at, reply) = calls.recv().await.unwrap();
@@ -91,7 +93,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         reply.send(()).unwrap();
         let (created_at, name) = pending.await.unwrap()?;
         assert!(
-            created_at <= entered_at,
+            created_at.milliseconds() <= entered_at.timestamp_millis() as f64,
             "creation timestamp must precede the awaited name callback"
         );
         assert_eq!(name.typed()?.as_deref(), Some("Desk:out"));
@@ -117,18 +119,14 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 stored
                     .created_at
                     .typed()?
+                    .clone()
                     .expect("Legacy passkey storage retains createdAt"),
                 created_at
             );
             assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
         } else {
             let stored = raw.get_api_key_by_hash("ordinary-order").await?.unwrap();
-            assert_eq!(
-                DateTime::parse_from_rfc3339(&stored.created_at)
-                    .unwrap()
-                    .to_utc(),
-                created_at
-            );
+            assert_eq!(stored.created_at, created_at);
             assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
         }
     }

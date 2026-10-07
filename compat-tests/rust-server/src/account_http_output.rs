@@ -29,7 +29,12 @@ impl OAuthRefreshTokenHandler for Refresh {
     ) -> Result<OAuthTokenSet, String> {
         Ok(OAuthTokenSet {
             access_token: Some("new-access".into()),
-            access_token_expires_at: Some("2100-01-01T00:00:00Z".parse().unwrap()),
+            access_token_expires_at: Some(
+                "2100-01-01T00:00:00Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .unwrap()
+                    .into(),
+            ),
             ..Default::default()
         })
     }
@@ -57,17 +62,17 @@ async fn run(input: Input) -> AuthResult<Value> {
             UserFieldConfig {
                 required: Some(false),
                 returned: Some(name != "scope" || input.operation != "list-accounts"),
-                on_update: (name == "scope")
-                    .then(|| Arc::new(|| json!("after")) as Arc<dyn Fn() -> Value + Send + Sync>),
+                on_update: (name == "scope").then(|| {
+                    Arc::new(|| "after".into())
+                        as Arc<dyn Fn() -> better_auth::FieldValue + Send + Sync>
+                }),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(value.map(|value| {
-                            if value.is_null() {
-                                value
-                            } else {
-                                json!(format!("{}:out", value.as_str().unwrap()))
-                            }
-                        }))
+                        Ok(if value.is_null() || value.is_undefined() {
+                            value
+                        } else {
+                            format!("{}:out", value.as_str().unwrap()).into()
+                        })
                     })),
                     ..Default::default()
                 }),
@@ -97,7 +102,7 @@ async fn run(input: Input) -> AuthResult<Value> {
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id.clone(),
-            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -117,7 +122,8 @@ async fn run(input: Input) -> AuthResult<Value> {
             access_token_expires_at: Some(
                 "2000-01-01T00:00:00Z"
                     .parse::<chrono::DateTime<chrono::Utc>>()
-                    .unwrap(),
+                    .unwrap()
+                    .into(),
             )
             .into(),
             ..Default::default()

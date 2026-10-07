@@ -16,16 +16,21 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}
 impl ActiveModelBehavior for ActiveModel {}
-impl From<Model> for better_auth_core::OrganizationRole {
-    fn from(model: Model) -> Self {
-        Self {
+impl TryFrom<Model> for better_auth_core::OrganizationRole {
+    type Error = better_auth_core::AuthError;
+
+    fn try_from(model: Model) -> Result<Self, Self::Error> {
+        Ok(Self {
             additional_fields: Default::default(),
             id: model.id.into(),
             organization_id: model.organization_id.into(),
             role: model.role.into(),
-            permission: model.permission.into(),
+            permission: better_auth_core::FieldValue::from_json(model.permission)?.into(),
             created_at: model.created_at.into(),
-            updated_at: model.updated_at.into(),
-        }
+            updated_at: model
+                .updated_at
+                .map(better_auth_core::FieldDate::from)
+                .into(),
+        })
     }
 }

@@ -107,7 +107,7 @@ impl<T: Clone> Rows<T> {
         let Some(index) = self.0.iter().position(|row| Arc::ptr_eq(row, &selected.0)) else {
             return Ok(None);
         };
-        let value = lock(&self.0[index])?.clone();
+        let value = lock(&selected.0)?.clone();
         let _ = self.0.remove(index);
         Ok(Some(value))
     }

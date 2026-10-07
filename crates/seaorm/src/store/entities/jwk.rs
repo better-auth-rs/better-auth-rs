@@ -26,8 +26,8 @@ impl From<Model> for better_auth_core::Jwk {
             id: model.id.into(),
             public_key: model.public_key,
             private_key: model.private_key,
-            created_at: model.created_at,
-            expires_at: model.expires_at,
+            created_at: model.created_at.into(),
+            expires_at: model.expires_at.map(Into::into),
             alg: model.alg,
             crv: model.crv,
         }

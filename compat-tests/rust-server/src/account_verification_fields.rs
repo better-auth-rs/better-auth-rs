@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use axum::{Json, Router, routing::post};
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::{
-    AuthRequest, CreateAccount, CreateUser, CreateVerification, HttpMethod, UpdateAccount,
+    AuthRequest, CreateAccount, CreateUser, CreateVerification, FieldMap, FieldValue, HttpMethod,
+    UpdateAccount, Utf16String,
     store::database_hooks::VerificationUpdate,
     store::{AuthTransaction, SecondaryStorage, transaction},
     user_fields::UserFieldConfig,
@@ -43,7 +44,7 @@ struct State {
     events: Vec<Value>,
     entries: Map<String, Value>,
     fail: Option<String>,
-    patch: Map<String, Value>,
+    patch: FieldMap,
 }
 type Shared = Arc<Mutex<State>>;
 
@@ -178,7 +179,7 @@ impl SeaOrmHooks<Schema> for Hooks {
         data: &mut CreateAccount,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<HookControl> {
-        self.before("account", "create", Value::Object(data.fields()?))?;
+        self.before("account", "create", Value::Object(data.fields()?.json()?))?;
         data.additional_fields
             .extend(self.0.lock().unwrap().patch.clone());
         Ok(HookControl::Continue)
@@ -197,7 +198,7 @@ impl SeaOrmHooks<Schema> for Hooks {
         data: &UpdateAccount,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<UpdateAccount>> {
-        self.before("account", "update", Value::Object(data.fields()?))?;
+        self.before("account", "update", Value::Object(data.fields()?.json()?))?;
         Ok(better_auth_seaorm::DatabaseHookUpdate::Continue)
     }
     async fn after_update_account(
@@ -213,7 +214,11 @@ impl SeaOrmHooks<Schema> for Hooks {
         data: &mut CreateVerification,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<HookControl> {
-        self.before("verification", "create", Value::Object(data.fields()?))?;
+        self.before(
+            "verification",
+            "create",
+            Value::Object(data.fields()?.json()?),
+        )?;
         data.additional_fields
             .extend(self.0.lock().unwrap().patch.clone());
         Ok(HookControl::Continue)
@@ -232,7 +237,11 @@ impl SeaOrmHooks<Schema> for Hooks {
         data: &VerificationUpdate,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<VerificationUpdate>> {
-        self.before("verification", "update", Value::Object(data.fields()?))?;
+        self.before(
+            "verification",
+            "update",
+            Value::Object(data.fields()?.json()?),
+        )?;
         Ok(better_auth_seaorm::DatabaseHookUpdate::Continue)
     }
     async fn after_update_verification(
@@ -261,6 +270,12 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
 }
 
+fn display_suffix(value: FieldValue, suffix: &str) -> AuthResult<FieldValue> {
+    let mut text = value.display_utf16()?.as_utf16().to_vec();
+    text.extend(suffix.encode_utf16());
+    Ok(Utf16String::from_units(text).into())
+}
+
 fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3] {
     let defaults = state.clone();
     let updates = state.clone();
@@ -274,42 +289,28 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
                 field_name: Some("stored_label".into()),
                 default_value_fn: Some(Arc::new(move || {
                     event(&defaults, format!("{model}.default"), json!("<undefined>")).unwrap();
-                    json!("default")
+                    "default".into()
                 })),
                 on_update: Some(Arc::new(move || {
                     event(&updates, format!("{model}.onUpdate"), json!("<undefined>")).unwrap();
-                    json!("updated")
+                    "updated".into()
                 })),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| {
                         event(
                             &input,
                             format!("{model}.input"),
-                            value.clone().unwrap_or(json!("<undefined>")),
+                            value.json()?.unwrap_or(json!("<undefined>")),
                         )?;
-                        let value = value.unwrap_or(json!("undefined"));
-                        Ok(Some(json!(format!(
-                            "{}:in",
-                            value
-                                .as_str()
-                                .map(str::to_owned)
-                                .unwrap_or_else(|| value.to_string())
-                        ))))
+                        display_suffix(value, ":in")
                     })),
                     output: Some(UserFieldTransform::new(move |value| {
                         event(
                             &output,
                             format!("{model}.output"),
-                            value.clone().unwrap_or(json!("<undefined>")),
+                            value.json()?.unwrap_or(json!("<undefined>")),
                         )?;
-                        let value = value.unwrap_or(json!("undefined"));
-                        Ok(Some(json!(format!(
-                            "{}:out",
-                            value
-                                .as_str()
-                                .map(str::to_owned)
-                                .unwrap_or_else(|| value.to_string())
-                        ))))
+                        display_suffix(value, ":out")
                     })),
                 }),
                 ..Default::default()
@@ -320,7 +321,7 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
             UserFieldConfig {
                 required: Some(false),
                 returned: Some(false),
-                default_value: Some(json!("secret")),
+                default_value: Some("secret".into()),
                 ..Default::default()
             },
         ),
@@ -329,7 +330,7 @@ fn policy(model: &'static str, state: &Shared) -> [(String, UserFieldConfig); 3]
             UserFieldConfig {
                 required: Some(false),
                 input: Some(false),
-                default_value: Some(json!("server")),
+                default_value: Some("server".into()),
                 ..Default::default()
             },
         ),
@@ -440,7 +441,7 @@ impl Fixture {
         input: Value,
         tx: Option<&dyn AuthTransaction<Schema>>,
     ) -> AuthResult<Value> {
-        let extras = input.as_object().unwrap().clone();
+        let extras = FieldMap::from_json(input.as_object().unwrap().clone())?;
         if model == "account" {
             let data = CreateAccount {
                 user_id: self.user_id.clone().into(),
@@ -480,7 +481,7 @@ impl Fixture {
         input: Value,
         tx: Option<&dyn AuthTransaction<Schema>>,
     ) -> AuthResult<Value> {
-        let extras = input.as_object().unwrap().clone();
+        let extras = FieldMap::from_json(input.as_object().unwrap().clone())?;
         if model == "account" {
             let data = UpdateAccount {
                 access_token: Some("refreshed-token".into()).into(),
@@ -531,7 +532,7 @@ impl Fixture {
             .create_session(better_auth_core::CreateSession {
                 additional_fields: Default::default(),
                 user_id: self.user_id.clone().into(),
-                expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+                expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),
                 ip_address: None,
                 user_agent: None,
                 impersonated_by: None,
@@ -622,11 +623,12 @@ async fn run(input: Input) -> AuthResult<Value> {
             let data = if input.scenario == "explicit-null" {
                 json!({"label": null, "protected":"native", "hidden":"native-secret"})
             } else {
-                f.state.lock().unwrap().patch =
+                f.state.lock().unwrap().patch = FieldMap::from_json(
                     json!({"label":"hook", "hidden":"hook-secret", "protected":"hook-protected"})
                         .as_object()
                         .unwrap()
-                        .clone();
+                        .clone(),
+                )?;
                 json!({"label":"request"})
             };
             f.checkpoint(

@@ -25,7 +25,10 @@ impl From<Model> for better_auth_core::Team {
             name: model.name.into(),
             organization_id: model.organization_id.into(),
             created_at: model.created_at.into(),
-            updated_at: model.updated_at.into(),
+            updated_at: model
+                .updated_at
+                .map(better_auth_core::FieldDate::from)
+                .into(),
         }
     }
 }

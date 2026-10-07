@@ -1,10 +1,10 @@
+use better_auth::FieldValue;
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth_seaorm::sea_orm::{
     ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, Schema,
 };
-use serde_json::json;
 
 pub fn configure(config: &mut OrganizationConfig) {
     config.teams.enabled = true;
@@ -13,7 +13,7 @@ pub fn configure(config: &mut OrganizationConfig) {
         input: Some(false),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|_| {
-                Ok(Some(json!("2000-01-02T03:04:05+02:00")))
+                Ok("2000-01-02T03:04:05+02:00".into())
             })),
             ..Default::default()
         }),
@@ -27,7 +27,11 @@ pub fn configure(config: &mut OrganizationConfig) {
                 required: Some(false),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(value.filter(|value| value.as_f64() != Some(99.0)))
+                        Ok(if value.as_f64() == Some(99.0) {
+                            FieldValue::Undefined
+                        } else {
+                            value
+                        })
                     })),
                     ..Default::default()
                 }),
@@ -47,7 +51,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             "updatedAt".into(),
             UserFieldConfig {
                 required: Some(false),
-                default_value: Some(json!("public-updated")),
+                default_value: Some("public-updated".into()),
                 ..Default::default()
             },
         ),
@@ -74,7 +78,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             UserFieldConfig {
                 field_type: UserFieldType::Number,
                 required: Some(false),
-                default_value: Some(json!(17)),
+                default_value: Some(17.into()),
                 ..Default::default()
             },
         ),

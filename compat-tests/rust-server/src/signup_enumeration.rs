@@ -1,11 +1,11 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use std::sync::Arc;
 
+use better_auth::FieldValue;
 use better_auth::config::UserFieldConfig;
 use better_auth::plugins::{EmailPasswordPlugin, email_password::OnExistingUserSignUp};
 use better_auth::{AuthConfig, AuthError, AuthResult, wire::UserView};
 use better_auth_core::AuthRequest;
-use serde_json::json;
 
 struct ExistingSignup;
 
@@ -45,17 +45,21 @@ pub fn configure(profile: &str, config: &mut AuthConfig) {
                 "alias".into(),
                 UserFieldConfig {
                     required: Some(false),
-                    default_value: Some(json!("guest")),
+                    default_value: Some("guest".into()),
                     transform: Some(FieldTransforms {
                         input: Some(UserFieldTransform::new(|value| {
-                            Ok(value.map(|value| {
-                                json!(format!("{}:in", value.as_str().unwrap_or("null")))
-                            }))
+                            Ok(if value.is_undefined() {
+                                value
+                            } else {
+                                format!("{}:in", value.as_str().unwrap_or("null")).into()
+                            })
                         })),
                         output: Some(UserFieldTransform::new(|value| {
-                            Ok(value.map(|value| {
-                                json!(format!("{}:out", value.as_str().unwrap_or("null")))
-                            }))
+                            Ok(if value.is_undefined() {
+                                value
+                            } else {
+                                format!("{}:out", value.as_str().unwrap_or("null")).into()
+                            })
                         })),
                     }),
                     ..Default::default()
@@ -73,7 +77,7 @@ pub fn configure(profile: &str, config: &mut AuthConfig) {
                 UserFieldConfig {
                     required: Some(false),
                     returned: Some(false),
-                    default_value: Some(json!("hidden")),
+                    default_value: Some("hidden".into()),
                     ..Default::default()
                 },
             ),
@@ -95,27 +99,29 @@ pub fn plugin(profile: &str, plugin: EmailPasswordPlugin) -> EmailPasswordPlugin
             let mut data = input.core_fields;
             let _ = data.insert(
                 "name".into(),
-                json!(format!(
+                format!(
                     "synthetic:{}",
                     data.get("name")
-                        .and_then(serde_json::Value::as_str)
+                        .and_then(FieldValue::as_str)
                         .unwrap_or_default()
-                )),
+                )
+                .into(),
             );
             let _ = data.insert(
                 "alias".into(),
-                json!(format!(
+                format!(
                     "custom:{}",
                     input
                         .additional_fields
                         .get("alias")
-                        .and_then(serde_json::Value::as_str)
+                        .and_then(FieldValue::as_str)
                         .unwrap_or_default()
-                )),
+                )
+                .into(),
             );
-            let _ = data.insert("secretNote".into(), json!("not-public"));
-            let _ = data.insert("unknown".into(), json!("not-in-schema"));
-            let _ = data.insert("id".into(), json!(input.id));
+            let _ = data.insert("secretNote".into(), "not-public".into());
+            let _ = data.insert("unknown".into(), "not-in-schema".into());
+            let _ = data.insert("id".into(), input.id.into());
             Ok(data)
         }))
     } else {

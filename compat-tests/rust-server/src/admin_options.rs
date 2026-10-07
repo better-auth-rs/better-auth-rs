@@ -41,7 +41,7 @@ impl AdminOptionsFixture {
             "secretNote".into(),
             better_auth::config::UserFieldConfig {
                 returned: Some(false),
-                default_value: Some(json!("admin-hidden")),
+                default_value: Some("admin-hidden".into()),
                 ..Default::default()
             },
         );

@@ -29,7 +29,11 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             let trace = Arc::new(Mutex::new(Vec::new()));
             let input_trace = trace.clone();
             let output_trace = trace.clone();
-            let projected = expected.clone();
+            let projected = expected
+                .clone()
+                .map(FieldValue::from_json)
+                .transpose()?
+                .unwrap_or(FieldValue::Undefined);
             let cache = Arc::new(MemoryCacheAdapter::new());
             let mut cfg = config();
             cfg.session.bearer = Some(Default::default());
@@ -57,14 +61,14 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                                     input_trace
                                         .lock()
                                         .unwrap()
-                                        .push(format!("input:name:{}", describe(&value)));
+                                        .push(format!("input:name:{}", describe(&value.json()?)));
                                     Ok(value)
                                 })),
                                 output: Some(UserFieldTransform::new(move |value| {
                                     output_trace
                                         .lock()
                                         .unwrap()
-                                        .push(format!("output:name:{}", describe(&value)));
+                                        .push(format!("output:name:{}", describe(&value.json()?)));
                                     Ok(projected.clone())
                                 })),
                             }),

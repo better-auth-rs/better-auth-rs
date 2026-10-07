@@ -10,7 +10,7 @@ fn input(label: &str, owner: Option<String>) -> CreateDeviceCode {
         device_code: format!("ordinary-device-consumption:{label}"),
         user_code: format!("ordinary-user-consumption:{label}"),
         user_id: owner,
-        expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
         status: "approved".into(),
         last_polled_at: None,
         polling_interval: Some(5000.0),
@@ -32,7 +32,10 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
                 if output_failure.load(Ordering::SeqCst) {
                     return Err(AuthError::internal("ordinary Device scope output error"));
                 }
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                })
             })),
             ..Default::default()
         }),
@@ -66,7 +69,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
             &initial.id,
             UpdateDeviceCode {
                 scope: Some("Current".into()).into(),
-                last_polled_at: Some(Some(polled)),
+                last_polled_at: Some(Some(polled.into())),
                 ..Default::default()
             },
         )
@@ -78,8 +81,8 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         .await?
         .unwrap();
     assert_eq!(consumed.scope.json()?, Some(json!("Current:out")));
-    assert_eq!(consumed.last_polled_at, Some(polled));
-    assert_eq!(*events.lock().unwrap(), [Some(json!("Current"))]);
+    assert_eq!(consumed.last_polled_at, Some(polled.into()));
+    assert_eq!(*events.lock().unwrap(), [FieldValue::from("Current")]);
     assert!(
         raw.get_device_code_by_device_code(&initial.device_code)
             .await?

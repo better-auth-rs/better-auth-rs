@@ -21,7 +21,7 @@ pub(super) async fn token<S: AuthSchema>(auth: &BetterAuth<S>, owner: &str) -> A
         .store()
         .create_session(CreateSession {
             user_id: owner.into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -55,7 +55,7 @@ pub(super) async fn read<S: AuthSchema>(
 
 async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) -> AuthResult<()> {
     let trace = Arc::new(Mutex::new(Vec::new()));
-    let output = Arc::new(Mutex::new(None::<Option<Value>>));
+    let output = Arc::new(Mutex::new(None::<FieldValue>));
     let policy = |field: &'static str| {
         let input_trace = trace.clone();
         let output_trace = trace.clone();
@@ -67,14 +67,14 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
                     input_trace
                         .lock()
                         .unwrap()
-                        .push(format!("input:{field}:{}", describe(&value)));
+                        .push(format!("input:{field}:{}", describe(&value.json()?)));
                     Ok(value)
                 })),
                 output: Some(UserFieldTransform::new(move |value| {
                     output_trace
                         .lock()
                         .unwrap()
-                        .push(format!("output:{field}:{}", describe(&value)));
+                        .push(format!("output:{field}:{}", describe(&value.json()?)));
                     Ok(output.lock().unwrap().clone().unwrap_or(value))
                 })),
             }),
@@ -121,7 +121,13 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         Some(Value::Null),
         None,
     ] {
-        *output.lock().unwrap() = Some(expected.clone());
+        *output.lock().unwrap() = Some(
+            expected
+                .clone()
+                .map(FieldValue::from_json)
+                .transpose()?
+                .unwrap_or(FieldValue::Undefined),
+        );
         let rows = auth.store().list_passkeys_by_user(&owner).await?;
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name.json()?, expected);
@@ -180,7 +186,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         assert_eq!(row.name.json()?, expected_output);
         assert_eq!(row.aaguid.json()?, expected_output);
     }
-    *output.lock().unwrap() = Some(Some(json!(42)));
+    *output.lock().unwrap() = Some(42.0.into());
     assert!(
         auth.store()
             .update_passkey_name(created.id.typed()?, "Updated display")

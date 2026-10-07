@@ -13,15 +13,21 @@ fn policy(field: &'static str, events: &Arc<Mutex<Vec<Value>>>) -> UserFieldConf
                 input_events
                     .lock()
                     .unwrap()
-                    .push(json!([field, "input", value]));
-                Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                    .push(json!([field, "input", value.json()?]));
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => value.as_str().unwrap().trim().into(),
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 output_events
                     .lock()
                     .unwrap()
-                    .push(json!([field, "output", value]));
-                Ok(value.map(|value| json!(format!("{}:custom", value.as_str().unwrap()))))
+                    .push(json!([field, "output", value.json()?]));
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => format!("{}:custom", value.as_str().unwrap()).into(),
+                })
             })),
         }),
         ..Default::default()
@@ -48,8 +54,8 @@ async fn registration<S: AuthSchema>(
                         (
                             "logo".into(),
                             UserFieldConfig {
-                                default_value: Some(json!(" Default ")),
-                                on_update: Some(Arc::new(|| json!(" Updated "))),
+                                default_value: Some(" Default ".into()),
+                                on_update: Some(Arc::new(|| " Updated ".into())),
                                 ..policy("organization.logo", &events)
                             },
                         ),
@@ -75,9 +81,12 @@ async fn registration<S: AuthSchema>(
                     own_events.lock().unwrap().push(json!([
                         "organization.name",
                         "own-output",
-                        value
+                        value.json()?
                     ]));
-                    Ok(value.map(|value| json!(format!("{}:own", value.as_str().unwrap()))))
+                    Ok(match value {
+                        FieldValue::Undefined => FieldValue::Undefined,
+                        value => format!("{}:own", value.as_str().unwrap()).into(),
+                    })
                 })),
                 ..Default::default()
             }),

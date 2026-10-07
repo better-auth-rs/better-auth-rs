@@ -39,9 +39,10 @@ impl OrganizationHooks for Hooks {
                 }
             }
         }
-        let _ = data
-            .additional_fields
-            .insert("hookState".into(), snapshot.into());
+        let _ = data.additional_fields.insert(
+            "hookState".into(),
+            better_auth::FieldMap::from_json(snapshot)?.into(),
+        );
         Ok(())
     }
 }
@@ -68,13 +69,18 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         required: Some(false),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| {
-                    if value.is_string() {
-                        serde_json::json!(value.to_string())
-                    } else {
-                        value
-                    }
-                }))
+                Ok(if value.is_string() {
+                    value
+                        .stringify()?
+                        .ok_or_else(|| {
+                            better_auth::AuthError::internal(
+                                "String field has no JSON representation",
+                            )
+                        })?
+                        .into()
+                } else {
+                    value
+                })
             })),
             ..Default::default()
         }),
@@ -84,7 +90,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         (
             "role".into(),
             UserFieldConfig {
-                default_value: Some(serde_json::json!("member")),
+                default_value: Some("member".into()),
                 ..json.clone()
             },
         ),

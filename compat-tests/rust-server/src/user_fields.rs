@@ -1,4 +1,5 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
+use better_auth::{FieldMap, FieldValue};
 use better_auth_seaorm::sea_orm::{self, entity::prelude::*};
 use serde::Serialize;
 
@@ -65,7 +66,6 @@ impl better_auth::AuthSchema for Schema {
 
 pub fn configure(config: &mut better_auth::AuthConfig) {
     use better_auth::config::{CookieCacheConfig, UserFieldConfig, UserFieldType};
-    use serde_json::json;
     use std::sync::Arc;
     config.session.cookie_cache = Some(CookieCacheConfig {
         enabled: Some(true),
@@ -77,8 +77,8 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
                 "changedMarker".into(),
                 UserFieldConfig {
                     required: Some(false),
-                    default_value: Some(json!("created")),
-                    on_update: Some(Arc::new(|| json!("updated"))),
+                    default_value: Some("created".into()),
+                    on_update: Some(Arc::new(|| "updated".into())),
                     ..Default::default()
                 },
             ),
@@ -92,7 +92,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
             (
                 "alias".into(),
                 UserFieldConfig {
-                    default_value: Some(json!("guest")),
+                    default_value: Some("guest".into()),
                     transform: Some(FieldTransforms {
                         input: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
                         output: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
@@ -115,7 +115,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
                 "internalCode".into(),
                 UserFieldConfig {
                     input: Some(false),
-                    default_value: Some(json!("server")),
+                    default_value: Some("server".into()),
                     ..Default::default()
                 },
             ),
@@ -123,7 +123,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
                 "secretNote".into(),
                 UserFieldConfig {
                     returned: Some(false),
-                    default_value: Some(json!("hidden")),
+                    default_value: Some("hidden".into()),
                     ..Default::default()
                 },
             ),
@@ -131,7 +131,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
                 "score".into(),
                 UserFieldConfig {
                     field_type: UserFieldType::Number,
-                    default_value: Some(json!(1)),
+                    default_value: Some(1.into()),
                     validator: Some(Arc::new(|value| {
                         if value.as_f64().is_some_and(|score| score >= 0.0) {
                             Ok(value)
@@ -149,18 +149,26 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         .into(),
     );
     for (name, field_type, default_value) in [
-        ("enabled", UserFieldType::Boolean, json!(true)),
-        ("tags", UserFieldType::StringArray, json!(["starter"])),
-        ("ratings", UserFieldType::NumberArray, json!([1, 2])),
+        ("enabled", UserFieldType::Boolean, FieldValue::from(true)),
+        (
+            "tags",
+            UserFieldType::StringArray,
+            vec!["starter".into()].into(),
+        ),
+        (
+            "ratings",
+            UserFieldType::NumberArray,
+            vec![1.into(), 2.into()].into(),
+        ),
         (
             "preferences",
             UserFieldType::Json,
-            json!({ "theme": "system" }),
+            FieldMap::from([("theme".into(), "system".into())]).into(),
         ),
         (
             "level",
             UserFieldType::Enum(vec!["basic".into(), "pro".into()]),
-            json!("basic"),
+            "basic".into(),
         ),
     ] {
         config.user.fields_mut().insert(
@@ -177,7 +185,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         "cohort".into(),
         UserFieldConfig {
             required: Some(false),
-            default_value_fn: Some(Arc::new(|| json!("factory"))),
+            default_value_fn: Some(Arc::new(|| "factory".into())),
             ..Default::default()
         },
     );
@@ -186,7 +194,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         UserFieldConfig {
             field_type: UserFieldType::Date,
             required: Some(false),
-            default_value_fn: Some(Arc::new(|| json!("2020-01-02T03:04:05.000Z"))),
+            default_value_fn: Some(Arc::new(|| "2020-01-02T03:04:05.000Z".into())),
             ..Default::default()
         },
     );
@@ -195,7 +203,7 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
         UserFieldConfig {
             required: Some(false),
             field_name: Some("storedLabel".into()),
-            default_value: Some(json!("public-label")),
+            default_value: Some("public-label".into()),
             ..Default::default()
         },
     );
@@ -241,16 +249,12 @@ pub async fn add_columns(
     Ok(())
 }
 
-fn suffix(
-    value: Option<serde_json::Value>,
-    suffix: &str,
-) -> better_auth::AuthResult<Option<serde_json::Value>> {
+fn suffix(value: FieldValue, suffix: &str) -> better_auth::AuthResult<FieldValue> {
     let text = match value {
-        None => "undefined".to_owned(),
-        Some(serde_json::Value::String(value)) => value,
-        Some(value) => value.to_string(),
+        FieldValue::String(value) => value,
+        value => value.stringify()?.unwrap_or_else(|| "undefined".into()),
     };
-    Ok(Some(serde_json::json!(format!("{text}:{suffix}"))))
+    Ok(format!("{text}:{suffix}").into())
 }
 
 pub async fn disabled_router(

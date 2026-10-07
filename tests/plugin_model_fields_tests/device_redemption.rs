@@ -30,7 +30,7 @@ async fn observe<S: AuthSchema>(
             device_code: token.clone(),
             user_code: format!("ordinary-user:{mode}"),
             user_id: Some(owner.into()),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             status: "approved".into(),
             last_polled_at: None,
             polling_interval: None,
@@ -194,7 +194,10 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(move |value| {
                     callback_outputs.lock().unwrap().push(value.clone());
-                    Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                    Ok(match value {
+                        FieldValue::Undefined => FieldValue::Undefined,
+                        value => format!("{}:out", value.as_str().unwrap()).into(),
+                    })
                 })),
                 ..Default::default()
             }),
@@ -206,11 +209,14 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
         .plugin(DeviceAuthorizationPlugin::new())
         .build()
         .await?;
-    let created_at = "2030-01-01T00:00:00Z".parse().unwrap();
+    let created_at: FieldDate = "2030-01-01T00:00:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .unwrap()
+        .into();
     let owner = auth
         .store()
         .create_user(CreateUser {
-            created_at: Some(created_at),
+            created_at: Some(created_at.clone()),
             updated_at: Some(created_at),
             image: None.into(),
             ..CreateUser::new()
@@ -226,7 +232,7 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
                 device_code: code.clone(),
                 user_code: format!("hidden-user-code:{mode}"),
                 user_id: Some(owner.id.typed()?.clone()),
-                expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+                expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                 status: "approved".into(),
                 last_polled_at: None,
                 polling_interval: None,
@@ -260,7 +266,7 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
         );
         assert_eq!(
             *outputs.lock().unwrap(),
-            [Some(json!("Hidden owner"))],
+            [FieldValue::from("Hidden owner")],
             "{mode} redemption must apply the user output callback once"
         );
     }

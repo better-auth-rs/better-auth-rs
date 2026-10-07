@@ -57,7 +57,7 @@ impl AuthLifecycleFixture {
                 UserFieldConfig {
                     required: Some(false),
                     returned: Some(returned),
-                    default_value: Some(json!(value)),
+                    default_value: Some(value.into()),
                     ..Default::default()
                 },
             );

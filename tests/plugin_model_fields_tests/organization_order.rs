@@ -32,18 +32,27 @@ fn policy(field: &'static str, events: &Events) -> UserFieldConfig {
         required: Some(false),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                input.lock().unwrap().push(json!([field, "input", value]));
-                Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                input
+                    .lock()
+                    .unwrap()
+                    .push(json!([field, "input", value.json()?]));
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => value.as_str().unwrap().trim().into(),
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                output.lock().unwrap().push(json!([field, "output", value]));
-                Ok(value.map(|value| {
-                    if matches!(field, "name" | "logo" | "label") {
-                        json!(format!("{}:out", value.as_str().unwrap()))
+                output
+                    .lock()
+                    .unwrap()
+                    .push(json!([field, "output", value.json()?]));
+                Ok(
+                    if !value.is_undefined() && matches!(field, "name" | "logo" | "label") {
+                        format!("{}:out", value.as_str().unwrap()).into()
                     } else {
                         value
-                    }
-                }))
+                    },
+                )
             })),
         }),
         ..Default::default()
@@ -66,11 +75,11 @@ fn declared(model: &str, events: &Events) -> UserConfig {
             ),
             default_value_fn: Some(Arc::new(move || {
                 default.lock().unwrap().push(json!(["label", "default"]));
-                json!(" Label ")
+                " Label ".into()
             })),
             on_update: Some(Arc::new(move || {
                 update.lock().unwrap().push(json!(["label", "onUpdate"]));
-                json!(" Updated ")
+                " Updated ".into()
             })),
             ..policy("label", events)
         },
@@ -85,12 +94,12 @@ fn declared(model: &str, events: &Events) -> UserConfig {
         let default = events.clone();
         logo.default_value_fn = Some(Arc::new(move || {
             default.lock().unwrap().push(json!(["logo", "default"]));
-            json!(" Logo ")
+            " Logo ".into()
         }));
         let update = events.clone();
         logo.on_update = Some(Arc::new(move || {
             update.lock().unwrap().push(json!(["logo", "onUpdate"]));
-            json!(" Next Logo ")
+            " Next Logo ".into()
         }));
     }
     result
@@ -213,7 +222,8 @@ async fn capture<S: AuthSchema>(
                     &user,
                     chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00Z")
                         .unwrap()
-                        .to_utc(),
+                        .to_utc()
+                        .into(),
                 ))
                 .await?,
         )?,
@@ -223,7 +233,11 @@ async fn capture<S: AuthSchema>(
                     additional_fields: Default::default(),
                     organization_id: parent_id.into(),
                     role: "reader".into(),
-                    permission: json!({"organization": ["read"]}),
+                    permission: FieldMap::from([(
+                        "organization".into(),
+                        vec!["read".into()].into(),
+                    )])
+                    .into(),
                 })
                 .await?,
         )?,

@@ -299,12 +299,15 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             .named
             .iter()
             .map(|field| {
-                let name = field.ident.as_ref().expect("named model field").to_string();
+                let ident = field.ident.as_ref().ok_or_else(|| {
+                    syn::Error::new_spanned(field, "AuthEntity requires named fields")
+                })?;
+                let name = ident.to_string();
                 let name = serde_serialized_name(&field.attrs, "rename")?.unwrap_or_else(|| {
                     rule.as_ref()
                         .map_or_else(|| name.clone(), |rule| rule.apply_to_field(&name))
                 });
-                let value = adapter_record::field_value(field, &seaorm_root);
+                let value = adapter_record::field_value(ident, &seaorm_root);
                 Ok(quote!((#name.to_owned(), #value)))
             })
             .collect::<syn::Result<Vec<_>>>()?;
