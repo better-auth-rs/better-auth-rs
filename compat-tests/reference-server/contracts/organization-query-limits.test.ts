@@ -37,6 +37,27 @@ test("member lists override the database default and preserve member order", asy
   expect(result.total).toBe(2);
 });
 
+test("member equality filters do not coerce objects and retain the organization constraint", async () => {
+  const { adapter, database } = await fixture();
+  database.organization.push({ ...database.organization[0], id: "other", slug: "other" });
+  database.member.push({ ...database.member[0], id: "outside", organizationId: "other" });
+  const before = JSON.stringify(database);
+  const filter = { field: "role", value: { toString: null } };
+  const equal = await adapter.listMembers({ organizationId: "org", filter: { ...filter, operator: "eq" } });
+  expect(equal.members).toStrictEqual([]);
+  expect(equal.total).toBe(0);
+  const unequal = await adapter.listMembers({ organizationId: "org", filter: { ...filter, operator: "ne" } });
+  expect(unequal.members.map(member => [member.id, member.organizationId, member.user.id])).toStrictEqual([
+    ["m0", "org", "u1"], ["m1", "org", "u2"],
+  ]);
+  expect(unequal.total).toBe(2);
+  for (const operator of ["gt", "gte", "lt", "lte"]) {
+    await expect(adapter.listMembers({ organizationId: "org", filter: { ...filter, operator } }))
+      .rejects.toBeInstanceOf(TypeError);
+  }
+  expect(JSON.stringify(database)).toBe(before);
+});
+
 for (const membershipLimit of [undefined, 0, () => 1]) {
   test(`full organization user lookup uses static truthy membership limit: ${String(membershipLimit)}`, async () => {
     const { adapter } = await fixture(membershipLimit);

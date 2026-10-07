@@ -157,8 +157,12 @@ async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResu
         .collect(),
     );
     store.configure_organization_fields(fields)?;
-    for (user, score, enabled) in [("first", 2, false), ("second", 10, true)] {
-        let mut member = CreateMember::new("organization", user, "member");
+    for (organization, user, score, enabled) in [
+        ("organization", "first", 2, false),
+        ("organization", "second", 10, true),
+        ("another-organization", "outsider", 99, true),
+    ] {
+        let mut member = CreateMember::new(organization, user, "member");
         member.additional_fields = [
             ("label".into(), Value::from(user)),
             ("score".into(), Value::from(f64::from(score))),
@@ -207,6 +211,33 @@ async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResu
     let (members, total) = store.query_organization_members(&params).await?;
     assert_eq!(total, 1);
     assert_eq!(members[0].user_id, "first");
+    params.filter_field = Some("role".into());
+    params.filter_value = Some(Value::from_json(json!({"toString": null}))?);
+    params.filter_operator = Some("eq".into());
+    let (members, total) = store.query_organization_members(&params).await?;
+    assert!(members.is_empty());
+    assert_eq!(total, 0);
+    params.filter_operator = Some("ne".into());
+    let (members, total) = store.query_organization_members(&params).await?;
+    assert_eq!(total, 2);
+    assert_eq!(
+        members
+            .iter()
+            .map(|member| member.user_id.as_str())
+            .collect::<Vec<_>>(),
+        [Some("first"), Some("second")]
+    );
+    assert!(
+        members
+            .iter()
+            .all(|member| member.organization_id == "organization")
+    );
+    for operator in ["gt", "gte", "lt", "lte"] {
+        params.filter_operator = Some(operator.into());
+        let error = store.query_organization_members(&params).await.unwrap_err();
+        assert!(matches!(error, AuthError::Internal(message)
+            if message == "Cannot convert object to primitive value"));
+    }
     params.filter_field = None;
     params.filter_value = None;
     params.sort_by = Some("score".into());

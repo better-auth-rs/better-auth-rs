@@ -962,6 +962,35 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
             vec![3, 4, 5, 1, 2, 0, 6],
             vec![0, 6, 1, 2, 3, 4, 5],
         ),
+        (
+            vec![
+                Some(json!({})),
+                Some(json!({"valueOf": null})),
+                Some(json!({"nested": {"toString": null}})),
+                Some(json!({"__proto__": {"toString": null}})),
+            ],
+            vec![0, 1, 2, 3],
+            vec![0, 1, 2, 3],
+        ),
+        (
+            vec![
+                Some(json!([{"valueOf": null}])),
+                Some(json!("[object Object]")),
+            ],
+            vec![0, 1],
+            vec![0, 1],
+        ),
+        (vec![Some(json!({"toString": null}))], vec![0], vec![0]),
+        (
+            vec![Some(json!({"toString": null})), Some(json!(null))],
+            vec![1, 0],
+            vec![0, 1],
+        ),
+        (
+            vec![Some(json!({"toString": null})), None],
+            vec![1, 0],
+            vec![0, 1],
+        ),
     ] {
         let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
         for (index, name) in names.iter().enumerate() {
@@ -1068,6 +1097,101 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
                     ("date-2".into(), json!(dates[2])),
                 ]
             );
+        }
+    }
+    check_cached_object_conversion_errors(ctx, &keys[0]).await;
+}
+
+async fn check_cached_object_conversion_errors(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    template: &better_auth_core::ApiKey,
+) {
+    use better_auth_core::store::SecondaryStorage;
+
+    for value in [
+        json!({"toString": null}),
+        json!({"toString": false}),
+        json!({"toString": 0}),
+        json!({"toString": ""}),
+        json!({"toString": []}),
+        json!({"toString": {}}),
+        json!([{"toString": null}]),
+    ] {
+        for names in [[value.clone(), json!("x")], [json!("x"), value]] {
+            let cache = Arc::new(better_auth_core::store::MemoryCacheAdapter::new());
+            for (index, name) in names.iter().enumerate() {
+                let mut key = template.clone();
+                key.id = format!("object-{index}").into();
+                key.key_hash = format!("object-secret-{index}");
+                key.name = better_auth_core::SchemaValue::from_json(Some(name.clone())).unwrap();
+                storage::put(cache.as_ref(), &key, false).await.unwrap();
+            }
+            let mut stored = Vec::new();
+            for key in [
+                "api-key:object-secret-0",
+                "api-key:by-id:object-0",
+                "api-key:object-secret-1",
+                "api-key:by-id:object-1",
+                "api-key:by-ref:list-owner",
+            ] {
+                let value = SecondaryStorage::get(cache.as_ref(), key).await.unwrap();
+                assert!(value.is_some());
+                stored.push((key, value));
+            }
+            let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+                storage: ApiKeyStorage::SecondaryStorage,
+                custom_storage: Some(cache.clone()),
+                ..Default::default()
+            });
+            for direction in ["asc", "desc"] {
+                let error = handlers::list_keys_core(
+                    "list-owner",
+                    &types::ListKeysQuery {
+                        sort_by: Some("name".into()),
+                        sort_direction: Some(direction.into()),
+                        ..Default::default()
+                    },
+                    &plugin,
+                    ctx,
+                )
+                .await
+                .unwrap_err();
+                assert!(matches!(error, AuthError::Internal(message)
+                    if message == "Cannot convert object to primitive value"));
+                for (key, expected) in &stored {
+                    assert_eq!(
+                        SecondaryStorage::get(cache.as_ref(), key).await.unwrap(),
+                        *expected
+                    );
+                }
+            }
+            let unsorted = handlers::list_keys_core(
+                "list-owner",
+                &types::ListKeysQuery::default(),
+                &plugin,
+                ctx,
+            )
+            .await
+            .unwrap();
+            assert_eq!(unsorted.total, names.len());
+            assert_eq!(
+                unsorted
+                    .api_keys
+                    .iter()
+                    .map(|key| (key.id.typed().unwrap().clone(), key.name.json().unwrap()))
+                    .collect::<Vec<_>>(),
+                names
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, name)| (format!("object-{index}"), Some(name)))
+                    .collect::<Vec<_>>()
+            );
+            for (key, expected) in &stored {
+                assert_eq!(
+                    SecondaryStorage::get(cache.as_ref(), key).await.unwrap(),
+                    *expected
+                );
+            }
         }
     }
 }

@@ -499,7 +499,15 @@ impl FieldValue {
             Self::Utf16String(value) => value.clone(),
             Self::Bool(value) => value.to_string().into(),
             Self::Number(value) => crate::schema_value::number_string(*value).into(),
-            Self::Object(_) => "[object Object]".into(),
+            Self::Object(fields) => {
+                // Own fields cannot be callable; shadowing toString removes the ordinary primitive conversion.
+                if fields.contains_key("toString") {
+                    return Err(AuthError::internal(
+                        "Cannot convert object to primitive value",
+                    ));
+                }
+                "[object Object]".into()
+            }
             Self::Date(value) => match value.to_datetime()? {
                 Some(value) => value
                     .with_timezone(&chrono::Local)

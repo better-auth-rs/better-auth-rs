@@ -1,6 +1,52 @@
 use super::*;
 
 #[test]
+fn ordinary_object_primitive_conversion_checks_only_the_selected_method() -> AuthResult<()> {
+    let display = crate::Utf16String::from("[object Object]");
+    for value in [
+        serde_json::json!({}),
+        serde_json::json!({"valueOf": null}),
+        serde_json::json!({"nested": {"toString": null}}),
+        serde_json::json!({"__proto__": {"toString": null}}),
+    ] {
+        let value = FieldValue::from_json(value)?;
+        assert_eq!(value.display_utf16()?, display);
+        assert!(crate::query::field_number(&value)?.is_nan());
+        assert_eq!(
+            crate::query::field_compare(&value, &FieldValue::from("[object Object]"))?,
+            Some(std::cmp::Ordering::Equal)
+        );
+    }
+    for method in [
+        FieldValue::Undefined,
+        FieldValue::Null,
+        FieldValue::Bool(false),
+        FieldValue::Number(0.0),
+        FieldValue::from(""),
+        FieldValue::from(Vec::<FieldValue>::new()),
+        FieldValue::from(FieldMap::new()),
+    ] {
+        let object = FieldValue::from(FieldMap::from_iter([("toString".into(), method)]));
+        for value in [object.clone(), FieldValue::from(vec![object])] {
+            for result in [
+                value.display_utf16().map(drop),
+                crate::query::field_number(&value).map(drop),
+                crate::query::field_compare(&value, &FieldValue::Null).map(drop),
+                crate::query::field_compare(&FieldValue::Null, &value).map(drop),
+            ] {
+                assert!(matches!(result, Err(AuthError::Internal(message))
+                    if message == "Cannot convert object to primitive value"));
+            }
+        }
+    }
+    assert_eq!(
+        FieldValue::from_json(serde_json::json!({"toString": null}))?.stringify()?,
+        Some("{\"toString\":null}".into())
+    );
+    Ok(())
+}
+
+#[test]
 fn object_identity_and_numeric_membership_use_distinct_comparisons() {
     let date = FieldValue::from(FieldDate::from_milliseconds(42.9));
     let same_time = FieldValue::from(FieldDate::from_milliseconds(42.0));

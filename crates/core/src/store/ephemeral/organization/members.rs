@@ -362,7 +362,6 @@ impl MemberStore for EphemeralStore {
                 } else {
                     expected.clone()
                 };
-                let ordering = crate::query::field_compare(&actual, &expected)?;
                 Ok(match operator {
                     "eq" => actual.strict_equals(&expected),
                     "ne" => !actual.strict_equals(&expected),
@@ -379,16 +378,16 @@ impl MemberStore for EphemeralStore {
                             }
                         }
                     }
-                    "gt" => ordering == Some(std::cmp::Ordering::Greater),
-                    "gte" => matches!(
-                        ordering,
-                        Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)
-                    ),
-                    "lt" => ordering == Some(std::cmp::Ordering::Less),
-                    "lte" => matches!(
-                        ordering,
-                        Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
-                    ),
+                    "gt" | "gte" | "lt" | "lte" => {
+                        use std::cmp::Ordering::{Equal, Greater, Less};
+                        let ordering = crate::query::field_compare(&actual, &expected)?;
+                        matches!(
+                            (operator, ordering),
+                            ("gt" | "gte", Some(Greater))
+                                | ("lt" | "lte", Some(Less))
+                                | ("gte" | "lte", Some(Equal))
+                        )
+                    }
                     _ => true,
                 })
             };
