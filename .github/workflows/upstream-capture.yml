@@ -7,7 +7,7 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/schema-join-reference-history-capture.mjs
+      - compat-tests/reference-server/contracts/user-id-generation-order-capture.mjs
 
 permissions:
   contents: read
@@ -18,8 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: schema-join-reference-history
-            regression: schema-join-reference-field
+          - contract: user-id-generation-order
+            regression: schema-join-reference-history
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
