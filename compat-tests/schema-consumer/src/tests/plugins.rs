@@ -362,7 +362,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
     );
     let renamed = auth
         .store()
-        .update_passkey_name(&passkey.id, "renamed passkey")
+        .update_passkey_name(passkey.id.typed().unwrap(), "renamed passkey")
         .await
         .unwrap();
     assert_eq!(
