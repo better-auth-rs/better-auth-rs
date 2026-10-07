@@ -3,7 +3,7 @@ use better_auth::plugins::oauth::{
     OAuthIdTokenVerifier, OAuthPlugin, OAuthProvider, OAuthUserInfo, OAuthUserInfoHandler,
     OAuthUserInfoRequest, OAuthUserInfoResponse,
 };
-use better_auth_core::AuthResult;
+use better_auth_core::{AuthResult, FieldValue};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -39,9 +39,15 @@ impl OAuthUserInfoHandler for BodyTrace {
         request: OAuthUserInfoRequest,
     ) -> AuthResult<Option<OAuthUserInfoResponse>> {
         self.current("oauth.userinfo", None);
+        let expires_at = request
+            .access_token_expires_at
+            .as_ref()
+            .map(|date| FieldValue::Date(date.clone()).json())
+            .transpose()?
+            .flatten();
         self.1.lock().unwrap().push(json!({
             "kind":"oauth-userinfo", "accessToken":request.access_token,
-            "refreshToken":request.refresh_token, "expiresAt":request.access_token_expires_at,
+            "refreshToken":request.refresh_token, "expiresAt":expires_at,
             "scopes":request.scopes, "idToken":request.id_token,
             "userPresent":request.user.is_some(),
             "firstName":request.user.as_ref().and_then(|user|user.name.as_ref()).and_then(|name|name.first_name.as_deref()),

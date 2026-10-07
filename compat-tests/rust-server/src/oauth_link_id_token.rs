@@ -66,7 +66,7 @@ impl OAuthUserInfoHandler for OAuthLinkIdTokenFixture {
                     .transpose()
                     .map_err(|error| better_auth_core::AuthError::internal(error.to_string()))?,
                 email_verified: Some(data["emailVerified"] == true).into(),
-                additional_fields,
+                additional_fields: better_auth_core::FieldMap::from_json(additional_fields)?,
             },
             data: {
                 let mut data = data;
@@ -199,10 +199,15 @@ password: Default::default(),
                 let raw_access = account.access_token.typed()?.as_deref();
                 let access=maybe_decrypt(raw_access,true,secret)?;
                 let refresh=maybe_decrypt(account.refresh_token.typed()?.as_deref(),true,secret)?;
-                Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=raw_access),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token.typed()?.as_deref(),"scope":account.scope.typed()?.as_deref(),"accessTokenExpiresAt":*account.access_token_expires_at.typed()?}))
+                Ok::<_,AuthError>(json!({"encrypted":access.as_ref().is_some_and(|token|!token.is_empty() && Some(token.as_str())!=raw_access),"accessToken":access,"refreshToken":refresh,"idToken":account.id_token.typed()?.as_deref(),"scope":account.scope.typed()?.as_deref(),"accessTokenExpiresAt":account.access_token_expires_at.json()?}))
+            }).transpose()?;
+            let user=user.map(|user| {
+                Ok::<_,AuthError>(json!({"name":user.name,"email":user.email(),"emailVerified":user.email_verified(),"image":user.image,
+                    "department":user.additional_fields.get("department").map(better_auth_core::FieldValue::json).transpose()?.flatten(),
+                    "internalCode":user.additional_fields.get("internalCode").map(better_auth_core::FieldValue::json).transpose()?.flatten()}))
             }).transpose()?;
             let state=fixture.state.lock().unwrap();
-            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user.map(|user|json!({"name":user.name,"email":user.email(),"emailVerified":user.email_verified(),"image":user.image,"department":user.additional_fields.get("department"),"internalCode":user.additional_fields.get("internalCode")})),"account":account})))
+            Ok::<_,AuthError>(Json(json!({"events":state.events,"imageUpdates":state.image_updates,"admissions":state.admissions,"nestedAccounts":accounts.iter().filter(|account|account.provider_id=="nested-cancel").count(),"user":user,"account":account})))
         }}))
     }
 }

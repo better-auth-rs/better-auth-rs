@@ -7,7 +7,9 @@ use better_auth::plugins::user_management::{
 };
 use better_auth::plugins::{PasswordManagementPlugin, UserManagementPlugin};
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth};
-use better_auth_core::{AuthRequest, CreateAccount, user_fields::UserFieldConfig, wire::UserView};
+use better_auth_core::{
+    AuthRequest, CreateAccount, FieldValue, user_fields::UserFieldConfig, wire::UserView,
+};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
@@ -26,7 +28,7 @@ pub(super) struct AuthLifecycleFixture {
 impl AuthLifecycleFixture {
     fn record(&self, name: &str, user: &UserView, request: Option<&AuthRequest>) -> AuthResult<()> {
         self.state.lock().unwrap().events.push(json!({"name":name,"email":user.email,"userName":user.name,"image":user.image,
-            "department":user.additional_fields.get("department"),"hasHidden":user.additional_fields.contains_key("secretNote"),
+            "department":user.additional_fields.get("department").map(FieldValue::json).transpose()?.flatten(),"hasHidden":user.additional_fields.contains_key("secretNote"),
             "hasCreatedAt":true,"path":request.map(AuthRequest::path),"tag":request.and_then(|request|request.headers.get("x-lifecycle-tag"))}));
         if request
             .and_then(|request| request.headers.get("x-lifecycle-fail"))
@@ -148,7 +150,11 @@ password: Default::default(),
                     let verification=match token {Some(token)=>auth.store().get_verification_by_identifier(&format!("reset-password:{token}")).await?,None=>None};
                     let state=fixture.state.lock().unwrap();
                     Ok(json!({"events":state.events,"resetToken":state.reset_token,"deleteToken":state.delete_token,"userExists":user.is_some(),"accounts":accounts.len(),
-                        "resetLifetime":verification.map(|verification| Ok::<_,AuthError>(((*verification.expires_at.typed()? - *verification.created_at.typed()?).num_milliseconds()+500)/1000)).transpose()?}))
+                        "resetLifetime":verification.map(|verification| {
+                            let expires_at = verification.expires_at.typed()?.to_datetime()?.ok_or_else(|| AuthError::internal("Reset verification has an invalid expiration date"))?;
+                            let created_at = verification.created_at.typed()?.to_datetime()?.ok_or_else(|| AuthError::internal("Reset verification has an invalid creation date"))?;
+                            Ok::<_,AuthError>(((expires_at - created_at).num_milliseconds()+500)/1000)
+                        }).transpose()?}))
                 }.await;
                 match result {Ok(value)=>Json(value).into_response(),Err(error)=>(axum::http::StatusCode::INTERNAL_SERVER_ERROR,Json(json!({"error":error.to_string()}))).into_response()}
             }

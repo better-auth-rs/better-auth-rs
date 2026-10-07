@@ -145,7 +145,15 @@ impl EmailOtpNativeFixture {
                     state["expiresAt"] = json!(
                         record
                             .as_ref()
-                            .map(|record| record.expires_at.typed().map(|value| value.to_rfc3339()))
+                            .map(|record| {
+                                let expires_at =
+                                    record.expires_at.typed()?.to_datetime()?.ok_or_else(|| {
+                                        AuthError::internal(
+                                            "OTP verification has an invalid expiration date",
+                                        )
+                                    })?;
+                                Ok::<_, AuthError>(expires_at.to_rfc3339())
+                            })
                             .transpose()?
                     );
                     state["attempts"] = json!(

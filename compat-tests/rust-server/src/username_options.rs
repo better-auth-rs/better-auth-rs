@@ -21,7 +21,7 @@ use better_auth::{
     integrations::axum::AxumIntegration,
 };
 use better_auth_core::{
-    AuthUser, CreateUser, HttpMethod, UpdateUser, config::CookieCacheConfig,
+    AuthUser, CreateUser, FieldMap, FieldValue, HttpMethod, UpdateUser, config::CookieCacheConfig,
     middleware::RateLimitConfig,
 };
 use better_auth_seaorm::{
@@ -57,13 +57,18 @@ impl Events {
         kind: &str,
         username: &Option<Option<String>>,
         display: &Option<Option<String>>,
-        fields: &Map<String, Value>,
+        fields: &FieldMap,
         request: Option<&better_auth_core::RequestHookContext>,
-    ) {
+    ) -> AuthResult<()> {
         let mut event = json!({"kind":kind,"path":request.map(|value|&value.path),"http":request.is_some_and(|value|value.is_http)});
         for name in ["username", "displayUsername"] {
-            if let Some(value) = fields.get(name) {
-                event[name] = value.clone();
+            if let Some(value) = fields
+                .get(name)
+                .map(FieldValue::json)
+                .transpose()?
+                .flatten()
+            {
+                event[name] = value;
             }
         }
         if let Some(value) = username {
@@ -73,6 +78,7 @@ impl Events {
             event["displayUsername"] = json!(value);
         }
         self.0.lock().unwrap().events.push(event);
+        Ok(())
     }
     fn normalize(&self, prefix: &'static str, value: &str, output: String) -> AuthResult<String> {
         self.0
@@ -126,7 +132,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
             &user.display_username,
             &user.additional_fields,
             context.request.as_ref(),
-        );
+        )?;
         Ok(HookControl::Continue)
     }
     async fn before_update_user(
@@ -141,7 +147,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
             &update.display_username,
             &update.additional_fields,
             context.request.as_ref(),
-        );
+        )?;
         Ok(if self.0.lock().unwrap().controls["echoUpdate"] == true {
             DatabaseHookUpdate::Patch(update.clone())
         } else {

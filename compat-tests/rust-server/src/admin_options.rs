@@ -5,7 +5,7 @@ use better_auth::plugins::admin::{
 };
 use better_auth::seaorm::{SeaOrmHookContext, SeaOrmHooks};
 use better_auth::{AuthError, AuthResult, BetterAuth};
-use better_auth_core::{AuthPlugin, AuthRequest, AuthUser, HttpMethod, UpdateUser};
+use better_auth_core::{AuthPlugin, AuthRequest, AuthUser, FieldValue, HttpMethod, UpdateUser};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde_json::{Value, json};
 use std::{
@@ -65,13 +65,13 @@ impl AdminOptionsFixture {
                 tokio::task::yield_now().await;
                 let mode = {
                     let mut state = fixture.state.lock().unwrap();
-                    state.events.push(json!({"event":"banned-message", "email":user.email, "reason":user.ban_reason, "secretNote":user.additional_fields.get("secretNote")}));
+                    state.events.push(json!({"event":"banned-message", "email":user.email, "reason":user.ban_reason, "secretNote":user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten()}));
                     state.mode.clone()
                 };
                 match mode.as_str() {
                     "api-error" => Err(rejection("ADMIN_CALLBACK_REJECTED", "Admin callback rejected")),
                     "ordinary-error" => Err(AuthError::internal("private admin callback failure")),
-                    _ => Ok(format!("Blocked: {}/{}", user.email.as_deref().unwrap_or_default(), user.additional_fields.get("secretNote").and_then(Value::as_str).unwrap_or_default())),
+                    _ => Ok(format!("Blocked: {}/{}", user.email.as_deref().unwrap_or_default(), user.additional_fields.get("secretNote").and_then(FieldValue::as_str).unwrap_or_default())),
                 }
             })
         }))
@@ -137,14 +137,17 @@ impl AdminOptionsFixture {
                         role: patch.get("role").and_then(Value::as_str).map(str::to_owned),
                         banned: patch.get("banned").and_then(Value::as_bool),
                         ban_reason: patch.get("banReason").map(|value| serde_json::from_value(value.clone())).transpose()?,
-                        ban_expires: patch.get("banExpires").map(|value| serde_json::from_value(value.clone())).transpose()?,
+                        ban_expires: patch.get("banExpires").map(|value| {
+                            serde_json::from_value::<Option<chrono::DateTime<chrono::Utc>>>(value.clone())
+                                .map(|date| date.map(Into::into))
+                        }).transpose()?,
                         ..Default::default()
                     }).await?);
                 }
                 let sessions = match &user { Some(user) => auth.store().get_user_sessions(user.id().typed().unwrap()).await?.len(), None => 0 };
                 let events = fixture.state.lock().unwrap().events.clone();
                 let user = match user.as_ref() { Some(user) => Some(auth.context().internal_user_view(user).await?), None => None };
-                let user = user.map(|user| json!({"email":user.email,"role":user.role,"name":user.name,"banned":user.banned,"banReason":user.ban_reason,"hasBanExpires":user.ban_expires.is_some(),"secretNote":user.additional_fields.get("secretNote")}));
+                let user = user.map(|user| Ok::<_, AuthError>(json!({"email":user.email,"role":user.role,"name":user.name,"banned":user.banned,"banReason":user.ban_reason,"hasBanExpires":user.ban_expires.is_some(),"secretNote":user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten()}))).transpose()?;
                 Ok(Json(json!({"events":events,"user":user,"sessions":sessions})))
             }
         }))
@@ -176,12 +179,8 @@ impl SeaOrmHooks<TestSchema> for AdminOptionsFixture {
         };
         if !ctx.request.as_ref().is_some_and(|request| {
             request.path.as_deref() == Some("/admin/update-user")
-                && request
-                    .body
-                    .as_ref()
-                    .and_then(|body| body.get("data"))
-                    .and_then(|data| data.get("banned"))
-                    == Some(&Value::Bool(true))
+                && request.body.get("data").and_then(|data| data.get("banned"))
+                    == Some(&FieldValue::Bool(true))
         }) {
             return Ok(());
         }

@@ -97,16 +97,13 @@ pub fn plugin(profile: &str, plugin: EmailPasswordPlugin) -> EmailPasswordPlugin
     if profile == "signup-synthetic" {
         plugin.custom_synthetic_user(Arc::new(|input| {
             let mut data = input.core_fields;
-            let _ = data.insert(
-                "name".into(),
-                format!(
-                    "synthetic:{}",
-                    data.get("name")
-                        .and_then(FieldValue::as_str)
-                        .unwrap_or_default()
-                )
-                .into(),
+            let name = format!(
+                "synthetic:{}",
+                data.get("name")
+                    .and_then(FieldValue::as_str)
+                    .unwrap_or_default()
             );
+            let _ = data.insert("name".into(), name.into());
             let _ = data.insert(
                 "alias".into(),
                 format!(

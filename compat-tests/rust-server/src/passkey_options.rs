@@ -225,7 +225,8 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                                     Some(
                                         chrono::DateTime::parse_from_rfc3339(value)
                                             .unwrap()
-                                            .with_timezone(&chrono::Utc),
+                                            .with_timezone(&chrono::Utc)
+                                            .into(),
                                     )
                                 },
                             ),
