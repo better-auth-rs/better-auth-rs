@@ -206,6 +206,8 @@ Session creation evaluates configured defaults before persistence. A public upda
 
 Memory session fields use the [Memory JSON and array representation](/docs/concepts/users-accounts#memory-json-and-arrays). JSON output callbacks receive stored text before decoding; declared string and number arrays remain native arrays. This conversion applies to database-backed Memory rows, not secondary-only session caches.
 
+Memory and SQL session updates yield after before-hooks and any secondary write, before adapter field conversion and persistence. This preserves the upstream adapter-lookup boundary for concurrent field callbacks. Cancelled updates and secondary-only writes retain their existing control flow. This boundary does not establish complete JavaScript Promise scheduling equivalence.
+
 ## Two-Factor Interaction
 
 When 2FA is enabled, sign-in verifies the primary credential first and then pauses on a pending verification flow. A full session is only created after `verify-totp`, `verify-otp`, or `verify-backup-code` succeeds.

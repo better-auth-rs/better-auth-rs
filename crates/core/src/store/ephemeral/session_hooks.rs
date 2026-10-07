@@ -91,6 +91,8 @@ impl EphemeralStore {
             None => (true, None),
         };
         let session = if write_database {
+            // Upstream awaits adapter lookup after hooks and before field conversion.
+            tokio::task::yield_now().await;
             self.write_session_update(token, update).await?
         } else {
             cached

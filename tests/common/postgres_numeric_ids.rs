@@ -30,6 +30,10 @@ fn session_input(user_id: &str) -> CreateSession {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The regression asserts returned and stored IDs while propagating database setup and query errors"
+)]
 async fn serial_session_update_ids_reach_the_numeric_column_after_conversion() -> TestResult {
     use better_auth_core::store::{SessionStore, UserStore, database_hooks::SessionUpdate};
 
