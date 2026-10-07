@@ -50,7 +50,8 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}-${{ inputs.profile || 'all' }}
-  cancel-in-progress: true
+  # A skipped push run must not cancel manual acceptance on the same branch.
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
