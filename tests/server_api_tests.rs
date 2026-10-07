@@ -37,7 +37,7 @@ async fn build_auth(
                 .with_name("Fixture"),
         )
         .await?;
-    Ok((auth, user.id.typed().unwrap().clone()))
+    Ok((auth, user.id.typed()?.clone()))
 }
 
 fn required(actions: Vec<String>) -> VerifyKeyOptions {
@@ -162,7 +162,7 @@ async fn issue_verify_and_revoke_machine_credential() -> Result<(), Box<dyn std:
     let revoked = api_keys
         .update(
             &user_id,
-            issued.api_key.id.typed().unwrap(),
+            issued.api_key.id.typed()?,
             UpdateKeyOptions {
                 config_id: Some("machine".into()),
                 enabled: Some(false),
@@ -202,7 +202,7 @@ async fn updates_preserve_replace_and_clear_nullable_fields()
     let preserved = api_keys
         .update(
             &user_id,
-            issued.api_key.id.typed().unwrap(),
+            issued.api_key.id.typed()?,
             UpdateKeyOptions {
                 name: Some("renamed".into()),
                 ..Default::default()
@@ -216,7 +216,7 @@ async fn updates_preserve_replace_and_clear_nullable_fields()
     let replaced = api_keys
         .update(
             &user_id,
-            issued.api_key.id.typed().unwrap(),
+            issued.api_key.id.typed()?,
             UpdateKeyOptions {
                 expires_in: FieldUpdate::Set(172800.25),
                 permissions: FieldUpdate::Set(HashMap::from([(
@@ -237,7 +237,7 @@ async fn updates_preserve_replace_and_clear_nullable_fields()
     let cleared = api_keys
         .update(
             &user_id,
-            issued.api_key.id.typed().unwrap(),
+            issued.api_key.id.typed()?,
             UpdateKeyOptions {
                 expires_in: FieldUpdate::Clear,
                 permissions: FieldUpdate::Clear,

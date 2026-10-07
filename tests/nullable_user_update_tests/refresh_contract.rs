@@ -43,6 +43,11 @@ const SCENARIOS: [&str; 9] = [
     "parallel-partial",
     "malformed-cache-envelope",
 ];
+const VALUE_SCENARIOS: [&str; 3] = [
+    "numeric-cached-expires-at",
+    "non-array-active-index",
+    "mixed-active-index",
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -210,7 +215,7 @@ async fn contract<S: AuthSchema>(
     let after = storage::snapshot(raw.as_ref(), database, &cache, &config).await?;
     let events = recorder.snapshot();
     let mut actual = json!({"before": before, "events": events, "outcome": outcome, "afterReturn": after_return, "after": after});
-    validate_and_normalize(&mut actual, start, end)?;
+    validate_and_normalize(&mut actual, start, end, &case.scenario)?;
     let mut expected = json!({"before": case.before, "events": case.events, "outcome": case.outcome, "afterReturn": case.after_return, "after": case.after});
     if case.transaction {
         let events = expected["events"]
@@ -244,7 +249,24 @@ async fn contract<S: AuthSchema>(
     Ok(())
 }
 
-fn validate_and_normalize(value: &mut Value, start: i64, end: i64) -> TestResult {
+fn validate_and_normalize(value: &mut Value, start: i64, end: i64, scenario: &str) -> TestResult {
+    let seed = value["before"]["cache"]
+        .as_array()
+        .ok_or("Expected cache entries")?
+        .iter()
+        .find(|entry| entry["key"] == "token-b")
+        .and_then(|entry| entry["value"].as_str())
+        .ok_or("Expected seeded token-b cache")?;
+    let seed: Value = serde_json::from_str(seed)?;
+    let expiry = EXPIRY.parse::<chrono::DateTime<Utc>>()?.timestamp_millis();
+    assert_eq!(
+        seed["session"]["expiresAt"],
+        if scenario == "numeric-cached-expires-at" {
+            json!(expiry)
+        } else {
+            json!(EXPIRY)
+        }
+    );
     let events = value["events"]
         .as_array_mut()
         .ok_or("Expected event array")?;
@@ -268,10 +290,9 @@ fn validate_and_normalize(value: &mut Value, start: i64, end: i64) -> TestResult
         assert_eq!(event["key"], "token-b");
         let cached: Value =
             serde_json::from_str(event["value"].as_str().ok_or("Expected cache text")?)?;
-        assert_eq!(cached["session"]["expiresAt"], EXPIRY);
+        assert_eq!(cached["session"], seed["session"]);
         assert_eq!(cached["user"]["name"], "Updated");
         assert_eq!(cached["user"]["updatedAt"].as_str(), updated_at.as_deref());
-        let expiry = EXPIRY.parse::<chrono::DateTime<Utc>>()?.timestamp_millis();
         let ttl = event["ttl"].as_i64().ok_or("Expected integer TTL")?;
         assert!(
             ((expiry - end).div_euclid(1000)..=(expiry - start).div_euclid(1000)).contains(&ttl)
@@ -307,13 +328,22 @@ fn configuration() -> AuthConfig {
 
 #[tokio::test]
 async fn secondary_user_refresh_matches_upstream_memory_and_sqlite() -> TestResult {
-    let fixture: Value = serde_json::from_str(&std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/secondary-user-refresh-1.7.6.json"
-    ))?)?;
+    fixture("secondary-user-refresh-1.7.6.json", &SCENARIOS).await
+}
+
+#[tokio::test]
+async fn secondary_user_refresh_values_match_upstream_memory_and_sqlite() -> TestResult {
+    fixture("secondary-user-refresh-values-1.7.6.json", &VALUE_SCENARIOS).await
+}
+
+async fn fixture(name: &str, scenarios: &[&str]) -> TestResult {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name);
+    let fixture: Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
     assert_eq!(fixture["version"], "1.7.6");
     let cases: Vec<Case> = serde_json::from_value(fixture["cases"].clone())?;
-    assert_eq!(cases.len(), 18);
+    assert_eq!(cases.len(), scenarios.len() * 2);
     for backend in ["memory", "sqlite"] {
         let selected: Vec<_> = cases
             .iter()
@@ -324,7 +354,7 @@ async fn secondary_user_refresh_matches_upstream_memory_and_sqlite() -> TestResu
                 .iter()
                 .map(|case| case.scenario.as_str())
                 .collect::<Vec<_>>(),
-            SCENARIOS
+            scenarios
         );
         for case in selected {
             if backend == "memory" {

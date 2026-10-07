@@ -3,9 +3,8 @@ use crate::entity::AuthUser;
 use crate::store::{AuthTransaction, UserStore, VerificationCleanup, VerificationSessionCleanup};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::wire::UserView;
-use crate::{AuthError, AuthResult, AuthSchema};
+use crate::{AuthError, AuthResult, AuthSchema, FieldDate, FieldMap, FieldValue, SchemaValue};
 use async_trait::async_trait;
-use serde_json::json;
 
 #[cfg(test)]
 mod tests;
@@ -14,6 +13,16 @@ struct CachedVerificationSessions<'a, S: AuthSchema> {
     store: &'a SecondaryStore<S>,
     user_id: &'a str,
     references: &'a [super::sessions::SessionReference],
+}
+
+fn cached_expiration(value: FieldValue) -> SchemaValue<FieldDate> {
+    SchemaValue::from_field(match value {
+        FieldValue::String(text) => match crate::utils::json::parse_json_date(&text) {
+            Some(date) => FieldDate::from(date).into(),
+            None => FieldValue::String(text),
+        },
+        value => value,
+    })
 }
 
 #[async_trait]
@@ -61,22 +70,66 @@ impl<S: AuthSchema> SecondaryStore<S> {
             self.inner.supports_native_json(),
         )
         .await?;
-        let mut references = self.references(&user.id.display_string()?).await?;
-        let now = chrono::Utc::now().timestamp_millis();
-        references.retain(|reference| reference.expires_at > now);
-        let count = references.len();
+        let references = decode(
+            self.secondary()?
+                .get(&format!("active-sessions-{}", user.id.display_string()?))
+                .await?,
+        )
+        .map(FieldValue::from_json)
+        .transpose()?
+        .unwrap_or_default();
+        if !references.is_truthy() {
+            return Ok(());
+        }
+        let now = chrono::Utc::now();
+        let references = references
+            .as_array()
+            .ok_or_else(|| AuthError::internal("Cached user session index must be an array"))?;
+        let mut tokens = Vec::new();
+        for reference in references {
+            if reference.is_null() {
+                return Err(AuthError::internal(
+                    "Cached user session index entry cannot be null",
+                ));
+            }
+            let fields = reference.as_object();
+            let expires = fields
+                .and_then(|fields| fields.get("expiresAt"))
+                .cloned()
+                .unwrap_or_default();
+            if cached_expiration(expires).is_after(now)? {
+                tokens.push(
+                    fields
+                        .and_then(|fields| fields.get("token"))
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+            }
+        }
+        let count = tokens.len();
+        let mut fields = FieldMap::from(user);
+        let mut ordered = FieldMap::new();
+        for name in self.config.user.user_adapter_fields().fields().keys() {
+            if let Some(value) = fields.remove(name) {
+                let _ = ordered.insert(name.clone(), value);
+            }
+        }
+        ordered.extend(fields);
+        let user = FieldValue::from(ordered);
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let runtime = self.clone();
         // Promise.all rejects on the first failure while already-started peers continue.
         let task = crate::request_runtime::spawn_with_request_context(async move {
             let runtime = &runtime;
             let user = &user;
-            let _ = futures_util::future::join_all(references.into_iter().map(|reference| {
+            let _ = futures_util::future::join_all(tokens.into_iter().map(|token| {
                 let sender = sender.clone();
                 async move {
-                    let result = runtime
-                        .refresh_cached_user_session(&reference.token, user, now)
-                        .await;
+                    let result = async {
+                        let token = token.decode::<String>()?;
+                        runtime.refresh_cached_user_session(&token, user, now).await
+                    }
+                    .await;
                     let _ = sender.send(result);
                 }
             }))
@@ -100,27 +153,33 @@ impl<S: AuthSchema> SecondaryStore<S> {
     async fn refresh_cached_user_session(
         &self,
         token: &str,
-        user: &UserView,
-        now: i64,
+        user: &FieldValue,
+        now: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<()> {
         let Some(cached) = decode(self.secondary()?.get(token).await?) else {
             return Ok(());
         };
-        if !crate::FieldValue::from_json(cached.clone())?.is_truthy() {
+        if !FieldValue::from_json(cached.clone())?.is_truthy() {
             return Ok(());
         }
         let session = cached.get("session").ok_or_else(|| {
             AuthError::internal("Cached user session refresh requires a session object")
         })?;
-        let expires = serde_json::from_value::<chrono::DateTime<chrono::Utc>>(
-            session.get("expiresAt").cloned().unwrap_or_default(),
-        )?;
-        let seconds =
-            u64::try_from((expires.timestamp_millis() - now).div_euclid(1000)).unwrap_or(0);
+        let expires = session
+            .get("expiresAt")
+            .cloned()
+            .map(FieldValue::from_json)
+            .transpose()?
+            .unwrap_or_default();
+        let seconds = cached_expiration(expires).cache_ttl(now)?;
+        let envelope = FieldValue::from(FieldMap::from([
+            ("session".into(), FieldValue::from_json(session.clone())?),
+            ("user".into(), user.clone()),
+        ]));
         self.secondary()?
             .set(
                 token,
-                &serde_json::to_string(&json!({"session": session, "user": user}))?,
+                &serde_json::to_string(&crate::field_value::serde::Json(&envelope))?,
                 Some(seconds),
             )
             .await?;

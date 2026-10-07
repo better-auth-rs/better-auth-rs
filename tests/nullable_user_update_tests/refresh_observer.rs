@@ -272,6 +272,7 @@ pub(super) fn project_reference(value: &mut Value, scenario: &str) -> TestResult
                         "malformed-cache-envelope" => {
                             "Cached user session refresh requires a session object"
                         }
+                        "non-array-active-index" => "Cached user session index must be an array",
                         _ => return Err(format!("Unexpected native error in {scenario}").into()),
                     }
                     .to_owned()

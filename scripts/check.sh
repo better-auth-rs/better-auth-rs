@@ -169,7 +169,9 @@ run_stage() {
       ;;
     secondary-user-refresh)
       cargo fmt --all -- --check
-      bun --no-install test ./compat-tests/reference-server/contracts/secondary-user-refresh.test.ts
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/secondary-user-refresh.test.ts \
+        ./compat-tests/reference-server/contracts/secondary-user-refresh-values.test.ts
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test nullable_user_update_tests --test secondary_storage_hooks_tests --test background_transaction_tests -- -D warnings
       cargo test --locked -p better-auth-core --lib store::secondary::users::tests::
