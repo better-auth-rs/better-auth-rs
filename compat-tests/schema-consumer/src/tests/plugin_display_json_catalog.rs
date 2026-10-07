@@ -1,11 +1,9 @@
 use super::*;
 use better_auth::{
-    __private_core::{
-        entity::AuthRecordFields,
-        id::{IdGeneration, IdGenerator},
-        store::ApiKeyStore,
-    },
-    ApiKey, AuthConfig, CreateApiKey, UpdateApiKey,
+    __private_core::store::ApiKeyStore,
+    AuthConfig, AuthRecordFields,
+    config::{IdGeneration, IdGenerator},
+    prelude::{ApiKey, CreateApiKey, UpdateApiKey},
 };
 
 mod sqlite {
