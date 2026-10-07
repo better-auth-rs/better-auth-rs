@@ -15,10 +15,10 @@ use better_auth_core::store::database_hooks::{DatabaseHookContext, DatabaseHooks
 use better_auth_core::wire::{SessionView, UserView, VerificationView};
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    AuthRoute, AuthSchema, CreateSession, CreateUser,
+    AuthRoute, AuthSchema, CreateSession, CreateUser, FieldMap,
 };
 use chrono::Utc;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -130,14 +130,14 @@ pub struct TestAuthOptions {
     /// Existing user ID. `login` checks existence; cookie helpers do not.
     pub user_id: String,
     /// Plugin and application session fields.
-    pub session: Map<String, Value>,
+    pub session: FieldMap,
 }
 impl TestAuthOptions {
     /// Use the configured session defaults for this user.
     pub fn new(user_id: impl Into<String>) -> Self {
         Self {
             user_id: user_id.into(),
-            session: Map::new(),
+            session: FieldMap::new(),
         }
     }
 }
@@ -349,7 +349,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         };
         let input = CreateSession {
             user_id: options.user_id.into(),
-            expires_at: Utc::now() + self.auth.config.session.expires_in(),
+            expires_at: (Utc::now() + self.auth.config.session.expires_in()).into(),
             ip_address: meta.ip_address,
             user_agent: meta.user_agent,
             impersonated_by: None,

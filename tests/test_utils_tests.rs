@@ -17,7 +17,8 @@ use better_auth_core::store::database_hooks::{
 use better_auth_core::store::{EphemeralStore, StatelessSchema};
 use better_auth_core::user_fields::{UserFieldConfig, UserFieldType};
 use better_auth_core::{
-    AuthError, AuthResult, CreateUser, CreateVerification, FieldDate, FieldValue, Organization,
+    AuthError, AuthResult, CreateUser, CreateVerification, FieldDate, FieldMap, FieldValue,
+    Organization,
 };
 use chrono::{Duration, Utc};
 use serde_json::json;
@@ -139,7 +140,7 @@ async fn contract<S: AuthSchema>(
     assert_eq!(user.created_at, date);
     assert_eq!(user.updated_at, date);
     let start = Utc::now();
-    let login = test.login(TestAuthOptions { user_id: "supplied-user".into(), session: serde_json::from_value(json!({"id":"injected","userId":"other","token":"injected","createdAt":"2000-01-01T00:00:00Z","updatedAt":"2000-01-01T00:00:00Z","expiresAt":"2000-01-01T00:00:00Z","ipAddress":"injected","userAgent":"injected","label":"selected"}))? }).await?;
+    let login = test.login(TestAuthOptions { user_id: "supplied-user".into(), session: FieldMap::from_json(serde_json::from_value(json!({"id":"injected","userId":"other","token":"injected","createdAt":"2000-01-01T00:00:00Z","updatedAt":"2000-01-01T00:00:00Z","expiresAt":"2000-01-01T00:00:00Z","ipAddress":"injected","userAgent":"injected","label":"selected"}))?)? }).await?;
     assert_ne!(login.session.id, "injected");
     assert_ne!(login.token, "injected");
     assert_eq!(login.session.user_id, user.id);
@@ -195,7 +196,7 @@ async fn contract<S: AuthSchema>(
         .get_auth_headers(TestAuthOptions::new("supplied-user"))
         .await?;
     let mut options = TestAuthOptions::new("supplied-user");
-    let _ = options.session.insert("label".into(), json!("browser"));
+    let _ = options.session.insert("label".into(), "browser".into());
     let cookies = test.get_cookies(options, Some("browser.example")).await?;
     assert_eq!(cookies[0].domain, "browser.example");
     assert!(!header["cookie"].contains(&cookies[0].value));
@@ -368,7 +369,7 @@ async fn failures<S: AuthSchema>(auth: BetterAuth<S>) -> AuthResult<()> {
         let error = helper
             .login(TestAuthOptions {
                 user_id: user.id.typed()?.clone(),
-                session: [("label".into(), json!(label))].into_iter().collect(),
+                session: [("label".into(), label.into())].into_iter().collect(),
             })
             .await;
         assert!(error.is_err());
@@ -431,9 +432,9 @@ async fn raw_organization_cleanup_retains_earlier_deletes_when_parent_delete_fai
         .login(TestAuthOptions {
             user_id: user.id.typed()?.clone(),
             session: [
-                ("activeOrganizationId".into(), json!("seed-org")),
-                ("activeTeamId".into(), json!("seed-team")),
-                ("impersonatedBy".into(), json!("disabled-admin")),
+                ("activeOrganizationId".into(), "seed-org".into()),
+                ("activeTeamId".into(), "seed-team".into()),
+                ("impersonatedBy".into(), "disabled-admin".into()),
             ]
             .into_iter()
             .collect(),

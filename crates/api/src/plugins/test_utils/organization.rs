@@ -41,7 +41,7 @@ impl<S: AuthSchema> TestOrganizationApi<'_, S> {
             overrides.logo = SchemaValue::Typed(None);
         }
         if overrides.metadata.is_undefined() {
-            overrides.metadata = better_auth_core::FieldValue::Null.into();
+            overrides.metadata = SchemaValue::Typed(None);
         }
         if overrides.created_at.is_undefined() {
             overrides.created_at = Utc::now().into();
