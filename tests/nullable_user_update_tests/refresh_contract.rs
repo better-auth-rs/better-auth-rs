@@ -6,7 +6,7 @@
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, FieldMap, UserView,
-    store::{EphemeralStore, SecondaryStore, StatelessSchema, UserStore, transaction},
+    store::{EphemeralStore, StatelessSchema, UserStore, secondary::SecondaryStore, transaction},
 };
 use better_auth_seaorm::{SeaOrmStore, sea_orm::DatabaseConnection};
 use chrono::Utc;

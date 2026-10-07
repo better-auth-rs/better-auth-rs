@@ -1,7 +1,7 @@
 use super::*;
 use crate::observability::{LogArgument, LogLevel, LogSink};
 use crate::store::{EphemeralStore, MemoryCacheAdapter, SecondaryStorage, transaction};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
