@@ -152,6 +152,11 @@ async fn factory_errors_preserve_stored_users_and_skip_output_callbacks() -> Aut
         receiver.try_iter().collect::<Vec<_>>(),
         ["input", "later", "output"]
     );
+    let stored = store
+        .get_user_by_id(original.id.typed()?)
+        .await?
+        .ok_or_else(|| AuthError::internal("Original user is missing before rejected writes"))?;
+    assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["output"]);
     assert_factory_error(
         store
             .create_user(
@@ -182,7 +187,7 @@ async fn factory_errors_preserve_stored_users_and_skip_output_callbacks() -> Aut
     assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["factory"]);
     assert_eq!(
         store.get_user_by_id(original.id.typed()?).await?,
-        Some(original)
+        Some(stored)
     );
     assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["output"]);
     Ok(())
