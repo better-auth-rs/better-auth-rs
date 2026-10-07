@@ -28,10 +28,6 @@ fn policy(field: &'static str, trace: Arc<Mutex<Vec<&'static str>>>) -> UserFiel
     }
 }
 
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Contract assertions must fail the test while store errors retain their context"
-)]
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let trace = Arc::new(Mutex::new(Vec::new()));
     let auth = BetterAuth::new(serial_config())

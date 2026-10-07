@@ -1,7 +1,7 @@
 use super::*;
 use better_auth::__private_core::{
     __private_async_trait::async_trait,
-    AuthInitContext, AuthPlugin, AuthRoute,
+    AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute,
     id::{IdGeneration, IdGenerator},
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -45,6 +45,14 @@ impl<S: AuthSchema> AuthPlugin<S> for Policy {
     }
     fn routes(&self) -> Vec<AuthRoute> {
         Vec::new()
+    }
+
+    async fn on_request(
+        &self,
+        _: &AuthRequest,
+        _: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
     }
 
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {

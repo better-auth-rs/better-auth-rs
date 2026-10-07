@@ -6,9 +6,9 @@ pub use better_auth_core::config::{
     CookieCacheStrategy, CookieCacheVersion, CookieCacheVersionCallback, CookieOverride,
     CrossSubDomainConfig, ErrorPageColors, ErrorPageCustomization, ErrorPageFont, ErrorPageSize,
     FieldTransforms, IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite,
-    SecretKey, SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldReference,
-    UserFieldTransform, UserFieldType, UserFieldValidator, VersionedSecret, core_paths,
-    extract_origin,
+    SecretKey, SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldFactory,
+    UserFieldReference, UserFieldTransform, UserFieldType, UserFieldValidator, VersionedSecret,
+    core_paths, extract_origin,
 };
 
 pub use better_auth_core::config::{
