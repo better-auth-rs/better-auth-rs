@@ -345,9 +345,7 @@ fn condition(case: &Case, source: &DeviceCode) -> AuthResult<DeviceCodeOwnership
                 .ok_or_else(|| {
                     AuthError::internal("Typed Device sets require captured candidates")
                 })?
-                .iter()
-                .cloned()
-                .collect();
+                .to_vec();
             if matches!(case.entry, references::Entry::FieldIn) {
                 assert_eq!(condition.operator, WhereOperator::In);
                 DeviceCodeOwnership::FieldIn {
