@@ -679,6 +679,13 @@ pub(crate) async fn stop_impersonating_core(
         return Err(AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
     }
 
+    let snapshot = match snapshot {
+        Some(data) => Some(
+            data.into_typed()?
+                .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?,
+        ),
+        None => None,
+    };
     ctx.session_manager()
         .delete_session(session.token())
         .await?;

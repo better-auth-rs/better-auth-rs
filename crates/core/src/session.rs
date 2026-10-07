@@ -5,7 +5,7 @@ use crate::config::AuthConfig;
 use crate::entity::{AuthSession, AuthUser};
 use crate::error::AuthResult;
 use crate::schema::AuthSchema;
-use crate::store::AuthStore;
+use crate::store::{AuthStore, JoinValue};
 use crate::types::CreateSession;
 use crate::utils::cookie_utils::{
     get_cookie, related_cookie_name, session_cookie_headers, verify_cookie_value,
@@ -26,19 +26,19 @@ pub use signer::{SessionCookieContext, SessionCookieSigner};
 mod response_tests;
 mod view;
 
-/// Authenticated session data independent of the application's storage models.
+/// A session and its selected User value, independent of the application's storage models.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionData {
+pub struct SessionData<U = UserView> {
     /// Session visible to the caller.
     pub session: SessionView,
     /// User visible to the caller.
-    pub user: UserView,
+    pub user: U,
 }
 
 /// Session read result, including the deferred-refresh signal.
-pub struct SessionResolution {
+pub struct SessionResolution<T = SessionData> {
     /// Authenticated session, when a valid credential was supplied.
-    pub data: Option<SessionData>,
+    pub data: Option<T>,
     /// Whether a deferred GET requires a subsequent POST refresh.
     pub needs_refresh: Option<bool>,
 }
@@ -231,8 +231,13 @@ impl<S: AuthSchema> SessionManager<S> {
         req.set_new_session(data)
     }
 
-    fn public_data(&self, mut data: SessionData) -> SessionData {
-        data.user.filter_cached_fields(&self.config.user);
+    fn public_data(
+        &self,
+        mut data: SessionData<JoinValue<UserView>>,
+    ) -> SessionData<JoinValue<UserView>> {
+        if let JoinValue::One(Some(user)) = &mut data.user {
+            user.filter_cached_fields(&self.config.user);
+        }
         data.session.filter_returned_fields(&self.config.session);
         data
     }
@@ -347,6 +352,36 @@ impl<S: AuthSchema> SessionManager<S> {
         req: &AuthRequest,
         read: SessionRead,
     ) -> AuthResult<SessionResolution> {
+        let resolved = self.resolve_relations(req, read, true).await?;
+        Ok(SessionResolution {
+            data: resolved
+                .data
+                .map(SessionData::into_typed)
+                .transpose()?
+                .flatten(),
+            needs_refresh: resolved.needs_refresh,
+        })
+    }
+
+    /// Resolve a session while preserving the User value selected by the adapter.
+    pub async fn resolve_native(
+        &self,
+        req: &AuthRequest,
+        read: SessionRead,
+    ) -> AuthResult<SessionResolution<NativeSessionData>> {
+        let resolved = self.resolve_relations(req, read, false).await?;
+        Ok(SessionResolution {
+            data: resolved.data.map(Into::into),
+            needs_refresh: resolved.needs_refresh,
+        })
+    }
+
+    async fn resolve_relations(
+        &self,
+        req: &AuthRequest,
+        read: SessionRead,
+        typed_user: bool,
+    ) -> AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>> {
         let raw = if req.path() == "/get-session" {
             req.query.clone()
         } else {
@@ -359,14 +394,15 @@ impl<S: AuthSchema> SessionManager<S> {
             )
         };
         let query = crate::query::session_query(raw)?;
-        crate::query::with_validated_query(query, self.resolve_inner(req, read)).await
+        crate::query::with_validated_query(query, self.resolve_inner(req, read, typed_user)).await
     }
 
     async fn resolve_inner(
         &self,
         req: &AuthRequest,
         read: SessionRead,
-    ) -> AuthResult<SessionResolution> {
+        typed_user: bool,
+    ) -> AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>> {
         let none = || SessionResolution {
             data: None,
             needs_refresh: None,
@@ -384,9 +420,9 @@ impl<S: AuthSchema> SessionManager<S> {
                 session: session.clone(),
                 user: self.user_view(&user).await?,
             };
-            req.set_session_snapshot(Some(data.clone()))?;
+            req.set_session_snapshot(Some(data.clone().into()))?;
             return Ok(SessionResolution {
-                data: Some(data),
+                data: Some(data.into()),
                 needs_refresh: None,
             });
         }
@@ -457,7 +493,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 let raw_snapshot =
                     self.capabilities.server_sessions() || cache.refresh_age().is_none();
                 if raw_snapshot {
-                    req.set_session_snapshot(Some(payload.data.clone()))?;
+                    req.set_session_snapshot(Some(payload.data.clone().into()))?;
                 }
                 payload.data.user.filter_cached_fields(&self.config.user);
                 payload
@@ -465,10 +501,10 @@ impl<S: AuthSchema> SessionManager<S> {
                     .session
                     .filter_returned_fields(&self.config.session);
                 if !raw_snapshot {
-                    req.set_session_snapshot(Some(payload.data.clone()))?;
+                    req.set_session_snapshot(Some(payload.data.clone().into()))?;
                 }
                 return Ok(SessionResolution {
-                    data: Some(payload.data),
+                    data: Some(payload.data.into()),
                     needs_refresh: None,
                 });
             }
@@ -482,7 +518,16 @@ impl<S: AuthSchema> SessionManager<S> {
             return Ok(none());
         };
         let mut data = if let Some(mut data) = cached_data {
-            data.user = self.user_view(&data.user).await?;
+            match &mut data.user {
+                JoinValue::One(Some(user)) => *user = self.user_view(user).await?,
+                JoinValue::One(None) => {
+                    req.set_session_snapshot(None)?;
+                    self.clear_cookies(req)?;
+                    return Ok(none());
+                }
+                JoinValue::Many(_) if typed_user => return Err(relationship_array_error()),
+                JoinValue::Many(_) => {}
+            }
             data.session.filter_returned_fields(&self.config.session);
             data
         } else {
@@ -496,7 +541,7 @@ impl<S: AuthSchema> SessionManager<S> {
             };
             SessionData {
                 session: self.session_view(&session).await?,
-                user: self.user_view(&user).await?,
+                user: JoinValue::One(Some(self.user_view(&user).await?)),
             }
         };
         req.set_session_snapshot(Some(data.clone()))?;
@@ -518,7 +563,8 @@ impl<S: AuthSchema> SessionManager<S> {
         }
         let needs_refresh = self.needs_refresh(&session);
         if self.config.session.defer_session_refresh && !is_post {
-            self.write_cache(req, &data, false).await?;
+            self.write_cache_with_response(req, &data.clone().into(), false, None, None)
+                .await?;
             return Ok(SessionResolution {
                 data: Some(self.public_data(data)),
                 needs_refresh: Some(needs_refresh),
@@ -537,10 +583,11 @@ impl<S: AuthSchema> SessionManager<S> {
                 result => result?,
             };
             data.session = self.internal_session_view(&updated).await?;
-            self.set_session_cookie(req, data.clone(), Some(false))
+            self.set_native_session_cookie(req, data.clone().into(), Some(false))
                 .await?;
         } else {
-            self.write_cache(req, &data, false).await?;
+            self.write_cache_with_response(req, &data.clone().into(), false, None, None)
+                .await?;
         }
         Ok(SessionResolution {
             data: Some(self.public_data(data)),
@@ -786,6 +833,10 @@ fn query_flag(req: &AuthRequest, name: &str) -> AuthResult<bool> {
         .map(|value| crate::FieldValue::from_json(value.clone()).map(|value| value.is_truthy()))
         .transpose()
         .map(|value| value.unwrap_or(false))
+}
+
+fn relationship_array_error() -> AuthError {
+    AuthError::internal("A User relationship array cannot authenticate a typed User")
 }
 
 fn failed_session_update() -> AuthError {

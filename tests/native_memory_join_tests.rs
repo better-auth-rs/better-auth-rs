@@ -271,7 +271,7 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
                 .await?
                 .unwrap();
             let owner = match data {
-                Some(data) => data.user,
+                Some(data) => data.into_typed()?.unwrap().user,
                 None => store.get_user_by_id(row.user_id.typed()?).await?.unwrap(),
             };
             session(&row, &owner)
@@ -281,7 +281,7 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
             let mut results = Vec::new();
             for (row, data) in store.get_session_snapshots(&tokens, false).await? {
                 let owner = match data {
-                    Some(data) => data.user,
+                    Some(data) => data.into_typed()?.unwrap().user,
                     None => store.get_user_by_id(row.user_id.typed()?).await?.unwrap(),
                 };
                 results.push(session(&row, &owner));
@@ -454,6 +454,8 @@ async fn native_user_child_reads_unconfigured_image_after_name_callback() -> Aut
                 .await?
                 .unwrap()
                 .1
+                .unwrap()
+                .into_typed()?
                 .unwrap()
                 .user
         } else {

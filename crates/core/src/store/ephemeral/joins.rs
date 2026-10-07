@@ -1,17 +1,19 @@
 //! Native joins retain child row references selected by the original raw query.
 
+use super::account_joins::{native_relation, user_value};
 use super::rows::RowRef;
 use super::sessions::SessionSource;
 use super::*;
 use crate::session::SessionData;
 use crate::store::schema::resolve_field_name;
+use crate::store::{JoinValue, ResolvedJoin};
 use crate::user_fields::{
     UserFieldConfig, project_adapter_value, project_source_fields_batches_then,
 };
 
 type UserRef = RowRef<UserView>;
 type AccountRef = RowRef<FieldMap>;
-type SessionSnapshot = (SessionView, Option<SessionData>);
+type SessionSnapshot = (SessionView, Option<SessionData<JoinValue<UserView>>>);
 
 impl EphemeralStore {
     pub(super) async fn output_user_refs(&self, users: Vec<UserRef>) -> AuthResult<Vec<UserView>> {
@@ -130,108 +132,96 @@ impl EphemeralStore {
         Ok(AccountView::from_adapter_fields(fields))
     }
 
-    pub(super) async fn joined_session_snapshot(
-        &self,
-        token: &str,
-    ) -> AuthResult<Option<SessionSnapshot>> {
-        self.model_fields
-            .begin_id_query(crate::store::schema::EntityRole::Session)?;
-        let rows = self
-            .raw("session", "findOne", |state| {
-                match state.sessions.find(|row| row.token == token)? {
-                    Some(session) => {
-                        let owner = session.user_id.field_value();
-                        let user = state
-                            .users
-                            .first_ref(|user| user.id.field_value().strict_equals(&owner))?;
-                        Ok(vec![(session, user)])
-                    }
-                    None => Ok(Vec::new()),
-                }
-            })
-            .await?;
-        Ok(self
-            .project_joined_sessions(rows)
-            .await?
-            .into_iter()
-            .next()
-            .filter(|(_, user)| user.is_some()))
-    }
-
-    pub(super) async fn joined_session_snapshots(
+    pub(super) async fn session_user_relations(
         &self,
         tokens: &[String],
         only_active: bool,
+        single: bool,
+        relation: &ResolvedJoin,
     ) -> AuthResult<Vec<SessionSnapshot>> {
-        self.model_fields
-            .begin_id_query(crate::store::schema::EntityRole::Session)?;
+        use crate::store::schema::EntityRole;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
+        let native = self.config.advanced.database.joins == Some(true);
         let now = Utc::now();
         let rows = self
-            .raw("session", "findMany", |state| {
-                let sessions = crate::query::paginate_memory(
-                    state
-                        .sessions
-                        .snapshot()?
-                        .into_iter()
-                        .filter(|session| {
+            .raw(
+                "session",
+                if single { "findOne" } else { "findMany" },
+                |state| {
+                    let sessions = crate::query::paginate_memory(
+                        state.sessions.select_refs(|session| {
                             tokens.contains(&session.token)
                                 && (!only_active
                                     || session.expires_at.milliseconds()
                                         > now.timestamp_millis() as f64)
+                        })?,
+                        Some(if single {
+                            1.0
+                        } else {
+                            self.config.advanced.database.find_many_limit()
+                        }),
+                        None,
+                    );
+                    sessions
+                        .into_iter()
+                        .map(|source| {
+                            if !native {
+                                return Ok((SessionSource::Live(source), None));
+                            }
+                            let session = source.read(|session| Ok(session.clone()))?;
+                            let value = session
+                                .field_values()?
+                                .get(&relation.from)
+                                .cloned()
+                                .unwrap_or_default();
+                            let users = native_relation(
+                                state.users.select_refs(|user| {
+                                    user_value(user, &relation.logical_to, &relation.to)
+                                        .strict_equals(&value)
+                                })?,
+                                relation,
+                                self.config.advanced.database.find_many_limit(),
+                                |user| user.id.field_value(),
+                            )?;
+                            Ok((SessionSource::Snapshot(Box::new(session)), Some(users)))
                         })
-                        .collect(),
-                    Some(self.config.advanced.database.find_many_limit()),
-                    None,
-                );
-                sessions
-                    .into_iter()
-                    .map(|session| {
-                        let owner = session.user_id.field_value();
-                        let user = state
-                            .users
-                            .first_ref(|user| user.id.field_value().strict_equals(&owner))?;
-                        Ok((session, user))
-                    })
-                    .collect()
-            })
+                        .collect::<AuthResult<Vec<_>>>()
+                },
+            )
             .await?;
-        let snapshots = self.project_joined_sessions(rows).await?;
-        if snapshots.iter().any(|(_, user)| user.is_none()) {
-            return Ok(Vec::new());
-        }
-        Ok(snapshots)
-    }
-
-    async fn project_joined_sessions(
-        &self,
-        rows: Vec<(SessionView, Option<UserRef>)>,
-    ) -> AuthResult<Vec<SessionSnapshot>> {
-        let sessions = rows
-            .iter()
-            .map(|(session, _)| SessionSource::Snapshot(Box::new(session.clone())))
-            .collect();
+        let (sessions, users): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
+        let fields = super::super::session_create_schema(&self.config.session, &FieldMap::new());
         self.output_sessions_batches_then(sessions, |ready| {
-            let rows = &rows;
+            let users = &users;
+            let fields = &fields;
             async move {
-                let mut pending = Vec::new();
-                let mut users = Vec::new();
-                for (index, session) in ready {
-                    let (_, user) = rows.get(index).ok_or_else(|| {
+                let mut selected = Vec::with_capacity(ready.len());
+                for (index, session) in &ready {
+                    let user = users.get(*index).ok_or_else(|| {
                         AuthError::internal("Session projection lost its stored join index")
                     })?;
-                    users.extend(user.clone());
-                    pending.push((index, session, user.is_some()));
+                    selected.push(match user {
+                        Some(user) => user.clone(),
+                        None => {
+                            self.fallback_join_users(
+                                relation,
+                                (EntityRole::Session, "session", fields),
+                                &session.field_values()?,
+                            )
+                            .await?
+                        }
+                    });
                 }
-                let mut users = self.output_user_refs(users).await?.into_iter();
-                Ok(pending
+                let projected = self.output_user_relations(selected).await?;
+                Ok(ready
                     .into_iter()
-                    .map(|(index, session, has_user)| {
-                        let data =
-                            if has_user { users.next() } else { None }.map(|user| SessionData {
-                                session: session.clone(),
-                                user,
-                            });
-                        (index, (session, data))
+                    .zip(projected)
+                    .map(|((index, session), user)| {
+                        let data = SessionData {
+                            session: session.clone(),
+                            user,
+                        };
+                        (index, (session, Some(data)))
                     })
                     .collect())
             }

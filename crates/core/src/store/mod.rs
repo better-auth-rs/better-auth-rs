@@ -581,14 +581,14 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         }
         Ok(())
     }
-    /// Read a session and an optional cached user projection in one storage operation.
+    /// Read a session and an optional loaded relationship without discarding missing or array children.
     async fn get_session_snapshot(
         &self,
         token: &str,
     ) -> AuthResult<
         Option<(
             crate::wire::SessionView,
-            Option<crate::session::SessionData>,
+            Option<crate::session::SessionData<JoinValue<crate::wire::UserView>>>,
         )>,
     > {
         Ok(self
@@ -623,7 +623,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<
         Vec<(
             crate::wire::SessionView,
-            Option<crate::session::SessionData>,
+            Option<crate::session::SessionData<JoinValue<crate::wire::UserView>>>,
         )>,
     >;
     /// Persist application session fields and update the modification timestamp.

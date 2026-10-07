@@ -60,43 +60,75 @@ pub(super) async fn sqlite() -> TestResult<DatabaseConnection> {
     Ok(database)
 }
 
-pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>) -> TestResult {
+pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>, scenario: &str) -> TestResult {
     let date: FieldDate = "2030-01-02T03:04:05.000Z"
         .parse::<chrono::DateTime<chrono::Utc>>()?
         .into();
-    for suffix in ["a", "b"] {
+    let selected = !matches!(
+        scenario,
+        "default" | "removed-reference" | "second-optional-user-reference"
+    );
+    let reverse = scenario.starts_with("reverse-");
+    let many = scenario.starts_with("reverse-user-reference-many");
+    let missing = scenario.ends_with("-empty") || scenario.ends_with("-missing");
+    for suffix in if selected {
+        &["a", "b", "c"][..]
+    } else {
+        &["a", "b"][..]
+    } {
+        let image = if !reverse {
+            Some(format!("image-{suffix}"))
+        } else if *suffix == "a" {
+            Some("session-b".into())
+        } else if !missing && (*suffix == "b" || many) {
+            Some("session-a".into())
+        } else {
+            None
+        };
         let _ = store
             .create_user(CreateUser {
                 id: Some(format!("user-{suffix}")),
                 name: Some(format!("User {suffix}")).into(),
                 email: Some(format!("{suffix}@session-user-join-reference.test")),
                 email_verified: Some(true),
-                image: Some(format!("image-{suffix}")).into(),
+                image: image.into(),
                 created_at: Some(date.clone()),
                 updated_at: Some(date.clone()),
                 ..Default::default()
             })
             .await?;
     }
-    let _ = store
-        .create_session(CreateSession {
-            user_id: "user-a".into(),
-            expires_at: "2100-01-02T03:04:05.000Z"
-                .parse::<chrono::DateTime<chrono::Utc>>()?
+    for suffix in if selected {
+        &["a", "b"][..]
+    } else {
+        &["a"][..]
+    } {
+        let token = if *suffix == "a" {
+            TOKEN.into()
+        } else {
+            format!("{TOKEN}-b")
+        };
+        let owner = if *suffix == "a" { "user-b" } else { "user-a" };
+        let _ = store
+            .create_session(CreateSession {
+                user_id: format!("user-{suffix}").into(),
+                expires_at: "2100-01-02T03:04:05.000Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()?
+                    .into(),
+                ip_address: Some("203.0.113.8".into()),
+                user_agent: Some("session-user-join-reference".into()),
+                impersonated_by: None,
+                active_organization_id: None,
+                additional_fields: [
+                    ("token".into(), token.into()),
+                    ("createdAt".into(), date.clone().into()),
+                    ("updatedAt".into(), date.clone().into()),
+                    ("ownerRef".into(), owner.into()),
+                ]
                 .into(),
-            ip_address: Some("203.0.113.8".into()),
-            user_agent: Some("session-user-join-reference".into()),
-            impersonated_by: None,
-            active_organization_id: None,
-            additional_fields: [
-                ("token".into(), TOKEN.into()),
-                ("createdAt".into(), date.clone().into()),
-                ("updatedAt".into(), date.into()),
-                ("ownerRef".into(), "user-b".into()),
-            ]
-            .into(),
-        })
-        .await?;
+            })
+            .await?;
+    }
     Ok(())
 }
 

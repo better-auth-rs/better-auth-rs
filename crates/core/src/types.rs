@@ -57,7 +57,11 @@ pub struct AuthRequest {
     server_context: std::sync::Arc<std::sync::Mutex<crate::FieldMap>>,
     headers_present: bool,
     new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::NativeSessionData>>>,
-    session_snapshot: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
+    session_snapshot: std::sync::Arc<
+        std::sync::Mutex<
+            Option<crate::session::SessionData<crate::store::JoinValue<crate::wire::UserView>>>,
+        >,
+    >,
 }
 
 /// Metadata extracted from an incoming request for session creation.
@@ -493,17 +497,20 @@ impl AuthRequest {
 
     /// The endpoint's session snapshot, including an expired record retained by get-session.
     /// This snapshot is not an authentication decision. Use the session manager to authenticate.
+    /// Return an error when the selected User relationship is an array.
     pub fn session_snapshot(&self) -> crate::AuthResult<Option<crate::session::SessionData>> {
-        Ok(self
-            .session_snapshot
+        self.session_snapshot
             .lock()
             .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?
-            .clone())
+            .clone()
+            .map(crate::session::SessionData::into_typed)
+            .transpose()
+            .map(Option::flatten)
     }
 
     pub(crate) fn set_session_snapshot(
         &self,
-        data: Option<crate::session::SessionData>,
+        data: Option<crate::session::SessionData<crate::store::JoinValue<crate::wire::UserView>>>,
     ) -> crate::AuthResult<()> {
         *self
             .session_snapshot

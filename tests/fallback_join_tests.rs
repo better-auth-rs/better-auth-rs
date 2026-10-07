@@ -178,7 +178,9 @@ async fn run<S: AuthSchema>(
     let mut users = Vec::new();
     for (session, cached) in sessions {
         let user = if let Some(data) = cached {
-            data.user
+            data.into_typed()?
+                .ok_or_else(|| AuthError::internal("user missing"))?
+                .user
         } else {
             store
                 .get_user_by_id(session.user_id.typed()?)

@@ -170,16 +170,15 @@ async fn serial_user_joins_keep_numeric_bindings_in_both_modes() -> AuthResult<(
             })
             .await?;
         let (_, snapshot) = required(store.get_session_snapshot(&session.token).await?)?;
-        assert_eq!(snapshot.is_some(), joins);
-        if let Some(snapshot) = snapshot {
-            assert_eq!(snapshot.user.id, "1");
-        }
+        assert_eq!(required(required(snapshot)?.into_typed()?)?.user.id, "1");
         let snapshots = store
             .get_session_snapshots(std::slice::from_ref(&session.token), true)
             .await?;
         assert_eq!(snapshots.len(), 1);
         assert_eq!(
-            required(required(snapshots.first())?.1.as_ref())?.user.id,
+            required(required(required(snapshots.first())?.1.clone())?.into_typed()?)?
+                .user
+                .id,
             "1"
         );
         let organization = store

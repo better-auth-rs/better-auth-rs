@@ -268,7 +268,7 @@ async fn list_sessions<S: AuthSchema>(
         .await?
     {
         let user = if let Some(data) = snapshot {
-            Some(data.user)
+            data.into_typed()?.map(|data| data.user)
         } else {
             ctx.database.get_user_by_id_field(&session.user_id).await?
         };

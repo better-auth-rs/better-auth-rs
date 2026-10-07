@@ -300,7 +300,10 @@ async fn capture(path: &str) -> AuthResult<JsonValue> {
                 reader.get_session_snapshot(token).await?,
                 "Native join must find the Session",
             )?;
-            let joined = required(joined, "Native join must find the owner")?;
+            let joined = required(
+                required(joined, "Native join must load the owner relationship")?.into_typed()?,
+                "Native join must find the owner",
+            )?;
             let user = UserView::with_field_policies(
                 &joined.user,
                 &reader.config.user,

@@ -5,16 +5,19 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthRequest, AuthResult, AuthSchema, AuthStore, CreateSession,
-    CreateUser, FieldDate, FieldMap, FieldValue, HttpMethod, ListUsersParams, UserView,
-    session::{SessionManager, SessionRead},
-    store::EphemeralStore,
+    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateSession, CreateUser, FieldDate,
+    FieldMap, FieldValue, ListUsersParams, UserView,
+    session::{NativeSessionData, SessionData},
+    store::{EphemeralStore, JoinValue},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldReference, UserFieldTransform},
-    utils::cookie_utils::sign_cookie_value,
+    wire::SessionView,
 };
 use better_auth_seaorm::{SeaOrmStore, sea_orm::DatabaseConnection};
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use tracing::instrument::WithSubscriber;
 use tracing_subscriber::prelude::*;
 
@@ -41,9 +44,18 @@ fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
     config.advanced.database.joins = Some(joins);
     config.session.cookie_cache = None;
     config.session.disable_session_refresh = Some(true);
+    config.advanced.database.default_find_many_limit =
+        (scenario == "reverse-user-reference-many-limit").then_some(1.0);
+    let generated = AtomicUsize::new(0);
     config.advanced.database.generate_id = Some(better_auth_core::id::IdGeneration::Custom(
-        better_auth_core::id::IdGenerator::new(|_| Ok(Some("session-a".into()))),
+        better_auth_core::id::IdGenerator::new(move |_| {
+            ["session-a", "session-b"]
+                .get(generated.fetch_add(1, Ordering::SeqCst))
+                .map(|id| Some((*id).into()))
+                .ok_or_else(|| AuthError::internal("Session seed generated an unexpected ID"))
+        }),
     ));
+    let replace_owner = scenario == "session-output-selects-fallback-owner";
     let field = |model: &'static str, name: &'static str, required| {
         let events = events.cloned();
         UserFieldConfig {
@@ -55,7 +67,17 @@ fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
                         format!("{model}.{name}"),
                         values::observe(&value)?
                     ]))?;
-                    Ok(value)
+                    Ok(
+                        if replace_owner
+                            && model == "session"
+                            && name == "ownerRef"
+                            && value.as_str() == Some("user-b")
+                        {
+                            "user-c".into()
+                        } else {
+                            value
+                        },
+                    )
                 })),
                 ..Default::default()
             }),
@@ -64,7 +86,21 @@ fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
     };
     config.user.fields_mut().extend([
         ("name".into(), field("user", "name", true)),
-        ("image".into(), field("user", "image", false)),
+        (
+            "image".into(),
+            UserFieldConfig {
+                references: scenario
+                    .starts_with("reverse-")
+                    .then(|| UserFieldReference {
+                        model: "session".into(),
+                        field: "id".into(),
+                    }),
+                unique: scenario
+                    .starts_with("reverse-user-reference-unique")
+                    .then_some(true),
+                ..field("user", "image", false)
+            },
+        ),
     ]);
     let reference = UserFieldReference {
         model: "user".into(),
@@ -81,14 +117,26 @@ fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
         (
             "userId".into(),
             UserFieldConfig {
-                references: (scenario != "removed-reference").then(|| reference.clone()),
+                references: (!matches!(
+                    scenario,
+                    "removed-reference"
+                        | "alternate-session-reference"
+                        | "session-output-selects-fallback-owner"
+                ))
+                .then(|| reference.clone()),
                 ..field("session", "userId", true)
             },
         ),
         (
             "ownerRef".into(),
             UserFieldConfig {
-                references: (scenario == "second-optional-user-reference").then_some(reference),
+                references: matches!(
+                    scenario,
+                    "second-optional-user-reference"
+                        | "alternate-session-reference"
+                        | "session-output-selects-fallback-owner"
+                )
+                .then_some(reference),
                 ..field("session", "ownerRef", false)
             },
         ),
@@ -101,6 +149,31 @@ async fn user_fields(user: &UserView, config: &AuthConfig) -> AuthResult<FieldVa
         UserView::with_internal_fields(user, &config.user, &Default::default()).await?,
     )
     .into())
+}
+
+fn snapshot_fields(
+    (session, joined): (SessionView, Option<SessionData<JoinValue<UserView>>>),
+    config: &AuthConfig,
+    internal: bool,
+    batch: bool,
+) -> AuthResult<FieldValue> {
+    let mut data = NativeSessionData::from(
+        joined
+            .ok_or_else(|| AuthError::internal("Requested Session relationship was not loaded"))?,
+    );
+    if internal {
+        if data.user.is_null() {
+            return Ok(FieldValue::Null);
+        }
+        data.session.filter_returned_fields(&config.session);
+        if !batch {
+            data.user = data.public_user(&config.user)?;
+        }
+        return Ok(FieldMap::from(data).into());
+    }
+    let mut fields = FieldMap::from(session);
+    let _ = fields.insert("user".into(), data.user);
+    Ok(fields.into())
 }
 
 async fn operation<S: AuthSchema>(
@@ -117,6 +190,40 @@ async fn operation<S: AuthSchema>(
             None => Ok(FieldValue::Null),
         };
     }
+    let internal = input["surface"] == "internal";
+    if input["batch"] == true {
+        let tokens = input
+            .get("tokens")
+            .or_else(|| {
+                input
+                    .get("input")?
+                    .get("where")?
+                    .as_array()?
+                    .first()?
+                    .get("value")
+            })
+            .and_then(Value::as_array)
+            .ok_or_else(|| AuthError::internal("Missing batch Session tokens"))?
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| AuthError::internal("Batch Session token is not a string"))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        let values = store
+            .get_session_snapshots(&tokens, false)
+            .await?
+            .into_iter()
+            .map(|snapshot| snapshot_fields(snapshot, &config, internal, true))
+            .collect::<AuthResult<Vec<_>>>()?;
+        return Ok(if internal && values.iter().any(FieldValue::is_null) {
+            Vec::<FieldValue>::new().into()
+        } else {
+            values.into()
+        });
+    }
     let token = input
         .get("token")
         .and_then(Value::as_str)
@@ -132,44 +239,16 @@ async fn operation<S: AuthSchema>(
         .ok_or_else(|| {
             AuthError::internal("Missing Session token at token or input.where[0].value")
         })?;
-    if input["surface"] == "internal" {
-        let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
-        let _ = request.headers.insert(
-            "cookie".into(),
-            format!(
-                "better-auth.session_token={}",
-                sign_cookie_value(token, SECRET)
-            ),
-        );
-        let result = SessionManager::new(config, store)
-            .resolve(&request, SessionRead::Authoritative)
-            .await?;
-        return Ok(result
-            .data
-            .map_or(FieldValue::Null, |data| FieldMap::from(data).into()));
-    }
     if name == "session-control" {
         return Ok(store
             .get_session(token)
             .await?
             .map_or(FieldValue::Null, |session| FieldMap::from(session).into()));
     }
-    let Some((session, joined)) = store.get_session_snapshot(token).await? else {
+    let Some(snapshot) = store.get_session_snapshot(token).await? else {
         return Ok(FieldValue::Null);
     };
-    let user = match joined {
-        Some(data) => Some(data.user),
-        None => store.get_user_by_id(session.user_id.typed()?).await?,
-    };
-    let mut result = FieldMap::from(session);
-    let _ = result.insert(
-        "user".into(),
-        match user {
-            Some(user) => user_fields(&user, &config).await?,
-            None => FieldValue::Null,
-        },
-    );
-    Ok(result.into())
+    snapshot_fields(snapshot, &config, internal, false)
 }
 
 fn assert_outcome(result: AuthResult<FieldValue>, expected: &Value) -> TestResult {
@@ -227,13 +306,17 @@ async fn contract<S: AuthSchema>(
     database: Option<&DatabaseConnection>,
     case: &Value,
 ) -> TestResult {
-    storage::seed(raw.as_ref()).await?;
+    let scenario = case["scenario"].as_str().ok_or("Missing scenario")?;
+    storage::seed(raw.as_ref(), scenario).await?;
     let before = storage::snapshot(raw.as_ref(), database).await?;
     storage::assert_snapshot(&before, &case["before"], database.is_some());
-    let scenario = case["scenario"].as_str().ok_or("Missing scenario")?;
     let joins = case["joins"].as_bool().ok_or("Missing joins option")?;
     let operations = case["operations"].as_array().ok_or("Missing operations")?;
-    assert_eq!(operations.len(), 6);
+    let controls = matches!(
+        scenario,
+        "default" | "removed-reference" | "second-optional-user-reference"
+    );
+    assert_eq!(operations.len(), if controls { 6 } else { 4 });
     for expected in operations {
         let events = Events::default();
         let config = Arc::new(config(scenario, joins, Some(&events)));
@@ -274,12 +357,19 @@ async fn session_user_join_references_match_upstream_before_queries() -> TestRes
         .get("scenarios")
         .and_then(Value::as_array)
         .ok_or("Missing scenarios")?;
-    assert_eq!(scenarios.len(), 3);
+    assert_eq!(scenarios.len(), 10);
     let cases = fixture
         .get("cases")
         .and_then(Value::as_array)
         .ok_or("Missing cases")?;
-    assert_eq!(cases.len(), 12);
+    assert_eq!(cases.len(), 40);
+    assert_eq!(
+        cases
+            .iter()
+            .map(|case| case["operations"].as_array().map_or(0, Vec::len))
+            .sum::<usize>(),
+        184
+    );
     for case in cases {
         let baseline = config("default", false, None);
         match case["backend"].as_str() {

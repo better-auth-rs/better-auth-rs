@@ -343,83 +343,41 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn get_session_snapshot(
         &self,
         token: &str,
-    ) -> AuthResult<Option<(SessionView, Option<crate::session::SessionData>)>> {
-        crate::session::SessionData::validate_schema(&self.config, &self.model_fields, |_, _| {
-            false
-        })?;
-        if self.config.advanced.database.joins == Some(true) {
-            return self.joined_session_snapshot(token).await;
-        }
+    ) -> AuthResult<
+        Option<(
+            SessionView,
+            Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
+        )>,
+    > {
+        let relation = crate::session::SessionData::resolve_schema(
+            &self.config,
+            &self.model_fields,
+            |_, _| false,
+        )?;
         Ok(self
-            .get_session(token)
+            .session_user_relations(&[token.to_owned()], false, true, &relation)
             .await?
-            .map(|session| (session, None)))
+            .into_iter()
+            .next())
     }
 
     async fn get_session_snapshots(
         &self,
         tokens: &[String],
         only_active: bool,
-    ) -> AuthResult<Vec<(SessionView, Option<crate::session::SessionData>)>> {
-        if self.config.advanced.database.joins == Some(true) {
-            return self.joined_session_snapshots(tokens, only_active).await;
-        }
-        let now = Utc::now();
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let sessions = self
-            .raw("session", "findMany", |state| {
-                Ok(crate::query::paginate_memory(
-                    state
-                        .sessions
-                        .select_refs(|session| {
-                            tokens.contains(&session.token)
-                                && (!only_active
-                                    || session.expires_at.milliseconds()
-                                        > now.timestamp_millis() as f64)
-                        })?
-                        .into_iter()
-                        .map(SessionSource::Live)
-                        .collect(),
-                    Some(self.config.advanced.database.find_many_limit()),
-                    None,
-                ))
-            })
-            .await?;
-        let snapshots = self
-            .output_sessions_batches_then(sessions, |ready| async move {
-                let mut pending = Vec::new();
-                let mut users = Vec::new();
-                for (index, session) in ready {
-                    let owner = session.user_id.field_value();
-                    let user = if owner.is_null() || owner.is_undefined() {
-                        None
-                    } else {
-                        self.user_ref_by_id_value(&owner).await?
-                    };
-                    let has_user = user.is_some();
-                    users.extend(user);
-                    pending.push((index, session, has_user));
-                }
-                let mut users = self.output_user_refs(users).await?.into_iter();
-                Ok(pending
-                    .into_iter()
-                    .map(|(index, session, has_user)| {
-                        let data = if has_user { users.next() } else { None }.map(|user| {
-                            crate::session::SessionData {
-                                session: session.clone(),
-                                user,
-                            }
-                        });
-                        (index, (session, data))
-                    })
-                    .collect())
-            })
-            .await?;
-        // Complete started output callbacks before applying the joined batch's missing-user rule.
-        if snapshots.iter().any(|(_, user)| user.is_none()) {
-            return Ok(Vec::new());
-        }
-        Ok(snapshots)
+    ) -> AuthResult<
+        Vec<(
+            SessionView,
+            Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
+        )>,
+    > {
+        let relation = crate::session::SessionData::resolve_schema(
+            &self.config,
+            &self.model_fields,
+            |_, _| false,
+        )?;
+        self.session_user_relations(tokens, only_active, false, &relation)
+            .await
     }
 
     async fn update_session_fields(

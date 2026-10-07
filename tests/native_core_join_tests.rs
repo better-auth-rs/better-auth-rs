@@ -251,7 +251,7 @@ async fn query(store: &Store, path: &str) -> AuthResult<Value> {
                 return Ok(Value::Null);
             };
             let user = match data {
-                Some(data) => data.user,
+                Some(data) => data.into_typed()?.unwrap().user,
                 None => store.get_user_by_id_field(&session.user_id).await?.unwrap(),
             };
             Ok(display_session(&session, &user))
@@ -270,7 +270,7 @@ async fn query(store: &Store, path: &str) -> AuthResult<Value> {
                 .await?
             {
                 let user = match data {
-                    Some(data) => data.user,
+                    Some(data) => data.into_typed()?.unwrap().user,
                     None => store.get_user_by_id_field(&session.user_id).await?.unwrap(),
                 };
                 result.push(display_session(&session, &user));

@@ -148,43 +148,6 @@ where
         }
     }
 
-    pub(super) async fn output_joined_users(
-        &self,
-        rows: &[Option<S::User>],
-        indices: &[usize],
-    ) -> AuthResult<Vec<Option<better_auth_core::wire::UserView>>> {
-        let selected = indices
-            .iter()
-            .map(|index| {
-                rows.get(*index).ok_or_else(|| {
-                    AuthError::internal("Parent projection lost its joined user index")
-                })
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        let models: Vec<_> = selected
-            .iter()
-            .filter_map(|user| user.as_ref())
-            .cloned()
-            .collect();
-        let mut projected = self
-            .output_users(&models, self.connection())
-            .await?
-            .into_iter();
-        selected
-            .into_iter()
-            .map(|user| {
-                if user.is_some() {
-                    projected
-                        .next()
-                        .map(Some)
-                        .ok_or_else(|| AuthError::internal("Joined user projection lost its row"))
-                } else {
-                    Ok(None)
-                }
-            })
-            .collect()
-    }
-
     fn native_user_record(&self, user: &S::User, fields: &UserConfig) -> AuthResult<AdapterRecord> {
         let backend = self.connection().get_database_backend();
         let storage = super::joins::native_child_fields(fields, |name, field| {

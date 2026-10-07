@@ -1,10 +1,12 @@
 use super::SessionData;
 use crate::{
-    AuthError, AuthResult, FieldMap, FieldValue, StructuredCloneContext, user_fields::UserConfig,
-    wire::SessionView,
+    AuthError, AuthResult, FieldMap, FieldValue, StructuredCloneContext,
+    store::JoinValue,
+    user_fields::UserConfig,
+    wire::{SessionView, UserView},
 };
 
-/// Session issuance data before the User value crosses a typed authentication boundary.
+/// Session data before the selected User value crosses a typed authentication boundary.
 #[derive(Debug, Clone)]
 pub struct NativeSessionData {
     /// Session passed to the credential writer.
@@ -58,6 +60,45 @@ impl From<SessionData> for NativeSessionData {
     }
 }
 
+impl From<SessionData> for SessionData<JoinValue<UserView>> {
+    fn from(data: SessionData) -> Self {
+        Self {
+            session: data.session,
+            user: JoinValue::One(Some(data.user)),
+        }
+    }
+}
+
+impl SessionData<JoinValue<UserView>> {
+    /// A typed authentication caller requires one User; a relationship page has no User identity.
+    pub fn into_typed(self) -> AuthResult<Option<SessionData>> {
+        match self.user {
+            JoinValue::One(user) => Ok(user.map(|user| SessionData {
+                session: self.session,
+                user,
+            })),
+            JoinValue::Many(_) => Err(super::relationship_array_error()),
+        }
+    }
+}
+
+impl From<SessionData<JoinValue<UserView>>> for NativeSessionData {
+    fn from(data: SessionData<JoinValue<UserView>>) -> Self {
+        Self {
+            session: data.session,
+            user: match data.user {
+                JoinValue::One(Some(user)) => FieldMap::from(user).into(),
+                JoinValue::One(None) => FieldValue::Null,
+                JoinValue::Many(users) => users
+                    .into_iter()
+                    .map(|user| FieldValue::from(FieldMap::from(user)))
+                    .collect::<Vec<_>>()
+                    .into(),
+            },
+        }
+    }
+}
+
 impl From<NativeSessionData> for FieldMap {
     fn from(data: NativeSessionData) -> Self {
         Self::from([
@@ -77,11 +118,11 @@ impl serde::Serialize for NativeSessionData {
 mod tests {
     use super::*;
     use crate::{
-        AuthConfig, AuthRequest, FieldDate, FromFieldMap, HttpMethod,
+        AuthConfig, AuthRequest, CreateSession, CreateUser, FieldDate, FromFieldMap, HttpMethod,
         config::{CookieCacheConfig, CookieCacheVersion},
-        session::{SessionManager, cookie_cache},
+        session::{SessionManager, SessionRead, cookie_cache},
         store::{EphemeralStore, StatelessSchema},
-        user_fields::UserFieldConfig,
+        user_fields::{UserFieldConfig, UserFieldReference},
     };
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     use std::sync::{
@@ -98,6 +139,115 @@ mod tests {
             ("createdAt".into(), now.clone().into()),
             ("updatedAt".into(), now.into()),
         ]))
+    }
+
+    #[tokio::test]
+    async fn typed_relationship_array_rejection_precedes_refresh_and_cookie_callbacks()
+    -> AuthResult<()> {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let recorded = calls.clone();
+        let mut config =
+            AuthConfig::new("typed-session-relationship-secret-at-least-32-characters");
+        let _ = config.user.fields_mut().insert(
+            "image".into(),
+            UserFieldConfig {
+                references: Some(UserFieldReference {
+                    model: "session".into(),
+                    field: "id".into(),
+                }),
+                ..Default::default()
+            },
+        );
+        config.session.cookie_cache = Some(CookieCacheConfig {
+            enabled: Some(true),
+            version: CookieCacheVersion::dynamic(move |_| {
+                let recorded = recorded.clone();
+                async move {
+                    let _ = recorded.fetch_add(1, Ordering::SeqCst);
+                    Ok("selected-relation".into())
+                }
+            }),
+            ..Default::default()
+        });
+        let config = Arc::new(config);
+        let manager = SessionManager::<StatelessSchema>::new(
+            config.clone(),
+            Arc::new(EphemeralStore::new(config.clone())),
+        );
+        let session = manager
+            .database
+            .create_session(CreateSession {
+                user_id: "canonical-owner".into(),
+                expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
+                additional_fields: Default::default(),
+                ip_address: None,
+                user_agent: None,
+                impersonated_by: None,
+                active_organization_id: None,
+            })
+            .await?;
+        let mut user = CreateUser::new()
+            .with_email("selected-owner@example.test")
+            .with_name("Selected owner");
+        user.image = Some(session.id.typed()?.clone()).into();
+        let user = manager.database.create_user(user).await?;
+        assert!(manager.needs_refresh(&session));
+        let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
+        let _ = request.headers.insert(
+            "cookie".into(),
+            format!(
+                "{}={}",
+                config.auth_cookie("session_token", Default::default()).name,
+                crate::utils::cookie_utils::sign_cookie_value(
+                    &session.token,
+                    config.signing_secret()
+                ),
+            ),
+        );
+        assert!(matches!(
+            manager.resolve(&request, SessionRead::Authoritative).await,
+            Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            request
+                .take_response_headers()?
+                .get_all("set-cookie")
+                .count(),
+            0
+        );
+        let stored = manager
+            .database
+            .get_session(&session.token)
+            .await?
+            .ok_or_else(|| AuthError::internal("Selected Session must remain stored"))?;
+        assert_eq!(stored.expires_at, session.expires_at);
+        assert!(request.new_session()?.is_none());
+
+        let mut native_request = AuthRequest::new(HttpMethod::Get, "/get-session");
+        native_request.headers = request.headers.clone();
+        native_request.query = Some(serde_json::json!({"disableRefresh": true}));
+        let native = manager
+            .resolve_native(&native_request, SessionRead::Authoritative)
+            .await?
+            .data
+            .ok_or_else(|| {
+                AuthError::internal("Native resolution must preserve the selected relationship")
+            })?;
+        let selected = native
+            .user
+            .as_array()
+            .ok_or_else(|| AuthError::internal("Native User relationship must remain an array"))?;
+        assert_eq!(selected.len(), 1);
+        assert_eq!(
+            selected
+                .first()
+                .and_then(FieldValue::as_object)
+                .and_then(|fields| fields.get("id")),
+            Some(&user.id.field_value())
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        Ok(())
     }
 
     #[test]

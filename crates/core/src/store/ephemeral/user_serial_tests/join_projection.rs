@@ -25,21 +25,22 @@ async fn serial_array_owners_join_only_after_fallback_projection() -> AuthResult
                 .field_value(),
             raw_owner
         );
-        let single = store.get_session_snapshot(&session.token).await?;
+        let single = required(store.get_session_snapshot(&session.token).await?)?;
         let bulk = store
             .get_session_snapshots(std::slice::from_ref(&session.token), true)
             .await?;
+        assert_eq!(single.0.user_id, "1");
+        assert_eq!(bulk.len(), 1);
+        let single = required(single.1)?.into_typed()?;
+        let (projected, child) = required(bulk.first())?;
+        assert_eq!(projected.user_id, "1");
+        let child = required(child.clone())?.into_typed()?;
         if joins {
             assert!(single.is_none());
-            assert!(bulk.is_empty());
-        } else {
-            let (projected, child) = required(single)?;
-            assert_eq!(projected.user_id, "1");
             assert!(child.is_none());
-            assert_eq!(bulk.len(), 1);
-            let (projected, child) = required(bulk.first())?;
-            assert_eq!(projected.user_id, "1");
-            assert_eq!(required(child.as_ref())?.user.id, "1");
+        } else {
+            assert_eq!(required(single)?.user.id, "1");
+            assert_eq!(required(child)?.user.id, "1");
         }
 
         let account = store

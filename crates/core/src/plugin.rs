@@ -730,7 +730,7 @@ impl<S: AuthSchema> AuthContext<S> {
         read: crate::session::SessionRead,
     ) -> AuthResult<(crate::wire::UserView, crate::wire::SessionView)> {
         let resolved = self.session_manager().resolve(req, read).await?;
-        req.set_session_snapshot(resolved.data.clone())?;
+        req.set_session_snapshot(resolved.data.clone().map(Into::into))?;
         let data = resolved.data.ok_or(AuthError::Unauthenticated)?;
         if !data.user.id.is_undefined() {
             req.set_server_context("auth.current-user-id", data.user.id.field_value())?;

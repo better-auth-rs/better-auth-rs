@@ -446,7 +446,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
     ) -> AuthResult<
         Option<(
             crate::wire::SessionView,
-            Option<crate::session::SessionData>,
+            Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
         )>,
     > {
         if self.storage.is_none() {
@@ -467,7 +467,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 session,
                 Some(crate::session::SessionData {
                     session: view,
-                    user,
+                    user: crate::store::JoinValue::One(Some(user)),
                 }),
             )));
         }
@@ -481,7 +481,12 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         tokens: &[String],
         only_active: bool,
-    ) -> AuthResult<Vec<(SessionView, Option<crate::session::SessionData>)>> {
+    ) -> AuthResult<
+        Vec<(
+            SessionView,
+            Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
+        )>,
+    > {
         if self.storage.is_none() {
             return self.inner.get_session_snapshots(tokens, only_active).await;
         }
@@ -500,7 +505,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 continue;
             }
             data.session.active = true;
-            sessions.push((data.session.clone(), Some(data)));
+            sessions.push((data.session.clone(), Some(data.into())));
         }
         Ok(sessions)
     }

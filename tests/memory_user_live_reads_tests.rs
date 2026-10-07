@@ -191,8 +191,8 @@ async fn ordinary_user_reads_keep_later_display_fields_live() -> AuthResult<()> 
                     .get_session_snapshots(&[token], false)
                     .await?
                     .into_iter()
-                    .map(|(_, data)| data.unwrap().user)
-                    .collect(),
+                    .map(|(_, data)| Ok(data.unwrap().into_typed()?.unwrap().user))
+                    .collect::<AuthResult<Vec<_>>>()?,
                 _ => {
                     return Err(better_auth_core::AuthError::internal(
                         "Unknown captured user read path",

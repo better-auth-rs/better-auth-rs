@@ -24,7 +24,7 @@ pub(super) fn user_value(user: &UserView, logical: &str, physical: &str) -> Valu
         .unwrap_or_default()
 }
 
-fn native_relation<T>(
+pub(super) fn native_relation<T>(
     rows: Vec<RowRef<T>>,
     relation: &ResolvedJoin,
     limit: f64,
@@ -62,6 +62,12 @@ impl EphemeralStore {
             ["name", "email", "image"]
                 .into_iter()
                 .map(str::to_owned)
+                .chain(
+                    self.model_fields
+                        .user_plugin_fields()
+                        .iter()
+                        .map(|name| (*name).to_owned()),
+                )
                 .chain(self.config.user.fields().keys().cloned())
                 .collect(),
         );
@@ -237,7 +243,14 @@ impl EphemeralStore {
                             Some(users) => users.get(*index).cloned().ok_or_else(|| {
                                 AuthError::internal("Account projection lost its joined User index")
                             })?,
-                            None => self.fallback_join_users(relation, fields, account).await?,
+                            None => {
+                                self.fallback_join_users(
+                                    relation,
+                                    (EntityRole::Account, "account", fields),
+                                    account,
+                                )
+                                .await?
+                            }
                         });
                     }
                     let projected = self.output_user_relations(selected).await?;
@@ -266,15 +279,14 @@ impl EphemeralStore {
         Ok(owners.into_iter().next())
     }
 
-    async fn fallback_join_users(
+    pub(super) async fn fallback_join_users(
         &self,
         relation: &ResolvedJoin,
-        fields: &crate::user_fields::UserConfig,
-        account: &FieldMap,
+        parent: (EntityRole, &str, &crate::user_fields::UserConfig),
+        fields: &FieldMap,
     ) -> AuthResult<JoinValue<UserRef>> {
-        let from =
-            relation.fallback_from((EntityRole::Account, "account", fields), &self.model_fields)?;
-        let value = account.get(&from).cloned().unwrap_or_default();
+        let from = relation.fallback_from(parent, &self.model_fields)?;
+        let value = fields.get(&from).cloned().unwrap_or_default();
         if value.is_null() || value.is_undefined() {
             return Ok(fallback_relation(Vec::new(), relation.many, 0.0));
         }
@@ -305,7 +317,7 @@ impl EphemeralStore {
         .await
     }
 
-    async fn output_user_relations(
+    pub(super) async fn output_user_relations(
         &self,
         users: Vec<JoinValue<UserRef>>,
     ) -> AuthResult<Vec<JoinValue<UserView>>> {

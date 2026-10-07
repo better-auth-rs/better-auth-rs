@@ -219,7 +219,7 @@ async fn rows<S: AuthSchema>(
         let mut result = Vec::new();
         for (session, snapshot) in store.get_session_snapshots(tokens, false).await? {
             let user = match snapshot {
-                Some(data) => data.user,
+                Some(data) => data.into_typed()?.unwrap().user,
                 None => store.get_user_by_id_field(&session.user_id).await?.unwrap(),
             };
             assert_eq!(session.user_id, user.id);

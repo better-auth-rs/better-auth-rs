@@ -2,13 +2,14 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, IntoActiveModel,
-    QueryFilter, QuerySelect, sea_query::ExprTrait,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
+    QuerySelect, sea_query::ExprTrait,
 };
 
 use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::EntityRole;
-use better_auth_core::store::{SessionStore, SessionUpdateWriter};
+use better_auth_core::store::{JoinValue, ResolvedJoin, SessionStore, SessionUpdateWriter};
+use better_auth_core::{FieldMap, UserView, session::SessionData, wire::SessionView};
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::{DatabaseHookUpdate, SessionUpdate};
@@ -16,6 +17,8 @@ use crate::schema::{AuthSchema, SeaOrmSessionModel, SeaOrmUserModel};
 use crate::types::CreateSession;
 
 use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
+
+type SessionSnapshot = (SessionView, Option<SessionData<JoinValue<UserView>>>);
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -76,13 +79,9 @@ where
     async fn native_session_snapshots(
         &self,
         rows: &[S::Session],
-        users: &[Option<S::User>],
-    ) -> AuthResult<
-        Vec<(
-            better_auth_core::wire::SessionView,
-            Option<better_auth_core::session::SessionData>,
-        )>,
-    >
+        users: &[Vec<S::User>],
+        many: bool,
+    ) -> AuthResult<Vec<SessionSnapshot>>
     where
         S::User: SeaOrmUserModel,
     {
@@ -95,19 +94,81 @@ where
             &self.config().session,
             self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
             |ready| async move {
-                let indices: Vec<_> = ready.iter().map(|(index, _)| *index).collect();
-                let projected = self.output_joined_users(users, &indices).await?;
-                Ok(ready
+                let pages = ready
+                    .iter()
+                    .map(|(index, _)| {
+                        users.get(*index).map(Vec::as_slice).ok_or_else(|| {
+                            AuthError::internal("Session projection lost its joined User page")
+                        })
+                    })
+                    .collect::<AuthResult<Vec<_>>>()?;
+                let projected = self.output_native_user_pages(pages).await?;
+                ready
                     .into_iter()
                     .zip(projected)
-                    .map(|((index, session), user)| {
-                        let data = user.map(|user| better_auth_core::session::SessionData {
+                    .map(|((index, session), users)| {
+                        let users = users
+                            .into_iter()
+                            .map(UserView::try_from)
+                            .collect::<AuthResult<Vec<_>>>()?;
+                        let data = SessionData {
                             session: session.clone(),
-                            user,
-                        });
-                        (index, (session, data))
+                            user: super::joins::relation_value(many, users),
+                        };
+                        Ok((index, (session, Some(data))))
                     })
-                    .collect())
+                    .collect()
+            },
+        )
+        .await
+    }
+
+    async fn fallback_session_snapshots(
+        &self,
+        rows: &[S::Session],
+        relation: &ResolvedJoin,
+    ) -> AuthResult<Vec<SessionSnapshot>>
+    where
+        S::User: SeaOrmUserModel,
+    {
+        self.validate_session_fields()?;
+        if !rows.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Session)?;
+        }
+        SessionView::with_internal_fields_many_for_adapter_then(
+            rows,
+            &self.config().session,
+            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            |_, session| async move {
+                let fields = better_auth_core::store::session_create_schema(
+                    &self.config().session,
+                    &FieldMap::new(),
+                );
+                let source = relation.fallback_from(
+                    (EntityRole::Session, "session", &fields),
+                    &self.model_fields,
+                )?;
+                let value = FieldMap::from(session.clone())
+                    .remove(&source)
+                    .unwrap_or_default();
+                let users = self
+                    .selected_join_users(
+                        relation,
+                        value,
+                        self.config().advanced.database.find_many_limit(),
+                    )
+                    .await?;
+                let mut projected = Vec::with_capacity(users.len());
+                for user in users {
+                    let mut user = self.output_user(&user, self.connection()).await?;
+                    self.set_join_user_visibility(&mut user);
+                    projected.push(user);
+                }
+                let data = SessionData {
+                    session: session.clone(),
+                    user: super::joins::relation_value(relation.many, projected),
+                };
+                Ok((session, Some(data)))
             },
         )
         .await
@@ -624,41 +685,43 @@ where
         }
     }
 
-    async fn get_session_snapshot(
-        &self,
-        token: &str,
-    ) -> AuthResult<
-        Option<(
-            better_auth_core::wire::SessionView,
-            Option<better_auth_core::session::SessionData>,
-        )>,
-    > {
-        better_auth_core::session::SessionData::validate_schema(
+    async fn get_session_snapshot(&self, token: &str) -> AuthResult<Option<SessionSnapshot>> {
+        let relation = SessionData::resolve_schema(
             self.config(),
             &self.model_fields,
             super::model_names::table_matches::<S, O, P>,
         )?;
-        if self.config().advanced.database.joins != Some(true) {
-            return Ok(self
-                .get_session(token)
-                .await?
-                .map(|session| (session, None)));
-        }
         self.model_fields.begin_id_query(EntityRole::Session)?;
-        self.model_fields
-            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
+        let parent = <S::Session as SeaOrmSessionModel>::Entity::find()
+            .filter(S::Session::token_column().eq(token))
+            .filter(
+                Condition::all()
+                    .add_option(S::Session::active_column().map(|column| column.eq(true))),
+            )
+            .limit(1);
+        if self.config().advanced.database.joins != Some(true) {
+            let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+                self.config(),
+                "findOne",
+                async { parent.all(self.connection()).await.map_err(map_db_err) },
+            )
+            .await?;
+            return Ok(self
+                .fallback_session_snapshots(&rows, &relation)
+                .await?
+                .into_iter()
+                .next());
+        }
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let query = super::joins::joined_query::<
             <S::Session as SeaOrmSessionModel>::Entity,
             <S::User as SeaOrmUserModel>::Entity,
         >(
-            <S::Session as SeaOrmSessionModel>::Entity::find()
-                .filter(S::Session::token_column().eq(token))
-                .filter(
-                    Condition::all()
-                        .add_option(S::Session::active_column().map(|column| column.eq(true))),
-                )
-                .limit(1),
-            (S::Session::user_id_column(), S::User::id_column()),
+            parent,
+            (
+                S::Session::field_column(&relation.from)?,
+                S::User::field_column(&relation.to)?,
+            ),
             S::User::id_column(),
         );
         let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
@@ -670,30 +733,38 @@ where
             >(self.connection(), &query),
         )
         .await?;
-        let Some((row, user)) = rows.into_iter().next() else {
-            return Ok(None);
-        };
-        let session = self.output_session(&row, self.connection()).await?;
-        let Some(user) = user else {
-            return Ok(None);
-        };
-        let data = better_auth_core::session::SessionData {
-            session: session.clone(),
-            user: self.output_user(&user, self.connection()).await?,
-        };
-        Ok(Some((session, Some(data))))
+        let (rows, users): (Vec<_>, Vec<_>) = super::joins::grouped_rows::<
+            <S::Session as SeaOrmSessionModel>::Entity,
+            <S::User as SeaOrmUserModel>::Entity,
+        >(rows, S::Session::id_column())
+        .into_iter()
+        .map(|(session, users)| {
+            let users = super::joins::selected_children::<<S::User as SeaOrmUserModel>::Entity>(
+                users.into_iter(),
+                S::User::id_column(),
+                relation.many,
+                self.config().advanced.database.find_many_limit(),
+            );
+            (session, users)
+        })
+        .unzip();
+        Ok(self
+            .native_session_snapshots(&rows, &users, relation.many)
+            .await?
+            .into_iter()
+            .next())
     }
 
     async fn get_session_snapshots(
         &self,
         tokens: &[String],
         only_active: bool,
-    ) -> AuthResult<
-        Vec<(
-            better_auth_core::wire::SessionView,
-            Option<better_auth_core::session::SessionData>,
-        )>,
-    > {
+    ) -> AuthResult<Vec<SessionSnapshot>> {
+        let relation = SessionData::resolve_schema(
+            self.config(),
+            &self.model_fields,
+            super::model_names::table_matches::<S, O, P>,
+        )?;
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let mut condition = Condition::all()
             .add(S::Session::token_column().is_in(tokens.iter().cloned()))
@@ -719,7 +790,10 @@ where
                     <S::User as SeaOrmUserModel>::Entity,
                 >(
                     parent,
-                    (S::Session::user_id_column(), S::User::id_column()),
+                    (
+                        S::Session::field_column(&relation.from)?,
+                        S::User::field_column(&relation.to)?,
+                    ),
                     S::User::id_column(),
                 );
                 let rows = super::joins::joined_rows::<
@@ -727,7 +801,24 @@ where
                     <S::User as SeaOrmUserModel>::Entity,
                 >(self.connection(), &query)
                 .await?;
-                let (rows, users): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
+                let (rows, users): (Vec<_>, Vec<_>) = super::joins::grouped_rows::<
+                    <S::Session as SeaOrmSessionModel>::Entity,
+                    <S::User as SeaOrmUserModel>::Entity,
+                >(
+                    rows, S::Session::id_column()
+                )
+                .into_iter()
+                .map(|(session, users)| {
+                    let users =
+                        super::joins::selected_children::<<S::User as SeaOrmUserModel>::Entity>(
+                            users.into_iter(),
+                            S::User::id_column(),
+                            relation.many,
+                            self.config().advanced.database.find_many_limit(),
+                        );
+                    (session, users)
+                })
+                .unzip();
                 Ok((rows, Some(users)))
             } else {
                 parent
@@ -738,66 +829,12 @@ where
             }
         })
         .await?;
-        let snapshots = if let Some(users) = native_users {
-            self.native_session_snapshots(&rows, &users).await?
+        if let Some(users) = native_users {
+            self.native_session_snapshots(&rows, &users, relation.many)
+                .await
         } else {
-            self.validate_session_fields()?;
-            if !rows.is_empty() {
-                self.model_fields.begin_id_output(EntityRole::Session)?;
-            }
-            better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter_then(
-                &rows,
-                &self.config().session,
-                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                |index, session| {
-                    let rows = &rows;
-                    async move {
-                        let row = rows.get(index).ok_or_else(|| {
-                            AuthError::internal("Session projection lost its stored join index")
-                        })?;
-                        let owner_id = row
-                            .clone()
-                            .into_active_model()
-                            .get(S::Session::user_id_column())
-                            .into_value();
-                        let user = match owner_id {
-                            Some(owner_id) => {
-                                self.model_fields.begin_id_query(
-                                    better_auth_core::store::schema::EntityRole::User,
-                                )?;
-                                database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-                                    self.config(),
-                                    "findOne",
-                                    async {
-                                        <S::User as SeaOrmUserModel>::Entity::find()
-                                            .filter(S::User::id_column().eq(owner_id))
-                                            .one(self.connection())
-                                            .await
-                                            .map_err(map_db_err)
-                                    },
-                                )
-                                .await?
-                            }
-                            None => None,
-                        };
-                        let data = match user.as_ref() {
-                            Some(user) => Some(better_auth_core::session::SessionData {
-                                session: session.clone(),
-                                user: self.output_user(user, self.connection()).await?,
-                            }),
-                            None => None,
-                        };
-                        Ok((session, data))
-                    }
-                },
-            )
-            .await?
-        };
-        // Complete started output callbacks before applying the joined batch's missing-user rule.
-        if snapshots.iter().any(|(_, user)| user.is_none()) {
-            return Ok(Vec::new());
+            self.fallback_session_snapshots(&rows, &relation).await
         }
-        Ok(snapshots)
     }
 
     async fn get_user_sessions(

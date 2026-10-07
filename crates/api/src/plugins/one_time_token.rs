@@ -261,7 +261,10 @@ pub(crate) async fn find_session<S: AuthSchema>(
     let Some((session, snapshot)) = ctx.database.get_session_snapshot(token).await? else {
         return Ok(None);
     };
-    if let Some(mut data) = snapshot {
+    if let Some(data) = snapshot {
+        let Some(mut data) = data.into_typed()? else {
+            return Ok(None);
+        };
         data.session.filter_returned_fields(&ctx.config.session);
         return Ok(Some((data.session, ctx.user_view(&data.user).await?)));
     }

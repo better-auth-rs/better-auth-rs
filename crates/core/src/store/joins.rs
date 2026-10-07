@@ -61,6 +61,16 @@ impl crate::session::SessionData {
         schema: &ModelFields,
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
+        Self::resolve_schema(config, schema, table_matches).map(|_| ())
+    }
+
+    /// Resolve the Session/User relationship before reading either model.
+    #[doc(hidden)]
+    pub fn resolve_schema(
+        config: &AuthConfig,
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<ResolvedJoin> {
         let fields = super::session_create_schema(&config.session, &crate::FieldMap::new());
         resolve_references(
             (EntityRole::Session, "session", &fields),
@@ -68,7 +78,6 @@ impl crate::session::SessionData {
             schema,
             table_matches,
         )
-        .map(|_| ())
     }
 }
 
