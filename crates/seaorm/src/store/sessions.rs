@@ -6,6 +6,7 @@ use sea_orm::{
     QueryFilter, QuerySelect,
 };
 
+use better_auth_core::store::schema::EntityRole;
 use better_auth_core::store::{SessionStore, SessionUpdateWriter};
 
 use crate::error::{AuthError, AuthResult};
@@ -45,6 +46,9 @@ where
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
         self.validate_session_fields()?;
+        if !rows.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Session)?;
+        }
         better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter(
             rows,
             &self.config().session,
@@ -59,6 +63,7 @@ where
         db: &impl ConnectionTrait,
     ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.validate_session_fields()?;
+        self.model_fields.begin_id_output(EntityRole::Session)?;
         better_auth_core::wire::SessionView::with_internal_fields_for_adapter(
             row,
             &self.config().session,
@@ -81,6 +86,9 @@ where
         S::User: SeaOrmUserModel,
     {
         self.validate_session_fields()?;
+        if !rows.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Session)?;
+        }
         better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter_batches_then(
             rows,
             &self.config().session,
@@ -117,7 +125,8 @@ where
     ) -> AuthResult<super::record_write::RecordWrite<<S::Session as SeaOrmSessionModel>::Entity>>
     {
         self.validate_session_fields()?;
-        let schema = self.config().session.field_schema();
+        let schema = self.config().session.adapter_schema();
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let fields = schema
             .storage_fields_with_binding(Default::default(), false, |name, field, value| {
                 crate::reference_id::input_binding(
@@ -220,8 +229,6 @@ where
         let now = Utc::now();
         create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
         create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
-        let id = self.generated_id("session", None)?;
-        let parsed = id.as_deref().map(S::Session::parse_id).transpose()?;
         let mut fields = self.config().session.default_fields();
         fields.extend(std::mem::take(&mut create_session.additional_fields));
         let mut plugin_fields = better_auth_core::FieldMap::new();
@@ -230,31 +237,45 @@ where
                 let _ = plugin_fields.insert(name.into(), value);
             }
         }
+        self.validate_session_fields()?;
+        let schema = self.config().session.adapter_schema();
+        self.model_fields.begin_id_input(EntityRole::Session)?;
+        let (fields, id) = schema
+            .create_adapter_storage_fields(
+                fields,
+                || {
+                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                        return Ok(None);
+                    }
+                    self.generated_id("session", None)?
+                        .as_deref()
+                        .map(S::Session::parse_id)
+                        .transpose()
+                },
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::Session::field_column,
+                        S::Session::native_json_field,
+                        db.get_database_backend(),
+                    )
+                },
+            )
+            .await?;
+        let database_generated_id = id.is_none();
         let expires_at = create_session.expires_at.clone();
         let mut active = S::Session::new_active(
-            parsed,
+            id,
             better_auth_core::id::random_id(None),
             create_session,
             now,
         )?;
-        if id.is_none() {
+        if database_generated_id {
             active.not_set(S::Session::id_column());
         }
-        self.validate_session_fields()?;
-        let schema = self.config().session.field_schema();
-        let fields = schema
-            .storage_fields_with_binding(fields, true, |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::Session::field_column,
-                    S::Session::native_json_field,
-                    db.get_database_backend(),
-                )
-            })
-            .await?;
         let mut active = super::record_write::RecordWrite::from_active(active);
         active.native_field(
             S::Session::expires_at_column(),
@@ -369,10 +390,11 @@ where
         };
         let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
         self.validate_session_fields()?;
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let fields = self
             .config()
             .session
-            .field_schema()
+            .adapter_schema()
             .storage_fields_with_binding(
                 std::mem::take(&mut update.additional_fields),
                 false,
@@ -492,6 +514,7 @@ where
         &self,
         token: &str,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -530,6 +553,7 @@ where
                 .await?
                 .map(|session| (session, None)));
         }
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         self.model_fields
             .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
         let query = super::joins::joined_query::<
@@ -579,6 +603,7 @@ where
             Option<better_auth_core::session::SessionData>,
         )>,
     > {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let mut condition = Condition::all()
             .add(S::Session::token_column().is_in(tokens.iter().cloned()))
             .add_option(S::Session::active_column().map(|column| column.eq(true)));
@@ -626,6 +651,9 @@ where
             self.native_session_snapshots(&rows, &users).await?
         } else {
             self.validate_session_fields()?;
+            if !rows.is_empty() {
+                self.model_fields.begin_id_output(EntityRole::Session)?;
+            }
             better_auth_core::wire::SessionView::with_internal_fields_many_for_adapter_then(
                 &rows,
                 &self.config().session,
@@ -643,7 +671,7 @@ where
                             .into_value();
                         let user = match owner_id {
                             Some(owner_id) => {
-                                self.model_fields.canonicalize_id(
+                                self.model_fields.begin_id_input(
                                     better_auth_core::store::schema::EntityRole::User,
                                 )?;
                                 database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
@@ -685,6 +713,7 @@ where
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let user_id = self.parse_id(user_id, <S::Session as SeaOrmSessionModel>::parse_user_id)?;
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
@@ -749,6 +778,7 @@ where
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -783,6 +813,7 @@ where
                 return Ok(());
             }
         }
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let _ = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "delete",

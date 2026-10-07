@@ -32,13 +32,16 @@ where
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
         if !rows.is_empty() {
-            self.model_fields.canonicalize_id(EntityRole::User)?;
+            self.model_fields.begin_id_output(EntityRole::User)?;
         }
         let sqlite = db.get_database_backend() == sea_orm::DbBackend::Sqlite;
+        let mut fields = self.config().user.user_adapter_fields();
+        // The typed model getter already projects immutable SQL primary keys.
+        let _ = fields.fields_mut().shift_remove("id");
         let mut output =
             better_auth_core::wire::UserView::with_internal_fields_many_for_adapter_using(
                 rows,
-                &self.config().user.user_adapter_fields(),
+                &fields,
                 &Default::default(),
                 FieldOutputCapabilities {
                     supports_native_json: db.get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -72,7 +75,7 @@ where
     }
 
     async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let email = normalize_user_email(email);
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -145,7 +148,7 @@ where
         let Some(column) = S::User::username_column() else {
             return Ok(None);
         };
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -191,7 +194,7 @@ where
             }
             create_user.prepare_user_fields(&self.config().user)?;
         }
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let now = Utc::now();
         let input = create_user.take_user_field_input(&self.config().user)?;
         let (mut fields, user_id) = self
@@ -200,10 +203,12 @@ where
             .create_user_storage_fields(
                 input,
                 || {
-                    self.generated_id("user", create_user.id.take())?
-                        .as_deref()
-                        .map(S::User::parse_id)
-                        .transpose()
+                    let id = if self.model_fields.id_input_active(EntityRole::User)? {
+                        self.generated_id("user", create_user.id.take())?
+                    } else {
+                        create_user.id.take()
+                    };
+                    id.as_deref().map(S::User::parse_id).transpose()
                 },
                 |name, field, value| {
                     crate::reference_id::input_binding(
@@ -366,10 +371,11 @@ where
         user_id: <S::User as SeaOrmUserModel>::Id,
         mut update: UpdateUser,
     ) -> AuthResult<Option<S::User>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let mut fields = self
             .config()
             .user
+            .user_adapter_fields()
             .storage_fields_with_binding(
                 update.take_user_field_input(&self.config().user)?,
                 false,
@@ -506,7 +512,7 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let user_id = self.parse_id(id, S::User::parse_id)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -531,7 +537,7 @@ where
         &self,
         id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         if let Some(id) = id.as_str() {
             return self.get_user_by_id(id).await;
         }
@@ -563,7 +569,7 @@ where
         ids: &[String],
         limit: f64,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let user_ids = ids
             .iter()
             .map(|id| self.parse_id(id, S::User::parse_id))
@@ -687,7 +693,7 @@ where
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let column = S::User::phone_number_column()
             .ok_or_else(|| AuthError::config("The user entity requires phone_number"))?;
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -795,6 +801,7 @@ where
             .map(|(_, _, model)| model)
             .collect::<Vec<_>>();
         let users = self.output_users(&selected, self.connection()).await?;
+        query.begin_adapter_count(&self.model_fields)?;
         let total = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "count",

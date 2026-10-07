@@ -145,7 +145,7 @@ fn resolve_references(
     table_matches: impl Fn(EntityRole, &str) -> bool,
 ) -> AuthResult<(String, String)> {
     // Where conversion changes adapter metadata before join validation, including failed joins.
-    schema.canonicalize_id(base_role)?;
+    schema.begin_id_input(base_role)?;
     let base_fields = schema.runtime_fields(base_role, base_fields)?;
     let model_fields = schema.runtime_fields(model_role, model_fields)?;
     let forward = matching_references(&model_fields, model, base, schema, &table_matches)?;

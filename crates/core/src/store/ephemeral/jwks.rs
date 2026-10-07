@@ -3,28 +3,47 @@ use super::*;
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{project_adapter_value, project_source_fields_then};
 
+#[cfg(test)]
+mod id_slot_tests;
+
 impl EphemeralStore {
     async fn project_jwk_refs(
         &self,
         selected: Vec<(crate::Jwk, RowRef<crate::Jwk>)>,
     ) -> AuthResult<Vec<crate::Jwk>> {
+        if !selected.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Jwk)?;
+        }
+        let fields = self
+            .model_fields
+            .fields(EntityRole::Jwk)
+            .adapter_fields(&[]);
         let mut rows = selected
             .into_iter()
             .map(|(snapshot, source)| (snapshot, source, FieldMap::new()))
             .collect::<Vec<_>>();
         project_source_fields_then(
             &mut rows,
-            self.model_fields.fields(EntityRole::Jwk).fields(),
+            fields.fields(),
             |(_, source, _), name, field| {
                 source.read(|row| {
+                    if name == "id" {
+                        return Ok(Some(row.id.field_value()));
+                    }
                     Ok(row
                         .additional_fields
                         .get(resolve_field_name(field.field_name.as_deref(), name))
                         .cloned())
                 })
             },
-            |(_, _, output), name, field, value| {
+            |(snapshot, _, output), name, field, value| {
                 Box::pin(async move {
+                    if name == "id" {
+                        snapshot.id = Self::project_id(&crate::SchemaValue::from_field(
+                            value.unwrap_or_default(),
+                        ))?;
+                        return Ok(());
+                    }
                     // References bypass JSON decoding; Serial reference arrays must reach callbacks unchanged.
                     let value = project_adapter_value(
                         value.unwrap_or_default(),
@@ -39,7 +58,6 @@ impl EphemeralStore {
             },
             |_, (snapshot, _, output)| {
                 let mut row = snapshot.clone();
-                row.id = Self::project_id(&row.id)?;
                 row.additional_fields = std::mem::take(output);
                 Ok(row)
             },
@@ -51,6 +69,7 @@ impl EphemeralStore {
 #[async_trait]
 impl crate::store::JwksStore for EphemeralStore {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        self.model_fields.begin_id_input(EntityRole::Jwk)?;
         let id = self.memory_primary_id_query(&Value::from(id))?;
         let selected = self
             .raw("jwks", "findOne", |state| {
@@ -90,19 +109,28 @@ impl crate::store::JwksStore for EphemeralStore {
     }
 
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
-        let additional_fields = self
+        self.model_fields.begin_id_input(EntityRole::Jwk)?;
+        let (additional_fields, id) = self
             .model_fields
             .fields(EntityRole::Jwk)
-            .storage_fields_with_binding(input.additional_fields, true, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+            .create_adapter_storage_fields(
+                input.additional_fields,
+                || {
+                    if !self.model_fields.id_input_active(EntityRole::Jwk)? {
+                        return Ok(None);
+                    }
+                    self.config
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_id("jwks", None, false)
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
         let mut key = crate::Jwk {
             additional_fields,
-            id: self
-                .generated_id("jwks", None, self.lock()?.jwks.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: id.map(crate::SchemaValue::Typed).unwrap_or_default(),
             public_key: input.public_key,
             private_key: input.private_key,
             created_at: input.created_at,

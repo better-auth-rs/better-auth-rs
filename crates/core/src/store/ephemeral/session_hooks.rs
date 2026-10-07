@@ -2,6 +2,7 @@ use super::hooks::CommittedWrite;
 use super::sessions::SessionSource;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, SessionUpdate};
+use crate::store::schema::EntityRole;
 
 impl SessionUpdate {
     fn apply(
@@ -104,15 +105,7 @@ impl EphemeralStore {
         token: &str,
         mut update: SessionUpdate,
     ) -> AuthResult<Option<SessionView>> {
-        let schema = self.session_config.field_schema();
-        let id = update
-            .id
-            .take()
-            .filter(|id| !id.is_empty())
-            .map(|id| self.memory_primary_id_query(&id.into()))
-            .transpose()?
-            .filter(|id| !matches!(id, Value::Number(number) if number.is_nan()))
-            .map(crate::SchemaValue::from_field);
+        let schema = self.session_config.adapter_schema();
         let configured_user_id = schema.fields().contains_key("userId");
         let mut user_id = if configured_user_id {
             if let Some(user_id) = update.user_id.take() {
@@ -128,11 +121,28 @@ impl EphemeralStore {
                 .map(|user_id| self.memory_reference_id_input(user_id.into()))
                 .transpose()?
         };
-        update.additional_fields = schema
-            .storage_fields_with_binding(update.additional_fields, false, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+        self.model_fields.begin_id_input(EntityRole::Session)?;
+        let (fields, id) = schema
+            .storage_fields_with_adapter_id(
+                std::mem::take(&mut update.additional_fields),
+                false,
+                || {
+                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                        return Ok(update.id.take().map(crate::SchemaValue::Typed));
+                    }
+                    Ok(update
+                        .id
+                        .take()
+                        .filter(|id| !id.is_empty())
+                        .map(|id| self.memory_primary_id_query(&id.into()))
+                        .transpose()?
+                        .filter(|id| !matches!(id, Value::Number(number) if number.is_nan()))
+                        .map(crate::SchemaValue::from_field))
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
+        update.additional_fields = fields;
         if configured_user_id {
             user_id = update
                 .additional_fields
@@ -164,6 +174,7 @@ impl EphemeralStore {
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
         let now = Utc::now();
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let matches = |row: &SessionView| {
             predicate(row)
                 && (!preserve || row.expires_at.milliseconds() > now.timestamp_millis() as f64)
@@ -205,7 +216,8 @@ impl EphemeralStore {
         }
         let count = if preserve {
             let expires_at = Utc::now();
-            let schema = self.session_config.field_schema();
+            let schema = self.session_config.adapter_schema();
+            self.model_fields.begin_id_input(EntityRole::Session)?;
             let mut fields = schema
                 .storage_fields_with_binding(Default::default(), false, |_, field, value| {
                     self.memory_plugin_field_input(field, value)
@@ -236,6 +248,7 @@ impl EphemeralStore {
             })
             .await?
         } else {
+            self.model_fields.begin_id_input(EntityRole::Session)?;
             self.raw("session", "deleteMany", |state| {
                 let before = state.sessions.len();
                 state.sessions.retain(|row| !matches(row))?;

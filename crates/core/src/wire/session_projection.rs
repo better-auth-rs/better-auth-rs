@@ -41,6 +41,9 @@ impl<T: AuthSession> SessionProjection<'_, T> {
         field: &UserFieldConfig,
         supports_native_json: bool,
     ) -> AuthResult<()> {
+        if name == "id" {
+            return Ok(());
+        }
         let value = if let Some(fields) = self.session.projected_fields() {
             fields.get(name).cloned().unwrap_or_default()
         } else {

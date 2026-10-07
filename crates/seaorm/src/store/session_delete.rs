@@ -33,6 +33,8 @@ where
         mut condition: Condition,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
+        self.model_fields
+            .begin_id_input(better_auth_core::store::schema::EntityRole::Session)?;
         let now = Utc::now();
         if preserve {
             condition = condition.add(S::Session::expires_at_column().gt(now));
@@ -103,6 +105,8 @@ where
             .await?
             .rows_affected
         } else {
+            self.model_fields
+                .begin_id_input(better_auth_core::store::schema::EntityRole::Session)?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "deleteMany",

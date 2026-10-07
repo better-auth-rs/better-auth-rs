@@ -480,7 +480,7 @@ where
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         self.store
             .model_fields
-            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
+            .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
         let id = self.store.parse_id(id, S::User::parse_id)?;
         match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
@@ -500,7 +500,7 @@ where
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         self.store
             .model_fields
-            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
+            .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
         match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(
                 <S::User as SeaOrmUserModel>::email_column()

@@ -16,7 +16,7 @@ impl EphemeralStore {
     pub(super) async fn output_user_refs(&self, users: Vec<UserRef>) -> AuthResult<Vec<UserView>> {
         if !users.is_empty() {
             self.model_fields
-                .canonicalize_id(crate::store::schema::EntityRole::User)?;
+                .begin_id_output(crate::store::schema::EntityRole::User)?;
         }
         // Core fields keep their schema positions even when an application replaces a policy.
         let mut fields: IndexMap<String, UserFieldConfig> = [
@@ -34,15 +34,17 @@ impl EphemeralStore {
         for name in UserView::NATIVE_FIELDS {
             let _ = fields.entry((*name).into()).or_default();
         }
-        let _ = fields.shift_remove("id");
-        let _ = fields.insert("id".into(), UserFieldConfig::default());
+        let fields = crate::user_fields::UserConfig {
+            additional_fields: Some(fields),
+        }
+        .adapter_fields(&[]);
         let mut rows = users
             .into_iter()
             .map(|user| (user, FieldMap::new(), FieldMap::new()))
             .collect::<Vec<_>>();
         project_source_fields_then(
             &mut rows,
-            &fields,
+            fields.fields(),
             |(source, native, _), name, field| {
                 source.read(|user| {
                     let value = user.native_field_value(name);
@@ -260,6 +262,8 @@ impl EphemeralStore {
         &self,
         token: &str,
     ) -> AuthResult<Option<SessionSnapshot>> {
+        self.model_fields
+            .begin_id_input(crate::store::schema::EntityRole::Session)?;
         let rows = self
             .raw("session", "findOne", |state| {
                 match state.sessions.find(|row| row.token == token)? {
@@ -287,6 +291,8 @@ impl EphemeralStore {
         tokens: &[String],
         only_active: bool,
     ) -> AuthResult<Vec<SessionSnapshot>> {
+        self.model_fields
+            .begin_id_input(crate::store::schema::EntityRole::Session)?;
         let now = Utc::now();
         let rows = self
             .raw("session", "findMany", |state| {

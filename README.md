@@ -127,6 +127,8 @@ The [organization plugin](docs/content/docs/plugins/organization.mdx) supports o
 
 Memory Serial mode stores numeric primary IDs and returns string IDs through public record APIs. Verification reservations retain their deterministic string IDs. Wallet, Passkey, TwoFactor, and TeamMember owner values use `SchemaValue<String>` and preserve numeric references in storage; use `user_id.typed()?` when you need a string. API Key `referenceId` remains an ordinary string because upstream does not declare an ID reference. Memory Serial mode applies Organization reference conversion to stored fields, queries, and internal relation keys. See [Organization field policies](docs/content/docs/plugins/organization.mdx#additional-fields) for typed storage boundaries.
 
+User, Session, JWK, and Wallet ID declarations retain their field position. The adapter controls their generation and conversion; see [model IDs](docs/content/docs/concepts/database.mdx#model-ids) for nested callback behavior.
+
 The [device authorization plugin](docs/content/docs/plugins/device-authorization.mdx) supports asynchronous code generators and propagates callback errors before persistence. Default device codes contain ASCII letters and digits; verification links replace any existing user-code query parameter.
 
 The [Admin plugin](docs/content/docs/plugins/admin.mdx) preserves a cancelled user update as a nullable response. Database-hook errors continue to propagate.

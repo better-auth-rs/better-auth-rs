@@ -244,10 +244,25 @@ impl SessionConfig {
         }
     }
 
+    /// Resolve the adapter-owned ID and retain native Session field positions.
+    #[doc(hidden)]
+    pub fn adapter_schema(&self) -> UserConfig {
+        self.field_schema().adapter_fields(&[
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "userId",
+        ])
+    }
+
     /// Evaluate creation defaults without validating or transforming session input.
     pub fn default_fields(&self) -> crate::FieldMap {
         self.fields()
             .iter()
+            .filter(|(name, _)| name.as_str() != "id")
             .filter_map(|(name, field)| field.default_value().map(|value| (name.clone(), value)))
             .collect()
     }

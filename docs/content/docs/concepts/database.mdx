@@ -125,7 +125,9 @@ Generate matching entities and an initial migration with `better-auth-rs generat
 
 A custom generator receives the logical model name, such as `user`, `apikey`, or `walletAddress`. Table aliases do not change that name. Return `Ok(None)` to omit the ID, or an error to stop the write. Create-before hooks run before generation. A cancelled hook does not invoke the generator.
 
-User creation applies each configured field's input transform and adapter binding before advancing to the next schema field. The ID generator runs at the configured `id` position, or after the other fields when `id` is implicit. The adapter replaces configured ID transforms with its ID policy. A force-allowed supplied ID skips the generator. A field or generator error stops later callbacks and prevents the write. Native User fields retain their schema order, and numeric field names use JavaScript property order.
+User, Session, JWK, and Wallet creation apply each configured field's input transform and adapter binding before advancing to the next schema field. The ID generator runs at the configured `id` position, or after the other fields when `id` is implicit. The adapter replaces configured ID transforms, defaults, and column aliases with its ID policy. A force-allowed supplied ID skips the generator. A field or generator error stops later callbacks and prevents the write. Native fields retain their schema order, and numeric field names use JavaScript property order.
+
+Nested adapter operations share the current ID policy. If a nested output replaces the input policy before the outer creation reaches its ID slot, the outer creation omits ID generation. Memory output reads an ID at its field position, so an earlier output callback can change the returned ID. SQL output reads the returned database snapshot. Memory Serial mode still assigns its numeric ID during insertion.
 
 ```rust
 use better_auth::config::IdGeneration;

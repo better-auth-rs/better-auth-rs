@@ -25,6 +25,55 @@ impl FieldOutputCapabilities {
 }
 
 impl UserConfig {
+    /// Resolve schema order and replace the adapter-owned ID policy in its existing slot.
+    #[doc(hidden)]
+    pub fn adapter_fields(&self, native: &[&str]) -> Self {
+        let mut fields: indexmap::IndexMap<_, _> = self
+            .ordered_fields(native)
+            .into_iter()
+            .map(|(name, field)| (name.to_owned(), field.clone()))
+            .collect();
+        let _ = fields.insert("id".into(), UserFieldConfig::default());
+        Self {
+            additional_fields: Some(fields),
+        }
+    }
+
+    /// Apply creation policies and resolve the current ID policy at its schema slot.
+    #[doc(hidden)]
+    pub async fn create_adapter_storage_fields<I>(
+        &self,
+        input: FieldMap,
+        generate_id: impl FnMut() -> AuthResult<Option<I>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<(FieldMap, Option<I>)> {
+        self.storage_fields_with_adapter_id(input, true, generate_id, bind)
+            .await
+    }
+
+    /// Resolve the adapter-owned ID between field policies without applying application ID callbacks.
+    #[doc(hidden)]
+    pub async fn storage_fields_with_adapter_id<I>(
+        &self,
+        input: FieldMap,
+        create: bool,
+        mut resolve_id: impl FnMut() -> AuthResult<Option<I>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<(FieldMap, Option<I>)> {
+        let schema = self.adapter_fields(&[]);
+        let mut output = FieldMap::new();
+        let mut id = None;
+        for (name, field) in schema.fields() {
+            if name == "id" {
+                id = resolve_id()?;
+            } else if let Some(value) = field.storage_input(input.get(name), create).await? {
+                let storage_name = resolve_field_name(field.field_name.as_deref(), name);
+                let _ = output.insert(storage_name.to_owned(), bind(storage_name, field, value)?);
+            }
+        }
+        Ok((output, id))
+    }
+
     pub(crate) fn ordered_fields(&self, native: &[&str]) -> Vec<(&str, &UserFieldConfig)> {
         let mut fields: Vec<_> = self
             .fields()

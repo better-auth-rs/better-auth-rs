@@ -2,6 +2,7 @@ use super::hooks::CommittedWrite;
 use super::rows::RowRef;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
+use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
@@ -42,6 +43,10 @@ impl EphemeralStore {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
+        if !sessions.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Session)?;
+        }
+        let schema = self.session_config.adapter_schema();
         let mut rows: Vec<_> = sessions
             .into_iter()
             .map(|source| {
@@ -52,9 +57,12 @@ impl EphemeralStore {
             .collect::<AuthResult<_>>()?;
         crate::user_fields::project_source_fields_batches_then(
             &mut rows,
-            self.session_config.fields(),
+            schema.fields(),
             |(_, source), name, field| {
                 source.read(|row| {
+                    if name == "id" {
+                        return Ok(row.id.field_value());
+                    }
                     let storage = row.field_values()?;
                     Ok(storage
                         .get(resolve_field_name(field.field_name.as_deref(), name))
@@ -65,19 +73,17 @@ impl EphemeralStore {
             },
             |(session, _), name, field, value| {
                 Box::pin(async move {
+                    if name == "id" {
+                        session.id = Self::project_id(&crate::SchemaValue::from_field(value))?;
+                        return Ok(());
+                    }
                     let value = field.adapter_output(value, field.references_id()).await?;
                     let _ = session.additional_fields.insert(name.to_owned(), value);
                     Ok(())
                 })
             },
-            |_, (session, source)| {
+            |_, (session, _)| {
                 let mut session = session.clone();
-                session.id = if self.session_config.fields().contains_key("id") {
-                    Self::project_id(&session.id)?
-                } else {
-                    // The implicit ID slot follows application fields; earlier native fields keep their selected values.
-                    source.read(|row| Self::project_id(&row.id))?
-                };
                 if self.session_config.fields().contains_key("userId") {
                     session.user_id = crate::SchemaValue::from_field(
                         session
@@ -190,7 +196,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         }
         let now = crate::FieldDate::from(Utc::now());
         let token = crate::id::random_id(None);
-        let schema = self.session_config.field_schema();
+        let schema = self.session_config.adapter_schema();
         let configured_user_id = schema.fields().contains_key("userId");
         let mut fields = self.session_config.default_fields();
         if configured_user_id {
@@ -205,20 +211,26 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 let _ = plugin_fields.insert(name.into(), value);
             }
         }
-        let id = self
-            .generated_id("session", None, self.lock()?.sessions.len())?
-            .map(crate::SchemaValue::Typed)
-            .unwrap_or_default();
         let mut user_id = if configured_user_id {
             create_session.user_id
         } else {
             self.memory_reference_id_input(create_session.user_id.into_field_value())?
         };
-        let mut additional_fields = schema
-            .storage_fields_with_binding(fields, true, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+        self.model_fields.begin_id_input(EntityRole::Session)?;
+        let (mut additional_fields, id) = schema
+            .create_adapter_storage_fields(
+                fields,
+                || {
+                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                        return Ok(None);
+                    }
+                    let row_count = self.lock()?.sessions.len();
+                    self.generated_id("session", None, row_count)
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
+        let id = id.map(crate::SchemaValue::Typed).unwrap_or_default();
         if configured_user_id {
             user_id = crate::SchemaValue::from_field(
                 additional_fields
@@ -281,6 +293,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let session = self
             .raw("session", "findOne", |state| {
                 Ok(state
@@ -318,6 +331,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             return self.joined_session_snapshots(tokens, only_active).await;
         }
         let now = Utc::now();
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let sessions = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -390,6 +404,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
@@ -427,6 +442,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         let session = self
             .raw("session", "findOne", |state| {
                 Ok(state
@@ -459,6 +475,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 return Ok(());
             }
         }
+        self.model_fields.begin_id_input(EntityRole::Session)?;
         self.raw("session", "delete", |state| {
             let _ = state.sessions.remove_first(|row| row.token == token)?;
             Ok(())

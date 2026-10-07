@@ -64,24 +64,53 @@ pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
 ) -> AuthResult<Write<M>> {
     let fields = config
         .storage_fields_with_binding(input, create, |name, field, value| {
-            crate::reference_id::input_binding(
-                name,
-                field,
-                value,
-                policy,
-                M::column,
-                |name| {
-                    M::column(name).is_ok_and(|column| {
-                        matches!(
-                            column.def().get_column_type(),
-                            sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-                        )
-                    })
-                },
-                backend,
-            )
+            additional_field_input::<M>(name, field, value, policy, backend)
         })
         .await?;
+    additional_field_write::<M>(fields)
+}
+
+pub(super) async fn create_additional_fields<M: SeaOrmPluginModel>(
+    config: &UserConfig,
+    input: FieldMap,
+    policy: &IdGeneration,
+    backend: DbBackend,
+    generate_id: impl FnMut() -> AuthResult<Option<String>>,
+) -> AuthResult<(Write<M>, Option<String>)> {
+    let (fields, id) = config
+        .create_adapter_storage_fields(input, generate_id, |name, field, value| {
+            additional_field_input::<M>(name, field, value, policy, backend)
+        })
+        .await?;
+    Ok((additional_field_write::<M>(fields)?, id))
+}
+
+fn additional_field_input<M: SeaOrmPluginModel>(
+    name: &str,
+    field: &better_auth_core::user_fields::UserFieldConfig,
+    value: better_auth_core::FieldValue,
+    policy: &IdGeneration,
+    backend: DbBackend,
+) -> AuthResult<better_auth_core::FieldValue> {
+    crate::reference_id::input_binding(
+        name,
+        field,
+        value,
+        policy,
+        M::column,
+        |name| {
+            M::column(name).is_ok_and(|column| {
+                matches!(
+                    column.def().get_column_type(),
+                    sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
+                )
+            })
+        },
+        backend,
+    )
+}
+
+fn additional_field_write<M: SeaOrmPluginModel>(fields: FieldMap) -> AuthResult<Write<M>> {
     let mut active = Write::<M>::default();
     for (name, value) in fields {
         active.field(M::column(&name)?, value);
@@ -100,6 +129,9 @@ pub(super) fn validate_additional_field_columns<M: SeaOrmPluginModel>(
         M::core_field_name,
     )?;
     for (name, field) in fields.fields() {
+        if name == "id" {
+            continue;
+        }
         let storage = resolve_field_name(field.field_name.as_deref(), name);
         for core in core_fields(role).iter().filter(|field| {
             !(role == EntityRole::TwoFactor

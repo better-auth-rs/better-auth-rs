@@ -9,8 +9,18 @@ impl EphemeralStore {
         mut snapshot: crate::types::WalletAddress,
         source: RowRef<crate::types::WalletAddress>,
     ) -> AuthResult<crate::types::WalletAddress> {
+        self.model_fields
+            .begin_id_output(EntityRole::WalletAddress)?;
+        let fields = self
+            .model_fields
+            .fields(EntityRole::WalletAddress)
+            .adapter_fields(&[]);
         let mut output = FieldMap::new();
-        for (name, field) in self.model_fields.fields(EntityRole::WalletAddress).fields() {
+        for (name, field) in fields.fields() {
+            if name == "id" {
+                snapshot.id = source.read(|row| Self::project_id(&row.id))?;
+                continue;
+            }
             let value = source.read(|row| {
                 Ok(row
                     .additional_fields
@@ -27,7 +37,6 @@ impl EphemeralStore {
             let _ = output.insert(name.to_owned(), value);
         }
         snapshot.additional_fields = output;
-        snapshot.id = Self::project_id(&snapshot.id)?;
         snapshot.user_id = Self::project_id(&snapshot.user_id)?;
         Ok(snapshot)
     }
@@ -40,6 +49,8 @@ impl crate::store::WalletStore for EphemeralStore {
         address: &str,
         chain_id: Option<i64>,
     ) -> AuthResult<Option<crate::types::WalletAddress>> {
+        self.model_fields
+            .begin_id_input(EntityRole::WalletAddress)?;
         let selected = self
             .raw("walletAddress", "findOne", |state| {
                 state
@@ -64,19 +75,32 @@ impl crate::store::WalletStore for EphemeralStore {
         &self,
         value: crate::types::CreateWalletAddress,
     ) -> AuthResult<crate::types::WalletAddress> {
-        let additional_fields = self
+        self.model_fields
+            .begin_id_input(EntityRole::WalletAddress)?;
+        let (additional_fields, id) = self
             .model_fields
             .fields(EntityRole::WalletAddress)
-            .storage_fields_with_binding(value.additional_fields, true, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+            .create_adapter_storage_fields(
+                value.additional_fields,
+                || {
+                    if !self
+                        .model_fields
+                        .id_input_active(EntityRole::WalletAddress)?
+                    {
+                        return Ok(None);
+                    }
+                    self.config.advanced.database.generate_id().adapter_id(
+                        "walletAddress",
+                        None,
+                        false,
+                    )
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
         let mut value = crate::types::WalletAddress {
             additional_fields,
-            id: self
-                .generated_id("walletAddress", None, self.lock()?.wallets.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: id.map(crate::SchemaValue::Typed).unwrap_or_default(),
             user_id: self.memory_reference_id_input(value.user_id.into())?,
             address: value.address,
             chain_id: value.chain_id,

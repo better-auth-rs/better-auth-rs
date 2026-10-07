@@ -283,7 +283,7 @@ impl EphemeralStore {
             Vec::new()
         } else {
             self.model_fields
-                .canonicalize_id(crate::store::schema::EntityRole::User)?;
+                .begin_id_input(crate::store::schema::EntityRole::User)?;
             let owners = self
                 .memory_primary_id_query(&owners.into())?
                 .decode::<Vec<Value>>()?;

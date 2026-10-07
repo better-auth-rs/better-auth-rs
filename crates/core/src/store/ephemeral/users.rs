@@ -15,7 +15,7 @@ impl EphemeralStore {
         &self,
         predicate: impl Fn(&UserView) -> bool + Send,
     ) -> AuthResult<Option<RowRef<UserView>>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         self.raw("user", "findOne", move |state| {
             state.users.first_ref(predicate)
         })
@@ -60,7 +60,7 @@ impl EphemeralStore {
 
     pub(super) async fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
         if !users.is_empty() {
-            self.model_fields.canonicalize_id(EntityRole::User)?;
+            self.model_fields.begin_id_output(EntityRole::User)?;
         }
         let storage = users
             .iter_mut()
@@ -153,10 +153,11 @@ impl EphemeralStore {
             }
         }
         let fields = update.take_user_field_input(&self.config.user)?;
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         update.additional_fields = self
             .config
             .user
+            .user_adapter_fields()
             .storage_fields_with_binding(fields, false, |_, field, value| {
                 self.memory_plugin_field_input(field, value)
             })
@@ -341,13 +342,16 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             create_user.prepare_user_fields(&self.config.user)?;
         }
         let fields = create_user.take_user_field_input(&self.config.user)?;
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let (mut fields, id) = self
             .config
             .user
             .create_user_storage_fields(
                 fields,
                 || {
+                    if !self.model_fields.id_input_active(EntityRole::User)? {
+                        return Ok(create_user.id.take());
+                    }
                     let row_count = self.lock()?.users.len();
                     self.generated_id("user", create_user.id.take(), row_count)
                 },
@@ -465,7 +469,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let ids = ids
             .iter()
             .map(|id| self.memory_primary_id_query(&Value::from(id.clone())))
@@ -558,7 +562,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             self.delete_user_sessions(id).await?;
         }
         self.delete_user_accounts_with_hooks(id).await?;
-        self.model_fields.canonicalize_id(EntityRole::User)?;
+        self.model_fields.begin_id_input(EntityRole::User)?;
         let stored_id = crate::SchemaValue::<String>::from_field(
             self.memory_primary_id_query(&Value::from(id))?,
         );
@@ -589,6 +593,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 return Ok(None);
             }
         }
+        self.model_fields.begin_id_input(EntityRole::User)?;
         self.raw("user", "delete", |state| {
             let _ = state.users.remove(&stored_id)?;
             Ok(())
@@ -633,6 +638,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let users = self
             .output_user_refs(users.into_iter().map(|(_, source)| source).collect())
             .await?;
+        query.begin_adapter_count(&self.model_fields)?;
         let total = self
             .raw("user", "count", |state| {
                 query.count_memory(state.users.snapshot()?.iter(), |snapshot| {

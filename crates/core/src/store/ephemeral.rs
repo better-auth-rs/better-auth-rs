@@ -32,6 +32,8 @@ mod fields;
 #[cfg(test)]
 mod history_tests;
 mod hooks;
+#[cfg(test)]
+mod id_slot_tests;
 mod invitation_accept;
 mod joins;
 mod jwks;

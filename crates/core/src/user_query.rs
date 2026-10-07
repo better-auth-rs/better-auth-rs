@@ -448,8 +448,26 @@ impl<'a> PreparedUserQuery<'a> {
         runtime: &crate::plugin_runtime::ModelFields,
     ) -> AuthResult<Self> {
         Self::prepare(params, fields, || {
-            runtime.canonicalize_id(crate::store::schema::EntityRole::User)
+            runtime.begin_id_input(crate::store::schema::EntityRole::User)
         })
+    }
+
+    /// Restore input policies when an adapter repeats this validated Where query for a count.
+    #[doc(hidden)]
+    pub fn begin_adapter_count(
+        &self,
+        runtime: &crate::plugin_runtime::ModelFields,
+    ) -> AuthResult<()> {
+        if self.params.filter_value.is_some()
+            || self
+                .params
+                .search_value
+                .as_deref()
+                .is_some_and(|value| !value.is_empty())
+        {
+            runtime.begin_id_input(crate::store::schema::EntityRole::User)?;
+        }
+        Ok(())
     }
 
     fn prepare(

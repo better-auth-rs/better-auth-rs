@@ -50,6 +50,7 @@ impl<
 > JwksStore for SeaOrmStore<S, O, P>
 {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
+        self.model_fields.begin_id_input(EntityRole::Jwk)?;
         let model = get::<P>(self.config(), self.connection(), id).await?;
         Ok(self
             .project_jwk_models(model.into_iter().collect())
@@ -74,6 +75,7 @@ impl<
 > JwksStore for super::SeaOrmTransaction<S, O, P>
 {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
+        self.store.model_fields.begin_id_input(EntityRole::Jwk)?;
         let model = get::<P>(self.store.config(), &self.tx, id).await?;
         Ok(self
             .store
@@ -136,13 +138,19 @@ impl<
     }
 
     async fn project_jwk_models(&self, models: Vec<P::Jwk>) -> AuthResult<Vec<Jwk>> {
-        let fields = self.model_fields.fields(EntityRole::Jwk);
+        if !models.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Jwk)?;
+        }
+        let fields = self
+            .model_fields
+            .fields(EntityRole::Jwk)
+            .adapter_fields(&[]);
         let records = models
             .iter()
             .map(|model| {
                 super::plugin_models::record_fields(
                     model,
-                    fields,
+                    &fields,
                     self.connection().get_database_backend(),
                 )
             })
@@ -169,7 +177,8 @@ impl<
         connection: &impl ConnectionTrait,
         input: CreateJwk,
     ) -> AuthResult<Jwk> {
-        let native = FieldMap::from_iter([
+        self.model_fields.begin_id_input(EntityRole::Jwk)?;
+        let mut native = FieldMap::from_iter([
             ("public_key".to_owned(), (input.public_key).into_field()),
             ("private_key".to_owned(), (input.private_key).into_field()),
             ("created_at".to_owned(), (input.created_at).into_field()),
@@ -179,17 +188,26 @@ impl<
         ]);
         let config = self.model_fields.fields(EntityRole::Jwk);
         let backend = connection.get_database_backend();
-        let mut active = super::plugin_models::additional_fields::<P::Jwk>(
+        let (mut active, id) = super::plugin_models::create_additional_fields::<P::Jwk>(
             config,
             input.additional_fields,
             self.config().advanced.database.generate_id(),
             backend,
-            true,
+            || {
+                if self.model_fields.id_input_active(EntityRole::Jwk)? {
+                    self.generated_id("jwks", None)
+                } else {
+                    Ok(None)
+                }
+            },
         )
         .await?;
+        if let Some(id) = id {
+            let _ = native.insert("id".into(), id.into());
+        }
         super::plugin_models::apply::<P::Jwk>(
             &mut active,
-            self.create_fields("jwks", None, native)?,
+            native,
             self.config().advanced.database.generate_id(),
         )?;
         let model = database_operation::<Entity<P::Jwk>, _>(self.config(), "create", async {

@@ -77,6 +77,7 @@ run_stage() {
         --test organization_additional_fields_tests --test plugin_runtime_tests \
         --example postgres_usage -- -D warnings
       cargo test --locked -p better-auth-core --lib -- field_value:: \
+        id_slot \
         store::ephemeral::serial_primary_tests:: \
         store::ephemeral::api_keys::tests:: store::ephemeral::two_factor::tests:: \
         store::ephemeral::sessions::live_output_tests:: \
@@ -112,20 +113,21 @@ run_stage() {
       ;;
     user-fields)
       cargo fmt --all -- --check
-      cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test user_id_generation_order_tests -- -D warnings
-      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value:: store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-seaorm -- -D warnings
+      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test user_id_generation_order_tests --test plugin_id_slot_tests -- -D warnings
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value:: id_slot store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test user_id_generation_order_tests --test user_record_values_tests \
         --test async_field_transform_tests --test sql_user_extra_output_tests \
         --test user_sort_field_tests --test schema_join_reference_tests \
         --test memory_serial_reference_tests --test organization_serial_reference_tests \
-        --test fallback_join_tests --test native_core_join_tests \
+        --test fallback_join_tests --test native_core_join_tests --test plugin_id_slot_tests \
         --test native_memory_join_tests --test account_owner_batch_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/user-id-generation-order.test.ts \
         ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
+        ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts \
         ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
         ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
         ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \

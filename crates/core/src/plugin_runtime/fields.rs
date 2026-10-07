@@ -19,7 +19,13 @@ pub struct ModelFields {
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
-    canonical_ids: Arc<Mutex<IndexSet<EntityRole>>>,
+    id_history: Arc<Mutex<IdHistory>>,
+}
+
+#[derive(Default)]
+struct IdHistory {
+    canonical: IndexSet<EntityRole>,
+    input: IndexSet<EntityRole>,
 }
 
 fn optional_string(fields: &mut FieldMap, name: &str) -> Option<SchemaValue<Option<String>>> {
@@ -31,7 +37,7 @@ impl ModelFields {
     #[doc(hidden)]
     pub fn fresh_runtime(&self) -> Self {
         Self {
-            canonical_ids: Arc::default(),
+            id_history: Arc::default(),
             ..self.clone()
         }
     }
@@ -40,11 +46,47 @@ impl ModelFields {
     #[doc(hidden)]
     pub fn canonicalize_id(&self, role: EntityRole) -> AuthResult<()> {
         let _ = self
-            .canonical_ids
+            .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
+            .canonical
             .insert(role);
         Ok(())
+    }
+
+    /// Install the ID input policy before input conversion or field-attribute lookup.
+    #[doc(hidden)]
+    pub fn begin_id_input(&self, role: EntityRole) -> AuthResult<()> {
+        let mut history = self
+            .id_history
+            .lock()
+            .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
+        let _ = history.canonical.insert(role);
+        let _ = history.input.insert(role);
+        Ok(())
+    }
+
+    /// Replace the ID input policy when a nonempty output conversion starts.
+    #[doc(hidden)]
+    pub fn begin_id_output(&self, role: EntityRole) -> AuthResult<()> {
+        let mut history = self
+            .id_history
+            .lock()
+            .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
+        let _ = history.canonical.insert(role);
+        let _ = history.input.shift_remove(&role);
+        Ok(())
+    }
+
+    /// Read the current ID policy after preceding field callbacks have completed.
+    #[doc(hidden)]
+    pub fn id_input_active(&self, role: EntityRole) -> AuthResult<bool> {
+        Ok(self
+            .id_history
+            .lock()
+            .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
+            .input
+            .contains(&role))
     }
 
     pub(crate) fn runtime_fields(
@@ -54,9 +96,10 @@ impl ModelFields {
     ) -> AuthResult<UserConfig> {
         let mut fields = configured.clone();
         if self
-            .canonical_ids
+            .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
+            .canonical
             .contains(&role)
         {
             let _ = fields.fields_mut().insert("id".into(), Default::default());

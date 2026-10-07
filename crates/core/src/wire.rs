@@ -255,9 +255,10 @@ impl SessionView {
         F: std::future::Future<Output = crate::AuthResult<R>> + Send,
     {
         let mut rows = session_projection::rows(sessions, config)?;
+        let schema = config.adapter_schema();
         crate::user_fields::project_fields_then(
             &mut rows,
-            config.fields(),
+            schema.fields(),
             |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
             |index, row| complete(index, row.view.clone()),
         )
@@ -275,9 +276,10 @@ impl SessionView {
         F: std::future::Future<Output = crate::AuthResult<Vec<(usize, R)>>> + Send,
     {
         let mut rows = session_projection::rows(sessions, config)?;
+        let schema = config.adapter_schema();
         crate::user_fields::project_fields_batches_then(
             &mut rows,
-            config.fields(),
+            schema.fields(),
             |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
             |_, row| Ok(row.view.clone()),
             complete,
