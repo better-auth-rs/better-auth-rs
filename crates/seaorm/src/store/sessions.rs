@@ -172,7 +172,6 @@ where
         session: &mut CreateSession,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<bool> {
-        let _ = session.additional_fields.remove("id");
         let context = self.hook_context(tx);
         for hook in self.hooks() {
             if better_auth_core::observability::database::with_database_hook(
@@ -218,6 +217,10 @@ where
     where
         C: ConnectionTrait,
     {
+        let _ = create_session.additional_fields.remove("id");
+        let mut fields = self.config().session.default_fields();
+        fields.extend(std::mem::take(&mut create_session.additional_fields));
+        create_session.additional_fields = fields;
         if !self
             .before_runtime_session_optional_in_tx(&mut create_session, tx)
             .await?
@@ -238,8 +241,7 @@ where
         let now = Utc::now();
         create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
         create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
-        let mut fields = self.config().session.default_fields();
-        fields.extend(std::mem::take(&mut create_session.additional_fields));
+        let mut fields = std::mem::take(&mut create_session.additional_fields);
         let mut plugin_fields = better_auth_core::FieldMap::new();
         for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
             if let Some(value) = fields.remove(name) {

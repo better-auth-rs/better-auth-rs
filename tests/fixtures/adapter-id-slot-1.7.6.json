@@ -5649,6 +5649,217 @@
         "jwks": [],
         "walletAddress": []
       }
+    },
+    {
+      "model": "session",
+      "slot": "after-alias",
+      "operation": "update-undefined-id-alias",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "session",
+            "data": {
+              "token": "slot-undefined-alias",
+              "userId": "001",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": null,
+              "userAgent": null,
+              "aliasId": "seed"
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-undefined-alias",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "1",
+            "aliasId": "1",
+            "id": "1"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-undefined-alias",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 1
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [
+        [
+          "input",
+          "aliasId",
+          "seed"
+        ],
+        [
+          "output",
+          "aliasId",
+          1
+        ]
+      ],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-undefined-alias",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": 1,
+            "id": 1
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "session",
+        "where": [
+          {
+            "field": "token",
+            "value": "slot-undefined-alias"
+          }
+        ],
+        "update": {
+          "aliasId": "clear",
+          "updatedAt": {
+            "type": "date",
+            "value": "2031-01-02T03:04:05.000Z"
+          }
+        }
+      },
+      "events": [
+        [
+          "input",
+          "aliasId",
+          "clear"
+        ],
+        [
+          "output",
+          "aliasId",
+          {
+            "type": "number",
+            "value": "NaN"
+          }
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "slot-undefined-alias",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2031-01-02T03:04:05.000Z"
+        },
+        "ipAddress": null,
+        "userAgent": null,
+        "userId": "1",
+        "aliasId": "NaN",
+        "id": "NaN"
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-undefined-alias",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2031-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": 1,
+            "id": {
+              "type": "number",
+              "value": "NaN"
+            }
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
     }
   ]
 }

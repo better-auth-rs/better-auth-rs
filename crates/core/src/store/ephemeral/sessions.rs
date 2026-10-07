@@ -158,7 +158,6 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         &self,
         input: &mut CreateSession,
     ) -> AuthResult<bool> {
-        let _ = input.additional_fields.remove("id");
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
@@ -197,6 +196,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         &self,
         mut create_session: CreateSession,
     ) -> AuthResult<Option<SessionView>> {
+        let _ = create_session.additional_fields.remove("id");
+        let mut fields = self.session_config.default_fields();
+        fields.extend(std::mem::take(&mut create_session.additional_fields));
+        create_session.additional_fields = fields;
         if !self
             .before_create_runtime_session_optional(&mut create_session)
             .await?
@@ -207,13 +210,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         let token = crate::id::random_id(None);
         let schema = self.session_config.adapter_schema();
         let configured_user_id = schema.fields().contains_key("userId");
-        let mut fields = self.session_config.default_fields();
+        let mut fields = create_session.additional_fields;
         if configured_user_id {
             let _ = fields
                 .entry("userId".into())
                 .or_insert_with(|| create_session.user_id.field_value());
         }
-        fields.extend(create_session.additional_fields);
         let mut plugin_fields = FieldMap::new();
         for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
             if let Some(value) = fields.remove(name) {

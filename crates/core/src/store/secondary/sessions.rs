@@ -85,16 +85,27 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(fields)
     }
 
-    pub(super) fn new_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
-        let now = Utc::now();
+    pub(super) fn prepare_session(&self, input: &mut CreateSession) -> AuthResult<()> {
+        let _ = input.additional_fields.remove("id");
         let id = self
             .config
             .advanced
             .generate_id("session", None)?
             .unwrap_or_else(|| crate::id::random_id(None));
+        let mut fields = FieldMap::new();
+        if !id.is_empty() {
+            let _ = fields.insert("id".into(), id.into());
+        }
+        fields.extend(self.config.session.default_fields());
+        fields.extend(std::mem::take(&mut input.additional_fields));
+        input.additional_fields = fields;
+        Ok(())
+    }
+
+    pub(super) fn new_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
+        let now = Utc::now();
         let user_id_missing = input.user_id.is_undefined();
         let mut fields = FieldMap::from_iter([
-            ("id".into(), id.clone().into()),
             ("token".into(), crate::id::random_id(None).into()),
             ("userId".into(), input.user_id.into_field_value()),
             ("expiresAt".into(), input.expires_at.into()),
@@ -115,13 +126,9 @@ impl<S: AuthSchema> SecondaryStore<S> {
             ),
             ("activeTeamId".into(), FieldValue::Null),
         ]);
-        if id.is_empty() {
-            let _ = fields.remove("id");
-        }
         if user_id_missing {
             let _ = fields.remove("userId");
         }
-        fields.extend(self.config.session.default_fields());
         fields.extend(input.additional_fields);
         self.hydrate_session(fields)
     }
@@ -364,6 +371,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             };
             session
         } else {
+            self.prepare_session(&mut input)?;
             if !self
                 .inner
                 .before_create_runtime_session_optional(&mut input)

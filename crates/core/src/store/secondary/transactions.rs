@@ -26,6 +26,7 @@ impl<S: AuthSchema> Transaction<S> {
             };
             session
         } else {
+            self.runtime.prepare_session(&mut input)?;
             if !self
                 .inner
                 .before_create_runtime_session_optional(&mut input)

@@ -254,6 +254,8 @@ async function captureUndefinedIdAliasUpdate() {
   }, "serial")).$context;
   const values = data("session", "undefined-alias", "001");
   delete values.label;
+  values.ipAddress = "";
+  values.userAgent = "";
   values.aliasId = "seed";
   const create = { model: "session", data: values };
   const step = { input: observeValue(create), before: observeValue(memory), result: null, after: null };

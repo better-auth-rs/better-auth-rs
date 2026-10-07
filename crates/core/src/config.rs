@@ -260,10 +260,17 @@ impl SessionConfig {
 
     /// Evaluate creation defaults without validating or transforming session input.
     pub fn default_fields(&self) -> crate::FieldMap {
-        self.fields()
-            .iter()
-            .filter(|(name, _)| name.as_str() != "id")
-            .filter_map(|(name, field)| field.default_value().map(|value| (name.clone(), value)))
+        self.field_schema()
+            .ordered_fields(&[])
+            .into_iter()
+            .filter(|(_, field)| {
+                field.default_value_fn.is_some()
+                    || field
+                        .default_value
+                        .as_ref()
+                        .is_some_and(|value| !value.is_undefined())
+            })
+            .filter_map(|(name, field)| field.default_value().map(|value| (name.to_owned(), value)))
             .collect()
     }
 }

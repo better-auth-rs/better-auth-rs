@@ -450,7 +450,7 @@ async fn memory_plugin_id_slot_matches_eight_upstream_cases() -> AuthResult<()> 
     assert_eq!(fixture.get("version"), Some(&json!("1.7.6")));
     assert_eq!(fixture.get("backend"), Some(&json!("memory")));
     let cases = required(fixture.get("cases").and_then(JsonValue::as_array))?;
-    assert_eq!(cases.len(), 24);
+    assert_eq!(cases.len(), 25);
     let mut compared = 0;
     for model in [Model::Jwk, Model::Wallet] {
         for slot in ["before-label", "after-label"] {
