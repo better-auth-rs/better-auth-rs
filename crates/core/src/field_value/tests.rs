@@ -156,12 +156,18 @@ fn structural_equality_does_not_replace_stringify_change_detection() {
 }
 
 #[test]
-fn valid_timeclip_values_outside_chrono_are_not_invalid_dates() -> AuthResult<()> {
+#[expect(
+    clippy::expect_used,
+    reason = "Date JSON conversion must serialize valid TimeClip endpoints and invalid dates"
+)]
+fn valid_timeclip_values_outside_chrono_are_not_invalid_dates() {
     let date = FieldDate::from_milliseconds(8_640_000_000_000_000.0);
     assert_eq!(date.milliseconds(), 8_640_000_000_000_000.0);
     assert!(date.to_datetime().is_err());
     assert_eq!(
-        FieldValue::from(date).json()?,
+        FieldValue::from(date)
+            .json()
+            .expect("TimeClip endpoint JSON"),
         Some(serde_json::json!("+275760-09-13T00:00:00.000Z"))
     );
     for milliseconds in [
@@ -174,14 +180,26 @@ fn valid_timeclip_values_outside_chrono_are_not_invalid_dates() -> AuthResult<()
         let date = FieldDate::from_milliseconds(milliseconds);
         assert!(date.milliseconds().is_nan());
         let value = FieldValue::from(date);
-        assert_eq!(value.json()?, Some(JsonValue::Null));
-        assert_eq!(value.stringify()?.as_deref(), Some("null"));
+        assert_eq!(
+            value.json().expect("invalid Date JSON"),
+            Some(JsonValue::Null)
+        );
+        assert_eq!(
+            value
+                .stringify()
+                .expect("invalid Date serialization")
+                .as_deref(),
+            Some("null")
+        );
     }
-    Ok(())
 }
 
 #[test]
-fn timeclip_json_preserves_calendar_boundaries_and_millisecond_precision() -> AuthResult<()> {
+#[expect(
+    clippy::expect_used,
+    reason = "The fixed calendar boundaries and clipped millisecond values must have JSON representations"
+)]
+fn timeclip_json_preserves_calendar_boundaries_and_millisecond_precision() {
     for (milliseconds, expected) in [
         (8_639_999_999_999_999.0, "+275760-09-12T23:59:59.999Z"),
         (8_640_000_000_000_000.0, "+275760-09-13T00:00:00.000Z"),
@@ -197,8 +215,14 @@ fn timeclip_json_preserves_calendar_boundaries_and_millisecond_precision() -> Au
         let date = FieldDate::from_milliseconds(milliseconds);
         assert!(date.to_datetime().is_err());
         let value = FieldValue::from(date);
-        assert_eq!(value.json()?, Some(serde_json::json!(expected)));
-        assert_eq!(value.stringify()?, Some(format!("\"{expected}\"")));
+        assert_eq!(
+            value.json().expect("calendar boundary JSON"),
+            Some(serde_json::json!(expected))
+        );
+        assert_eq!(
+            value.stringify().expect("calendar boundary serialization"),
+            Some(format!("\"{expected}\""))
+        );
     }
     for (milliseconds, expected) in [
         (-1.9, "1969-12-31T23:59:59.999Z"),
@@ -207,9 +231,10 @@ fn timeclip_json_preserves_calendar_boundaries_and_millisecond_precision() -> Au
         (1.9, "1970-01-01T00:00:00.001Z"),
     ] {
         assert_eq!(
-            FieldValue::from(FieldDate::from_milliseconds(milliseconds)).json()?,
+            FieldValue::from(FieldDate::from_milliseconds(milliseconds))
+                .json()
+                .expect("clipped millisecond JSON"),
             Some(serde_json::json!(expected))
         );
     }
-    Ok(())
 }
