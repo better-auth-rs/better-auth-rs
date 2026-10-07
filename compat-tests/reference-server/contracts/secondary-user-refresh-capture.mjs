@@ -34,16 +34,21 @@ export const secondaryUserRefreshScenarios = [
 ];
 
 function seedCache(scenario) {
-  const activeTokens = scenario.malformed ? ["token-a"] : ["token-a", "token-b"];
+  const activeTokens = scenario.refreshSuccess ? ["token-b"] : scenario.malformed ? ["token-a"] : ["token-a", "token-b"];
   const values = new Map([[indexKey, JSON.stringify(activeTokens.map(token => ({ token, expiresAt: expiresAt.getTime() })))]]);
   for (const suffix of ["a", "b"]) {
     const session = {
-      id: `session-${suffix}`, token: `token-${suffix}`, userId: owner.id, expiresAt,
+      id: `session-${suffix}`, token: `token-${suffix}`, userId: owner.id,
+      expiresAt: scenario.numericExpiry && suffix === "b" ? expiresAt.getTime() : expiresAt,
       createdAt: seedDate, updatedAt: seedDate, ipAddress: null, userAgent: `agent-${suffix}`,
     };
     values.set(`token-${suffix}`, JSON.stringify({ session, user: owner }));
   }
   if (scenario.malformed) values.set("token-a", "{}");
+  if (scenario.nonArrayIndex) values.set(indexKey, "{}");
+  if (scenario.mixedIndex) values.set(indexKey, JSON.stringify([
+    { token: "token-b", expiresAt: expiresAt.getTime() }, { token: "stale" },
+  ]));
   return values;
 }
 
@@ -212,7 +217,7 @@ async function captureCase(backend, scenario) {
       assert.equal(event.key, "token-b");
       assert.equal(typeof event.value, "string");
       const value = JSON.parse(event.value);
-      assert.equal(value.session.expiresAt, expiresAt.toISOString());
+      assert.equal(value.session.expiresAt, scenario.numericExpiry ? expiresAt.getTime() : expiresAt.toISOString());
       assert.equal(value.user.name, "Updated");
       assert.equal(value.user.updatedAt, updatedAt);
       assert.ok(Number.isInteger(event.ttl));
@@ -263,12 +268,12 @@ function verifyCase(backend, scenario, before, afterReturn, after, events, outco
   }] : [];
   assert.deepEqual(logs.slice(0, transactionLogs.length), transactionLogs);
   const refreshLogs = logs.slice(transactionLogs.length);
-  assert.equal(refreshLogs.length, errorSource ? 0 : 1, `${backend}/${scenario.name}: ${JSON.stringify(logs)}`);
+  assert.equal(refreshLogs.length, errorSource || scenario.refreshSuccess ? 0 : 1, `${backend}/${scenario.name}: ${JSON.stringify(logs)}`);
   for (const log of refreshLogs) {
     assert.equal(log.level, "error");
     assert.equal(log.message, refreshMessage);
     assert.equal(log.args.length, 1);
-    const typeError = scenario.missing || scenario.cancel || scenario.malformed;
+    const typeError = scenario.missing || scenario.cancel || scenario.malformed || scenario.nonArrayIndex;
     assert.equal(log.args[0].name, typeError ? "TypeError" : "Error");
     assert.equal(log.args[0].injected, typeError ? null : "cache");
   }
@@ -282,11 +287,18 @@ function verifyCase(backend, scenario, before, afterReturn, after, events, outco
       [before.cache.find(entry => entry.key === indexKey).value, "{}"]);
     assert.ok(cacheEvents.every(event => event.kind.startsWith("cache.get.")));
   }
-  if (!scenario.parallel) {
+  if (scenario.nonArrayIndex) {
+    assert.deepEqual(cacheEvents, [
+      { kind: "cache.get.start", key: indexKey },
+      { kind: "cache.get.return", key: indexKey, value: "{}" },
+    ]);
+  }
+  if (!scenario.parallel && !scenario.refreshSuccess) {
     assert.deepEqual(after.cache, before.cache);
     assert.deepEqual(afterReturn, after);
   } else {
-    assert.deepEqual(cacheEvents.filter(event => event.kind === "cache.get.start").map(event => event.key), [indexKey, "token-a", "token-b"]);
+    assert.deepEqual(cacheEvents.filter(event => event.kind === "cache.get.start").map(event => event.key),
+      scenario.parallel ? [indexKey, "token-a", "token-b"] : [indexKey, "token-b"]);
     assert.deepEqual(cacheEvents.filter(event => event.kind === "cache.set.start").map(event => event.key), ["token-b"]);
     assert.equal(after.cache.find(entry => entry.key === "token-a").value, before.cache.find(entry => entry.key === "token-a").value);
     assert.equal(after.cache.find(entry => entry.key === indexKey).value, before.cache.find(entry => entry.key === indexKey).value);
@@ -294,16 +306,20 @@ function verifyCase(backend, scenario, before, afterReturn, after, events, outco
     const afterB = JSON.parse(after.cache.find(entry => entry.key === "token-b").value);
     assert.deepEqual(afterB.session, beforeB.session);
     assert.deepEqual(afterB.user, JSON.parse(JSON.stringify(outcome.value, (_, value) => value?.type === "date" ? value.value : value)));
-    assert.ok(events.findIndex(event => event.kind === "operation.return") < events.findIndex(event => event.kind === "cache.set.start"));
+    if (scenario.parallel) {
+      assert.ok(events.findIndex(event => event.kind === "operation.return") < events.findIndex(event => event.kind === "cache.set.start"));
+    } else {
+      assert.deepEqual(afterReturn, after);
+      assert.ok(events.findIndex(event => event.kind === "cache.set.return") < events.findIndex(event => event.kind === "update.return"));
+    }
   }
 }
 
-export async function captureSecondaryUserRefresh() {
+export async function captureSecondaryUserRefreshCases(scenarios) {
   const cases = [];
   for (const backend of ["memory", "sqlite"]) {
-    for (const scenario of secondaryUserRefreshScenarios) cases.push(await captureCase(backend, scenario));
+    for (const scenario of scenarios) cases.push(await captureCase(backend, scenario));
   }
-  assert.equal(cases.length, 18);
   return {
     version,
     contract: {
@@ -313,6 +329,12 @@ export async function captureSecondaryUserRefresh() {
     },
     cases,
   };
+}
+
+export async function captureSecondaryUserRefresh() {
+  const captured = await captureSecondaryUserRefreshCases(secondaryUserRefreshScenarios);
+  assert.equal(captured.cases.length, 18);
+  return captured;
 }
 
 if (import.meta.main) {

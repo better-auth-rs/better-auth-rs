@@ -20,6 +20,7 @@ on:
       - compat-tests/reference-server/contracts/plugin-display-json-capture.mjs
       - compat-tests/reference-server/contracts/api-key-catalog-capture.mjs
       - compat-tests/reference-server/contracts/secondary-user-refresh-capture.mjs
+      - compat-tests/reference-server/contracts/secondary-user-refresh-values-capture.mjs
       - compat-tests/reference-server/contracts/memory-sort-capture.mjs
       - compat-tests/reference-server/contracts/organization-member-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/account-user-selected-relations-capture.mjs
@@ -37,8 +38,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: secondary-user-refresh
-            regression: memory-transaction-values
+          - contract: secondary-user-refresh-values
+            regression: secondary-user-refresh
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
