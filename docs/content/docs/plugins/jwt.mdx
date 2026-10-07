@@ -43,6 +43,8 @@ To sign session cookie caches with plugin keys, enable `SessionConfig.cookie_cac
 
 Cache tokens use `typ: better-auth.session-cache+jwt`, audience `better-auth:session-cache`, and the configured base URL as issuer. These values are independent of ordinary token issuer and audience configuration. The cache binds `sub` to the cached user ID and `sid` to the cached session token. Cache reads also require the signed session cookie, matching token, cache version, and unexpired session and cache lifetimes. Ordinary JWTs cannot serve as cache cookies. Authoritative session reads bypass the cache.
 
+Cache signing resolves the local signing key before validating the required string user ID. A missing or undefined ID fails after key reads or creation. The failure preserves prior key writes unless the active transaction rolls back.
+
 Public JWKS discovery excludes keys beyond the configured grace period. Local verification continues to use persisted keys, including expired signing keys, as upstream does. Keep published keys available for the lifetime of tokens verified remotely. The compatibility profiles cover default EdDSA, RS256, ES256, ES512, 3072-bit PS256, callbacks and key overrides, remote JWKS rotation, and asymmetric cache round trips and negative cases.
 
 The signer receives `SessionCookieContext<S>` for signing and verification, including the request, effective configuration, and active transaction. During transactional signup, signing keys are read or created through the same transaction as the session. A rollback removes new keys with the other database writes; the cookie writer remains inside the transaction.

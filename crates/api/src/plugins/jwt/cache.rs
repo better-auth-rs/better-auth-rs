@@ -17,31 +17,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
         expires_in: f64,
         context: SessionCookieContext<'_, S>,
     ) -> AuthResult<String> {
-        let sid = payload
-            .get("session")
-            .and_then(|session| session.get("token"))
-            .cloned()
-            .ok_or_else(|| AuthError::internal("Session cache requires a session token"))?;
-        let subject = payload
-            .get("user")
-            .and_then(|user| user.get("id"))
-            .cloned()
-            .ok_or_else(|| AuthError::internal("Session cache requires a user ID"))?;
-        payload.extend([
-            ("sid".into(), sid),
-            ("sub".into(), subject),
-            ("iat".into(), Utc::now().timestamp().into()),
-            (
-                "exp".into(),
-                better_auth_core::wire::serialize_optional_number(
-                    &Some(Utc::now().timestamp() as f64 + expires_in),
-                    serde_json::value::Serializer,
-                )?,
-            ),
-            ("aud".into(), AUDIENCE.into()),
-        ]);
         let runtime = self.runtime.context()?;
-        let _ = payload.insert("iss".into(), issuer(&runtime).into());
         let mut endpoint = EndpointContext::new(
             Some(context.request),
             request_body(context.request)?,
@@ -52,16 +28,42 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             .request
             .session_snapshot()?
             .map(|data| (data.user, data.session));
-        self.plugin
-            .sign_in_endpoint(
-                payload,
-                &JwtSigningOptions {
-                    header: serde_json::from_value(json!({"typ": TYPE}))?,
-                    ..Default::default()
-                },
-                &endpoint,
-            )
-            .await
+        let options = JwtSigningOptions {
+            header: serde_json::from_value(json!({"typ": TYPE}))?,
+            ..Default::default()
+        };
+        let key = self
+            .plugin
+            .resolve_local_signing_key(&options, &endpoint)
+            .await?;
+        let sid = payload
+            .get("session")
+            .and_then(|session| session.get("token"))
+            .cloned()
+            .ok_or_else(|| AuthError::internal("Session cache requires a session token"))?;
+        payload.extend([
+            ("sid".into(), sid),
+            ("iat".into(), Utc::now().timestamp().into()),
+            (
+                "exp".into(),
+                better_auth_core::wire::serialize_optional_number(
+                    &Some(Utc::now().timestamp() as f64 + expires_in),
+                    serde_json::value::Serializer,
+                )?,
+            ),
+            ("aud".into(), AUDIENCE.into()),
+            ("iss".into(), issuer(&runtime).into()),
+        ]);
+        let _ = payload.remove("sub");
+        claims::prepare_local_claims(&mut payload)?;
+        let subject = payload
+            .get("user")
+            .and_then(|user| user.get("id"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| AuthError::internal("\"sub\" claim must be a string"))?
+            .to_owned();
+        let _ = payload.insert("sub".into(), subject.into());
+        key.sign(payload, &options)
     }
 
     async fn verify(

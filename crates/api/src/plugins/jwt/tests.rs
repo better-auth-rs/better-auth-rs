@@ -165,6 +165,126 @@ async fn callbacks_receive_the_complete_session_and_custom_signing_options() {
 }
 
 #[tokio::test]
+async fn cookie_signer_resolves_keys_before_rejecting_missing_subject() -> AuthResult<()> {
+    use crate::plugins::test_helpers::{
+        create_test_config, create_test_context_with_config, create_user_and_session,
+    };
+    use better_auth_core::{
+        CreateUser, FieldMap, FieldValue,
+        config::{CookieCacheConfig, CookieCacheStrategy},
+        session::{NativeSessionData, SessionData},
+    };
+    use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+    use std::sync::Mutex;
+
+    for explicit_undefined in [false, true] {
+        let mut config = create_test_config();
+        config.session.cookie_cache = Some(CookieCacheConfig {
+            enabled: Some(true),
+            strategy: Some(CookieCacheStrategy::Jwt),
+            ..Default::default()
+        });
+        let mut ctx = create_test_context_with_config(config).await;
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let reads = events.clone();
+        let creates = events.clone();
+        let plugin = JwtPlugin::new().session_cookie_cache(true).callbacks(
+            JwtCallbacks::<BundledSchema>::default()
+                .get_jwks(move |endpoint| {
+                    let events = reads.clone();
+                    Box::pin(async move {
+                        events.lock().unwrap().push("get");
+                        endpoint.auth.database.list_jwks().await.map(Some)
+                    })
+                })
+                .create_jwk(move |key, endpoint| {
+                    let events = creates.clone();
+                    Box::pin(async move {
+                        let key = endpoint.auth.database.create_jwk(key).await?;
+                        events.lock().unwrap().push("create");
+                        Ok(key)
+                    })
+                }),
+        );
+        let mut init = AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+        plugin.on_init(&mut init).await?;
+        let runtime = init.runtime();
+        ctx.extensions = init.extensions;
+        let ctx = Arc::new(ctx);
+        runtime.bind(&ctx)?;
+        let (user, session) = create_user_and_session(
+            &ctx,
+            CreateUser::new()
+                .with_email("missing-subject@example.com")
+                .with_name("Missing subject"),
+            Duration::hours(1),
+        )
+        .await;
+        let mut projected_user = FieldMap::from(user.clone());
+        if explicit_undefined {
+            let _ = projected_user.insert("id".into(), FieldValue::Undefined);
+        } else {
+            let _ = projected_user.remove("id");
+        }
+        assert!(ctx.database.list_jwks().await?.is_empty());
+        let manager = ctx.session_manager();
+        let request = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
+        let result = manager
+            .set_native_session_cookie(
+                &request,
+                NativeSessionData {
+                    session: session.clone(),
+                    user: projected_user.into(),
+                },
+                Some(false),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(AuthError::Internal(message)) if message == "\"sub\" claim must be a string")
+        );
+        events.lock().unwrap().push("reject");
+        assert_eq!(*events.lock().unwrap(), ["get", "get", "create", "reject"]);
+        let keys = ctx.database.list_jwks().await?;
+        assert_eq!(keys.len(), 1);
+        assert!(request.new_session()?.is_none());
+        let headers = request.take_response_headers()?;
+        assert!(
+            headers
+                .get_all("set-cookie")
+                .any(|cookie| cookie.starts_with("better-auth.session_token="))
+        );
+        assert!(
+            !headers
+                .get_all("set-cookie")
+                .any(|cookie| cookie.starts_with("better-auth.session_data"))
+        );
+
+        let valid = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
+        manager
+            .set_session_cookie(&valid, SessionData { user, session }, Some(false))
+            .await?;
+        assert!(valid.new_session()?.is_some());
+        assert!(
+            valid
+                .take_response_headers()?
+                .get_all("set-cookie")
+                .any(|cookie| cookie.starts_with("better-auth.session_data="))
+        );
+        let reused = ctx.database.list_jwks().await?;
+        assert_eq!(reused.len(), 1);
+        assert_eq!(
+            reused.first().map(|key| &key.id),
+            keys.first().map(|key| &key.id)
+        );
+        assert_eq!(
+            *events.lock().unwrap(),
+            ["get", "get", "create", "reject", "get"]
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
     use crate::plugins::test_helpers::{
         create_test_config, create_test_context_with_config, create_user_and_session,

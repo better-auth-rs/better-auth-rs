@@ -1,5 +1,31 @@
 use super::*;
 
+pub(super) struct ResolvedSigningKey {
+    algorithm: String,
+    key_id: Option<String>,
+    signer: Box<dyn JwsSigner>,
+}
+
+impl ResolvedSigningKey {
+    pub(super) fn sign(
+        &self,
+        payload: Map<String, Value>,
+        options: &JwtSigningOptions,
+    ) -> AuthResult<String> {
+        let mut header = JwsHeader::from_map(options.header.clone()).map_err(jose_error)?;
+        header.set_algorithm(&self.algorithm);
+        if let Some(id) = &self.key_id {
+            header.set_key_id(id);
+        }
+        josekit::jws::serialize_compact(
+            &serde_json::to_vec(&payload)?,
+            &header,
+            self.signer.as_ref(),
+        )
+        .map_err(jose_error)
+    }
+}
+
 impl JwtPlugin {
     pub(super) async fn sign_session<S: AuthSchema>(
         &self,
@@ -72,6 +98,17 @@ impl JwtPlugin {
         if let Some(callback) = &self.config.custom_sign {
             return callback(payload, options.clone()).await;
         }
+        let key = self.resolve_local_signing_key(options, endpoint).await?;
+        claims::prepare_local_claims(&mut payload)?;
+        key.sign(payload, options)
+    }
+
+    pub(super) async fn resolve_local_signing_key<S: AuthSchema>(
+        &self,
+        options: &JwtSigningOptions,
+        endpoint: &EndpointContext<'_, S>,
+    ) -> AuthResult<ResolvedSigningKey> {
+        let config = &endpoint.auth.config;
         let selected =
             if let Some(id) = &options.key_id {
                 let key = self
@@ -181,14 +218,11 @@ impl JwtPlugin {
                 )));
             }
         };
-        claims::prepare_local_claims(&mut payload)?;
-        let mut header = JwsHeader::from_map(options.header.clone()).map_err(jose_error)?;
-        header.set_algorithm(algorithm);
-        if let Some(id) = key.id.as_str() {
-            header.set_key_id(id);
-        }
-        josekit::jws::serialize_compact(&serde_json::to_vec(&payload)?, &header, signer.as_ref())
-            .map_err(jose_error)
+        Ok(ResolvedSigningKey {
+            algorithm: algorithm.to_owned(),
+            key_id: key.id.as_str().map(str::to_owned),
+            signer,
+        })
     }
 
     fn default_claims(
