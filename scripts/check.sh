@@ -243,6 +243,7 @@ run_stage() {
     telemetry)
       cargo fmt --all -- --check
       cargo clippy --locked --test telemetry_options_tests --test telemetry_environment_tests -- -D warnings
+      cargo test --locked -p better-auth-core --lib observability::telemetry::host::tests::
       cargo test --locked --test telemetry_options_tests --test telemetry_environment_tests
       bun --no-install test ./compat-tests/reference-server/contracts/telemetry-*.test.ts
       ;;

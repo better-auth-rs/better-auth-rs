@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 const OBSERVATION_DIR_ENV: &str = "BETTER_AUTH_TELEMETRY_OBSERVATION_DIR";
+const UPSTREAM_OBSERVATION_ENV: &str = "BETTER_AUTH_TELEMETRY_UPSTREAM_OBSERVATION";
 
 fn fixture() -> Result<Value, serde_json::Error> {
     serde_json::from_str(include_str!("fixtures/telemetry-environment-1.7.6.json"))
@@ -33,6 +34,7 @@ fn initialization_metadata_matches_upstream_in_independent_processes()
     if let Some(directory) = &observation_dir {
         std::fs::create_dir_all(directory)?;
     }
+    let upstream_observation = std::env::var_os(UPSTREAM_OBSERVATION_ENV);
     for (name, case) in cases {
         let mut child = std::process::Command::new(std::env::current_exe()?);
         let _ = child.args(["--exact", "environment_case", "--ignored"]);
@@ -49,6 +51,9 @@ fn initialization_metadata_matches_upstream_in_independent_processes()
         let _ = child.env("BETTER_AUTH_TEST_TELEMETRY_CASE", name);
         if let Some(directory) = &observation_dir {
             let _ = child.env(OBSERVATION_DIR_ENV, directory);
+        }
+        if let Some(path) = &upstream_observation {
+            let _ = child.env(UPSTREAM_OBSERVATION_ENV, path);
         }
         let output = child.output()?;
         assert!(
@@ -89,7 +94,6 @@ fn compare_metadata(actual: &Value, expected: &Value) {
         "cpuSpeed",
         "memory",
         "isWSL",
-        "isDocker",
     ] {
         assert_eq!(
             actual.get("systemInfo").and_then(|system| system.get(key)),
@@ -105,6 +109,19 @@ fn compare_metadata(actual: &Value, expected: &Value) {
         actual.get("runtime"),
         Some(&json!({"name":"rust","version":null}))
     );
+}
+
+fn compare_docker(actual: &Value, expected: &Value) -> AuthResult<()> {
+    let docker = expected
+        .pointer("/systemInfo/isDocker")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| AuthError::internal("missing upstream Docker observation"))?;
+    assert_eq!(
+        actual.pointer("/systemInfo/isDocker"),
+        Some(&Value::Bool(docker)),
+        "Docker detection must match the upstream event from this runner"
+    );
+    Ok(())
 }
 
 #[tokio::test]
@@ -160,6 +177,35 @@ async fn environment_case() -> AuthResult<()> {
     );
     for event in events.iter() {
         compare_metadata(&event.payload, expected);
+    }
+    if let Some(path) = std::env::var_os(UPSTREAM_OBSERVATION_ENV) {
+        let path = PathBuf::from(path);
+        let upstream: Value = serde_json::from_slice(&std::fs::read(&path).map_err(|error| {
+            AuthError::internal(format!(
+                "cannot read upstream telemetry observation {}: {error}",
+                path.display()
+            ))
+        })?)?;
+        let observation = upstream
+            .get("cases")
+            .and_then(|cases| cases.get(&name))
+            .and_then(|case| case.get("observation"))
+            .ok_or_else(|| AuthError::internal("missing upstream telemetry case"))?;
+        let direct = observation
+            .pointer("/direct/0/payload")
+            .ok_or_else(|| AuthError::internal("missing upstream direct telemetry event"))?;
+        compare_docker(&metadata, direct)?;
+        let upstream_events = observation
+            .get("auth")
+            .and_then(Value::as_array)
+            .ok_or_else(|| AuthError::internal("missing upstream auth telemetry events"))?;
+        assert_eq!(events.len(), upstream_events.len());
+        for (event, upstream_event) in events.iter().zip(upstream_events) {
+            let payload = upstream_event
+                .get("payload")
+                .ok_or_else(|| AuthError::internal("missing upstream auth telemetry payload"))?;
+            compare_docker(&event.payload, payload)?;
+        }
     }
     Ok(())
 }

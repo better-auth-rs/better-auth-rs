@@ -1,3 +1,4 @@
+mod host;
 mod metadata;
 mod options;
 pub use options::{

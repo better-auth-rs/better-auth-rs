@@ -2,7 +2,7 @@ use std::io::IsTerminal;
 
 use serde_json::{Map, Value, json};
 
-use super::is_test;
+use super::{host, is_test};
 
 const CI_KEYS: &[&str] = &[
     "BUILD_ID",
@@ -119,7 +119,7 @@ pub(super) fn initialization_metadata() -> Map<String, Value> {
         ("systemPlatform".into(), json!(platform)),
         ("systemArchitecture".into(), json!(architecture)),
     ]);
-    // Rust's standard library does not expose the upstream hardware and container detectors.
+    // Kernel, CPU, RAM, and WSL metadata still require an upstream-compatible native provider.
     for key in [
         "systemRelease",
         "cpuCount",
@@ -127,10 +127,10 @@ pub(super) fn initialization_metadata() -> Map<String, Value> {
         "cpuSpeed",
         "memory",
         "isWSL",
-        "isDocker",
     ] {
         let _ = system_info.insert(key.into(), Value::Null);
     }
+    let _ = system_info.insert("isDocker".into(), json!(host::is_docker()));
     if std::io::stdout().is_terminal() {
         let _ = system_info.insert("isTTY".into(), Value::Bool(true));
     }
