@@ -47,6 +47,8 @@ on:
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
       - compat-tests/reference-server/contracts/totp-period-nan-capture.mjs
       - compat-tests/reference-server/contracts/totp-counter-capture.mjs
+      - compat-tests/reference-server/contracts/one-time-token-expiry-capture.mjs
+      - compat-tests/reference-server/contracts/device-polling-capture.mjs
       - compat-tests/reference-server/contracts/oauth-proxy-max-age-capture.mjs
       - tests/fixtures/cookie-cache-cleanup.capture.mjs
 
@@ -59,8 +61,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: totp-counter
-            regressions: [totp-period, totp-period-nan]
+          - contract: one-time-token-expiry
+            regressions: [email-verification-duration]
+            backend: ''
+          - contract: device-polling
+            regressions: [device-redemption, device-interval]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
