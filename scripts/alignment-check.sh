@@ -45,5 +45,5 @@ bun test ./compat-tests/client-tests/support
 if [[ "$reference_only" != "true" ]]; then
   cargo test --locked --test client_compat_tests -- \
     --ignored --nocapture --exact --test-threads=1 \
-    parallel_server_startup full_client_compat configuration_client_compat
+    parallel_server_startup full_client_compat configuration_client_compat configuration_failure_aggregation
 fi

@@ -197,7 +197,7 @@ fn run_bun_phase_suite(
     rust_port: u16,
     profile: &str,
     oidc_url: &str,
-) {
+) -> Result<(), String> {
     let output = Command::new("bun")
         .arg("test")
         // A timed-out scenario can still write to the shared fixture database.
@@ -231,15 +231,21 @@ fn run_bun_phase_suite(
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("Bun phase suite failed.\nstdout:\n{stdout}\n\nstderr:\n{stderr}");
+        return Err(format!(
+            "Bun phase suite failed ({status}).\nstdout:\n{stdout}\n\nstderr:\n{stderr}",
+            status = output.status,
+        ));
     }
+    Ok(())
 }
 
 async fn run_client_compat(paths: &[&str]) {
-    run_client_compat_profile(paths, "default").await;
+    run_client_compat_profile(paths, "default")
+        .await
+        .unwrap_or_else(|error| panic!("{error}"));
 }
 
-async fn run_client_compat_profile(paths: &[&str], profile: &str) {
+async fn run_client_compat_profile(paths: &[&str], profile: &str) -> Result<(), String> {
     println!("Client compatibility profile: {profile}");
     let binary = rust_compat_binary();
     let mut oidc_server = start_oidc_server();
@@ -250,7 +256,81 @@ async fn run_client_compat_profile(paths: &[&str], profile: &str) {
     let mut rust_server = start_rust_compat_server(binary, profile, &oidc_url);
     let rust_port = wait_for_health(&mut rust_server, Duration::from_secs(90)).await;
 
-    run_bun_phase_suite(paths, ts_port, rust_port, profile, &oidc_url);
+    run_bun_phase_suite(paths, ts_port, rust_port, profile, &oidc_url)
+}
+
+async fn collect_client_compat_profile(
+    paths: &[&str],
+    profile: &str,
+    failures: &mut Vec<(String, String)>,
+) {
+    if let Err(error) = run_client_compat_profile(paths, profile).await {
+        eprintln!("Client compatibility profile failed: {profile}\n{error}");
+        failures.push((profile.to_owned(), error));
+    }
+}
+
+#[tokio::test]
+#[ignore = "starts isolated profiles with intentional Bun failures to verify failure aggregation"]
+async fn configuration_failure_aggregation() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = std::env::temp_dir().join(format!(
+        "better-auth-compat-aggregation-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos(),
+    ));
+    std::fs::create_dir(&directory)?;
+    let failure = directory.join("failure.test.ts");
+    let success = directory.join("success.test.ts");
+    let marker = directory.join("completed-profile");
+    std::fs::write(
+        &failure,
+        r#"import { test } from "bun:test";
+test("intentional harness failure", () => {
+  process.stdout.write(`harness stdout ${process.env.COMPAT_PROFILE}\n`);
+  process.stderr.write(`harness stderr ${process.env.COMPAT_PROFILE}\n`);
+  throw new Error(`intentional harness failure ${process.env.COMPAT_PROFILE}`);
+});
+"#,
+    )?;
+    std::fs::write(
+        &success,
+        format!(
+            r#"import {{ expect, test }} from "bun:test";
+import {{ writeFileSync }} from "node:fs";
+test("profile after failure executes", async () => {{
+  for (const key of ["AUTH_BASE_URL_TS", "AUTH_BASE_URL_RUST"]) {{
+    expect((await fetch(`${{process.env[key]}}/__health`)).status).toBe(200);
+  }}
+  writeFileSync({}, process.env.COMPAT_PROFILE);
+}});
+"#,
+            serde_json::to_string(&marker)?,
+        ),
+    )?;
+    let failure = failure.to_str().expect("temporary fixture path is UTF-8");
+    let success = success.to_str().expect("temporary fixture path is UTF-8");
+    let mut failures = Vec::new();
+    collect_client_compat_profile(&[failure], "api-error", &mut failures).await;
+    collect_client_compat_profile(&[success], "api-error-production", &mut failures).await;
+    collect_client_compat_profile(&[failure], "request-query-memory", &mut failures).await;
+    let completed = std::fs::read_to_string(marker)?;
+    assert_eq!(completed, "api-error-production");
+    assert_eq!(
+        failures
+            .iter()
+            .map(|(profile, _)| profile.as_str())
+            .collect::<Vec<_>>(),
+        ["api-error", "request-query-memory"],
+    );
+    for (profile, output) in failures {
+        assert!(output.contains(&format!("harness stdout {profile}")));
+        assert!(output.contains(&format!("harness stderr {profile}")));
+        assert!(output.contains(&format!("intentional harness failure {profile}")));
+    }
+    std::fs::remove_dir_all(directory)?;
+    Ok(())
 }
 
 #[tokio::test]
@@ -424,6 +504,7 @@ async fn full_client_compat() {
 async fn configuration_client_compat() {
     let selected = std::env::var("COMPAT_TEST_PROFILE").ok();
     let mut matched = false;
+    let mut failures = Vec::new();
     for profile in [
         "api-error",
         "api-error-production",
@@ -640,18 +721,29 @@ async fn configuration_client_compat() {
         }
         matched = true;
         if profile.starts_with("two-factor-after-") {
-            run_client_compat_profile(&["./tests/config/two-factor-after/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/two-factor-after/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("phone-native-") {
-            run_client_compat_profile(&["./tests/config/phone-native/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/phone-native/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile == "dynamic-environment" {
             let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
                 "../compat-tests/client-tests/tests/config/dynamic-environment/cases.json"
             ))
             .expect("dynamic environment cases");
             for index in 0..cases.len() {
-                run_client_compat_profile(
+                collect_client_compat_profile(
                     &["./tests/config/dynamic-environment/"],
                     &format!("{profile}:{index}"),
+                    &mut failures,
                 )
                 .await;
             }
@@ -662,65 +754,181 @@ async fn configuration_client_compat() {
             .expect("proxy environment cases");
             for (index, case) in cases.iter().enumerate() {
                 println!("OAuth proxy environment: {}", case["name"]);
-                run_client_compat_profile(
+                collect_client_compat_profile(
                     &["./tests/config/oauth-proxy-env/"],
                     &format!("{profile}:{index}"),
+                    &mut failures,
                 )
                 .await;
             }
         } else if profile.starts_with("password-security") {
-            run_client_compat_profile(&["./tests/config/password-security/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/password-security/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("http-body") {
-            run_client_compat_profile(&["./tests/config/http-body/"], profile).await;
+            collect_client_compat_profile(&["./tests/config/http-body/"], profile, &mut failures)
+                .await;
         } else if profile.starts_with("oauth-popup-") {
-            run_client_compat_profile(&["./tests/config/oauth-popup/"], profile).await;
+            collect_client_compat_profile(&["./tests/config/oauth-popup/"], profile, &mut failures)
+                .await;
         } else if profile.starts_with("admin-") {
-            run_client_compat_profile(&["./tests/config/admin-options/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/admin-options/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("last-login-") {
-            run_client_compat_profile(&["./tests/config/last-login/"], profile).await;
+            collect_client_compat_profile(&["./tests/config/last-login/"], profile, &mut failures)
+                .await;
         } else if matches!(profile, "api-error" | "api-error-production") {
-            run_client_compat_profile(&["./tests/config/api-error/"], profile).await;
+            collect_client_compat_profile(&["./tests/config/api-error/"], profile, &mut failures)
+                .await;
         } else if profile.starts_with("request-security-") {
-            run_client_compat_profile(&["./tests/config/request-security/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-security/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-api-key-") {
-            run_client_compat_profile(&["./tests/config/request-api-key/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-api-key/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile == "native-dispatch" {
-            run_client_compat_profile(&["./tests/config/native-dispatch/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/native-dispatch/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile == "native-passkey" {
-            run_client_compat_profile(&["./tests/phase8/passkey.test.ts"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/phase8/passkey.test.ts"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile == "native-two-factor" {
-            run_client_compat_profile(&["./tests/phase11", "./tests/phase12"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/phase11", "./tests/phase12"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-otp-") {
-            run_client_compat_profile(&["./tests/config/request-otp/"], profile).await;
+            collect_client_compat_profile(&["./tests/config/request-otp/"], profile, &mut failures)
+                .await;
         } else if profile.starts_with("request-oauth-") {
-            run_client_compat_profile(&["./tests/config/request-oauth/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-oauth/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-two-factor-") {
-            run_client_compat_profile(&["./tests/config/request-two-factor/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-two-factor/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-admin-") {
-            run_client_compat_profile(&["./tests/config/request-admin/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-admin/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-organization-") {
-            run_client_compat_profile(&["./tests/config/request-organization/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-organization/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-plugin-") {
-            run_client_compat_profile(&["./tests/config/request-plugin/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-plugin/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-change-email") {
-            run_client_compat_profile(&["./tests/config/change-email/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/change-email/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-query-") {
-            run_client_compat_profile(&["./tests/config/request-query/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-query/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("request-record-") {
-            run_client_compat_profile(&["./tests/config/request-record/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/request-record/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("trailing-slashes-") {
-            run_client_compat_profile(&["./tests/config/trailing-slashes/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/trailing-slashes/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("username-") {
-            run_client_compat_profile(&["./tests/config/username-options/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/username-options/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("stateless-") {
-            run_client_compat_profile(&["./tests/config/stateless/"], profile).await;
+            collect_client_compat_profile(&["./tests/config/stateless/"], profile, &mut failures)
+                .await;
         } else if profile.starts_with("custom-session") {
-            run_client_compat_profile(&["./tests/config/custom-session/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/custom-session/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else if profile.starts_with("two-factor-") && profile != "two-factor-context" {
-            run_client_compat_profile(&["./tests/config/two-factor-options/"], profile).await;
+            collect_client_compat_profile(
+                &["./tests/config/two-factor-options/"],
+                profile,
+                &mut failures,
+            )
+            .await;
         } else {
-            run_client_compat_profile(&[&format!("./tests/config/{profile}/")], profile).await;
+            collect_client_compat_profile(
+                &[&format!("./tests/config/{profile}/")],
+                profile,
+                &mut failures,
+            )
+            .await;
         }
     }
     assert!(matched, "No configuration profile matched {selected:?}");
+    assert!(
+        failures.is_empty(),
+        "Client compatibility profiles failed: {}",
+        failures
+            .iter()
+            .map(|(profile, _)| profile.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
