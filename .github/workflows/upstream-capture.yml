@@ -19,6 +19,7 @@ on:
       - compat-tests/reference-server/contracts/adapter-id-slot-capture.mjs
       - compat-tests/reference-server/contracts/plugin-display-json-capture.mjs
       - compat-tests/reference-server/contracts/memory-sort-capture.mjs
+      - compat-tests/reference-server/contracts/organization-member-join-reference-capture.mjs
 
 permissions:
   contents: read
@@ -29,8 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: memory-sort
-            regression: api-key-cache-sort
+          - contract: organization-member-join-reference
+            regression: schema-join-reference
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
