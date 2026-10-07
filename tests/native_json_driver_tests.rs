@@ -234,7 +234,7 @@ async fn check(
                     assert_eq!(expected.properties.get("errno"), Some(&json!(3140)));
                     assert_eq!(expected.properties.get("sqlState"), Some(&json!("22032")));
                     format!(
-                        "Query Error: error returned from database: 3140 (22032): {}",
+                        "Execution Error: error returned from database: 3140 (22032): {}",
                         expected.message
                     )
                 }

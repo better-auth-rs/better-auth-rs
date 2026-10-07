@@ -30,6 +30,9 @@ jobs:
           - contract: adapter-id-slot
             regression: account-verification-serial-primary
             backend: ''
+          - contract: session-jwk-wallet-rate-limit-serial
+            regression: account-verification-serial-primary
+            backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:

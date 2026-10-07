@@ -8,4 +8,9 @@ test("Memory Session, Jwk, WalletAddress, and RateLimit Serial IDs match the cap
   expect(actual).toStrictEqual(fixture);
   expect(actual.version).toBe("1.7.6");
   expect(actual.cases).toHaveLength(53);
+  const negativeZero = actual.cases.find(entry => entry.operation === "id-update" && entry.name === "negative-zero");
+  expect(negativeZero?.input.id).toStrictEqual({ type: "number", value: "-0" });
+  expect(negativeZero?.events.find(event => event[0] === "update-before")?.[1].id).toStrictEqual({ type: "number", value: "-0" });
+  const zero = actual.cases.find(entry => entry.operation === "id-update" && entry.name === "zero");
+  expect(zero?.input.id).toBe(0);
 }, 30_000);

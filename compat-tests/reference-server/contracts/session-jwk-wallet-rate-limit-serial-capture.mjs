@@ -3,13 +3,23 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { jwt, siwe } from "better-auth/plugins";
-import { observeValue } from "./device-where-capture.mjs";
+import { observeValue as observeSharedValue } from "./device-where-capture.mjs";
 
 const version = JSON.parse(readFileSync(new URL("../node_modules/@better-auth/core/package.json", import.meta.url), "utf8")).version;
 assert.equal(version, "1.7.6");
 const date = new Date("2030-01-02T03:04:05.000Z");
 const expiresAt = new Date("2100-01-02T03:04:05.000Z");
 const models = ["session", "jwks", "walletAddress", "rateLimit"];
+
+// JSON erases the sign of zero. Preserve the sign in this contract's input and hook observations.
+function observeValue(value) {
+  if (Object.is(value, -0)) return { type: "number", value: "-0" };
+  if (Array.isArray(value)) return value.map(observeValue);
+  if (value !== null && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(Object.entries(value).map(([key, value]) => [key, observeValue(value)]));
+  }
+  return observeSharedValue(value);
+}
 
 function data(model, label) {
   switch (model) {

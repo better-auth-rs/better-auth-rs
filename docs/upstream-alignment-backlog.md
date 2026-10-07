@@ -12,11 +12,13 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+The Serial capture now preserves negative zero with a contract-local number tag in the complete input and hook observations. All 53 cases and strict whole-document comparison remain required; CI must regenerate the fixture. The native JSON MySQL check now uses the observed SeaORM `Execution Error` prefix while retaining the complete database diagnostic and every other assertion. These corrections await focused CI.
+
 SQL Session updates now resolve supplied IDs at their schema slot and build MySQL reselect predicates from the final bound writes. The shared traversal retains ID and physical-column alias order without a second typed-ID parse. Regression coverage targets Serial conversion and omission, nested policy changes, aliases, extension-field precedence, and changed tokens. These source-supported checks have not run in CI and do not establish a new upstream golden pairing. Runtime `forceAllowId` history and generic creation alias collisions remain separate work.
 
 User-fields CI 37611599609 at `39266e8` passed production-library Clippy, then stopped at an unfulfilled `panic_in_result_fn` expectation in the new SQL ID-slot test. The unnecessary expectation is removed; all assertions remain unchanged. Rust behavior acceptance for the ID-slot implementation remains pending.
 
-Runtime-values CI 37611694835 at `0f977cf` stopped during strict Bun replay before Rust checks. The new ID-slot capture omitted explicit User/Session update timestamps, so upstream `updatedAt.onUpdate` introduced twelve real-clock values across four cases. The original capture, fixture, and assertions remain unchanged pending permission to supply a fixed timestamp in the actual update request and recapture all sixteen cases. The capture workflow now repeats the complete capture and compares both JSON documents before issuing checksums.
+Runtime-values CI 37611694835 at `0f977cf` stopped during strict Bun replay before Rust checks. The new ID-slot capture omitted explicit User/Session update timestamps, so upstream `updatedAt.onUpdate` introduced twelve real-clock values across four cases. The actual update request now supplies a fixed timestamp. All sixteen cases and complete assertions remain required; the replacement fixture must come from CI. The capture workflow repeats the complete capture and compares both JSON documents before issuing checksums. The original fixture and failed logs remain available as prior evidence.
 
 User-fields CI 37609927617 at `901a026` passed the complete focused stage. This accepts the current Serial owner, ID projection, reference, join, and User field regressions through that commit. The subsequent explicit-ID runtime-policy work is not included in this result.
 

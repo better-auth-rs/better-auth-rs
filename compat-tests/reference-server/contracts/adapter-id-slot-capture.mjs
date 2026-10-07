@@ -8,6 +8,7 @@ import { observeValue } from "./device-where-capture.mjs";
 const version = JSON.parse(readFileSync(new URL("../node_modules/@better-auth/core/package.json", import.meta.url), "utf8")).version;
 assert.equal(version, "1.7.6");
 const date = new Date("2030-01-02T03:04:05.000Z");
+const changedAt = new Date("2031-01-02T03:04:05.000Z");
 const expiresAt = new Date("2100-01-02T03:04:05.000Z");
 const models = ["user", "session", "jwks", "walletAddress"];
 const slots = ["before-label", "after-label"];
@@ -110,7 +111,10 @@ async function captureCase(model, slot, operation) {
       events.push(["output", "label", observeValue(value)]);
       if (operation === "live-output-id-write") {
         const input = {
-          model, where: [{ field: "id", value: selectedId }], update: { id: "00101" },
+          model, where: [{ field: "id", value: selectedId }], update: {
+            id: "00101",
+            ...(model === "user" || model === "session" ? { updatedAt: changedAt } : {}),
+          },
         };
         events.push(["writer-update", observeValue(input), observeValue(memory)]);
         phase = "writer-update";
