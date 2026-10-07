@@ -197,7 +197,6 @@ fn visible(row: &DeviceCode, seeded: &DeviceCode) -> AuthResult<Value> {
 
 #[expect(
     clippy::expect_used,
-    clippy::panic_in_result_fn,
     reason = "Storage observations require the complete callback input for every declared field"
 )]
 async fn stored(
@@ -313,7 +312,6 @@ fn condition(case: &Case) -> AuthResult<DeviceCodeOwnership> {
 
 #[expect(
     clippy::expect_used,
-    clippy::panic_in_result_fn,
     reason = "The contract requires exact input traces and diagnostic messages while propagating store failures"
 )]
 pub(crate) async fn run<S: AuthSchema>(
