@@ -129,8 +129,9 @@ impl<E: EntityTrait> RecordWrite<E> {
         let values = super::record_bindings::bind(backend, bindings)?;
         let id = columns
             .iter()
-            .position(|column| column.to_string() == primary.to_string())
-            .map(|index| values[index].clone());
+            .zip(&values)
+            .find(|(column, _)| column.to_string() == primary.to_string())
+            .map(|(_, value)| value.clone());
         let values = columns
             .iter()
             .zip(values)

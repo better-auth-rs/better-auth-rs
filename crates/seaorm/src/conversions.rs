@@ -93,8 +93,8 @@ impl From<&entities::api_key::Model> for ApiKey {
             remaining: model.remaining,
             last_request: model.last_request.map(Into::into),
             expires_at: model.expires_at.map(Into::into),
-            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
-            updated_at: better_auth_core::FieldDate::from(model.updated_at).into(),
+            created_at: better_auth_core::FieldDate::from(model.created_at),
+            updated_at: better_auth_core::FieldDate::from(model.updated_at),
             permissions: model.permissions.clone(),
             metadata: model.metadata.clone(),
         }

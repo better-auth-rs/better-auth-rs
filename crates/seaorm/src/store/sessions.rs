@@ -111,7 +111,7 @@ where
         }
     }
 
-    pub(crate) async fn apply_session_field_updates(
+    pub(super) async fn apply_session_field_updates(
         &self,
         active: <S::Session as SeaOrmSessionModel>::ActiveModel,
     ) -> AuthResult<super::record_write::RecordWrite<<S::Session as SeaOrmSessionModel>::Entity>>
