@@ -39,6 +39,9 @@ pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>, now: i64) -> T
             impersonated_by: None,
             active_organization_id: None,
             additional_fields: FieldMap::from([
+                // The captured adapter.create seed explicitly supplies null client metadata.
+                ("ipAddress".into(), FieldValue::Null),
+                ("userAgent".into(), FieldValue::Null),
                 ("token".into(), "duration-owner-session-token".into()),
                 ("createdAt".into(), date.clone().into()),
                 ("updatedAt".into(), date.clone().into()),
