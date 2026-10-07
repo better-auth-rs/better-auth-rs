@@ -29,6 +29,56 @@ fn session_input(user_id: &str) -> CreateSession {
     }
 }
 
+#[tokio::test]
+async fn serial_session_update_ids_reach_the_numeric_column_after_conversion() -> TestResult {
+    use better_auth_core::store::{SessionStore, UserStore, database_hooks::SessionUpdate};
+
+    let database = Database::connect("sqlite::memory:").await?;
+    run_app_migrations(&database).await?;
+    let store = SeaOrmStore::<LegacySchema>::new(test_config(), database.clone());
+    let owner = store
+        .create_user(
+            CreateUser::new()
+                .with_email("session-id@ids.test")
+                .with_name("Owner"),
+        )
+        .await?;
+    let created = store
+        .create_session(session_input(owner.id.typed()?))
+        .await?;
+    let mut expected_id = created.id.typed()?.parse::<i32>()?;
+    for (input, replacement) in [
+        ("1e2", Some(100)),
+        ("0x65", Some(101)),
+        ("", None),
+        ("invalid", None),
+    ] {
+        if let Some(id) = replacement {
+            expected_id = id;
+        }
+        let updated = store
+            .update_session_with_writer(
+                &created.token,
+                SessionUpdate {
+                    id: Some(input.into()),
+                    ip_address: Some(Some(format!("input:{input}"))),
+                    ..Default::default()
+                },
+                None,
+            )
+            .await?
+            .ok_or("Numeric Session update returned no row")?;
+        assert_eq!(updated.id.typed()?, &expected_id.to_string());
+        let row = session::Entity::find_by_id(expected_id)
+            .one(&database)
+            .await?
+            .ok_or("Numeric Session update did not persist")?;
+        assert_eq!(row.token, created.token);
+        assert_eq!(row.ip_address, Some(format!("input:{input}")));
+    }
+    Ok(())
+}
+
 async fn create_graph(tx: &dyn AuthTransaction<LegacySchema>, label: &str) -> AuthResult<Graph> {
     let user = tx
         .create_user(

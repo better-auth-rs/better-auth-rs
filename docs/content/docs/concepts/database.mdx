@@ -129,6 +129,8 @@ User, Session, JWK, and Wallet creation apply each configured field's input tran
 
 Nested adapter operations share the current ID policy. If a nested output replaces the input policy before the outer creation reaches its ID slot, the outer creation omits ID generation. Memory output reads an ID at its field position, so an earlier output callback can change the returned ID. SQL output reads the returned database snapshot. Memory Serial mode still assigns its numeric ID during insertion.
 
+SQL Session updates resolve a supplied ID at its schema position. Under the Serial input policy, `"1e2"` becomes `100`; empty strings and values that convert to `NaN` omit the ID write. Earlier callbacks can replace that input policy through a nested output. Field aliases retain their write order, and MySQL reads the updated row with the final ID or token binding.
+
 ```rust
 use better_auth::config::IdGeneration;
 let mut config = better_auth::AuthConfig::new("your-very-secure-secret-key-at-least-32-chars-long");

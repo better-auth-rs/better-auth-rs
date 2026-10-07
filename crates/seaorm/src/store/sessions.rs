@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, IntoActiveModel,
-    QueryFilter, QuerySelect,
+    QueryFilter, QuerySelect, sea_query::ExprTrait,
 };
 
 use better_auth_core::store::schema::EntityRole;
@@ -384,20 +384,43 @@ where
         token: &str,
         mut update: SessionUpdate,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
-        let reselect = match update.id.as_deref() {
-            Some(id) => S::Session::id_column().eq(self.parse_id(id, S::Session::parse_id)?),
-            None => S::Session::token_column().eq(update.token.as_deref().unwrap_or(token)),
-        };
+        let backend = db.get_database_backend();
         let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
         self.validate_session_fields()?;
         self.model_fields.begin_id_input(EntityRole::Session)?;
+        let mut input = std::mem::take(&mut update.additional_fields);
+        let typed_id = update.id.take().map(better_auth_core::FieldValue::from);
+        let mut supplied_id = input.remove("id").or(typed_id);
         let fields = self
             .config()
             .session
             .adapter_schema()
-            .storage_fields_with_binding(
-                std::mem::take(&mut update.additional_fields),
-                false,
+            .update_adapter_storage_fields(
+                input,
+                || {
+                    let Some(value) = supplied_id.take() else {
+                        return Ok(None);
+                    };
+                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                        return Ok(Some(value));
+                    }
+                    if !value.is_truthy() {
+                        return Ok(None);
+                    }
+                    match self.config().advanced.database.generate_id() {
+                        better_auth_core::id::IdGeneration::Serial => {
+                            let number = better_auth_core::query::field_number(&value)?;
+                            Ok((!number.is_nan())
+                                .then_some(better_auth_core::FieldValue::Number(number)))
+                        }
+                        better_auth_core::id::IdGeneration::Uuid
+                            if backend == sea_orm::DbBackend::Postgres =>
+                        {
+                            Ok(None)
+                        }
+                        _ => Ok(Some(value)),
+                    }
+                },
                 |name, field, value| {
                     crate::reference_id::input_binding(
                         name,
@@ -406,7 +429,7 @@ where
                         self.config().advanced.database.generate_id(),
                         S::Session::field_column,
                         S::Session::native_json_field,
-                        db.get_database_backend(),
+                        backend,
                     )
                 },
             )
@@ -428,6 +451,18 @@ where
             }
         }
         active.apply_fields(fields, S::Session::field_column)?;
+        let reselect = match (
+            active.expression(S::Session::id_column(), backend)?,
+            active.expression(S::Session::token_column(), backend)?,
+        ) {
+            (Some(value), _) => S::Session::id_column()
+                .into_expr()
+                .eq(S::Session::id_column().save_as(value)),
+            (_, Some(value)) => S::Session::token_column()
+                .into_expr()
+                .eq(S::Session::token_column().save_as(value)),
+            _ => S::Session::token_column().eq(token),
+        };
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "update",

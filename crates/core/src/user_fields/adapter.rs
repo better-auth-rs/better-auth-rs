@@ -60,18 +60,61 @@ impl UserConfig {
         mut resolve_id: impl FnMut() -> AuthResult<Option<I>>,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<(FieldMap, Option<I>)> {
+        let mut id = None;
+        let output = self
+            .storage_fields_with_bound_id(
+                input,
+                create,
+                || {
+                    id = resolve_id()?;
+                    Ok(None)
+                },
+                bind,
+            )
+            .await?;
+        Ok((output, id))
+    }
+
+    /// Apply update policies and preserve ID writes in schema order with aliased fields.
+    #[doc(hidden)]
+    pub async fn update_adapter_storage_fields(
+        &self,
+        input: FieldMap,
+        resolve_id: impl FnMut() -> AuthResult<Option<Value>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<FieldMap> {
+        self.storage_fields_with_bound_id(input, false, resolve_id, bind)
+            .await
+    }
+
+    async fn storage_fields_with_bound_id(
+        &self,
+        input: FieldMap,
+        create: bool,
+        mut resolve_id: impl FnMut() -> AuthResult<Option<Value>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<FieldMap> {
         let schema = self.adapter_fields(&[]);
         let mut output = FieldMap::new();
-        let mut id = None;
         for (name, field) in schema.fields() {
-            if name == "id" {
-                id = resolve_id()?;
-            } else if let Some(value) = field.storage_input(input.get(name), create).await? {
+            let value = if name == "id" {
+                resolve_id()?
+            } else {
+                field.storage_input(input.get(name), create).await?
+            };
+            if let Some(value) = value {
                 let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-                let _ = output.insert(storage_name.to_owned(), bind(storage_name, field, value)?);
+                let value = if name == "id" {
+                    value
+                } else {
+                    bind(storage_name, field, value)?
+                };
+                if !value.is_undefined() {
+                    let _ = output.insert(storage_name.to_owned(), value);
+                }
             }
         }
-        Ok((output, id))
+        Ok(output)
     }
 
     pub(crate) fn ordered_fields(&self, native: &[&str]) -> Vec<(&str, &UserFieldConfig)> {
