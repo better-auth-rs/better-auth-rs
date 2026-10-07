@@ -83,7 +83,7 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     let created = store.create_session(create).await?;
     let ended = Utc::now().timestamp_millis() as f64;
     assert!((started..=ended).contains(&created.created_at.milliseconds()));
-    assert_eq!(created.updated_at, created.created_at);
+    assert!((started..=ended).contains(&created.updated_at.milliseconds()));
     assert_eq!(created.token.len(), 32);
     assert!(
         created

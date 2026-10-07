@@ -12,6 +12,8 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+Plugin-fields CI 37639718338 at `9ba943b` passed all 117 upstream tests again, then reported the bounded insertion loop's indexing lint. A loop-local expectation now states the checked index invariant. Source review also corrected one remaining Session regression that required independently generated creation timestamps to be equal. Both timestamps now retain separate creation-time bounds; the complete storage and readback assertions remain unchanged. Rust acceptance remains pending.
+
 At `015d6d8`, user-fields CI 37639180216 passed 38 upstream tests with 984 assertions, including every Session creation contract. Plugin-fields CI 37639187671 passed 117 upstream tests with 2211 assertions, including dynamic cache sorting and Enum display declarations. Both Rust checks stopped at the same unused-result lint in the Session secondary writer's optional-storage guard. The guard now explicitly discards the borrowed value while retaining its early return. No behavior assertion changed; Rust acceptance remains pending.
 
 API Key `name` and Passkey `name`/`aaguid` now accept Enum declarations through their existing String columns. The native reference and column-collision restrictions remain unchanged. Existing Memory/SQLite display contracts also exercise `Enum(["Reserved"])` with unlisted strings, dynamic callback output, complete storage assertions, endpoint responses, and cache refill/hits. The upstream adapter does not validate Enum membership at these boundaries. The existing `plugin-fields` selectors cover the expanded contracts and run upstream contracts before Rust compilation; CI acceptance remains pending.

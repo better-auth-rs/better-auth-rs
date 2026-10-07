@@ -663,6 +663,10 @@ fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) 
     };
     // Mixed values and invalid dates can violate sort_by's total-order requirement.
     // ponytail: O(n²); use a subquadratic sort that accepts unordered comparisons if large cache lists become costly.
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "The outer range bounds current; current only decreases while positive"
+    )]
     for index in 1..views.len() {
         let mut current = index;
         while current > 0 && compare(&views[current], &views[current - 1])? == Less {
