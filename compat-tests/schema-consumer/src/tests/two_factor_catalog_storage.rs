@@ -1,6 +1,6 @@
 use super::server_catalog::TestResult;
 use better_auth::{
-    AuthConfig, AuthSchema,
+    AuthConfig, AuthSchema, FieldMap,
     prelude::{
         AuthUser, CreateTwoFactor, CreateUser, TwoFactor, TwoFactorStorage, UpdateTwoFactor,
         UpdateUser, UserView,
@@ -81,7 +81,7 @@ where
         .with_email_verified(false);
     owner_input.image = Option::<String>::None.into();
     owner_input.created_at = Some("2030-01-02T03:04:05.123Z".parse()?);
-    owner_input.updated_at = owner_input.created_at;
+    owner_input.updated_at = owner_input.created_at.clone();
     let owner = store.create_user(owner_input).await?;
     let owner_id = owner.id.typed()?.clone();
     assert!(!owner_id.is_empty());
@@ -149,10 +149,10 @@ where
     let mut active = model.into_active_model();
     P::TwoFactor::apply_fields(
         &mut active,
-        Map::from_iter([
+        FieldMap::from_json(Map::from_iter([
             ("verified".into(), Value::Null),
             ("failed_verification_count".into(), Value::Null),
-        ]),
+        ]))?,
     )?;
     let nullable = active.update(database).await?.record()?;
     expected.verified = None;
@@ -283,7 +283,7 @@ where
         .record_two_factor_failure(&created.id, 2, &deadline)
         .await?;
     expected.failed_verification_count = Some(2);
-    expected.locked_until = Some(lock);
+    expected.locked_until = Some(lock.into());
     assert_eq!(stored::<P>(database, &id).await?, expected);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     store

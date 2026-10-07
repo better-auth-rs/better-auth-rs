@@ -1,6 +1,6 @@
 use super::server_catalog::TestResult;
 use better_auth::{
-    AuthConfig, AuthSchema,
+    AuthConfig, AuthSchema, FieldMap,
     prelude::{
         CreatePasskey, CreateUser, Passkey, PasskeyCredentialState, PasskeyStorage,
         UpdatePasskeyAuthentication,
@@ -107,7 +107,7 @@ where
     let mut active = model.into_active_model();
     P::Passkey::apply_fields(
         &mut active,
-        Map::from_iter([("created_at".to_owned(), Value::Null)]),
+        FieldMap::from_json(Map::from_iter([("created_at".to_owned(), Value::Null)]))?,
     )?;
     let nullable = active.update(database).await?.record()?;
     expected.created_at = None.into();

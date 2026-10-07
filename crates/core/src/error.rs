@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// An endpoint error response whose body and headers are excluded from diagnostics.
-pub struct ApiErrorResponse(crate::types::AuthResponse, bool);
+pub struct ApiErrorResponse(Box<crate::types::AuthResponse>, bool);
 
 impl std::fmt::Debug for ApiErrorResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -157,9 +157,11 @@ impl AuthError {
     /// Numeric 302 errors created from `AuthResponse` retain the ordinary API error policy.
     pub fn redirect(location: impl Into<String>) -> Self {
         Self::Response(ApiErrorResponse(
-            crate::AuthResponse::new(302)
-                .with_header("location", location)
-                .with_header("content-type", "application/json"),
+            Box::new(
+                crate::AuthResponse::new(302)
+                    .with_header("location", location)
+                    .with_header("content-type", "application/json"),
+            ),
             true,
         ))
     }
@@ -328,7 +330,7 @@ impl AuthError {
     /// `IntoResponse::into_response` when the `axum` feature is enabled.
     pub fn to_auth_response(self) -> crate::types::AuthResponse {
         if let Self::Response(response) = self {
-            return response.0.into_api_error();
+            return (*response.0).into_api_error();
         }
         if let Self::PasswordHash(error) = self {
             crate::observability::logger::current().error(
@@ -438,7 +440,7 @@ pub type AuthResult<T> = Result<T, AuthError>;
 
 impl From<crate::types::AuthResponse> for AuthError {
     fn from(response: crate::types::AuthResponse) -> Self {
-        Self::Response(ApiErrorResponse(response, false))
+        Self::Response(ApiErrorResponse(Box::new(response), false))
     }
 }
 

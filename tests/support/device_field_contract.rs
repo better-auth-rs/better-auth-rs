@@ -170,7 +170,7 @@ fn observe(name: &str, row: &DeviceCode) -> AuthResult<Value> {
         .flatten();
     assert_eq!(serialized.get("label"), label.as_ref());
     assert!(serialized.get("additional_fields").is_none());
-    Ok(json!({"name":name, "scope":row.scope.json()?, "fields":row.additional_fields}))
+    Ok(json!({"name":name, "scope":row.scope.json()?, "fields":row.additional_fields.json()?}))
 }
 
 #[expect(
