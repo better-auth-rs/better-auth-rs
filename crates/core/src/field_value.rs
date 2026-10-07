@@ -332,9 +332,7 @@ impl FieldValue {
             Self::Undefined => return Ok(None),
             Self::Null => JsonValue::Null,
             Self::Bool(value) => JsonValue::Bool(*value),
-            Self::Number(value) => {
-                serde_json::Number::from_f64(*value).map_or(JsonValue::Null, JsonValue::Number)
-            }
+            Self::Number(_) => serde_json::to_value(serde::Json(self))?,
             Self::String(value) => JsonValue::String(value.clone()),
             Self::Utf16String(value) => JsonValue::String(value.to_utf8().map_err(|error| {
                 AuthError::internal(format!(

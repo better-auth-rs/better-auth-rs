@@ -23,7 +23,7 @@ impl<S: AuthSchema> ValidateUserInfo<S> for AdmissionRecords {
         _: &EndpointContext<'_, S>,
     ) -> AuthResult<Option<UserValidationRejection>> {
         self.0.lock().unwrap().push(json!({
-            "name": data.user.get("name"),
+            "name": data.user.get("name").map(better_auth_core::FieldValue::json).transpose()?.flatten(),
             "source": data.source,
         }));
         Ok(None)

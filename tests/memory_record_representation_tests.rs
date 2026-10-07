@@ -1,5 +1,5 @@
 use better_auth_core::{
-    AuthConfig, AuthResult, AuthStore, CreateAccount, CreateUser, CreateVerification,
+    AuthConfig, AuthResult, AuthStore, CreateAccount, CreateUser, CreateVerification, FieldMap,
     UpdateAccount,
     id::{IdGeneration, IdGenerator},
     store::{EphemeralStore, RuntimeStore, StatelessSchema, database_hooks::VerificationUpdate},
@@ -91,11 +91,11 @@ fn fields(scenario: Scenario, events: Option<&Trace>) -> UserConfig {
                         let output = events.clone();
                         FieldTransforms {
                             input: Some(UserFieldTransform::new(move |value| {
-                                event(&input, json!(["input", name, value]));
+                                event(&input, json!(["input", name, value.json()?]));
                                 Ok(value)
                             })),
                             output: Some(UserFieldTransform::new(move |value| {
-                                event(&output, json!(["output", name, value]));
+                                event(&output, json!(["output", name, value.json()?]));
                                 Ok(value)
                             })),
                         }
@@ -181,6 +181,7 @@ async fn create(
     owner: &str,
     extras: Map<String, Value>,
 ) -> AuthResult<(String, Value)> {
+    let extras = FieldMap::from_json(extras)?;
     match family {
         Family::Account => {
             let row = store
@@ -194,7 +195,7 @@ async fn create(
                 .await?;
             Ok((
                 row.id.typed()?.clone(),
-                serde_json::to_value(row.additional_fields)?,
+                Value::Object(row.additional_fields.json()?),
             ))
         }
         Family::Verification => {
@@ -212,7 +213,7 @@ async fn create(
                 .await?;
             Ok((
                 row.id.typed()?.clone(),
-                serde_json::to_value(row.additional_fields)?,
+                Value::Object(row.additional_fields.json()?),
             ))
         }
     }
@@ -223,7 +224,7 @@ async fn create(
     reason = "The contract reads only a record created by the same ordinary fixture"
 )]
 async fn read(store: &Store, family: Family) -> AuthResult<Value> {
-    Ok(serde_json::to_value(match family {
+    let fields = match family {
         Family::Account => {
             store
                 .get_account("ordinary", "display-row")
@@ -238,7 +239,8 @@ async fn read(store: &Store, family: Family) -> AuthResult<Value> {
                 .expect("ordinary display verification exists")
                 .additional_fields
         }
-    })?)
+    };
+    Ok(Value::Object(fields.json()?))
 }
 
 #[expect(
@@ -246,13 +248,13 @@ async fn read(store: &Store, family: Family) -> AuthResult<Value> {
     reason = "The ordinary update must return the fixture record"
 )]
 async fn update(store: &Store, family: Family, id: &str) -> AuthResult<Value> {
-    Ok(serde_json::to_value(match family {
+    let fields = match family {
         Family::Account => {
             store
                 .update_account(
                     id,
                     UpdateAccount {
-                        additional_fields: display_input(true),
+                        additional_fields: FieldMap::from_json(display_input(true))?,
                         ..Default::default()
                     },
                 )
@@ -264,7 +266,7 @@ async fn update(store: &Store, family: Family, id: &str) -> AuthResult<Value> {
                 .update_verification(
                     "ordinary-display",
                     VerificationUpdate {
-                        additional_fields: display_input(true),
+                        additional_fields: FieldMap::from_json(display_input(true))?,
                         ..Default::default()
                     },
                 )
@@ -272,7 +274,8 @@ async fn update(store: &Store, family: Family, id: &str) -> AuthResult<Value> {
                 .expect("ordinary display update returns a record")
                 .additional_fields
         }
-    })?)
+    };
+    Ok(Value::Object(fields.json()?))
 }
 
 #[expect(

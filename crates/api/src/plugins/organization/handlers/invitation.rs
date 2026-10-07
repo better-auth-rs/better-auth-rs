@@ -850,7 +850,14 @@ mod tests {
         let first = invite_member_core(&body, &user, &session, &config, &ctx, None)
             .await
             .unwrap();
-        let shortened = *first.expires_at.typed().unwrap() - Duration::hours(1);
+        let shortened = first
+            .expires_at
+            .typed()
+            .unwrap()
+            .to_datetime()
+            .unwrap()
+            .unwrap()
+            - Duration::hours(1);
         ctx.database
             .update_invitation_expiry(first.id.typed().unwrap(), shortened)
             .await
@@ -860,7 +867,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resent.id, first.id);
-        assert!(*resent.expires_at.typed().unwrap() > shortened);
+        assert!(
+            resent
+                .expires_at
+                .typed()
+                .unwrap()
+                .to_datetime()
+                .unwrap()
+                .unwrap()
+                > shortened
+        );
         assert_eq!(
             ctx.database
                 .get_invitation_by_id(first.id.typed().unwrap())

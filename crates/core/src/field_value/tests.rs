@@ -130,6 +130,47 @@ fn json_boundary_preserves_omission_and_applies_javascript_value_conversion() {
 #[test]
 #[expect(
     clippy::expect_used,
+    reason = "The fixed JavaScript number encodings must parse and project at both JSON boundaries"
+)]
+fn numeric_json_projection_matches_javascript_number_encodings() {
+    for (number, expected) in [
+        (0.0, "0"),
+        (-0.0, "0"),
+        (1.0, "1"),
+        (-1.0, "-1"),
+        (1.5, "1.5"),
+        (-1.5, "-1.5"),
+        (9_007_199_254_740_992.0, "9007199254740992"),
+        (1e20, "100000000000000000000"),
+        (1e21, "1e+21"),
+        (1e-6, "0.000001"),
+        (1e-7, "1e-7"),
+        (f64::NAN, "null"),
+        (f64::INFINITY, "null"),
+        (f64::NEG_INFINITY, "null"),
+    ] {
+        let value = FieldValue::Number(number);
+        let expected_json: JsonValue =
+            serde_json::from_str(expected).expect("fixed JavaScript number JSON");
+        assert_eq!(
+            value.json().expect("number JSON projection"),
+            Some(expected_json),
+            "JSON value for {number}"
+        );
+        assert_eq!(
+            value
+                .stringify()
+                .expect("number JSON serialization")
+                .as_deref(),
+            Some(expected),
+            "JSON text for {number}"
+        );
+    }
+}
+
+#[test]
+#[expect(
+    clippy::expect_used,
     reason = "The fixed finite records must have JSON representations for change detection"
 )]
 fn structural_equality_does_not_replace_stringify_change_detection() {
