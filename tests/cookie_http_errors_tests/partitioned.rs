@@ -19,6 +19,10 @@ fn shapes<'a>(headers: impl IntoIterator<Item = &'a String>) -> Vec<Value> {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Result propagates setup and transport failures; assertions retain complete fixture diagnostics."
+)]
 async fn partitioned_attributes_follow_resolution_through_all_cookie_writers() -> AuthResult<()> {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/cookie-partitioned-1.7.6.json"))?;

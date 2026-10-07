@@ -22,10 +22,10 @@ fn sort_headers(value: &mut Value) {
 
 fn semantic_response(value: &Value, anchor: i64) -> Value {
     let mut value = normalize(value, anchor);
-    if let Some(text) = value["body"].as_str() {
-        if let Ok(body) = serde_json::from_str::<Value>(text) {
-            value["body"] = body;
-        }
+    if let Some(text) = value["body"].as_str()
+        && let Ok(body) = serde_json::from_str::<Value>(text)
+    {
+        value["body"] = body;
     }
     value
 }

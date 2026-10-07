@@ -89,6 +89,10 @@ impl AuthPlugin<S> for CleanupEndpoint {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Result propagates setup and transport failures; assertions retain complete ordered-header diagnostics."
+)]
 async fn aggregate_cleanup_preserves_ordered_complete_headers() -> AuthResult<()> {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("fixtures/cookie-cleanup-1.7.6.json"))?;

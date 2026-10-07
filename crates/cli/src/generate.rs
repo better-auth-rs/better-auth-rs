@@ -252,13 +252,12 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
             .then(|| quote! { #[sea_orm(primary_key, auto_increment = #auto_increment)] });
         let number_storage = if entity.role == Some(EntityRole::RateLimit) && name == "count" {
             Some(quote!(#[sea_orm(column_type = "Integer")]))
-        } else if entity.role == Some(EntityRole::DeviceCode) && name == "polling_interval" {
-            Some(quote!(#[sea_orm(column_type = "Integer", nullable)]))
-        } else if entity.api_key_native_schema
-            && field
-                .registry_column
-                .and_then(|column| entity.catalog_field(column))
-                .is_some_and(|definition| definition.ty == "Option<f64>")
+        } else if (entity.role == Some(EntityRole::DeviceCode) && name == "polling_interval")
+            || entity.api_key_native_schema
+                && field
+                    .registry_column
+                    .and_then(|column| entity.catalog_field(column))
+                    .is_some_and(|definition| definition.ty == "Option<f64>")
         {
             Some(quote!(#[sea_orm(column_type = "Integer", nullable)]))
         } else {

@@ -257,6 +257,10 @@ impl BeforeStoreLastLoginCookie<S> for Observer {
 }
 
 impl ApiErrorHandler<S> for Observer {
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "The callback validates the routed error type; returning Err would test a different error-handler path."
+    )]
     fn on_error(&self, error: &AuthError, _: &AuthContext<S>) -> AuthResult<Option<ApiErrorTask>> {
         let AuthError::Internal(message) = error else {
             panic!("expected ordinary cookie error")
