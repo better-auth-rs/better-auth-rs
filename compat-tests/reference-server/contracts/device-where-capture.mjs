@@ -24,12 +24,12 @@ export const observeValue = value => {
   return value;
 };
 
-export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios(), { diagnostics = [] } = {}) {
+export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios(), { diagnostics = [], ownerRefType = "string" } = {}) {
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const events = [];
   const fields = Object.fromEntries(Object.entries(fieldTypes).map(([field, type]) => [field, {
-    type, required: false, fieldName: `stored_${field}`,
+    type: field === "ownerRef" ? ownerRefType : type, required: false, fieldName: `stored_${field}`,
     ...(field === "ownerRef" ? { references: { model: "user", field: "id" } } : {}),
     transform: {
       input(value) { events.push({ phase: "input", field, value: observeValue(value) }); return value; },
@@ -89,7 +89,7 @@ export async function captureDeviceWhereGroup(backend, serial, scenarios = devic
       if (scenario.guardMismatch) {
         const guard = where.find(condition => condition.field === scenario.guardMismatch);
         assert.ok(guard, "The mismatch must replace an existing native binding");
-        guard.value = `${scenario.guardMismatch}-mismatch`;
+        guard.value = Object.hasOwn(scenario, "guardMismatchValue") ? scenario.guardMismatchValue : `${scenario.guardMismatch}-mismatch`;
       }
       const before = await raw();
       const storageBefore = scenario.observeStorage ? await storage() : undefined;

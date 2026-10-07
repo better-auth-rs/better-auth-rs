@@ -38,6 +38,7 @@ on:
       - compat-tests/reference-server/contracts/session-user-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/device-where-references-capture.mjs
       - compat-tests/reference-server/contracts/device-reference-sets-capture.mjs
+      - compat-tests/reference-server/contracts/device-reference-values-capture.mjs
       - compat-tests/reference-server/contracts/email-verification-payload-capture.mjs
       - compat-tests/reference-server/contracts/oauth-token-duration-capture.mjs
       - compat-tests/reference-server/contracts/memory-name-coercion-capture.mjs
@@ -56,17 +57,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: device-reference-sets
-            regressions: [device-where, device-where-transactions, device-where-references]
+          - contract: device-reference-values
+            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets]
             backend: memory
-          - contract: device-reference-sets
-            regressions: [device-where, device-where-transactions, device-where-references]
+          - contract: device-reference-values
+            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets]
             backend: sqlite
-          - contract: device-reference-sets
-            regressions: [device-where, device-where-transactions, device-where-references]
+          - contract: device-reference-values
+            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets]
             backend: postgres
-          - contract: device-reference-sets
-            regressions: [device-where, device-where-transactions, device-where-references]
+          - contract: device-reference-values
+            regressions: [device-where, device-where-transactions, device-where-references, device-reference-sets]
             backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
