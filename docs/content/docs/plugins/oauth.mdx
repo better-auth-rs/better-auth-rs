@@ -93,6 +93,8 @@ Social `scopes`, `disable_implicit_sign_up`, and `disable_sign_up` retain omissi
 
 Set `require_email_verification` to `Some(true)` to require a verified user email before issuing a session. Omitted and false values disable this requirement. Social and Generic providers use the same verification policy and configured verification-email sender.
 
+When sign-in requires verification and enables email delivery, a missing selected-user email is logged before returning `EMAIL_NOT_VERIFIED`. The sender is not called. This includes an Account relation that selects a User array. Without a configured sender, the same verification decision does not attempt delivery or produce that delivery error log.
+
 Register social providers in one `OAuthPlugin` for the verified upstream configuration mapping. The same plugin may contain Generic OAuth providers. Multiple `OAuthPlugin` instances keep separate runtime configurations and have no unique upstream provider-map equivalent.
 
 Set `map_profile_to_user` to an `Arc<dyn OAuthProfileMapper>` to override local profile fields after built-in decoding. TikTok ignores this callback, matching its pinned provider behavior. Omitted mapper fields preserve the provider value. `Some(None.into())` clears the name, `Some(None)` clears the image, and `additional_fields` adds configured application fields. The mapper cannot change the account subject. A custom `get_user_info` handler takes precedence and skips this mapper. Callback errors propagate through the existing OAuth error path. `map_user_info` remains the base JSON decoder for custom providers; it is distinct from the local-field mapper.

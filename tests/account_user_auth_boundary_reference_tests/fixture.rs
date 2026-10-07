@@ -14,6 +14,12 @@ pub(super) struct Scenario {
     pub(super) override_user_info: bool,
     #[serde(default)]
     pub(super) callback: bool,
+    #[serde(default)]
+    pub(super) require_email_verification: bool,
+    #[serde(default)]
+    pub(super) send_on_sign_in: bool,
+    #[serde(default)]
+    pub(super) email_sender: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -67,6 +73,44 @@ pub(super) struct Fixture {
 }
 
 impl Fixture {
+    pub(super) fn read_email() -> AuthResult<Self> {
+        let fixture: Self = serde_json::from_str(include_str!(
+            "../fixtures/account-user-auth-email-1.7.6.json"
+        ))?;
+        assert_eq!(fixture.version, "1.7.6");
+        assert_eq!(fixture.scenarios.len(), 2);
+        assert_eq!(fixture.cases.len(), 8);
+        for sender in [true, false] {
+            let name = format!(
+                "social-owner-many-email-{}",
+                if sender { "sender" } else { "no-sender" }
+            );
+            let scenario = fixture.scenario(&name)?;
+            assert_eq!(scenario.route, "social");
+            assert_eq!(scenario.relation, "reverse-user-reference-many");
+            assert!(
+                scenario.many && scenario.require_email_verification && scenario.send_on_sign_in
+            );
+            assert!(!scenario.accounts_one && !scenario.override_user_info && !scenario.callback);
+            assert_eq!(scenario.email_sender, sender);
+            for backend in ["memory", "sqlite"] {
+                for joins in [false, true] {
+                    assert_eq!(
+                        fixture
+                            .cases
+                            .iter()
+                            .filter(|case| case.scenario == name
+                                && case.backend == backend
+                                && case.joins == joins)
+                            .count(),
+                        1
+                    );
+                }
+            }
+        }
+        Ok(fixture)
+    }
+
     pub(super) fn read() -> AuthResult<Self> {
         let fixture: Self = serde_json::from_str(include_str!(
             "../fixtures/account-user-auth-boundary-1.7.6.json"

@@ -3,7 +3,7 @@ use axum::{Router, body::Body, http::Request};
 use better_auth::{
     integrations::axum::AxumIntegration,
     plugins::{
-        EmailPasswordPlugin,
+        EmailPasswordPlugin, EmailVerificationPlugin,
         oauth::{OAuthPlugin, OAuthProvider},
     },
 };
@@ -39,20 +39,26 @@ pub(super) async fn auth<S: AuthSchema>(
     provider.verify_id_token = Some(callbacks.clone());
     provider.get_user_info = Some(callbacks.clone());
     provider.override_user_info_on_sign_in = scenario.override_user_info;
-    let auth = Arc::new(
-        BetterAuth::new(config)
-            .store_arc(store)
-            .plugin(OAuthPlugin::new().add_provider("google", provider))
-            .plugin(EmailPasswordPlugin::new().password_hasher(callbacks.clone()))
-            .validate_user_info(callbacks.clone())
-            .on_api_error(callbacks)
-            .rate_limit(RateLimitConfig {
-                enabled: Some(false),
-                ..Default::default()
-            })
-            .build()
-            .await?,
-    );
+    provider.require_email_verification = scenario.require_email_verification.then_some(true);
+    let mut builder = BetterAuth::new(config)
+        .store_arc(store)
+        .plugin(OAuthPlugin::new().add_provider("google", provider))
+        .plugin(EmailPasswordPlugin::new().password_hasher(callbacks.clone()))
+        .validate_user_info(callbacks.clone())
+        .on_api_error(callbacks)
+        .rate_limit(RateLimitConfig {
+            enabled: Some(false),
+            ..Default::default()
+        });
+    if scenario.send_on_sign_in {
+        let mut verification = EmailVerificationPlugin::new().send_on_sign_in(true);
+        if scenario.email_sender {
+            verification = verification
+                .custom_send_verification_email(Arc::new(email::Sender(events.clone())));
+        }
+        builder = builder.plugin(verification);
+    }
+    let auth = Arc::new(builder.build().await?);
     Ok(Harness { auth, flow })
 }
 
@@ -137,8 +143,15 @@ pub(super) fn assert_response(
         assert_eq!(response.body, "");
     } else {
         let mut actual: Value = serde_json::from_str(&response.body)?;
-        assert_eq!(actual["token"].as_str(), anchors.token.as_deref());
-        actual["token"] = json!("<session-token>");
+        if anchors.token.is_some() {
+            assert_eq!(actual["token"].as_str(), anchors.token.as_deref());
+            actual["token"] = json!("<session-token>");
+        } else {
+            assert!(
+                actual.get("token").is_none(),
+                "The response must not introduce an unobserved Session token"
+            );
+        }
         assert_eq!(actual, serde_json::from_str::<Value>(&expected.body)?);
     }
     Ok(())

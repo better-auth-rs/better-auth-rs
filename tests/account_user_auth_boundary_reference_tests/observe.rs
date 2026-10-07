@@ -61,14 +61,13 @@ pub(super) fn verify_dynamic(
     start: i64,
     end: i64,
 ) -> TestResult<Anchors> {
-    let mut anchors = Anchors::default();
     let Some(issued) = hook(events, "session", "before") else {
         assert!(rows(after, "session")?.is_empty(), "{case:?}");
         assert_eq!(
             case.response.status, 500,
             "Session issuance must precede a successful response"
         );
-        return Ok(anchors);
+        return Ok(Anchors::default());
     };
     let admissions: Vec<_> = events
         .iter()
@@ -85,20 +84,10 @@ pub(super) fn verify_dynamic(
         "{case:?}: admission and issuance must preserve own Undefined"
     );
 
-    let account = rows(after, "account")?
-        .iter()
-        .find(|row| row["id"] == "account-a")
-        .ok_or("Missing updated Account")?;
-    assert_eq!(account["userId"], "user-a");
-    let updated = millis(&account["updatedAt"])?;
-    assert!(
-        (start..=end).contains(&updated),
-        "{case:?}: Account updatedAt {updated} outside {start}..={end}"
-    );
-    let completed_account =
-        hook(events, "account", "after").ok_or("Missing Account update after hook")?;
-    assert_eq!(millis(&completed_account["updatedAt"])?, updated);
-    anchors.account_updated_at = Some(updated);
+    let mut anchors = account_update_anchors(events, after, case, start..=end)?;
+    let updated = anchors
+        .account_updated_at
+        .ok_or("Missing Account update anchor")?;
 
     let token = text(issued, "token")?;
     assert_eq!(token.len(), 32);
@@ -144,6 +133,31 @@ pub(super) fn verify_dynamic(
         anchors.session_id = Some(id.into());
     }
     Ok(anchors)
+}
+
+pub(super) fn account_update_anchors(
+    events: &[Value],
+    after: &Value,
+    case: &Case,
+    request_window: std::ops::RangeInclusive<i64>,
+) -> TestResult<Anchors> {
+    let account = rows(after, "account")?
+        .iter()
+        .find(|row| row["id"] == "account-a")
+        .ok_or("Missing updated Account")?;
+    assert_eq!(account["userId"], "user-a");
+    let updated = millis(&account["updatedAt"])?;
+    assert!(
+        request_window.contains(&updated),
+        "{case:?}: Account updatedAt {updated} outside {request_window:?}"
+    );
+    let completed_account =
+        hook(events, "account", "after").ok_or("Missing Account update after hook")?;
+    assert_eq!(millis(&completed_account["updatedAt"])?, updated);
+    Ok(Anchors {
+        account_updated_at: Some(updated),
+        ..Default::default()
+    })
 }
 
 fn normalize_record(model: &str, row: &mut Value, anchors: &Anchors) -> TestResult {

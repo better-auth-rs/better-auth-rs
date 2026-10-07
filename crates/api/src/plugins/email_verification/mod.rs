@@ -360,7 +360,7 @@ impl EmailVerificationPlugin {
 
     pub(crate) async fn send_verification_on_oauth_sign_in(
         &self,
-        user: &impl AuthUser,
+        user: Option<&impl AuthUser>,
         is_register: bool,
         require_verification: bool,
         callback_url: &str,
@@ -372,20 +372,32 @@ impl EmailVerificationPlugin {
         } else {
             require_verification && self.config.send_on_sign_in
         };
-        if should_send
-            && !user.email_verified()
-            && let Some(email) = user.email()
-            && let Err(error) = self
-                .send_verification_email_for_user(
-                    user,
-                    email,
-                    Some(callback_url),
-                    Some(request),
-                    ctx,
-                )
-                .await
+        if !should_send
+            || user.is_some_and(AuthUser::email_verified)
+            || !delivery::available(Some(&self.config), ctx)
         {
-            // Upstream logs sender failures without changing the OAuth verification decision.
+            return;
+        }
+        let result = async {
+            let (user, email) = user
+                .and_then(|user| user.email().map(|email| (user, email)))
+                .ok_or_else(|| {
+                    AuthError::internal(
+                        "Cannot create an OAuth verification token without a user email",
+                    )
+                })?;
+            self.send_verification_email_for_user(
+                user,
+                email,
+                Some(callback_url),
+                Some(request),
+                ctx,
+            )
+            .await
+        }
+        .await;
+        if let Err(error) = result {
+            // Upstream logs verification delivery failures without changing the OAuth verification decision.
             better_auth_core::observability::logger::current().error(
                 "Failed to send OAuth verification email",
                 &[better_auth_core::observability::LogArgument::Error(&error)],

@@ -203,6 +203,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/schema-join-reference-history.test.ts \
         ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
+        ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
         ./compat-tests/reference-server/contracts/organization-member-join-reference.test.ts
       ;;
     passkey)

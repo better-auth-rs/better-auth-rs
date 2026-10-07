@@ -1,5 +1,5 @@
 use better_auth_core::entity::{AuthSession, AuthUser};
-use better_auth_core::wire::SessionView;
+use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount, CreateUser,
     UpdateAccount, UpdateUser,
@@ -26,7 +26,7 @@ impl OAuthSignInOptions<'_> {
     async fn check_email_verification(
         &self,
         provider: &ResolvedProvider,
-        user: &impl AuthUser,
+        user: Option<&UserView>,
         is_register: bool,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> Result<(), OAuthSignInError> {
@@ -43,7 +43,7 @@ impl OAuthSignInOptions<'_> {
                 )
                 .await;
         }
-        if required && !user.email_verified() {
+        if required && !user.is_some_and(AuthUser::email_verified) {
             return Err(OAuthSignInError::Generic("email_not_verified".to_owned()));
         }
         Ok(())
@@ -380,14 +380,14 @@ pub(super) async fn process_oauth_sign_in(
         let user = match owner_user {
             better_auth_core::store::JoinValue::One(Some(user)) => {
                 options
-                    .check_email_verification(provider, &user, false, ctx)
+                    .check_email_verification(provider, Some(&user), false, ctx)
                     .await?;
                 better_auth_core::FieldValue::from(better_auth_core::FieldMap::from(user))
             }
             better_auth_core::store::JoinValue::Many(users) => {
-                if provider.config.require_email_verification == Some(true) {
-                    return Err(OAuthSignInError::Generic("email_not_verified".into()));
-                }
+                options
+                    .check_email_verification(provider, None, false, ctx)
+                    .await?;
                 better_auth_core::FieldValue::Array(
                     users
                         .into_iter()
@@ -548,7 +548,7 @@ pub(super) async fn process_oauth_sign_in(
         }
 
         options
-            .check_email_verification(provider, &linked_user, false, ctx)
+            .check_email_verification(provider, Some(&linked_user), false, ctx)
             .await?;
         let issued = issue_selected_user_session(
             ctx,
@@ -654,7 +654,7 @@ pub(super) async fn process_oauth_sign_in(
         let (created_user, created_account) = outcome;
 
         options
-            .check_email_verification(provider, &created_user, true, ctx)
+            .check_email_verification(provider, Some(&created_user), true, ctx)
             .await?;
         let issued = issue_selected_user_session(
             ctx,

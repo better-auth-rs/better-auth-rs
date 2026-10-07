@@ -21,6 +21,8 @@ use tracing_subscriber::prelude::*;
 mod callbacks;
 #[path = "account_user_auth_boundary_reference_tests/config.rs"]
 mod config;
+#[path = "account_user_auth_boundary_reference_tests/email.rs"]
+mod email;
 #[path = "account_user_auth_boundary_reference_tests/fixture.rs"]
 mod fixture;
 #[path = "account_user_auth_boundary_reference_tests/hooks.rs"]
