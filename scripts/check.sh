@@ -186,6 +186,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/schema-join-reference-unknown.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-field.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-history.test.ts \
+        ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
         ./compat-tests/reference-server/contracts/organization-member-join-reference.test.ts
       ;;
     passkey)
