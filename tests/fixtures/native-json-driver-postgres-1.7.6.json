@@ -1,0 +1,2787 @@
+{
+  "version": "1.7.6",
+  "backend": "postgres",
+  "columns": [
+    {
+      "table": "native_json_driver",
+      "position": "1",
+      "name": "id",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "2",
+      "name": "deviceCode",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "3",
+      "name": "userCode",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "4",
+      "name": "userId",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "5",
+      "name": "expiresAt",
+      "type": "timestamp with time zone",
+      "nativeType": "timestamptz",
+      "maxLength": null,
+      "datetimePrecision": "6",
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "6",
+      "name": "status",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "7",
+      "name": "lastPolledAt",
+      "type": "timestamp with time zone",
+      "nativeType": "timestamptz",
+      "maxLength": null,
+      "datetimePrecision": "6",
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "8",
+      "name": "pollingInterval",
+      "type": "integer",
+      "nativeType": "int4",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "9",
+      "name": "clientId",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "10",
+      "name": "scope",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "11",
+      "name": "stored_payload",
+      "type": "jsonb",
+      "nativeType": "jsonb",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "null",
+      "input": null,
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": null
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-null",
+              "deviceCode": "create-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": true,
+            "payloadText": null
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-null",
+              "deviceCode": "create-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": true,
+            "payloadText": null
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-null",
+              "deviceCode": "update-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": null
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-null",
+              "deviceCode": "update-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": true,
+            "payloadText": null
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-null",
+              "deviceCode": "update-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": true,
+            "payloadText": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-ordinary",
+      "input": "ordinary",
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 196,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Token \"ordinary\" is invalid.",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: ordinary\nunnamed portal parameter $10 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-ordinary",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-ordinary"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-ordinary",
+              "deviceCode": "update-string-ordinary",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 195,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Token \"ordinary\" is invalid.",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: ordinary\nunnamed portal parameter $1 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-ordinary",
+              "deviceCode": "update-string-ordinary",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-ordinary",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-ordinary"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-ordinary",
+              "deviceCode": "update-string-ordinary",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-json-scalar",
+      "input": "\"ordinary\"",
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": "ordinary",
+          "id": "create-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "\"ordinary\""
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-scalar",
+              "deviceCode": "create-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": false,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": "ordinary",
+          "id": "create-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-scalar",
+              "deviceCode": "create-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": false,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-scalar",
+              "deviceCode": "update-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": "ordinary",
+          "id": "update-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "\"ordinary\""
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-scalar",
+              "deviceCode": "update-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": false,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": "ordinary",
+          "id": "update-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-scalar",
+              "deviceCode": "update-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": false,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-json-null",
+      "input": "null",
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "null"
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-null",
+              "deviceCode": "create-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": false,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-null",
+              "deviceCode": "create-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": false,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-null",
+              "deviceCode": "update-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "null"
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-null",
+              "deviceCode": "update-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": false,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-null",
+              "deviceCode": "update-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": false,
+            "payloadText": "null"
+          }
+        ]
+      }
+    },
+    {
+      "name": "date-valid",
+      "input": {
+        "type": "date",
+        "value": "2030-01-02T03:04:05.000Z"
+      },
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 193,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Token \"-01\" is invalid.",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: 2030-01...\nunnamed portal parameter $10 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            }
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-date-valid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-valid",
+              "deviceCode": "update-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 192,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Token \"-01\" is invalid.",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: 2030-01...\nunnamed portal parameter $1 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-valid",
+              "deviceCode": "update-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-date-valid"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-valid",
+              "deviceCode": "update-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "date-invalid",
+      "input": {
+        "type": "date",
+        "value": "Invalid Date"
+      },
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 191,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Token \"0NaN\" is invalid.",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: 0NaN...\nunnamed portal parameter $10 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "Invalid Date"
+            }
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-invalid",
+              "deviceCode": "update-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 190,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Token \"0NaN\" is invalid.",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: 0NaN...\nunnamed portal parameter $1 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "Invalid Date"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-invalid",
+              "deviceCode": "update-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-invalid",
+              "deviceCode": "update-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-empty",
+      "input": [],
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {},
+          "id": "create-array-empty"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": []
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {}
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-empty",
+              "deviceCode": "create-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {}
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{}"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {},
+          "id": "create-array-empty"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {}
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-empty",
+              "deviceCode": "create-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {}
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{}"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-empty"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-empty",
+              "deviceCode": "update-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {},
+          "id": "update-array-empty"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": []
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {}
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-empty",
+              "deviceCode": "update-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {}
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {},
+          "id": "update-array-empty"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {}
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-empty",
+              "deviceCode": "update-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {}
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-scalars",
+      "input": [
+        "ordinary",
+        1,
+        null
+      ],
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 203,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Expected \":\", but found \",\".",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: {\"ordinary\",...\nunnamed portal parameter $10 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-scalars",
+              "deviceCode": "update-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 202,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Expected \":\", but found \",\".",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: {\"ordinary\",...\nunnamed portal parameter $1 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-scalars",
+              "deviceCode": "update-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-scalars",
+              "deviceCode": "update-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-nested",
+      "input": [
+        [
+          1
+        ],
+        [
+          "ordinary",
+          null
+        ]
+      ],
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 203,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Expected string or \"}\", but found \"{\".",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: {{...\nunnamed portal parameter $10 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-nested"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-nested",
+              "deviceCode": "update-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 202,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Expected string or \"}\", but found \"{\".",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: {{...\nunnamed portal parameter $1 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-nested",
+              "deviceCode": "update-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-nested"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-nested",
+              "deviceCode": "update-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-runtime-values",
+      "input": [
+        {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        {
+          "type": "date",
+          "value": "Invalid Date"
+        },
+        {
+          "type": "undefined"
+        },
+        {
+          "type": "number",
+          "value": "NaN"
+        },
+        {
+          "type": "number",
+          "value": "Infinity"
+        }
+      ],
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 224,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Expected \":\", but found \",\".",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: {\"2030-01-02T03:04:05.000+00:00\",...\nunnamed portal parameter $10 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              {
+                "type": "date",
+                "value": "Invalid Date"
+              },
+              {
+                "type": "undefined"
+              },
+              {
+                "type": "number",
+                "value": "NaN"
+              },
+              {
+                "type": "number",
+                "value": "Infinity"
+              }
+            ]
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-runtime-values",
+              "deviceCode": "update-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "error",
+          "message": "invalid input syntax for type json",
+          "properties": {
+            "length": 223,
+            "name": "error",
+            "severity": "ERROR",
+            "code": "22P02",
+            "detail": "Expected \":\", but found \",\".",
+            "hint": {
+              "type": "undefined"
+            },
+            "position": {
+              "type": "undefined"
+            },
+            "internalPosition": {
+              "type": "undefined"
+            },
+            "internalQuery": {
+              "type": "undefined"
+            },
+            "where": "JSON data, line 1: {\"2030-01-02T03:04:05.000+00:00\",...\nunnamed portal parameter $1 = '...'",
+            "schema": {
+              "type": "undefined"
+            },
+            "table": {
+              "type": "undefined"
+            },
+            "dataType": {
+              "type": "undefined"
+            },
+            "constraint": {
+              "type": "undefined"
+            },
+            "file": "jsonfuncs.c",
+            "routine": "json_errsave_error"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              {
+                "type": "date",
+                "value": "Invalid Date"
+              },
+              {
+                "type": "undefined"
+              },
+              {
+                "type": "number",
+                "value": "NaN"
+              },
+              {
+                "type": "number",
+                "value": "Infinity"
+              }
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-runtime-values",
+              "deviceCode": "update-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-runtime-values",
+              "deviceCode": "update-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": false,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    }
+  ]
+}

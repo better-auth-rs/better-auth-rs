@@ -1,0 +1,3054 @@
+{
+  "version": "1.7.6",
+  "backend": "mysql",
+  "columns": [
+    {
+      "table": "native_json_driver",
+      "position": "1",
+      "name": "id",
+      "type": "varchar",
+      "nativeType": "varchar(36)",
+      "maxLength": "36",
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "2",
+      "name": "deviceCode",
+      "type": "varchar",
+      "nativeType": "varchar(191)",
+      "maxLength": "191",
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "3",
+      "name": "userCode",
+      "type": "varchar",
+      "nativeType": "varchar(191)",
+      "maxLength": "191",
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "4",
+      "name": "userId",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": "65535",
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "5",
+      "name": "expiresAt",
+      "type": "timestamp",
+      "nativeType": "timestamp(3)",
+      "maxLength": null,
+      "datetimePrecision": "3",
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "6",
+      "name": "status",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": "65535",
+      "datetimePrecision": null,
+      "nullable": "NO",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "7",
+      "name": "lastPolledAt",
+      "type": "timestamp",
+      "nativeType": "timestamp(3)",
+      "maxLength": null,
+      "datetimePrecision": "3",
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "8",
+      "name": "pollingInterval",
+      "type": "int",
+      "nativeType": "int",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "9",
+      "name": "clientId",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": "65535",
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "10",
+      "name": "scope",
+      "type": "text",
+      "nativeType": "text",
+      "maxLength": "65535",
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    },
+    {
+      "table": "native_json_driver",
+      "position": "11",
+      "name": "stored_payload",
+      "type": "json",
+      "nativeType": "json",
+      "maxLength": null,
+      "datetimePrecision": null,
+      "nullable": "YES",
+      "default": null
+    }
+  ],
+  "cases": [
+    {
+      "name": "null",
+      "input": null,
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": null
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-null",
+              "deviceCode": "create-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-null",
+              "deviceCode": "create-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-null",
+              "deviceCode": "update-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": null
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-null",
+              "deviceCode": "update-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-null",
+              "deviceCode": "update-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-ordinary",
+      "input": "ordinary",
+      "created": {
+        "returned": false,
+        "error": {
+          "name": "Error",
+          "message": "Invalid JSON text: \"Invalid value.\" at position 0 in value for column 'native_json_driver.stored_payload'.",
+          "properties": {
+            "code": "ER_INVALID_JSON_TEXT",
+            "errno": 3140,
+            "sqlState": "22032",
+            "sqlMessage": "Invalid JSON text: \"Invalid value.\" at position 0 in value for column 'native_json_driver.stored_payload'.",
+            "sql": "insert into `native_json_driver` (`deviceCode`, `userCode`, `userId`, `expiresAt`, `status`, `lastPolledAt`, `pollingInterval`, `clientId`, `scope`, `stored_payload`, `id`) values ('create-string-ordinary', 'ABCD2345', NULL, '2032-01-02 03:04:05.000', 'pending', NULL, 5, 'ordinary-client', NULL, 'ordinary', 'create-string-ordinary')"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": []
+      },
+      "createdRead": {
+        "returned": true,
+        "result": null,
+        "events": [],
+        "stored": []
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-ordinary",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-ordinary"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-ordinary",
+              "deviceCode": "update-string-ordinary",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": false,
+        "error": {
+          "name": "Error",
+          "message": "Invalid JSON text: \"Invalid value.\" at position 0 in value for column 'native_json_driver.stored_payload'.",
+          "properties": {
+            "code": "ER_INVALID_JSON_TEXT",
+            "errno": 3140,
+            "sqlState": "22032",
+            "sqlMessage": "Invalid JSON text: \"Invalid value.\" at position 0 in value for column 'native_json_driver.stored_payload'.",
+            "sql": "update `native_json_driver` set `stored_payload` = 'ordinary' where `native_json_driver`.`id` = 'update-string-ordinary'"
+          }
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-ordinary",
+              "deviceCode": "update-string-ordinary",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-ordinary",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-ordinary"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-ordinary",
+              "deviceCode": "update-string-ordinary",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-json-scalar",
+      "input": "\"ordinary\"",
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "\"ordinary\""
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-scalar",
+              "deviceCode": "create-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-scalar",
+              "deviceCode": "create-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-scalar",
+              "deviceCode": "update-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "\"ordinary\""
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-scalar",
+              "deviceCode": "update-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-scalar",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-string-json-scalar"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "ordinary"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-scalar",
+              "deviceCode": "update-string-json-scalar",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "ordinary"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"ordinary\""
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-json-null",
+      "input": "null",
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "null"
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-null",
+              "deviceCode": "create-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-string-json-null",
+              "deviceCode": "create-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-null",
+              "deviceCode": "update-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": "null"
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-null",
+              "deviceCode": "update-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-string-json-null",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-string-json-null"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-string-json-null",
+              "deviceCode": "update-string-json-null",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      }
+    },
+    {
+      "name": "date-valid",
+      "input": {
+        "type": "date",
+        "value": "2030-01-02T03:04:05.000Z"
+      },
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-date-valid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-date-valid",
+              "deviceCode": "create-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "2030-01-02T03:04:05.000Z"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"2030-01-02T03:04:05.000Z\""
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-date-valid"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-date-valid",
+              "deviceCode": "create-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "2030-01-02T03:04:05.000Z"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"2030-01-02T03:04:05.000Z\""
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-date-valid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-valid",
+              "deviceCode": "update-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-date-valid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-valid",
+              "deviceCode": "update-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "2030-01-02T03:04:05.000Z"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"2030-01-02T03:04:05.000Z\""
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-valid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-date-valid"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-valid",
+              "deviceCode": "update-date-valid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": "2030-01-02T03:04:05.000Z"
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "\"2030-01-02T03:04:05.000Z\""
+          }
+        ]
+      }
+    },
+    {
+      "name": "date-invalid",
+      "input": {
+        "type": "date",
+        "value": "Invalid Date"
+      },
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "Invalid Date"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-date-invalid",
+              "deviceCode": "create-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "create-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-date-invalid",
+              "deviceCode": "create-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-invalid",
+              "deviceCode": "update-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "type": "date",
+              "value": "Invalid Date"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-invalid",
+              "deviceCode": "update-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-date-invalid",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": null,
+          "id": "update-date-invalid"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": null
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-date-invalid",
+              "deviceCode": "update-date-invalid",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": null
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "null"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-empty",
+      "input": [],
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [],
+          "id": "create-array-empty"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": []
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": []
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-empty",
+              "deviceCode": "create-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": []
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[]"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [],
+          "id": "create-array-empty"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": []
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-empty",
+              "deviceCode": "create-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": []
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[]"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-empty"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-empty",
+              "deviceCode": "update-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [],
+          "id": "update-array-empty"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": []
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": []
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-empty",
+              "deviceCode": "update-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": []
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[]"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-empty",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [],
+          "id": "update-array-empty"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": []
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-empty",
+              "deviceCode": "update-array-empty",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": []
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[]"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-scalars",
+      "input": [
+        "ordinary",
+        1,
+        null
+      ],
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "ordinary",
+            1,
+            null
+          ],
+          "id": "create-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-scalars",
+              "deviceCode": "create-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "ordinary",
+                1,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"ordinary\", 1, null]"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "ordinary",
+            1,
+            null
+          ],
+          "id": "create-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-scalars",
+              "deviceCode": "create-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "ordinary",
+                1,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"ordinary\", 1, null]"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-scalars",
+              "deviceCode": "update-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "ordinary",
+            1,
+            null
+          ],
+          "id": "update-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-scalars",
+              "deviceCode": "update-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "ordinary",
+                1,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"ordinary\", 1, null]"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-scalars",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "ordinary",
+            1,
+            null
+          ],
+          "id": "update-array-scalars"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "ordinary",
+              1,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-scalars",
+              "deviceCode": "update-array-scalars",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "ordinary",
+                1,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"ordinary\", 1, null]"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-nested",
+      "input": [
+        [
+          1
+        ],
+        [
+          "ordinary",
+          null
+        ]
+      ],
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            [
+              1
+            ],
+            [
+              "ordinary",
+              null
+            ]
+          ],
+          "id": "create-array-nested"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-nested",
+              "deviceCode": "create-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                [
+                  1
+                ],
+                [
+                  "ordinary",
+                  null
+                ]
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[[1], [\"ordinary\", null]]"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            [
+              1
+            ],
+            [
+              "ordinary",
+              null
+            ]
+          ],
+          "id": "create-array-nested"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-nested",
+              "deviceCode": "create-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                [
+                  1
+                ],
+                [
+                  "ordinary",
+                  null
+                ]
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[[1], [\"ordinary\", null]]"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-nested"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-nested",
+              "deviceCode": "update-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            [
+              1
+            ],
+            [
+              "ordinary",
+              null
+            ]
+          ],
+          "id": "update-array-nested"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-nested",
+              "deviceCode": "update-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                [
+                  1
+                ],
+                [
+                  "ordinary",
+                  null
+                ]
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[[1], [\"ordinary\", null]]"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-nested",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            [
+              1
+            ],
+            [
+              "ordinary",
+              null
+            ]
+          ],
+          "id": "update-array-nested"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              [
+                1
+              ],
+              [
+                "ordinary",
+                null
+              ]
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-nested",
+              "deviceCode": "update-array-nested",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                [
+                  1
+                ],
+                [
+                  "ordinary",
+                  null
+                ]
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[[1], [\"ordinary\", null]]"
+          }
+        ]
+      }
+    },
+    {
+      "name": "array-runtime-values",
+      "input": [
+        {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        {
+          "type": "date",
+          "value": "Invalid Date"
+        },
+        {
+          "type": "undefined"
+        },
+        {
+          "type": "number",
+          "value": "NaN"
+        },
+        {
+          "type": "number",
+          "value": "Infinity"
+        }
+      ],
+      "created": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "2030-01-02T03:04:05.000Z",
+            null,
+            null,
+            null,
+            null
+          ],
+          "id": "create-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              {
+                "type": "date",
+                "value": "Invalid Date"
+              },
+              {
+                "type": "undefined"
+              },
+              {
+                "type": "number",
+                "value": "NaN"
+              },
+              {
+                "type": "number",
+                "value": "Infinity"
+              }
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "2030-01-02T03:04:05.000Z",
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-runtime-values",
+              "deviceCode": "create-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "2030-01-02T03:04:05.000Z",
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"2030-01-02T03:04:05.000Z\", null, null, null, null]"
+          }
+        ]
+      },
+      "createdRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "create-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "2030-01-02T03:04:05.000Z",
+            null,
+            null,
+            null,
+            null
+          ],
+          "id": "create-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "2030-01-02T03:04:05.000Z",
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "create-array-runtime-values",
+              "deviceCode": "create-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "2030-01-02T03:04:05.000Z",
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"2030-01-02T03:04:05.000Z\", null, null, null, null]"
+          }
+        ]
+      },
+      "seeded": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": {
+            "seed": "ordinary"
+          },
+          "id": "update-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": {
+              "seed": "ordinary"
+            }
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-runtime-values",
+              "deviceCode": "update-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": {
+                "seed": "ordinary"
+              }
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "{\"seed\": \"ordinary\"}"
+          }
+        ]
+      },
+      "updated": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "2030-01-02T03:04:05.000Z",
+            null,
+            null,
+            null,
+            null
+          ],
+          "id": "update-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "input",
+            "field": "payload",
+            "value": [
+              {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              {
+                "type": "date",
+                "value": "Invalid Date"
+              },
+              {
+                "type": "undefined"
+              },
+              {
+                "type": "number",
+                "value": "NaN"
+              },
+              {
+                "type": "number",
+                "value": "Infinity"
+              }
+            ]
+          },
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "2030-01-02T03:04:05.000Z",
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-runtime-values",
+              "deviceCode": "update-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "2030-01-02T03:04:05.000Z",
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"2030-01-02T03:04:05.000Z\", null, null, null, null]"
+          }
+        ]
+      },
+      "updatedRead": {
+        "returned": true,
+        "result": {
+          "deviceCode": "update-array-runtime-values",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": {
+            "type": "date",
+            "value": "2032-01-02T03:04:05.000Z"
+          },
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5,
+          "clientId": "ordinary-client",
+          "scope": null,
+          "payload": [
+            "2030-01-02T03:04:05.000Z",
+            null,
+            null,
+            null,
+            null
+          ],
+          "id": "update-array-runtime-values"
+        },
+        "events": [
+          {
+            "phase": "output",
+            "field": "payload",
+            "value": [
+              "2030-01-02T03:04:05.000Z",
+              null,
+              null,
+              null,
+              null
+            ]
+          }
+        ],
+        "stored": [
+          {
+            "row": {
+              "id": "update-array-runtime-values",
+              "deviceCode": "update-array-runtime-values",
+              "userCode": "ABCD2345",
+              "userId": null,
+              "expiresAt": {
+                "type": "date",
+                "value": "2032-01-02T03:04:05.000Z"
+              },
+              "status": "pending",
+              "lastPolledAt": null,
+              "pollingInterval": 5,
+              "clientId": "ordinary-client",
+              "scope": null,
+              "stored_payload": [
+                "2030-01-02T03:04:05.000Z",
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "payloadSqlNull": 0,
+            "payloadText": "[\"2030-01-02T03:04:05.000Z\", null, null, null, null]"
+          }
+        ]
+      }
+    }
+  ]
+}

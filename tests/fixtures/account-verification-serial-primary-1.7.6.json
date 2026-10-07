@@ -1,0 +1,2573 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "model": "account",
+      "slot": "implicit",
+      "operation": "nested-success",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "1"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "accountId": "serial-outer",
+        "providerId": "ordinary",
+        "userId": "1",
+        "accessToken": {
+          "type": "undefined"
+        },
+        "refreshToken": {
+          "type": "undefined"
+        },
+        "idToken": {
+          "type": "undefined"
+        },
+        "accessTokenExpiresAt": {
+          "type": "undefined"
+        },
+        "refreshTokenExpiresAt": {
+          "type": "undefined"
+        },
+        "scope": {
+          "type": "undefined"
+        },
+        "password": {
+          "type": "undefined"
+        },
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "label": "outer",
+        "id": "2"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": 1
+          },
+          {
+            "accountId": "serial-outer",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "outer",
+            "id": 2
+          }
+        ],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "account",
+      "slot": "implicit",
+      "operation": "nested-failure",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "inner-field-failure"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "account",
+      "slot": "implicit",
+      "operation": "outer-failure",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "1"
+          }
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "outer-field-failure"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": 1
+          }
+        ],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "account",
+      "slot": "before-label",
+      "operation": "nested-success",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "inner"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "accountId": "serial-outer",
+        "providerId": "ordinary",
+        "userId": "1",
+        "accessToken": {
+          "type": "undefined"
+        },
+        "refreshToken": {
+          "type": "undefined"
+        },
+        "idToken": {
+          "type": "undefined"
+        },
+        "accessTokenExpiresAt": {
+          "type": "undefined"
+        },
+        "refreshTokenExpiresAt": {
+          "type": "undefined"
+        },
+        "scope": {
+          "type": "undefined"
+        },
+        "password": {
+          "type": "undefined"
+        },
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "id": "2",
+        "label": "outer"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "inner"
+          },
+          {
+            "accountId": "serial-outer",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 2,
+            "label": "outer"
+          }
+        ],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "account",
+      "slot": "before-label",
+      "operation": "nested-failure",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "inner-field-failure"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "account",
+      "slot": "before-label",
+      "operation": "outer-failure",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "inner"
+          }
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "outer-field-failure"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [
+          {
+            "accountId": "serial-inner",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "inner"
+          }
+        ],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "account",
+      "operation": "lifecycle",
+      "before": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "operation",
+          "create-first"
+        ],
+        [
+          "input",
+          "label",
+          "first"
+        ],
+        [
+          "output",
+          "label",
+          "first"
+        ],
+        [
+          "operation",
+          "create-second"
+        ],
+        [
+          "input",
+          "label",
+          "second"
+        ],
+        [
+          "output",
+          "label",
+          "second"
+        ],
+        [
+          "operation",
+          "read-padded-id"
+        ],
+        [
+          "output",
+          "label",
+          "first"
+        ],
+        [
+          "operation",
+          "update-padded-id"
+        ],
+        [
+          "input",
+          "label",
+          "updated"
+        ],
+        [
+          "output",
+          "label",
+          "updated"
+        ],
+        [
+          "operation",
+          "delete-padded-id"
+        ],
+        [
+          "operation",
+          "read-deleted-id"
+        ],
+        [
+          "operation",
+          "create-after-removal"
+        ],
+        [
+          "input",
+          "label",
+          "third"
+        ],
+        [
+          "output",
+          "label",
+          "third"
+        ],
+        [
+          "operation",
+          "read-all"
+        ],
+        [
+          "output",
+          "label",
+          "second"
+        ],
+        [
+          "output",
+          "label",
+          "third"
+        ]
+      ],
+      "operations": [
+        {
+          "name": "create-first",
+          "result": {
+            "accountId": "serial-first",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "first",
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-first",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "first",
+                "id": 1
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "create-second",
+          "result": {
+            "accountId": "serial-second",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "second",
+            "id": "2"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-first",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "first",
+                "id": 1
+              },
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "read-padded-id",
+          "result": {
+            "accountId": "serial-first",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "first",
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-first",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "first",
+                "id": 1
+              },
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "update-padded-id",
+          "result": {
+            "accountId": "serial-first",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "updated",
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-first",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "updated",
+                "id": 1
+              },
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "delete-padded-id",
+          "result": {
+            "type": "undefined"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "read-deleted-id",
+          "result": null,
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "create-after-removal",
+          "result": {
+            "accountId": "serial-third",
+            "providerId": "ordinary",
+            "userId": "1",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "idToken": {
+              "type": "undefined"
+            },
+            "accessTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "undefined"
+            },
+            "scope": {
+              "type": "undefined"
+            },
+            "password": {
+              "type": "undefined"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "third",
+            "id": "2"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              },
+              {
+                "accountId": "serial-third",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "third",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        },
+        {
+          "name": "read-all",
+          "result": [
+            {
+              "accountId": "serial-second",
+              "providerId": "ordinary",
+              "userId": "1",
+              "accessToken": {
+                "type": "undefined"
+              },
+              "refreshToken": {
+                "type": "undefined"
+              },
+              "idToken": {
+                "type": "undefined"
+              },
+              "accessTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "scope": {
+                "type": "undefined"
+              },
+              "password": {
+                "type": "undefined"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "second",
+              "id": "2"
+            },
+            {
+              "accountId": "serial-third",
+              "providerId": "ordinary",
+              "userId": "1",
+              "accessToken": {
+                "type": "undefined"
+              },
+              "refreshToken": {
+                "type": "undefined"
+              },
+              "idToken": {
+                "type": "undefined"
+              },
+              "accessTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "scope": {
+                "type": "undefined"
+              },
+              "password": {
+                "type": "undefined"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "third",
+              "id": "2"
+            }
+          ],
+          "after": {
+            "user": [
+              {
+                "name": "Account owner",
+                "email": "owner@record-serial.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [
+              {
+                "accountId": "serial-second",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              },
+              {
+                "accountId": "serial-third",
+                "providerId": "ordinary",
+                "userId": 1,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "third",
+                "id": 2
+              }
+            ],
+            "session": [],
+            "verification": []
+          }
+        }
+      ],
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Account owner",
+            "email": "owner@record-serial.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [
+          {
+            "accountId": "serial-second",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "second",
+            "id": 2
+          },
+          {
+            "accountId": "serial-third",
+            "providerId": "ordinary",
+            "userId": 1,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "third",
+            "id": 2
+          }
+        ],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "verification",
+      "slot": "implicit",
+      "operation": "nested-success",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "1"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "identifier": "serial-outer",
+        "value": "value-outer",
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "label": "outer",
+        "id": "2"
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": 1
+          },
+          {
+            "identifier": "serial-outer",
+            "value": "value-outer",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "outer",
+            "id": 2
+          }
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "slot": "implicit",
+      "operation": "nested-failure",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "inner-field-failure"
+      },
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "verification",
+      "slot": "implicit",
+      "operation": "outer-failure",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "1"
+          }
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "outer-field-failure"
+      },
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": 1
+          }
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "slot": "before-label",
+      "operation": "nested-success",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "inner"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "identifier": "serial-outer",
+        "value": "value-outer",
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "id": "2",
+        "label": "outer"
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "inner"
+          },
+          {
+            "identifier": "serial-outer",
+            "value": "value-outer",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 2,
+            "label": "outer"
+          }
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "slot": "before-label",
+      "operation": "nested-failure",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "inner-field-failure"
+      },
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      }
+    },
+    {
+      "model": "verification",
+      "slot": "before-label",
+      "operation": "outer-failure",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "inner"
+          }
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "outer-field-failure"
+      },
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [
+          {
+            "identifier": "serial-inner",
+            "value": "value-inner",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "inner"
+          }
+        ]
+      }
+    },
+    {
+      "model": "verification",
+      "operation": "lifecycle",
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": []
+      },
+      "events": [
+        [
+          "operation",
+          "create-first"
+        ],
+        [
+          "input",
+          "label",
+          "first"
+        ],
+        [
+          "output",
+          "label",
+          "first"
+        ],
+        [
+          "operation",
+          "create-second"
+        ],
+        [
+          "input",
+          "label",
+          "second"
+        ],
+        [
+          "output",
+          "label",
+          "second"
+        ],
+        [
+          "operation",
+          "read-padded-id"
+        ],
+        [
+          "output",
+          "label",
+          "first"
+        ],
+        [
+          "operation",
+          "consume-first"
+        ],
+        [
+          "output",
+          "label",
+          "first"
+        ],
+        [
+          "output",
+          "label",
+          "first"
+        ],
+        [
+          "operation",
+          "consume-missing"
+        ],
+        [
+          "operation",
+          "create-after-removal"
+        ],
+        [
+          "input",
+          "label",
+          "third"
+        ],
+        [
+          "output",
+          "label",
+          "third"
+        ],
+        [
+          "operation",
+          "read-all"
+        ],
+        [
+          "output",
+          "label",
+          "second"
+        ],
+        [
+          "output",
+          "label",
+          "third"
+        ]
+      ],
+      "operations": [
+        {
+          "name": "create-first",
+          "result": {
+            "identifier": "serial-first",
+            "value": "value-first",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "first",
+            "id": "1"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-first",
+                "value": "value-first",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "first",
+                "id": 1
+              }
+            ]
+          }
+        },
+        {
+          "name": "create-second",
+          "result": {
+            "identifier": "serial-second",
+            "value": "value-second",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "second",
+            "id": "2"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-first",
+                "value": "value-first",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "first",
+                "id": 1
+              },
+              {
+                "identifier": "serial-second",
+                "value": "value-second",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ]
+          }
+        },
+        {
+          "name": "read-padded-id",
+          "result": {
+            "identifier": "serial-first",
+            "value": "value-first",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "first",
+            "id": "1"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-first",
+                "value": "value-first",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "first",
+                "id": 1
+              },
+              {
+                "identifier": "serial-second",
+                "value": "value-second",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ]
+          }
+        },
+        {
+          "name": "consume-first",
+          "result": {
+            "identifier": "serial-first",
+            "value": "value-first",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "first",
+            "id": "1"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-second",
+                "value": "value-second",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ]
+          }
+        },
+        {
+          "name": "consume-missing",
+          "result": null,
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-second",
+                "value": "value-second",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              }
+            ]
+          }
+        },
+        {
+          "name": "create-after-removal",
+          "result": {
+            "identifier": "serial-third",
+            "value": "value-third",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "third",
+            "id": "2"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-second",
+                "value": "value-second",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              },
+              {
+                "identifier": "serial-third",
+                "value": "value-third",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "third",
+                "id": 2
+              }
+            ]
+          }
+        },
+        {
+          "name": "read-all",
+          "result": [
+            {
+              "identifier": "serial-second",
+              "value": "value-second",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "second",
+              "id": "2"
+            },
+            {
+              "identifier": "serial-third",
+              "value": "value-third",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "third",
+              "id": "2"
+            }
+          ],
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [
+              {
+                "identifier": "serial-second",
+                "value": "value-second",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "second",
+                "id": 2
+              },
+              {
+                "identifier": "serial-third",
+                "value": "value-third",
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "third",
+                "id": 2
+              }
+            ]
+          }
+        }
+      ],
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [
+          {
+            "identifier": "serial-second",
+            "value": "value-second",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "second",
+            "id": 2
+          },
+          {
+            "identifier": "serial-third",
+            "value": "value-third",
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "third",
+            "id": 2
+          }
+        ]
+      }
+    }
+  ]
+}
