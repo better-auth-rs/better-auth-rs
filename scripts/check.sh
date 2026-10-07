@@ -64,13 +64,14 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test user_id_generation_order_tests -- -D warnings
-      cargo test --locked -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history
+      cargo test --locked -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value::
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test user_id_generation_order_tests --test user_record_values_tests \
         --test async_field_transform_tests --test sql_user_extra_output_tests \
         --test user_sort_field_tests --test schema_join_reference_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/user-id-generation-order.test.ts \
+        ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
         ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
         ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \
         ./compat-tests/reference-server/contracts/user-sort-field.test.ts

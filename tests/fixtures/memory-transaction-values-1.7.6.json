@@ -1,0 +1,4177 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "untouched",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "same-date",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": false,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "changed-date",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": false,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2031-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2031-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2031-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2031-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2031-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": false,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": false,
+        "array": false
+      }
+    },
+    {
+      "name": "invalid-date-null",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "Invalid Date"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "Invalid Date"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "Invalid Date"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "Invalid Date"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": false,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": null,
+        "mirrorMoment": {
+          "type": "date",
+          "value": "Invalid Date"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": null
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": null
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": null
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "Invalid Date"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "Invalid Date"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "Invalid Date"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "nonfinite-infinity",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": {
+          "type": "number",
+          "value": "NaN"
+        },
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": {
+          "type": "number",
+          "value": "Infinity"
+        },
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "Infinity"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "Infinity"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "Infinity"
+          }
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "nonfinite-null",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": {
+          "type": "number",
+          "value": "NaN"
+        },
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": null,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": {
+            "type": "number",
+            "value": "NaN"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": null
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": null
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": null
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "same-array",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": false
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "changed-array",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": false
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Beta"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Beta"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Beta"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Beta"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Beta"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": false
+      },
+      "afterVersusSeed": {
+        "date": false,
+        "array": false
+      }
+    },
+    {
+      "name": "array-object-key-order",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          {
+            "a": 1,
+            "b": 2
+          }
+        ],
+        "mirrorLabels": [
+          {
+            "a": 1,
+            "b": 2
+          }
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ],
+          "mirrorLabels": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": false
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          {
+            "b": 2,
+            "a": 1
+          }
+        ],
+        "mirrorLabels": [
+          {
+            "a": 1,
+            "b": 2
+          }
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            {
+              "b": 2,
+              "a": 1
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            {
+              "b": 2,
+              "a": 1
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            {
+              "b": 2,
+              "a": 1
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            {
+              "b": 2,
+              "a": 1
+            }
+          ],
+          "mirrorLabels": [
+            {
+              "a": 1,
+              "b": 2
+            }
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": false
+      },
+      "afterVersusSeed": {
+        "date": false,
+        "array": false
+      }
+    },
+    {
+      "name": "nested",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "nested": {
+        "row": {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        },
+        "identity": {
+          "datesAliased": true,
+          "arraysAliased": true
+        },
+        "versusParent": {
+          "date": false,
+          "array": false
+        }
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "result": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    },
+    {
+      "name": "rollback",
+      "seeded": {
+        "name": "Owner",
+        "email": "owner@memory-values.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "moment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "mirrorMoment": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "labels": [
+          "Alpha"
+        ],
+        "mirrorLabels": [
+          "Alpha"
+        ],
+        "quantity": 2,
+        "id": "owner"
+      },
+      "seedIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "seedEvents": [
+        {
+          "phase": "input",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "input",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "before": [
+        {
+          "name": "Owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "transactionIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "transactionVersusSeed": {
+        "date": false,
+        "array": false
+      },
+      "transactionFinalIdentity": {
+        "datesAliased": true,
+        "arraysAliased": false
+      },
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "transaction-rollback"
+      },
+      "events": [
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "input",
+          "field": "labels",
+          "value": [
+            "Uncommitted"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Uncommitted"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        },
+        {
+          "phase": "output",
+          "field": "moment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "mirrorMoment",
+          "value": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          }
+        },
+        {
+          "phase": "output",
+          "field": "labels",
+          "value": [
+            "Uncommitted"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "mirrorLabels",
+          "value": [
+            "Alpha"
+          ]
+        },
+        {
+          "phase": "output",
+          "field": "quantity",
+          "value": 2
+        }
+      ],
+      "after": [
+        {
+          "name": "Concurrent owner",
+          "email": "owner@memory-values.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "moment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "mirrorMoment": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "labels": [
+            "Alpha"
+          ],
+          "mirrorLabels": [
+            "Alpha"
+          ],
+          "quantity": 2,
+          "id": "owner"
+        }
+      ],
+      "afterIdentity": {
+        "datesAliased": true,
+        "arraysAliased": true
+      },
+      "afterVersusSeed": {
+        "date": true,
+        "array": true
+      }
+    }
+  ]
+}

@@ -24,6 +24,8 @@ pub mod email;
 pub mod entity;
 pub mod error;
 mod error_codes;
+mod field_value;
+pub use field_value::{FieldDate, FieldMap, FieldValue, StructuredCloneContext};
 pub mod hooks;
 pub mod id;
 pub mod middleware;
