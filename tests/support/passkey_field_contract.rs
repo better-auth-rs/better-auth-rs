@@ -140,7 +140,8 @@ impl<S: AuthSchema> Fixture<S> {
 
     #[expect(
         clippy::expect_used,
-        reason = "The paired record must contain every native and additional field"
+        clippy::panic_in_result_fn,
+        reason = "The paired record must contain every native and additional field and satisfy all credential invariants"
     )]
     fn visible(&self, row: &Passkey) -> AuthResult<Value> {
         let id = row.id.typed()?;
@@ -319,7 +320,12 @@ impl<S: AuthSchema> Fixture<S> {
             )
             .await?;
         if mode == 1 {
-            assert_eq!(observation["stored"], before);
+            assert_eq!(
+                observation
+                    .get("stored")
+                    .ok_or_else(|| AuthError::internal("Passkey observation has no stored rows"))?,
+                &before
+            );
         }
         Ok(observation)
     }
@@ -336,45 +342,49 @@ pub(crate) async fn contract<S: AuthSchema>(
 ) -> AuthResult<()> {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/passkey-fields-1.7.6.json"))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let backends = fixture["backends"].as_array().expect("captured backends");
+    assert_eq!(fixture.get("version").expect("captured version"), "1.7.6");
+    let backends = fixture
+        .get("backends")
+        .and_then(Value::as_array)
+        .expect("captured backends");
     assert_eq!(
         backends
             .iter()
-            .map(|case| case["backend"].as_str())
+            .map(|case| case.get("backend").expect("captured backend name").as_str())
             .collect::<Vec<_>>(),
         [Some("memory"), Some("sqlite")]
     );
     let expected = backends
         .iter()
-        .find(|case| case["backend"] == backend)
+        .find(|case| case.get("backend").expect("captured backend name") == backend)
         .expect("captured backend");
+    let operations = expected.get("operations").expect("captured operations");
+    let failures = expected
+        .get("failures")
+        .and_then(Value::as_array)
+        .expect("captured failures");
     assert_eq!(
-        expected["operations"]
+        operations
             .as_array()
             .expect("captured operations")
             .iter()
-            .map(|operation| operation["name"].as_str())
+            .map(|operation| operation
+                .get("name")
+                .expect("captured operation name")
+                .as_str())
             .collect::<Vec<_>>(),
         OPERATIONS.map(Some)
     );
-    assert_eq!(
-        expected["failures"]
-            .as_array()
-            .expect("captured failures")
-            .len(),
-        6
-    );
+    assert_eq!(failures.len(), 6);
     let fixture = Fixture::new(raw).await?;
     match scenario {
-        Scenario::Operations => assert_eq!(fixture.operations().await?, expected["operations"]),
+        Scenario::Operations => assert_eq!(&fixture.operations().await?, operations),
         Scenario::Failure { operation, phase } => {
             let actual = fixture.error(operation, phase).await?;
-            let expected = expected["failures"]
-                .as_array()
-                .expect("captured failures")
+            let name = actual.get("name").expect("observed operation name");
+            let expected = failures
                 .iter()
-                .find(|failure| failure["name"] == actual["name"])
+                .find(|failure| failure.get("name").expect("captured failure name") == name)
                 .expect("captured error scenario");
             assert_eq!(&actual, expected);
         }

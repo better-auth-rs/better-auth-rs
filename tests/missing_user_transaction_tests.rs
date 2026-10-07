@@ -67,6 +67,10 @@ impl MissingUpdateHooks {
         Ok(DatabaseHookUpdate::Continue)
     }
 
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "The hook asserts its observed input before returning the scenario's intentional application error"
+    )]
     fn after_missing(&self, is_missing: bool, path: Option<&str>) -> AuthResult<()> {
         assert!(is_missing);
         assert_eq!(path, Some("/missing-update"));

@@ -39,6 +39,12 @@ pub(crate) const OWNER: &str = "number-name-user-1";
 const SECRET: &str = "ordinary-api-key-number-name-secret-at-least-32-characters";
 const ORIGIN: &str = "http://api-key-number-name.test";
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scenario {
+    Defaults,
+    Ordering,
+}
+
 #[derive(Deserialize)]
 struct Fixture {
     version: String,
@@ -85,9 +91,12 @@ struct Response {
     body: String,
 }
 
-pub(crate) fn fixture(backend: &str, required: bool) -> TestResult<Case> {
-    let fixture: Fixture =
-        serde_json::from_str(include_str!("../fixtures/api-key-number-name-1.7.6.json"))?;
+pub(crate) fn fixture(backend: &str, required: bool, scenario: Scenario) -> TestResult<Case> {
+    let source = match scenario {
+        Scenario::Defaults => include_str!("../fixtures/api-key-number-name-1.7.6.json"),
+        Scenario::Ordering => include_str!("../fixtures/api-key-number-name-order-1.7.6.json"),
+    };
+    let fixture: Fixture = serde_json::from_str(source)?;
     assert_eq!(fixture.version, "1.7.6");
     assert_eq!(
         fixture
@@ -156,6 +165,7 @@ impl<S: AuthSchema> ApiErrorHandler<S> for Callbacks {
 
 struct Fields {
     required: bool,
+    scenario: Scenario,
     state: Shared,
 }
 
@@ -175,13 +185,22 @@ impl<S: AuthSchema> AuthPlugin<S> for Fields {
         Ok(None)
     }
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
+        let scenario = self.scenario;
         let transform = |kind| {
             let state = self.state.clone();
             UserFieldTransform::new(move |value| {
                 state.lock().expect("API Key field trace").events.push(json!({
                     "kind": kind, "field": "name", "value": value.json()?.unwrap_or(json!({"type":"undefined"})),
                 }));
-                Ok(value)
+                Ok(if scenario == Scenario::Ordering && kind == "input" {
+                    match value.as_str() {
+                        Some("Key 10") => 10.0.into(),
+                        Some("Key 2") => 2.0.into(),
+                        _ => value,
+                    }
+                } else {
+                    value
+                })
             })
         };
         context.register_model_fields(
@@ -211,6 +230,7 @@ impl<S: AuthSchema> AuthPlugin<S> for Fields {
 pub(crate) async fn contract<S, F, Fut>(
     raw: Arc<dyn AuthStore<S>>,
     case: Case,
+    scenario: Scenario,
     observe_raw: F,
 ) -> TestResult
 where
@@ -224,19 +244,32 @@ where
     );
     assert_eq!(case.owner_id, OWNER);
     assert_eq!(case.catalog.is_null(), case.backend == "memory");
-    assert_eq!(
-        case.operations
-            .iter()
-            .map(|operation| operation.name.as_str())
-            .collect::<Vec<_>>(),
-        [
+    let operations: &[&str] = match scenario {
+        Scenario::Defaults => &[
             "create-first",
             "create-second",
             "get",
             "list",
             "list-name-ascending",
-            "reject-number-input"
-        ]
+            "reject-number-input",
+        ],
+        Scenario::Ordering => &[
+            "create-ten",
+            "create-two",
+            "create-default",
+            "get",
+            "list",
+            "list-name-asc",
+            "list-name-desc",
+            "reject-number-input",
+        ],
+    };
+    assert_eq!(
+        case.operations
+            .iter()
+            .map(|operation| operation.name.as_str())
+            .collect::<Vec<_>>(),
+        operations
     );
     let state = Shared::default();
     let ids = state.clone();
@@ -262,6 +295,7 @@ where
             }))
             .plugin(Fields {
                 required: case.required,
+                scenario,
                 state: state.clone(),
             })
             .on_api_error(callbacks)
@@ -341,7 +375,7 @@ where
         observation::assert_response(response, &operation.response, &dates)?;
     }
     eprintln!(
-        "API Key Number name boundaries: HTTP statusText and JSON key order remain unpaired; Axum framing is checked separately; Memory adapter projection maps absent permissions to None; SQLite catalog compares semantics rather than DDL spelling; backend={}",
+        "API Key Number name boundaries: finite number and null ordering is paired; object coercion timing and locale string ordering remain unpaired; HTTP statusText and JSON key order remain unpaired; Axum framing is checked separately; Memory adapter projection maps absent permissions to None; SQLite catalog compares semantics rather than DDL spelling; backend={}",
         case.backend
     );
     Ok(())

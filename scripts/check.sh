@@ -43,6 +43,7 @@ run_stage() {
       cargo fmt --all -- --check
       bun --no-install test \
         ./compat-tests/reference-server/contracts/api-key-number-name.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-number-name-order.test.ts \
         ./compat-tests/reference-server/contracts/passkey-shared-display.test.ts
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-cli -p better-auth-seaorm -p better-auth-seaorm-macros -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache \

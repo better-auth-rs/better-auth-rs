@@ -11,7 +11,7 @@ use better_auth::{
         sea_orm::{ConnectionTrait, DbBackend, Statement},
     },
 };
-use contract::TestResult;
+use contract::{Scenario, TestResult};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -57,6 +57,7 @@ async fn stored(database: &DatabaseConnection) -> TestResult<Value> {
 async fn run<S: AuthSchema, P: SeaOrmPluginSchema>(
     database: DatabaseConnection,
     required: bool,
+    scenario: Scenario,
 ) -> TestResult
 where
     S::User: SeaOrmUserModel,
@@ -64,7 +65,7 @@ where
     S::Account: SeaOrmAccountModel,
     S::Verification: SeaOrmVerificationModel,
 {
-    let case = contract::fixture("sqlite", required)?;
+    let case = contract::fixture("sqlite", required, scenario)?;
     let (catalog, ddl) = sqlite_catalog::observe(
         &database,
         "apikey",
@@ -83,26 +84,46 @@ where
     assert_eq!(declarations(&ddl)?, declarations(&case.catalog["ddl"])?);
     let store =
         SeaOrmStore::<S>::new(contract::config(), database.clone()).with_plugin_schema::<P>();
-    contract::contract(Arc::new(store), case, move || {
+    contract::contract(Arc::new(store), case, scenario, move || {
         let database = database.clone();
         async move { stored(&database).await }
     })
     .await
 }
 
-#[tokio::test]
-async fn generated_sqlite_api_key_number_name_matches_pinned_http_and_storage() -> TestResult {
+async fn run_scenario(scenario: Scenario) -> TestResult {
     for required in [true, false] {
         let database = Database::connect("sqlite::memory:").await?;
         let result = if required {
             required::create_auth_tables(&database).await?;
-            run::<required::AppAuthSchema, required::AppPluginSchema>(database.clone(), true).await
+            run::<required::AppAuthSchema, required::AppPluginSchema>(
+                database.clone(),
+                true,
+                scenario,
+            )
+            .await
         } else {
             optional::create_auth_tables(&database).await?;
-            run::<optional::AppAuthSchema, optional::AppPluginSchema>(database.clone(), false).await
+            run::<optional::AppAuthSchema, optional::AppPluginSchema>(
+                database.clone(),
+                false,
+                scenario,
+            )
+            .await
         };
         database.close().await?;
         result?;
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn generated_sqlite_api_key_number_name_matches_pinned_http_and_storage() -> TestResult {
+    run_scenario(Scenario::Defaults).await
+}
+
+#[tokio::test]
+async fn generated_sqlite_api_key_number_name_order_matches_pinned_http_and_storage() -> TestResult
+{
+    run_scenario(Scenario::Ordering).await
 }

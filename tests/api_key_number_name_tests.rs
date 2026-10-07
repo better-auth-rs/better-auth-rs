@@ -7,7 +7,7 @@ use better_auth::__private_core::{
     FieldValue,
     store::{ApiKeyStore, EphemeralStore},
 };
-use contract::TestResult;
+use contract::{Scenario, TestResult};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -32,16 +32,30 @@ async fn stored(store: &EphemeralStore) -> TestResult<Value> {
     Ok(Value::Array(result))
 }
 
-#[tokio::test]
-async fn memory_api_key_number_name_matches_pinned_http_and_storage() -> TestResult {
+async fn run(scenario: Scenario) -> TestResult {
     for required in [true, false] {
         let raw = Arc::new(EphemeralStore::new(Arc::new(contract::config())));
         let observer = raw.clone();
-        contract::contract(raw, contract::fixture("memory", required)?, move || {
-            let observer = observer.clone();
-            async move { stored(&observer).await }
-        })
+        contract::contract(
+            raw,
+            contract::fixture("memory", required, scenario)?,
+            scenario,
+            move || {
+                let observer = observer.clone();
+                async move { stored(&observer).await }
+            },
+        )
         .await?;
     }
     Ok(())
+}
+
+#[tokio::test]
+async fn memory_api_key_number_name_matches_pinned_http_and_storage() -> TestResult {
+    run(Scenario::Defaults).await
+}
+
+#[tokio::test]
+async fn memory_api_key_number_name_order_matches_pinned_http_and_storage() -> TestResult {
+    run(Scenario::Ordering).await
 }

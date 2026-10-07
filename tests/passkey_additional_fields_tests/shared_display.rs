@@ -20,25 +20,33 @@ async fn paired(backend: &str) -> TestResult {
     let fixture: Value = serde_json::from_str(include_str!(
         "../fixtures/passkey-shared-display-1.7.6.json"
     ))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let cases = fixture["cases"]
-        .as_array()
+    assert_eq!(fixture.get("version").ok_or("Captured version")?, "1.7.6");
+    let cases = fixture
+        .get("cases")
+        .and_then(Value::as_array)
         .ok_or("Captured shared display cases")?;
     assert_eq!(cases.len(), 4);
-    let selected = cases
-        .iter()
-        .filter(|case| case["backend"] == backend)
-        .collect::<Vec<_>>();
+    let mut selected = Vec::new();
+    for case in cases {
+        if case.get("backend").ok_or("Captured backend")? == backend {
+            selected.push(case);
+        }
+    }
     assert_eq!(
         selected
             .iter()
-            .map(|case| &case["declarationOrder"])
-            .collect::<Vec<_>>(),
+            .map(|case| case
+                .get("declarationOrder")
+                .ok_or("Captured declaration order"))
+            .collect::<Result<Vec<_>, _>>()?,
         [&json!(["name", "aaguid"]), &json!(["aaguid", "name"])]
     );
     for case in selected {
-        assert_eq!(case["table"], "shared_display_passkey");
-        assert_eq!(case["column"], "display");
+        assert_eq!(
+            case.get("table").ok_or("Captured table")?,
+            "shared_display_passkey"
+        );
+        assert_eq!(case.get("column").ok_or("Captured column")?, "display");
         if backend == "memory" {
             run(
                 Arc::new(EphemeralStore::new(Arc::new(config()))),
@@ -67,6 +75,10 @@ async fn sqlite_shared_passkey_display_matches_pinned_operations() -> TestResult
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The configuration contract asserts exact initialization results while propagating database cleanup errors"
+)]
 async fn missing_passkey_display_requires_explicit_shared_storage() -> TestResult {
     let incomplete = UserConfig {
         additional_fields: Some(
@@ -117,6 +129,10 @@ async fn missing_passkey_display_requires_explicit_shared_storage() -> TestResul
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The security contract asserts exact rejection and zero callbacks while propagating database cleanup errors"
+)]
 async fn shared_passkey_display_cannot_replace_protected_physical_columns() -> TestResult {
     for column in ["stored_owner", "stored_credential", "stored_counter"] {
         let events = Trace::default();
