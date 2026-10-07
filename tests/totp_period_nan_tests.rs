@@ -1,5 +1,6 @@
 #![expect(
     clippy::expect_used,
+    clippy::indexing_slicing,
     clippy::panic_in_result_fn,
     reason = "Fixture shape and contract assertions must fail immediately; setup errors propagate."
 )]
