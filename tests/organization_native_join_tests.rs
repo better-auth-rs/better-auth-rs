@@ -70,6 +70,10 @@ async fn query<S: AuthSchema>(store: &impl AuthStore<S>, fixture: &Value) -> Aut
                 "members":row.members.iter().map(display_member).collect::<Vec<_>>(),
                 "teams":row.teams.map(|rows| rows.iter().map(display_team).collect::<Vec<_>>())})
         }
+        #[expect(
+            clippy::unreachable,
+            reason = "Every pinned fixture path must have an aggregate consumer."
+        )]
         path => unreachable!("Unconsumed adapter aggregate: {path}"),
     })
 }
@@ -167,6 +171,10 @@ fn assert_nested_phases(events: &[Value], fixture: &Value) {
         ("organizations", _) => json!(["member.label", "M-A"]),
         ("invitations", _) => json!(["invitation.label", "I-A"]),
         ("teams", _) => json!(["team.name", "T-A"]),
+        #[expect(
+            clippy::unreachable,
+            reason = "Every pinned nested-read fixture must have an expected callback target."
+        )]
         _ => unreachable!(),
     };
     assert!(events[..write].contains(&target));

@@ -70,8 +70,7 @@ async fn update_display<S: AuthSchema, T: AuthStore<S>>(
                     id,
                     "2099-01-01T00:00:00Z"
                         .parse::<chrono::DateTime<chrono::Utc>>()
-                        .unwrap()
-                        .into(),
+                        .unwrap(),
                 )
                 .await?;
             json!(["display-write", "invitation", {"detail":detail}])

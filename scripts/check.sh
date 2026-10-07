@@ -168,10 +168,10 @@ run_stage() {
       ;;
     schema-joins)
       cargo fmt --all -- --check
-      cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test schema_join_reference_conflict_tests --test organization_member_join_reference_tests --test organization_native_join_tests --test organization_serial_reference_tests -- -D warnings
-      cargo test --locked -p better-auth-core -p better-auth-seaorm --lib -- store::joins:: schema_history
-      cargo test --locked --features axum,seaorm2,redis-cache \
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-seaorm -- -D warnings
+      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test schema_join_reference_conflict_tests --test organization_member_join_reference_tests --test organization_native_join_tests --test organization_serial_reference_tests -- -D warnings
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- store::joins:: schema_history
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test schema_join_reference_tests --test join_binding_tests \
         --test schema_join_reference_conflict_tests --test schema_preflight_tests \
         --test organization_member_join_reference_tests \

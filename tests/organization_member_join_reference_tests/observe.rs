@@ -7,6 +7,10 @@ fn error_field<'a>(error: &'a Value, name: &str) -> AuthResult<&'a Value> {
         .ok_or_else(|| AuthError::internal(format!("Missing captured error field: {name}")))
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test helper propagates observation errors and asserts the complete captured error contract."
+)]
 fn assert_error(error: AuthError, expected: &Value) -> AuthResult<()> {
     match error_field(expected, "name")?.as_str() {
         Some("BetterAuthError") => {
@@ -62,6 +66,10 @@ fn assert_error(error: AuthError, expected: &Value) -> AuthResult<()> {
     Ok(())
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test helper propagates decoding errors and asserts complete results, JSON output, and property order."
+)]
 pub(super) fn assert_result(
     result: AuthResult<Option<MemberUser>>,
     expected: &Operation,

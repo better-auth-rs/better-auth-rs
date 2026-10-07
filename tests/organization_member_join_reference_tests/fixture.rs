@@ -84,6 +84,10 @@ pub(super) struct Fixture {
 }
 
 impl Fixture {
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "The fixture loader propagates parse errors and uses assertions to detect missing contract cases."
+    )]
     pub(super) fn read() -> AuthResult<Self> {
         let fixture: Self = serde_json::from_str(include_str!(
             "../fixtures/organization-member-join-reference-1.7.6.json"

@@ -67,7 +67,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
     let _ = store
         .add_team_member(&team.id, &user_id, None)
         .await?
-        .expect("ordinary team membership is inserted");
+        .ok_or_else(|| AuthError::internal("ordinary team membership is inserted"))?;
     let mut invitation = CreateInvitation::new(
         &padded_organization,
         EMAIL,
@@ -75,7 +75,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         &padded_user,
         "2100-01-01T00:00:00Z"
             .parse::<chrono::DateTime<chrono::Utc>>()
-            .unwrap()
+            .map_err(|error| AuthError::internal(format!("invalid invitation expiry: {error}")))?
             .into(),
     );
     invitation.team_id = Some(team.id.typed()?.clone());
@@ -94,7 +94,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         let user = store
             .get_user_by_id(row.user_id.typed()?)
             .await?
-            .expect("ordinary member has its user");
+            .ok_or_else(|| AuthError::internal("ordinary member has its user"))?;
         filtered_members.push(joined_member(&MemberUser {
             member: row,
             user: better_auth_core::MemberUserView::from_user(&user),
@@ -108,15 +108,15 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
             include_teams: true,
         })
         .await?
-        .expect("ordinary organization exists");
+        .ok_or_else(|| AuthError::internal("ordinary organization exists"))?;
     let point_team_member = store
         .get_team_member(&padded_team, &padded_user)
         .await?
-        .expect("ordinary team member pair exists");
+        .ok_or_else(|| AuthError::internal("ordinary team member pair exists"))?;
     let lookup = json!({
-        "numericMember":member(&store.get_member_value(&FieldValue::from(organization_id.parse::<u64>().unwrap()), &FieldValue::from(user_id.parse::<u64>().unwrap())).await?.expect("ordinary numeric member pair exists")),
-        "member":joined_member(&store.get_member_with_user(&padded_organization, &padded_user).await?.expect("ordinary member pair exists")),
-        "memberById":joined_member(&store.get_member_by_id_with_user(created_member.id.typed()?).await?.expect("ordinary member ID exists")),
+        "numericMember":member(&store.get_member_value(&FieldValue::from(organization_id.parse::<u64>().map_err(|error| AuthError::internal(format!("invalid serial organization ID: {error}")))?), &FieldValue::from(user_id.parse::<u64>().map_err(|error| AuthError::internal(format!("invalid serial user ID: {error}")))?)).await?.ok_or_else(|| AuthError::internal("ordinary numeric member pair exists"))?),
+        "member":joined_member(&store.get_member_with_user(&padded_organization, &padded_user).await?.ok_or_else(|| AuthError::internal("ordinary member pair exists"))?),
+        "memberById":joined_member(&store.get_member_by_id_with_user(created_member.id.typed()?).await?.ok_or_else(|| AuthError::internal("ordinary member ID exists"))?),
         "filtered":{"total":total,"members":filtered_members},
         "organizations":store.list_user_organizations(&padded_user).await?.iter().map(|row| &row.id).collect::<Vec<_>>(),
         "teams":store.list_user_teams(&padded_user).await?.iter().map(|row| &row.id).collect::<Vec<_>>(),
@@ -130,15 +130,15 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
             "teamMembers":store.count_team_members(&padded_team).await?,
             "roles":store.count_organization_roles(&padded_organization).await?,
         },
-        "role":store.find_organization_role(&padded_organization, OrganizationRoleKey::Name("viewer")).await?.expect("ordinary role exists").organization_id,
-        "invitations":store.list_user_invitations(EMAIL).await?.iter().map(|row| json!({
+        "role":store.find_organization_role(&padded_organization, OrganizationRoleKey::Name("viewer")).await?.ok_or_else(|| AuthError::internal("ordinary role exists"))?.organization_id,
+        "invitations":store.list_user_invitations(EMAIL).await?.iter().map(|row| -> AuthResult<Value> { Ok(json!({
             "organizationId":row.invitation.organization_id,"inviterId":row.invitation.inviter_id,
-            "organizationName":present(row.organization.as_ref().expect("ordinary invitation organization exists").name.json().unwrap()),"teamId":present(row.invitation.team_id.json().unwrap()),
-        })).collect::<Vec<_>>(),
+            "organizationName":present(row.organization.as_ref().ok_or_else(|| AuthError::internal("ordinary invitation organization exists"))?.name.json()?),"teamId":present(row.invitation.team_id.json()?),
+        })) }).collect::<AuthResult<Vec<_>>>()?,
         "pending":store.get_pending_invitation(&padded_organization, EMAIL).await?.iter().map(|row| &row.id).collect::<Vec<_>>(),
         "full":{
             "id":full.organization.id,"members":full.members.iter().map(joined_member).collect::<Vec<_>>(),
-            "teams":full.teams.expect("team page requested").iter().map(|row| json!({"id":row.id,"organizationId":row.organization_id})).collect::<Vec<_>>(),
+            "teams":full.teams.ok_or_else(|| AuthError::internal("team page requested"))?.iter().map(|row| json!({"id":row.id,"organizationId":row.organization_id})).collect::<Vec<_>>(),
             "invitations":full.invitations.iter().map(|row| json!({"organizationId":row.organization_id,"inviterId":row.inviter_id})).collect::<Vec<_>>(),
         },
     });
@@ -152,7 +152,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
             user_id: user_id.clone().into(),
             expires_at: "2100-01-01T00:00:00Z"
                 .parse::<chrono::DateTime<chrono::Utc>>()
-                .unwrap()
+                .map_err(|error| AuthError::internal(format!("invalid session expiry: {error}")))?
                 .into(),
             ip_address: None,
             user_agent: None,
@@ -170,11 +170,12 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
             Some(10).into(),
         )
         .await?;
-    let _ = snapshot.expect("ordinary acceptance returns its cookie snapshot");
+    let _ = snapshot
+        .ok_or_else(|| AuthError::internal("ordinary acceptance returns its cookie snapshot"))?;
     let session_after = store
         .get_session(&session.token)
         .await?
-        .expect("ordinary accepted session remains available");
+        .ok_or_else(|| AuthError::internal("ordinary accepted session remains available"))?;
     let acceptance = json!({
         "member":member(&accepted_member),"status":accepted_invitation.status,"teamId":present(accepted_invitation.team_id.json()?),
         "teamMembers":team_members(store.list_team_members(&padded_team).await?),

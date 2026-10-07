@@ -1,5 +1,5 @@
 use better_auth_core::{
-    AuthConfig, AuthResult, CreateInvitation, CreateMember, CreateOrganization,
+    AuthConfig, AuthError, AuthResult, CreateInvitation, CreateMember, CreateOrganization,
     CreateOrganizationRole, CreateSession, CreateTeam, CreateUser, FieldMap, FieldValue,
     InvitationStatus, Member, TeamMember, UpdateOrganization, UpdateOrganizationRole, UpdateTeam,
     id::IdGeneration,
@@ -41,16 +41,31 @@ fn reference(trace: Option<Arc<Mutex<Vec<Value>>>>) -> UserFieldConfig {
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 if let Some(trace) = &input_trace {
-                    trace.lock().unwrap().push(json!(["input", value.json()?]));
+                    trace
+                        .lock()
+                        .map_err(|error| {
+                            AuthError::internal(format!("input trace lock poisoned: {error}"))
+                        })?
+                        .push(json!(["input", value.json()?]));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => FieldValue::from(value.as_str().unwrap().trim()),
+                    value => FieldValue::from(
+                        value
+                            .as_str()
+                            .ok_or_else(|| AuthError::internal("reference input must be a string"))?
+                            .trim(),
+                    ),
                 })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 if let Some(trace) = &trace {
-                    trace.lock().unwrap().push(json!(["output", value.json()?]));
+                    trace
+                        .lock()
+                        .map_err(|error| {
+                            AuthError::internal(format!("output trace lock poisoned: {error}"))
+                        })?
+                        .push(json!(["output", value.json()?]));
                 }
                 Ok(value)
             })),
@@ -72,6 +87,10 @@ fn member(row: &Member) -> Value {
     json!({"id":row.id,"organizationId":row.organization_id,"userId":row.user_id,"role":row.role})
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "member creates a JSON object before this helper inserts the joined field"
+)]
 fn joined_member(row: &MemberUser) -> Value {
     let mut value = member(&row.member);
     value["userIdFromJoin"] = json!(row.user.id);
@@ -101,6 +120,10 @@ async fn user(store: &EphemeralStore) -> AuthResult<String> {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "the test propagates setup errors and uses assert_eq for the complete fixture comparison"
+)]
 async fn organization_reference_fields_match_pinned_callback_values_and_projection()
 -> AuthResult<()> {
     let fixture: Value = serde_json::from_str(include_str!(
@@ -125,7 +148,7 @@ async fn organization_reference_fields_match_pinned_callback_values_and_projecti
             "invitation" => fields.invitation = schema,
             "team" => fields.team = schema,
             "organizationRole" => fields.organization_role = schema,
-            _ => unreachable!(),
+            _ => return Err(AuthError::internal(format!("unexpected model: {model}"))),
         }
         let store = EphemeralStore::new(Arc::new(config(false)));
         store.configure_organization_fields(fields)?;
@@ -167,7 +190,9 @@ async fn organization_reference_fields_match_pinned_callback_values_and_projecti
                         "001",
                         "2100-01-01T00:00:00Z"
                             .parse::<chrono::DateTime<chrono::Utc>>()
-                            .unwrap()
+                            .map_err(|error| {
+                                AuthError::internal(format!("invalid invitation expiry: {error}"))
+                            })?
                             .into(),
                     ))
                     .await?;
@@ -215,18 +240,27 @@ async fn organization_reference_fields_match_pinned_callback_values_and_projecti
                     .await?;
                 (selected(row)?, selected(updated)?)
             }
-            _ => unreachable!(),
+            _ => return Err(AuthError::internal(format!("unexpected model: {model}"))),
         };
         let _ = families.insert(
             model.into(),
-            json!({"created":created,"updated":updated,"trace":*trace.lock().unwrap()}),
+            json!({"created":created,"updated":updated,"trace":*trace.lock().map_err(|error| AuthError::internal(format!("callback trace lock poisoned: {error}")))?}),
         );
     }
-    assert_eq!(Value::Object(families), fixture["families"]);
+    assert_eq!(
+        &Value::Object(families),
+        fixture
+            .get("families")
+            .ok_or_else(|| AuthError::internal("fixture has no families"))?
+    );
     Ok(())
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "the test propagates setup errors and uses assert_eq for the complete fixture comparison"
+)]
 async fn organization_serial_queries_joins_and_ordinary_lifecycle_match_upstream() -> AuthResult<()>
 {
     let fixture: Value = serde_json::from_str(include_str!(
@@ -236,11 +270,20 @@ async fn organization_serial_queries_joins_and_ordinary_lifecycle_match_upstream
         lifecycle::observe(false).await?,
         lifecycle::observe(true).await?,
     ];
-    assert_eq!(json!(actual), fixture["lifecycles"]);
+    assert_eq!(
+        &json!(actual),
+        fixture
+            .get("lifecycles")
+            .ok_or_else(|| AuthError::internal("fixture has no lifecycles"))?
+    );
     Ok(())
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "the test propagates setup errors and uses assert_eq for the complete fixture comparison"
+)]
 async fn explicit_native_reference_replacement_retains_ordinary_string_storage() -> AuthResult<()> {
     let fixture: Value = serde_json::from_str(include_str!(
         "fixtures/organization-serial-references-1.7.6.json"
@@ -257,7 +300,14 @@ async fn explicit_native_reference_replacement_retains_ordinary_string_storage()
                         field_name: Some("stored_organization_id".into()),
                         transform: Some(FieldTransforms {
                             output: Some(UserFieldTransform::new(move |value| {
-                                trace.lock().unwrap().push(value.json()?);
+                                trace
+                                    .lock()
+                                    .map_err(|error| {
+                                        AuthError::internal(format!(
+                                            "output trace lock poisoned: {error}"
+                                        ))
+                                    })?
+                                    .push(value.json()?);
                                 Ok(value)
                             })),
                             ..Default::default()
@@ -288,10 +338,12 @@ async fn explicit_native_reference_replacement_retains_ordinary_string_storage()
             OrganizationRoleKey::Name("viewer"),
         )
         .await?
-        .expect("ordinary replaced-reference role exists");
+        .ok_or_else(|| AuthError::internal("ordinary replaced-reference role exists"))?;
     assert_eq!(
-        json!({"created":created.organization_id,"read":read.organization_id,"outputs":*outputs.lock().unwrap()}),
-        fixture["replacement"]
+        &json!({"created":created.organization_id,"read":read.organization_id,"outputs":*outputs.lock().map_err(|error| AuthError::internal(format!("output trace lock poisoned: {error}")))?}),
+        fixture
+            .get("replacement")
+            .ok_or_else(|| AuthError::internal("fixture has no replacement"))?
     );
     Ok(())
 }
