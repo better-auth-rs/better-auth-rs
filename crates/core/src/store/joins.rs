@@ -186,7 +186,6 @@ fn resolve_references(
             Ok(MemberUserJoin {
                 from: from.1.to_owned(),
                 to: to.1.to_owned(),
-                logical_from: from.0.to_owned(),
                 logical_to: to.0.to_owned(),
                 many: to.1 != "id" && !*unique,
             })
@@ -225,8 +224,6 @@ pub struct MemberUserJoin {
     pub from: String,
     /// Physical field on User.
     pub to: String,
-    /// Original logical Member field corresponding to the native source column.
-    pub logical_from: String,
     /// Original logical User field corresponding to the native target column.
     pub logical_to: String,
     /// Whether the selected foreign key returns a page instead of one user.
