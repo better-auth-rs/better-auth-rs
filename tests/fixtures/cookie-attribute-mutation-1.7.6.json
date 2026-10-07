@@ -4674,6 +4674,1714 @@
           ]
         ]
       }
+    },
+    {
+      "input": {
+        "secure": false,
+        "partitioned": true,
+        "action": "replace",
+        "incoming": [
+          [
+            "0.5",
+            "old-five"
+          ],
+          [
+            "0.0",
+            "old-zero"
+          ]
+        ],
+        "valueLength": 32,
+        "name": "0"
+      },
+      "before": {
+        "name": "0",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "prepared": [
+        {
+          "name": "0",
+          "valueLength": 32,
+          "attributeGroup": 0,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        },
+        {
+          "name": "0.5",
+          "valueLength": 0,
+          "attributeGroup": 1,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "0.0",
+          "valueLength": 0,
+          "attributeGroup": 2,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        }
+      ],
+      "afterPrepare": {
+        "name": "0",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "writes": [
+        {
+          "name": "0",
+          "attributeGroup": 0,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ],
+          "header": "0=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        },
+        {
+          "name": "0.5",
+          "attributeGroup": 1,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ],
+          "header": "0.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "0.0",
+          "attributeGroup": 2,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ],
+          "header": "0.0=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        }
+      ],
+      "headers": [
+        "0=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "0.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "0.0=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned"
+      ],
+      "after": {
+        "name": "0",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      }
+    },
+    {
+      "input": {
+        "secure": false,
+        "partitioned": true,
+        "action": "replace",
+        "incoming": [
+          [
+            "4294967294.5",
+            "old-five"
+          ],
+          [
+            "4294967294",
+            "old-base"
+          ]
+        ],
+        "valueLength": 8000,
+        "name": "4294967294"
+      },
+      "before": {
+        "name": "4294967294",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "prepared": [
+        {
+          "name": "4294967294",
+          "valueLength": 0,
+          "attributeGroup": 0,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.5",
+          "valueLength": 0,
+          "attributeGroup": 1,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.0",
+          "valueLength": 3939,
+          "attributeGroup": 2,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.1",
+          "valueLength": 3939,
+          "attributeGroup": 2,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.2",
+          "valueLength": 122,
+          "attributeGroup": 2,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        }
+      ],
+      "afterPrepare": {
+        "name": "4294967294",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "writes": [
+        {
+          "name": "4294967294",
+          "attributeGroup": 0,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ],
+          "header": "4294967294=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.5",
+          "attributeGroup": 1,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ],
+          "header": "4294967294.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.0",
+          "attributeGroup": 2,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ],
+          "header": "4294967294.0=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.1",
+          "attributeGroup": 2,
+          "before": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ],
+          "header": "4294967294.1=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        },
+        {
+          "name": "4294967294.2",
+          "attributeGroup": 2,
+          "before": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ],
+          "header": "4294967294.2=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        }
+      ],
+      "headers": [
+        "4294967294=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "4294967294.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "4294967294.0=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "4294967294.1=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned",
+        "4294967294.2=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; Secure; SameSite=Lax; Partitioned"
+      ],
+      "after": {
+        "name": "4294967294",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      }
+    },
+    {
+      "input": {
+        "secure": false,
+        "partitioned": true,
+        "action": "replace",
+        "incoming": [
+          [
+            "4294967295.5",
+            "old-five"
+          ],
+          [
+            "4294967295",
+            "old-base"
+          ]
+        ],
+        "valueLength": 32,
+        "name": "4294967295"
+      },
+      "before": {
+        "name": "4294967295",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "prepared": [
+        {
+          "name": "4294967295.5",
+          "valueLength": 0,
+          "attributeGroup": 0,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "4294967295",
+          "valueLength": 32,
+          "attributeGroup": 1,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        }
+      ],
+      "afterPrepare": {
+        "name": "4294967295",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "writes": [
+        {
+          "name": "4294967295.5",
+          "attributeGroup": 0,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ],
+          "header": "4294967295.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "4294967295",
+          "attributeGroup": 1,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ],
+          "header": "4294967295=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        }
+      ],
+      "headers": [
+        "4294967295.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "4294967295=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned"
+      ],
+      "after": {
+        "name": "4294967295",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      }
+    },
+    {
+      "input": {
+        "secure": false,
+        "partitioned": true,
+        "action": "replace",
+        "incoming": [
+          [
+            "01.5",
+            "old-five"
+          ],
+          [
+            "01",
+            "old-base"
+          ]
+        ],
+        "valueLength": 32,
+        "name": "01"
+      },
+      "before": {
+        "name": "01",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "prepared": [
+        {
+          "name": "01.5",
+          "valueLength": 0,
+          "attributeGroup": 0,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "01",
+          "valueLength": 32,
+          "attributeGroup": 1,
+          "attributes": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        }
+      ],
+      "afterPrepare": {
+        "name": "01",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      },
+      "writes": [
+        {
+          "name": "01.5",
+          "attributeGroup": 0,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ],
+          "header": "01.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              0
+            ]
+          ]
+        },
+        {
+          "name": "01",
+          "attributeGroup": 1,
+          "before": [
+            [
+              "secure",
+              false
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ],
+          "header": "01=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+          "after": [
+            [
+              "secure",
+              true
+            ],
+            [
+              "sameSite",
+              "lax"
+            ],
+            [
+              "path",
+              "/ordinary"
+            ],
+            [
+              "httpOnly",
+              true
+            ],
+            [
+              "domain",
+              ".cookie-attributes.test"
+            ],
+            [
+              "partitioned",
+              true
+            ],
+            [
+              "maxAge",
+              45.5
+            ]
+          ]
+        }
+      ],
+      "headers": [
+        "01.5=; Max-Age=0; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned",
+        "01=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; Max-Age=45; Domain=.cookie-attributes.test; Path=/ordinary; HttpOnly; SameSite=Lax; Partitioned"
+      ],
+      "after": {
+        "name": "01",
+        "attributes": [
+          [
+            "secure",
+            false
+          ],
+          [
+            "sameSite",
+            "lax"
+          ],
+          [
+            "path",
+            "/ordinary"
+          ],
+          [
+            "httpOnly",
+            true
+          ],
+          [
+            "domain",
+            ".cookie-attributes.test"
+          ],
+          [
+            "partitioned",
+            true
+          ],
+          [
+            "maxAge",
+            45.5
+          ]
+        ]
+      }
     }
   ],
   "lastLogin": [

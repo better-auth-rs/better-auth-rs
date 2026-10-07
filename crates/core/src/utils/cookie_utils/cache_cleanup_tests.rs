@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AuthRequest, CookieAttributes, HttpMethod, SameSite};
+use crate::{AuthRequest, CookieAttributes, CookieOverride, HttpMethod, SameSite};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -12,6 +12,7 @@ enum Action {
 
 #[derive(Deserialize)]
 struct Input {
+    name: Option<String>,
     action: Action,
     logical: String,
     incoming: Vec<(String, String)>,
@@ -30,6 +31,7 @@ fn direct_cache_actions_match_ordered_display_cookie_capture() -> AuthResult<()>
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/cookie-cache-cleanup-1.7.6.json"
     )))?;
+    assert_eq!(cases.len(), 7);
     let mut config = AuthConfig::new("ordinary-cookie-cache-cleanup-secret-at-least-32-characters")
         .base_url("https://cookie-cache-cleanup.test");
     config.advanced.use_secure_cookies = Some(false);
@@ -43,19 +45,37 @@ fn direct_cache_actions_match_ordered_display_cookie_capture() -> AuthResult<()>
         ..Default::default()
     };
     for case in cases {
+        let mut config = config.clone();
+        if let Some(name) = &case.input.name {
+            let _ = config.advanced.cookies.get_or_insert_default().insert(
+                case.input.logical.clone(),
+                CookieOverride {
+                    name: Some(name.clone()),
+                    ..Default::default()
+                },
+            );
+        }
         let mut request = AuthRequest::new(HttpMethod::Get, "/ordinary-cookie-display");
         if !case.input.incoming.is_empty() {
+            let prefix = if case.input.name.is_some() {
+                ""
+            } else {
+                "better-auth."
+            };
             let cookie = case
                 .input
                 .incoming
                 .iter()
-                .map(|(name, value)| format!("better-auth.{name}={value}"))
+                .map(|(name, value)| format!("{prefix}{name}={value}"))
                 .collect::<Vec<_>>()
                 .join("; ");
             let _ = request.headers.insert("cookie".into(), cookie);
         }
         for name in &case.input.issued {
-            let cookie = config.auth_cookie(name, Default::default());
+            let mut cookie = config.auth_cookie(name, Default::default());
+            if case.input.name.is_some() {
+                cookie.name.clone_from(name);
+            }
             request.append_response_header("Set-Cookie", render_cookie("display", &cookie)?)?;
         }
         let cookie = config.auth_cookie(&case.input.logical, Default::default());

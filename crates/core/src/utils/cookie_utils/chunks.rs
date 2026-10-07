@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashSet};
 use indexmap::IndexMap;
 
 use super::{get_cookie, render_cookie, render_cookie_mut};
+use crate::utils::json::array_index;
 use crate::{AuthError, AuthRequest, AuthResult, request_runtime::ResolvedCookie};
 
 fn chunk_index(name: &str, cookie_name: &str) -> Option<usize> {
@@ -71,10 +72,10 @@ pub(crate) fn clear_existing_cookies(
     mut response_headers: Option<&mut crate::Headers>,
 ) -> AuthResult<()> {
     let mut seen = HashSet::new();
-    for name in existing_names(req, &cookie.name)
-        .into_iter()
-        .filter(|name| seen.insert(name.clone()))
-    {
+    let mut names = existing_names(req, &cookie.name);
+    names.retain(|name| seen.insert(name.clone()));
+    names.sort_by_key(|name| array_index(name).map_or((true, 0), |index| (false, index)));
+    for name in names {
         let header = clear_chunk(&name, cookie)?;
         if let Some(headers) = response_headers.as_deref_mut() {
             headers.append("Set-Cookie", header);
@@ -144,6 +145,7 @@ pub fn create_chunked_cookies(
             )],
         );
     }
+    cookies.sort_by_key(|name, _| array_index(name).map_or((true, 0), |index| (false, index)));
     let mut payload = cookie.clone();
     cookies
         .into_iter()

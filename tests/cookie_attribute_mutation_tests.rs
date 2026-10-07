@@ -51,6 +51,7 @@ struct ChunkCase {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ChunkInput {
+    name: Option<String>,
     secure: bool,
     partitioned: bool,
     action: String,
@@ -148,9 +149,18 @@ fn session_snapshot(config: &AuthConfig) -> AuthResult<Value> {
 fn chunk_attribute_mutations_preserve_pinned_header_order_and_caller_attributes() -> AuthResult<()>
 {
     let cases = capture()?.chunks;
-    assert_eq!(cases.len(), 6);
+    assert_eq!(cases.len(), 10);
     for case in cases {
-        let config = config(case.input.secure, case.input.partitioned);
+        let mut config = config(case.input.secure, case.input.partitioned);
+        if let Some(name) = case.input.name {
+            let _ = config.advanced.cookies.get_or_insert_default().insert(
+                "ordinary".into(),
+                CookieOverride {
+                    name: Some(name),
+                    ..Default::default()
+                },
+            );
+        }
         let cookie = config.auth_cookie(
             "ordinary",
             CookieAttributes {
