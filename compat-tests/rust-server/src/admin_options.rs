@@ -179,7 +179,12 @@ impl SeaOrmHooks<TestSchema> for AdminOptionsFixture {
         };
         if !ctx.request.as_ref().is_some_and(|request| {
             request.path.as_deref() == Some("/admin/update-user")
-                && request.body.get("data").and_then(|data| data.get("banned"))
+                && request
+                    .body
+                    .as_object()
+                    .and_then(|body| body.get("data"))
+                    .and_then(FieldValue::as_object)
+                    .and_then(|data| data.get("banned"))
                     == Some(&FieldValue::Bool(true))
         }) {
             return Ok(());
