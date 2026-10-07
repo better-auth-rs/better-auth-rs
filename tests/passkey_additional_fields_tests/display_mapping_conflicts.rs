@@ -64,10 +64,18 @@ async fn reject_conflicts<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) {
                         }));
                     }
                     let result = auth.build().await;
-                    assert!(
-                        matches!(result, Err(AuthError::Config(ref message)) if message.contains(" storage column ")),
-                        "{native}/{name}/{storage:?}, reversed={reversed}, split={split}"
-                    );
+                    if name == other {
+                        assert!(
+                            result.is_ok(),
+                            "shared displays {native}/{name}/{storage:?}, reversed={reversed}, split={split}: {:?}",
+                            result.err()
+                        );
+                    } else {
+                        assert!(
+                            matches!(result, Err(AuthError::Config(ref message)) if message.contains(" storage column ")),
+                            "{native}/{name}/{storage:?}, reversed={reversed}, split={split}"
+                        );
+                    }
                     assert_eq!(calls.load(Ordering::SeqCst), 0);
                 }
             }

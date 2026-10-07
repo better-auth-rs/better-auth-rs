@@ -13,6 +13,8 @@ mod display_mapping;
 mod display_mapping_conflicts;
 #[path = "support/passkey_fields.rs"]
 mod fixture;
+#[path = "passkey_additional_fields_tests/shared_display.rs"]
+mod shared_display;
 
 use better_auth::{
     __private_core::{

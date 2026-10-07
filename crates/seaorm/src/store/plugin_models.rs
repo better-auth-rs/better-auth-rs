@@ -144,9 +144,10 @@ pub(super) fn validate_additional_field_columns<M: SeaOrmPluginModel>(
         }
         let storage = resolve_field_name(field.field_name.as_deref(), name);
         for core in core_fields(role).iter().filter(|field| {
-            !(role == EntityRole::TwoFactor
-                && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
-                && matches!(field.name, "created_at" | "updated_at"))
+            !(role == EntityRole::Passkey && matches!(field.name, "name" | "aaguid"))
+                && !(role == EntityRole::TwoFactor
+                    && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
+                    && matches!(field.name, "created_at" | "updated_at"))
                 && !(role == EntityRole::Passkey
                     && M::passkey_storage() == better_auth_core::PasskeyStorage::Native
                     && matches!(field.name, "credential" | "updated_at"))

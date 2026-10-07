@@ -519,12 +519,20 @@ impl Entity {
                         let display = native_display_field(role, name);
                         if display {
                             let supported = match &field.field_type {
-                                FieldType::Name(kind) => matches!(kind.as_str(), "string" | "json"),
+                                FieldType::Name(kind) => {
+                                    matches!(kind.as_str(), "string" | "json")
+                                        || role == EntityRole::ApiKey && kind == "number"
+                                }
                                 FieldType::Enum(_) => true,
                             };
                             if !supported || field.references.is_some() {
+                                let types = if role == EntityRole::ApiKey {
+                                    "string, number, enum, or JSON"
+                                } else {
+                                    "string, enum, or JSON"
+                                };
                                 return Err(format!(
-                                    "{role:?} {name} requires a string, enum, or JSON declaration without a reference"
+                                    "{role:?} {name} requires a {types} declaration without a reference"
                                 ));
                             }
                         }
@@ -547,7 +555,13 @@ impl Entity {
                                 .iter()
                                 .filter(|core| {
                                     core.registry_column.is_some()
-                                        && !(display && core.logical_name == *name)
+                                        && !(display
+                                            && (core.logical_name == *name
+                                                || role == EntityRole::Passkey
+                                                    && native_display_field(
+                                                        role,
+                                                        &core.logical_name,
+                                                    )))
                                 })
                                 .any(|core| {
                                     let rust = core.ident.to_string();
@@ -573,7 +587,10 @@ impl Entity {
                                     .and_then(|field| field.field_name.as_deref()),
                                 native,
                             );
-                            if name != native && (name == column || storage == column) {
+                            if name != native
+                                && (name == column || storage == column)
+                                && !(role == EntityRole::Passkey && display)
+                            {
                                 return Err(format!(
                                     "{role:?} field {name} conflicts with {native} storage column {column}"
                                 ));
@@ -616,6 +633,25 @@ impl Entity {
                     unique: Some(field.unique),
                     attributes: Some(field.clone()),
                 });
+            }
+        }
+        if entity.role == Some(EntityRole::Passkey)
+            && let Some(column) = entity.column("name").map(str::to_owned)
+            && let Some(position) = entity
+                .fields
+                .iter()
+                .position(|field| field.registry_column == Some("aaguid") && field.column == column)
+        {
+            let aaguid = entity.fields.remove(position);
+            if let Some(name) = entity
+                .fields
+                .iter_mut()
+                .find(|field| field.registry_column == Some("name"))
+            {
+                // Upstream preserves the first column position and the last declaration's attributes.
+                name.ty = aaguid.ty;
+                name.unique = aaguid.unique;
+                name.attributes = aaguid.attributes;
             }
         }
         if entity.table.is_empty() {

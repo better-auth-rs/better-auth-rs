@@ -1,0 +1,7 @@
+{
+  "apikey": {
+    "additionalFields": {
+      "name": { "type": "number", "required": true, "defaultValue": 7 }
+    }
+  }
+}

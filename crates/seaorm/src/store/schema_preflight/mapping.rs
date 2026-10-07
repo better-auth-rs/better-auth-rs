@@ -87,6 +87,9 @@ fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthRe
                 !(role == EntityRole::Passkey
                     && M::passkey_storage() == better_auth_core::PasskeyStorage::Native
                     && matches!(field.name, "credential" | "updated_at"))
+                    && !(role == EntityRole::Passkey
+                        && matches!(field.name, "name" | "aaguid")
+                        && fields.fields().contains_key(field.name))
                     && !(role == EntityRole::TwoFactor
                         && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
                         && matches!(field.name, "created_at" | "updated_at"))

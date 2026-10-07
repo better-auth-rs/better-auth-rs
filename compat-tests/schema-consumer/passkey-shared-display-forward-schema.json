@@ -1,0 +1,17 @@
+{
+  "passkey": {
+    "modelName": "shared_display_passkey",
+    "additionalFields": {
+      "name": {
+        "type": "string",
+        "required": false,
+        "fieldName": "display"
+      },
+      "aaguid": {
+        "type": "string",
+        "required": false,
+        "fieldName": "display"
+      }
+    }
+  }
+}

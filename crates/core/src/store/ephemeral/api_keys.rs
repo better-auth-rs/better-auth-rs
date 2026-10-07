@@ -5,7 +5,7 @@ use chrono::Utc;
 
 use super::{EphemeralStore, rows::RowRef};
 use crate::store::{ApiKeyStore, ApiKeyUsageWrite};
-use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, FieldDate, UpdateApiKey};
+use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, FieldDate, FieldValue, UpdateApiKey};
 
 fn now() -> FieldDate {
     Utc::now().into()
@@ -101,23 +101,32 @@ impl ApiKeyStore for EphemeralStore {
                     let mut named = keys
                         .into_iter()
                         .map(|key| {
-                            let name = if key.0.name.is_undefined() {
-                                None
-                            } else {
-                                key.0.name.typed()?.clone()
-                            };
-                            Ok((name, key))
+                            let name = key.0.name.field_value();
+                            let text = name.display_utf16()?;
+                            Ok((name, text, key))
                         })
                         .collect::<AuthResult<Vec<_>>>()?;
                     named.sort_by(|a, b| {
-                        let order = a.0.cmp(&b.0);
+                        use std::cmp::Ordering;
+                        let order = match (&a.0, &b.0) {
+                            (
+                                FieldValue::Null | FieldValue::Undefined,
+                                FieldValue::Null | FieldValue::Undefined,
+                            ) => Ordering::Equal,
+                            (FieldValue::Null | FieldValue::Undefined, _) => Ordering::Less,
+                            (_, FieldValue::Null | FieldValue::Undefined) => Ordering::Greater,
+                            (FieldValue::Number(left), FieldValue::Number(right)) => {
+                                (left - right).partial_cmp(&0.0).unwrap_or(Ordering::Equal)
+                            }
+                            _ => a.1.cmp(&b.1),
+                        };
                         if direction == "desc" {
                             order.reverse()
                         } else {
                             order
                         }
                     });
-                    keys = named.into_iter().map(|(_, key)| key).collect();
+                    keys = named.into_iter().map(|(_, _, key)| key).collect();
                 } else if let Some((field @ ("enabled" | "rateLimitEnabled"), direction)) =
                     sort.filter(|_| keys.len() > 1)
                 {

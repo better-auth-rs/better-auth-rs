@@ -1,0 +1,47 @@
+#![cfg(all(feature = "seaorm2", feature = "axum"))]
+
+#[path = "support/api_key_number_name_contract.rs"]
+mod contract;
+
+use better_auth::__private_core::{
+    FieldValue,
+    store::{ApiKeyStore, EphemeralStore},
+};
+use contract::TestResult;
+use serde_json::{Value, json};
+use std::sync::Arc;
+
+async fn stored(store: &EphemeralStore) -> TestResult<Value> {
+    let mut result = Vec::new();
+    for row in store
+        .find_api_keys_by_reference(contract::OWNER, None)
+        .await?
+    {
+        let mut value = FieldValue::from_json(serde_json::to_value(&row)?)?
+            .json()?
+            .ok_or("API Key must serialize")?;
+        let fields = value.as_object_mut().ok_or("Expected an API Key object")?;
+        assert!(row.permissions.is_none());
+        assert_eq!(fields.remove("permissions"), Some(Value::Null));
+        for field in ["createdAt", "updatedAt"] {
+            let date = fields.get_mut(field).ok_or("Missing API Key date")?;
+            *date = json!({"type":"date", "value": date});
+        }
+        result.push(value);
+    }
+    Ok(Value::Array(result))
+}
+
+#[tokio::test]
+async fn memory_api_key_number_name_matches_pinned_http_and_storage() -> TestResult {
+    for required in [true, false] {
+        let raw = Arc::new(EphemeralStore::new(Arc::new(contract::config())));
+        let observer = raw.clone();
+        contract::contract(raw, contract::fixture("memory", required)?, move || {
+            let observer = observer.clone();
+            async move { stored(&observer).await }
+        })
+        .await?;
+    }
+    Ok(())
+}

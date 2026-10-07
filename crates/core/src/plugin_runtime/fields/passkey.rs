@@ -49,7 +49,8 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
         }
         for native in ["name", "aaguid"] {
             let column = storage_name(fields, native);
-            if name != native && (name == column || storage == column) {
+            if !matches!(name.as_str(), "name" | "aaguid") && (name == column || storage == column)
+            {
                 return Err(AuthError::config(format!(
                     "Passkey field {name} conflicts with {native} storage column {column}"
                 )));
@@ -109,8 +110,14 @@ impl ModelFields {
                 bind(field, value)
             })
             .await?;
-        let name = optional_string(&mut fields, storage_name(config, "name"));
-        let aaguid = optional_string(&mut fields, storage_name(config, "aaguid"));
+        let name_column = storage_name(config, "name");
+        let aaguid_column = storage_name(config, "aaguid");
+        let name = optional_string(&mut fields, name_column);
+        let aaguid = if name_column == aaguid_column {
+            name.clone()
+        } else {
+            optional_string(&mut fields, aaguid_column)
+        };
         Ok(PasskeyFieldPatch {
             name,
             aaguid,

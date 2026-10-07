@@ -37,6 +37,16 @@ export BETTER_AUTH_ORGANIZATION_SCHEMA="$schema_dir/organization_schema.rs"
 export BETTER_AUTH_SQLITE_JSON_SCHEMA="$schema_dir/sqlite_json_schema.rs"
 "$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
+for required in required optional; do
+  schema="$schema_dir/api_key_number_name_${required}.rs"
+  "$consumer_cli" generate --plugins api-key --database sqlite --schema-config "compat-tests/schema-consumer/api-key-number-name-${required}-schema.json" --output "$schema"
+  export "BETTER_AUTH_API_KEY_NUMBER_NAME_${required^^}_SCHEMA=$schema"
+done
+for order in forward reversed; do
+  schema="$schema_dir/passkey_shared_display_${order}.rs"
+  "$consumer_cli" generate --plugins passkey --database sqlite --schema-config "compat-tests/schema-consumer/passkey-shared-display-${order}-schema.json" --output "$schema"
+  export "BETTER_AUTH_PASSKEY_SHARED_DISPLAY_${order^^}_SCHEMA=$schema"
+done
 for backend in sqlite postgres mysql; do
   schema="$schema_dir/native_api_key_${backend}.rs"
   "$consumer_cli" generate --plugins api-key --database "$backend" --output "$schema"

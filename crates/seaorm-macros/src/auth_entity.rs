@@ -127,6 +127,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     if let Some(missing) = core.iter().find(|required| {
         !(row_presence && **required == "active"
             || native_passkey && matches!(**required, "credential" | "updated_at")
+            || role == EntityRole::Passkey && matches!(**required, "name" | "aaguid")
             || native_two_factor && matches!(**required, "created_at" | "updated_at"))
             && !idents.iter().any(|ident| ident == *required)
     }) {

@@ -213,7 +213,7 @@ fn plugin_display_fields_generate_declared_storage_types_and_aliases() {
     clippy::expect_used,
     reason = "The negative configurations must deserialize before generation rejects unsafe native replacements."
 )]
-fn plugin_display_fields_reject_other_types_references_and_native_aliases() {
+fn plugin_display_fields_validate_types_references_and_native_aliases() {
     for (model, display, native, immutable) in [
         ("apikey", "name", "key", "key"),
         ("passkey", "name", "credentialID", "credentialID"),
@@ -233,9 +233,10 @@ fn plugin_display_fields_reject_other_types_references_and_native_aliases() {
                 (model): { "additionalFields": { (display): field } }
             }))
             .expect("unsupported display-field configuration");
-            assert!(
-                generate(&config, Database::Sqlite).is_err(),
-                "accepted {model}.{display}: {field}"
+            assert_eq!(
+                generate(&config, Database::Sqlite).is_ok(),
+                model == "apikey" && field.get("type") == Some(&json!("number")),
+                "unexpected initialization result for {model}.{display}: {field}"
             );
         }
         for field in [
@@ -306,5 +307,15 @@ fn plugin_display_field_column_conflicts_do_not_depend_on_declaration_order() {
         } }
     }))
     .expect("two displays with one storage column");
-    assert!(generate(&config, Database::Sqlite).is_err());
+    let source = generate(&config, Database::Sqlite).expect("shared display column generates");
+    let fields = model_fields(&source, "passkey");
+    assert!(!fields.contains_key("aaguid"));
+    assert_eq!(
+        attribute_value(
+            fields.get("name").expect("shared display field"),
+            "sea_orm",
+            "column_name"
+        ),
+        Some("shared_display".into())
+    );
 }

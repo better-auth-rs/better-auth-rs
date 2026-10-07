@@ -241,12 +241,38 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 {
     pub(super) fn validate_passkey_fields(&self) -> AuthResult<()> {
         let fields = self.model_fields.fields(EntityRole::Passkey);
-        super::plugin_models::validate_field_columns(
-            "Passkey schema",
-            fields,
-            P::Passkey::column,
-            P::Passkey::core_field_name,
-        )?;
+        let storage = |name: &str| {
+            fields.fields().get(name).map(|field| {
+                better_auth_core::store::schema::resolve_field_name(
+                    field.field_name.as_deref(),
+                    name,
+                )
+                .to_owned()
+            })
+        };
+        let name = storage("name");
+        let aaguid = storage("aaguid");
+        if let Some(column) = name.filter(|name| Some(name) == aaguid.as_ref()) {
+            let column = P::Passkey::column(&column)?;
+            if P::Passkey::core_field_name(&column)
+                .is_some_and(|name| !matches!(name, "name" | "aaguid"))
+            {
+                return Err(AuthError::config(
+                    "Passkey shared display fields cannot replace an identity or credential column",
+                ));
+            }
+        } else {
+            // Missing typed display slots are valid only when both policies resolve one physical column.
+            for name in ["name", "aaguid"] {
+                let _ = P::Passkey::column(name)?;
+            }
+            super::plugin_models::validate_field_columns(
+                "Passkey schema",
+                fields,
+                P::Passkey::column,
+                P::Passkey::core_field_name,
+            )?;
+        }
         let mut extras = fields.clone();
         extras
             .fields_mut()

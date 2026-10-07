@@ -179,6 +179,19 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
+    if role == EntityRole::Passkey {
+        for name in ["name", "aaguid"] {
+            if !fields
+                .named
+                .iter()
+                .any(|field| field.ident.as_ref().is_some_and(|ident| ident == name))
+            {
+                let ident = format_ident!("{name}");
+                // Runtime validation requires an explicit shared-column mapping for an absent display slot.
+                output.push(quote!(#ident: #core_root::SchemaValue::Undefined,));
+            }
+        }
+    }
     let passkey_storage = options.native_passkey.then(|| {
         output.push(quote!(credential: #core_root::SchemaValue::Undefined,));
         output.push(quote!(updated_at: #core_root::SchemaValue::Undefined,));
