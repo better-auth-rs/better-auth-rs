@@ -71,6 +71,7 @@ run_stage() {
         --test user_sort_field_tests --test schema_join_reference_tests
       bun --no-install test \
         ./compat-tests/reference-server/contracts/user-id-generation-order.test.ts \
+        ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
         ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
         ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
         ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \

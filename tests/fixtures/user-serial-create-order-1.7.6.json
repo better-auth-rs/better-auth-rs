@@ -1,0 +1,301 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "slot": "implicit",
+      "operation": "nested-success",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "name": "Inner owner",
+            "email": "inner@serial-order.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "label": "inner",
+            "id": "1"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "name": "Outer owner",
+        "email": "outer@serial-order.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "outer",
+        "id": "2"
+      },
+      "error": null,
+      "after": [
+        {
+          "name": "Inner owner",
+          "email": "inner@serial-order.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "inner",
+          "id": 1
+        },
+        {
+          "name": "Outer owner",
+          "email": "outer@serial-order.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "outer",
+          "id": 2
+        }
+      ]
+    },
+    {
+      "slot": "implicit",
+      "operation": "nested-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "inner-field-failure"
+      },
+      "after": []
+    },
+    {
+      "slot": "implicit",
+      "operation": "outer-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "name": "Inner owner",
+            "email": "inner@serial-order.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "label": "inner",
+            "id": "1"
+          }
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "outer-field-failure"
+      },
+      "after": [
+        {
+          "name": "Inner owner",
+          "email": "inner@serial-order.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "inner",
+          "id": 1
+        }
+      ]
+    },
+    {
+      "slot": "before-label",
+      "operation": "nested-success",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "name": "Inner owner",
+            "email": "inner@serial-order.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "1",
+            "label": "inner"
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "name": "Outer owner",
+        "email": "outer@serial-order.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "id": "2",
+        "label": "outer"
+      },
+      "error": null,
+      "after": [
+        {
+          "name": "Inner owner",
+          "email": "inner@serial-order.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "id": 1,
+          "label": "inner"
+        },
+        {
+          "name": "Outer owner",
+          "email": "outer@serial-order.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "id": 2,
+          "label": "outer"
+        }
+      ]
+    },
+    {
+      "slot": "before-label",
+      "operation": "nested-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "inner-field-failure"
+      },
+      "after": []
+    },
+    {
+      "slot": "before-label",
+      "operation": "outer-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "name": "Inner owner",
+            "email": "inner@serial-order.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "1",
+            "label": "inner"
+          }
+        ]
+      ],
+      "result": null,
+      "error": {
+        "name": "Error",
+        "message": "outer-field-failure"
+      },
+      "after": [
+        {
+          "name": "Inner owner",
+          "email": "inner@serial-order.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "id": 1,
+          "label": "inner"
+        }
+      ]
+    }
+  ]
+}
