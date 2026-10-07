@@ -7,7 +7,7 @@ use better_auth::plugins::{
 };
 use better_auth::prelude::AuthUser;
 use better_auth::seaorm::{Database, SeaOrmStore};
-use better_auth::{AuthConfig, BetterAuth};
+use better_auth::{AuthConfig, AuthResult, BetterAuth, FieldValue};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
@@ -124,15 +124,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Protected route - requires a valid session
-async fn get_me(session: CurrentSession<auth_schema::AppAuthSchema>) -> impl IntoResponse {
-    Json(serde_json::json!({
+async fn get_me(
+    session: CurrentSession<auth_schema::AppAuthSchema>,
+) -> AuthResult<impl IntoResponse> {
+    Ok(Json(serde_json::json!({
         "user": {
             "id": session.user.id(),
             "email": session.user.email(),
             "name": session.user.name,
-            "createdAt": session.user.created_at().to_rfc3339(),
+            "createdAt": FieldValue::Date(session.user.created_at()).json()?,
         }
-    }))
+    })))
 }
 
 /// Public route - optionally shows user info
