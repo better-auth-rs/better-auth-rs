@@ -54,6 +54,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
   # Independent consumer and compatibility manifests have separate dependency builds.
   # Disable debug information to keep those builds within the runner disk limit.
   CARGO_PROFILE_DEV_DEBUG: 0
@@ -107,22 +108,19 @@ jobs:
         run: |
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Expose the devenv Rust toolchain to the cache action
-        run: |
-          cat > "$RUNNER_TEMP/devenv-rust-path.sh" <<'SH'
-          set -euo pipefail
-          dirname "$(command -v rustc)" >> "$GITHUB_PATH"
-          dirname "$(command -v cargo)" >> "$GITHUB_PATH"
-          SH
-          devenv shell -- bash "$RUNNER_TEMP/devenv-rust-path.sh"
-      - uses: Swatinem/rust-cache@v2
+      - name: Restore Rust cache
+        id: rust-cache
+        uses: actions/cache/restore@v6.1.0
         with:
-          cache-on-failure: true
-          key: devenv-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}
-          workspaces: |
-            .
-            compat-tests/rust-server
-            compat-tests/schema-consumer
+          key: rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '**/.cargo/config', '**/.cargo/config.toml', '**/rust-toolchain', '**/rust-toolchain.toml') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '**/.cargo/config', '**/.cargo/config.toml', '**/rust-toolchain', '**/rust-toolchain.toml') }}-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            compat-tests/rust-server/target
+            compat-tests/schema-consumer/target
       - name: Install locked compatibility dependencies
         run: devenv shell -- ./scripts/check.sh dependencies
       - name: Check formatting
@@ -184,3 +182,14 @@ jobs:
             trap 'consumer_status=$?; printf "Consumer command exit: %s\n" "$consumer_status"; kill "$consumer_sampler" 2>/dev/null || true; wait "$consumer_sampler" 2>/dev/null || true; exit "$consumer_status"' EXIT
           fi
           devenv shell -- ./scripts/check.sh "$CHECK_STAGE"
+      - name: Save Rust cache
+        if: ${{ !cancelled() && steps.rust-cache.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6.1.0
+        with:
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            compat-tests/rust-server/target
+            compat-tests/schema-consumer/target
