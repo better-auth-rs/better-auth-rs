@@ -85,7 +85,7 @@ impl MissingUpdateHooks {
 impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
     async fn before_update_user(
         &self,
-        _: &str,
+        _: &better_auth_core::FieldValue,
         update: &UpdateUser,
         context: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {

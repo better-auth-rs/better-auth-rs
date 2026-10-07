@@ -44,7 +44,7 @@ struct RejectEnrollment;
 impl better_auth_seaorm::SeaOrmHooks<BundledSchema> for RejectEnrollment {
     async fn before_update_user(
         &self,
-        _id: &str,
+        _id: &better_auth_core::FieldValue,
         update: &UpdateUser,
         _ctx: &better_auth_seaorm::SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<UpdateUser>> {

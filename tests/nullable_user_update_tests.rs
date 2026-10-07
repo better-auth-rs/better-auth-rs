@@ -131,6 +131,72 @@ async fn cached_name(cache: &Cache, token: &str) -> String {
         .unwrap()
         .to_owned()
 }
+async fn native_missing_user<S: AuthSchema>(
+    auth: &BetterAuth<S>,
+    observer: &Observer,
+    cache: &Cache,
+    token: &str,
+) {
+    for mode in 0..=3 {
+        observer.events.lock().unwrap().clear();
+        observer.mode.store(mode, Ordering::SeqCst);
+        let result = auth
+            .store()
+            .update_user_by_id_value(
+                &better_auth_core::FieldValue::Undefined,
+                update("Unmatched native ID"),
+            )
+            .await;
+        if mode < 2 {
+            assert!(result.unwrap().is_none());
+        } else {
+            assert!(matches!(result, Err(AuthError::UserNotFound)));
+        }
+        assert_eq!(
+            *observer.events.lock().unwrap(),
+            if mode == 1 || mode == 2 {
+                vec!["before"]
+            } else {
+                vec!["before", "after-null"]
+            },
+        );
+        assert_eq!(cached_name(cache, token).await, "Original");
+    }
+    observer.mode.store(0, Ordering::SeqCst);
+    for commit in [false, true] {
+        observer.events.lock().unwrap().clear();
+        let events = observer.events.clone();
+        let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
+            Box::pin(async move {
+                assert!(
+                    tx.update_user_by_id_value(
+                        &better_auth_core::FieldValue::Undefined,
+                        update("Unmatched transactional ID"),
+                    )
+                    .await?
+                    .is_none()
+                );
+                assert_eq!(*events.lock().unwrap(), ["before"]);
+                if commit {
+                    Ok(())
+                } else {
+                    Err(AuthError::internal("rollback native selector"))
+                }
+            })
+        })
+        .await;
+        assert_eq!(result.is_ok(), commit);
+        assert_eq!(
+            *observer.events.lock().unwrap(),
+            if commit {
+                vec!["before", "after-null"]
+            } else {
+                vec!["before"]
+            },
+        );
+        assert_eq!(cached_name(cache, token).await, "Original");
+    }
+}
 async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache: Arc<Cache>) {
     let user = auth
         .store()
@@ -157,6 +223,7 @@ async fn exercise<S: AuthSchema>(auth: BetterAuth<S>, observer: Observer, cache:
         .unwrap();
     let token = session.token().to_owned();
     *cache.watched.lock().unwrap() = token.clone();
+    native_missing_user(&auth, &observer, &cache, &token).await;
     observer.events.lock().unwrap().clear();
     assert!(
         auth.store()

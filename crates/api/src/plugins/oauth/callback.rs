@@ -202,7 +202,7 @@ pub(super) async fn handle_callback(
         |error_code: &str, description: Option<&str>| -> AuthResult<AuthResponse> {
             let mut params = url::form_urlencoded::Serializer::new(String::new());
             let _ = params.append_pair("error", error_code);
-            if let Some(description) = description.filter(|value| !value.is_empty()) {
+            if let Some(description) = description {
                 let _ = params.append_pair("error_description", description);
             }
             Ok(
@@ -216,7 +216,13 @@ pub(super) async fn handle_callback(
     }
 
     if let Some(error) = error.as_deref().filter(|error| !error.is_empty()) {
-        return redirect_on_error(error, merged.get("error_description").map(String::as_str));
+        return redirect_on_error(
+            error,
+            merged
+                .get("error_description")
+                .map(String::as_str)
+                .filter(|description| !description.is_empty()),
+        );
     }
 
     if let Some(user_id) = payload.server_context.get("anonymousUserId") {

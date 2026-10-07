@@ -217,7 +217,15 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
         id: &str,
         update: crate::UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
-        let user = self.inner.update_user_optional(id, update).await?;
+        self.update_user_by_id_value(&crate::FieldValue::from(id), update)
+            .await
+    }
+    async fn update_user_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+        update: crate::UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        let user = self.inner.update_user_by_id_value(id, update).await?;
         if let Some(updated) = user.clone() {
             let runtime = self.runtime.clone();
             self.inner.queue_after_commit(Box::pin(async move {

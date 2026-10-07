@@ -47,7 +47,8 @@ run_stage() {
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-cli -p better-auth-seaorm -p better-auth-seaorm-macros -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_display_json_tests --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-cli plugin_display_field_tests
-      cargo test --locked -p better-auth-core --lib -- plugin_display_json_tests factory_tests passkey
+      cargo test --locked -p better-auth-core --lib -- plugin_display_json_tests factory_tests passkey store::ephemeral::api_keys::tests::
+      cargo test --locked -p better-auth-api --lib plugins::api_key::
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_display_json_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests passkey_update_ids
       ./scripts/consumer-check.sh --test generated_plugin_catalog plugin_display_json -- --include-ignored
@@ -169,12 +170,14 @@ run_stage() {
     schema-joins)
       cargo fmt --all -- --check
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test account_user_selected_relations_reference_tests --test account_user_auth_boundary_reference_tests --test account_user_signin_snapshot_tests --test schema_join_reference_conflict_tests --test organization_member_join_reference_tests --test organization_native_join_tests --test organization_serial_reference_tests -- -D warnings
-      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- store::joins:: schema_history session::native::tests:: session::cookie_cache::
-      cargo test --locked --no-fail-fast -p better-auth-api --lib -- plugins::helpers::session_tests:: plugins::jwt::tests::
+      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test account_user_selected_relations_reference_tests --test account_user_auth_boundary_reference_tests --test account_user_signin_snapshot_tests --test nullable_user_update_tests --test cookie_cleanup_tests --test cookie_expires_tests --test cookie_http_errors_tests --test schema_join_reference_conflict_tests --test organization_member_join_reference_tests --test organization_native_join_tests --test organization_serial_reference_tests -- -D warnings
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- store::joins:: store::ephemeral::user_serial_tests:: schema_history session::native::tests:: session::cookie_cache:: utils::cookie_utils::
+      cargo test --locked --no-fail-fast -p better-auth-api --lib -- plugins::helpers::session_tests:: plugins::jwt::tests:: plugins::oauth::signin::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test schema_join_reference_tests --test join_binding_tests \
         --test account_user_selected_relations_reference_tests --test account_user_auth_boundary_reference_tests --test account_user_signin_snapshot_tests \
+        --test nullable_user_update_tests --test database_hook_updates_tests --test missing_user_transaction_tests \
+        --test cookie_cleanup_tests --test cookie_expires_tests --test cookie_http_errors_tests \
         --test schema_join_reference_conflict_tests --test schema_preflight_tests \
         --test organization_member_join_reference_tests \
         --test organization_native_join_tests --test organization_serial_reference_tests \

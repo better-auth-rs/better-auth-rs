@@ -63,7 +63,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_user(
         &self,
-        id: &str,
+        id: &better_auth_core::FieldValue,
         update: &UpdateUser,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {

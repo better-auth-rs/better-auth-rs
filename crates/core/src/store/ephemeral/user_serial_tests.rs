@@ -321,3 +321,65 @@ async fn non_serial_session_owner_projection_preserves_lone_utf16() -> AuthResul
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn native_user_update_preserves_undefined_null_and_string_selectors() -> AuthResult<()> {
+    let store = EphemeralStore::default();
+    for name in ["first", "second", "null", "string"] {
+        let _ = store.create_user(user(name)).await?;
+    }
+    store.lock()?.users.update_each(|user| {
+        user.id = crate::SchemaValue::from_field(match user.name.typed()?.as_deref() {
+            Some("first" | "second") => Value::Undefined,
+            Some("null") => Value::Null,
+            _ => Value::from("undefined"),
+        });
+        Ok(())
+    })?;
+    for (id, name, expected_names) in [
+        (
+            Value::Undefined,
+            "undefined match",
+            ["undefined match", "undefined match", "null", "string"],
+        ),
+        (
+            Value::Null,
+            "null match",
+            ["null match", "null match", "null match", "string"],
+        ),
+        (
+            Value::from("undefined"),
+            "string match",
+            ["null match", "null match", "null match", "string match"],
+        ),
+    ] {
+        let updated = required(
+            store
+                .update_user_by_id_value(
+                    &id,
+                    UpdateUser {
+                        name: Some(name.into()).into(),
+                        ..Default::default()
+                    },
+                )
+                .await?,
+        )?;
+        assert_eq!(
+            updated.email.as_deref(),
+            Some(if id.is_string() {
+                "string@serial-user.test"
+            } else {
+                "first@serial-user.test"
+            })
+        );
+        let rows = store.lock()?.users.snapshot()?;
+        assert_eq!(
+            rows.iter()
+                .map(|user| user.name.typed().map(|value| value.as_deref()))
+                .collect::<AuthResult<Vec<_>>>()?,
+            expected_names.map(Some)
+        );
+        assert_eq!(rows[0].updated_at, rows[1].updated_at);
+    }
+    Ok(())
+}

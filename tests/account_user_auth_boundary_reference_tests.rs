@@ -29,6 +29,8 @@ mod hooks;
 mod http;
 #[path = "account_user_auth_boundary_reference_tests/models.rs"]
 mod models;
+#[path = "account_user_auth_boundary_reference_tests/oauth_flow.rs"]
+mod oauth_flow;
 #[path = "account_user_auth_boundary_reference_tests/observe.rs"]
 mod observe;
 #[path = "account_user_auth_boundary_reference_tests/recorder.rs"]
@@ -69,13 +71,42 @@ async fn contract<S: AuthSchema>(
         vec![Arc::new(hooks::Hooks(events.clone()))],
         Default::default(),
     )?;
-    let auth = http::auth(store, options, scenario, &events).await?;
+    let harness = http::auth(store, options, scenario, &events).await?;
+    let request = match (&harness.flow, &case.setup) {
+        (Some(flow), Some(setup)) => {
+            let request = flow
+                .prepare(harness.auth.clone(), setup, &case.request)
+                .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+                .await?;
+            assert!(
+                events.take()?.is_empty(),
+                "OAuth setup must not run database or provider callbacks"
+            );
+            assert_eq!(
+                storage::snapshot(raw.as_ref(), database, &[]).await?,
+                before
+            );
+            request
+        }
+        (None, None) => case.request.clone(),
+        _ => return Err("OAuth setup must match the callback scenario".into()),
+    };
     let start = chrono::Utc::now().timestamp_millis();
-    let response = http::request(auth, &case.request)
+    let response = http::request(harness.auth, &request)
         .with_subscriber(tracing_subscriber::registry().with(events.clone()))
         .await?;
     let end = chrono::Utc::now().timestamp_millis();
     let mut observed = events.take()?;
+    if let Some(flow) = &harness.flow {
+        flow.verify_and_normalize(&mut observed)?;
+        assert_eq!(case.checked["oauthStateAndCodeVerifierVerified"], true);
+    } else {
+        assert!(
+            case.checked
+                .get("oauthStateAndCodeVerifierVerified")
+                .is_none()
+        );
+    }
     let tokens = observe::issued_tokens(&observed)?;
     let mut after = storage::snapshot(raw.as_ref(), database, &tokens).await?;
     let anchors = observe::verify_dynamic(&observed, &after, case, start, end)?;
@@ -83,7 +114,7 @@ async fn contract<S: AuthSchema>(
     observe::assert_events(&observed, &case.events, case)?;
     storage::assert_snapshot(&after, &case.after, database.is_some(), case);
     http::assert_response(response, &case.response, &anchors)?;
-    observe::assert_checked(case, scenario, &anchors);
+    observe::assert_checked(case, scenario, &anchors, &observed);
     Ok(())
 }
 
@@ -100,6 +131,36 @@ async fn memory_account_user_auth_boundaries_match_upstream_http() -> TestResult
 #[tokio::test]
 async fn sqlite_account_user_auth_boundaries_match_upstream_http() -> TestResult {
     let fixture = Fixture::read()?;
+    for case in fixture.cases.iter().filter(|case| case.backend == "sqlite") {
+        let database = storage::sqlite(fixture.scenario(&case.scenario)?).await?;
+        let raw = Arc::new(SeaOrmStore::<models::Core>::new(
+            config::baseline(),
+            database.clone(),
+        ));
+        contract(
+            raw,
+            Some(&database),
+            fixture.scenario(&case.scenario)?,
+            case,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_account_user_profile_overrides_match_upstream_http() -> TestResult {
+    let fixture = Fixture::read_overrides()?;
+    for case in fixture.cases.iter().filter(|case| case.backend == "memory") {
+        let raw = Arc::new(EphemeralStore::new(Arc::new(config::baseline())));
+        contract(raw, None, fixture.scenario(&case.scenario)?, case).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn sqlite_account_user_profile_overrides_match_upstream_http() -> TestResult {
+    let fixture = Fixture::read_overrides()?;
     for case in fixture.cases.iter().filter(|case| case.backend == "sqlite") {
         let database = storage::sqlite(fixture.scenario(&case.scenario)?).await?;
         let raw = Arc::new(SeaOrmStore::<models::Core>::new(

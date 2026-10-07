@@ -133,20 +133,24 @@ pub(super) async fn update<M: SeaOrmUserModel>(
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
     extra: better_auth_core::FieldMap,
-    id: sea_orm::Value,
+    id: better_auth_core::FieldValue,
+    policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<Option<M>> {
     let backend = db.get_database_backend();
     let fields = fields::<M>(backend, active, name, image, extra)?;
     let (columns, bindings): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
     let values = record_bindings::bind(backend, bindings)?;
+    let column = M::id_column();
+    let filter = if id.is_undefined() {
+        column
+            .into_expr()
+            .eq(column.save_as(record_bindings::parameter(id, backend)?))
+    } else {
+        super::value_filter::equals_id(column, &id, policy, backend)?
+    };
     let mut query = M::Entity::update_many();
     for (column, value) in columns.into_iter().zip(values) {
         query = query.col_expr(column, value);
     }
-    super::updates::execute_update_returning_one(
-        db,
-        query.filter(M::id_column().eq(id.clone())),
-        M::id_column().eq(id),
-    )
-    .await
+    super::updates::execute_update_returning_one(db, query.filter(filter.clone()), filter).await
 }

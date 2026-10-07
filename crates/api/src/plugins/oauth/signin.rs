@@ -88,26 +88,57 @@ impl OAuthSignInError {
 
     pub(super) fn redirect_parts(self) -> AuthResult<(String, Option<String>)> {
         Ok(match self {
-            Self::Auth(error) => return Err(error),
+            Self::Auth(error) => return api_error_redirect_parts(error),
             Self::Generic(message) => (message.replace(' ', "_"), None),
-            Self::Banned(message) => ("BANNED_USER".into(), Some(message.clone())),
-            Self::Admission(error) => (error.error.clone(), Some(error.message().to_owned())),
-            Self::Endpoint(response) => {
-                let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
-                (
-                    body.get("code")
-                        .and_then(serde_json::Value::as_str)
-                        .ok_or_else(|| {
-                            AuthError::internal("OAuth endpoint rejection omitted its error code")
-                        })?
-                        .to_owned(),
-                    body.get("message")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::to_owned),
-                )
+            Self::Banned(message) => (
+                "BANNED_USER".into(),
+                (!message.is_empty()).then_some(message),
+            ),
+            Self::Admission(error) => {
+                let message = error.message().to_owned();
+                (error.error, (!message.is_empty()).then_some(message))
             }
+            Self::Endpoint(response) => return api_error_redirect_parts(response.into()),
         })
     }
+}
+
+fn api_error_redirect_parts(error: AuthError) -> AuthResult<(String, Option<String>)> {
+    if !error.is_api_error() || error.is_found_redirect() {
+        return Err(error);
+    }
+    if !matches!(error, AuthError::Response(_)) {
+        let (_, code, message) = error.error_payload();
+        return match code.filter(|code| !code.is_empty()) {
+            Some(code) => Ok((code, (!message.is_empty()).then_some(message))),
+            None => Err(error),
+        };
+    }
+    let response = error.to_auth_response();
+    // A custom response without an error code must retain its original body and headers.
+    let body = match response.body.field_value() {
+        Ok(body) => body,
+        _ => return Err(response.into()),
+    };
+    let Some(code) = body
+        .as_object()
+        .and_then(|body| body.get("code"))
+        .filter(|code| code.is_truthy())
+    else {
+        return Err(response.into());
+    };
+    // URLSearchParams converts JavaScript strings to USVString at the URL boundary.
+    let code = String::from_utf16_lossy(code.display_utf16()?.as_utf16());
+    let description = body
+        .as_object()
+        .and_then(|body| body.get("message"))
+        .filter(|message| message.is_truthy())
+        .map(better_auth_core::FieldValue::display_utf16)
+        .transpose()?;
+    Ok((
+        code,
+        description.map(|message| String::from_utf16_lossy(message.as_utf16())),
+    ))
 }
 
 impl From<AuthError> for OAuthSignInError {
@@ -295,74 +326,65 @@ pub(super) async fn process_oauth_sign_in(
                 .map_err(|error| error.to_string())?;
         }
 
-        let user = match owner.user {
-            better_auth_core::store::JoinValue::One(Some(mut user)) => {
-                if email_verified
-                    && !user.email_verified()
-                    && user
-                        .email()
-                        .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
-                {
-                    let _ = ctx
-                        .database
-                        .update_user(
-                            user.id()
-                                .typed()
-                                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-                            UpdateUser {
-                                email_verified: Some(true),
-                                ..Default::default()
-                            },
-                        )
-                        .await
-                        .map_err(|error| error.to_string())?;
-                }
-
-                if options.override_user_info {
-                    user = ctx
-                        .database
-                        .update_user(
-                            user.id()
-                                .typed()
-                                .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-                            UpdateUser {
-                                additional_fields: ctx
-                                    .config
-                                    .user
-                                    .parse_provider_input(&user_info.additional_fields, false)
-                                    .map_err(|error| error.to_string())?,
-                                name: user_info
-                                    .name()?
-                                    .map(|value| Some(value.to_owned()).into())
-                                    .unwrap_or_default(),
-                                image: user_info.image.clone().map(Into::into).unwrap_or_default(),
-                                email: Some(provider_email.to_lowercase()),
-                                email_verified: Some(
-                                    email_verified
-                                        || (user.email_verified()
-                                            && user.email().is_some_and(|email| {
-                                                email.eq_ignore_ascii_case(provider_email)
-                                            })),
-                                ),
-                                ..Default::default()
-                            },
-                        )
-                        .await
-                        .map_err(|error| error.to_string())?;
-                }
-
+        let mut owner_user = owner.user;
+        if let better_auth_core::store::JoinValue::One(Some(user)) = &owner_user
+            && email_verified
+            && !user.email_verified()
+            && user
+                .email()
+                .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
+        {
+            let _ = ctx
+                .database
+                .update_user_by_id_value(
+                    &user.id().field_value(),
+                    UpdateUser {
+                        email_verified: Some(true),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+        }
+        if options.override_user_info {
+            let (id, existing_verified) = match &owner_user {
+                better_auth_core::store::JoinValue::One(Some(user)) => (
+                    user.id().field_value(),
+                    user.email_verified()
+                        && user
+                            .email()
+                            .is_some_and(|email| email.eq_ignore_ascii_case(provider_email)),
+                ),
+                _ => (better_auth_core::FieldValue::Undefined, false),
+            };
+            let updated = ctx
+                .database
+                .update_user_by_id_value(
+                    &id,
+                    provider_profile_update(
+                        ctx,
+                        user_info,
+                        provider_email,
+                        email_verified || existing_verified,
+                    )?,
+                )
+                .await?;
+            if let Some(user) = updated {
+                owner_user = better_auth_core::store::JoinValue::One(Some(user));
+            } else {
+                better_auth_core::observability::logger::current().warn(
+                    "Could not update user info during OAuth sign in; preserving existing user for session.",
+                    &[],
+                );
+            }
+        }
+        let user = match owner_user {
+            better_auth_core::store::JoinValue::One(Some(user)) => {
                 options
                     .check_email_verification(provider, &user, false, ctx)
                     .await?;
                 better_auth_core::FieldValue::from(better_auth_core::FieldMap::from(user))
             }
             better_auth_core::store::JoinValue::Many(users) => {
-                if options.override_user_info {
-                    return Err(AuthError::config(
-                        "OAuth profile updates for array User relationships are not supported",
-                    )
-                    .into());
-                }
                 if provider.config.require_email_verification == Some(true) {
                     return Err(OAuthSignInError::Generic("email_not_verified".into()));
                 }
@@ -499,37 +521,30 @@ pub(super) async fn process_oauth_sign_in(
         }
 
         if options.override_user_info {
-            linked_user = ctx
+            let updated = ctx
                 .database
-                .update_user(
-                    linked_user
-                        .id()
-                        .typed()
-                        .map_err(|error| OAuthSignInError::Generic(error.to_string()))?,
-                    UpdateUser {
-                        additional_fields: ctx
-                            .config
-                            .user
-                            .parse_provider_input(&user_info.additional_fields, false)
-                            .map_err(|error| error.to_string())?,
-                        name: user_info
-                            .name()?
-                            .map(|value| Some(value.to_owned()).into())
-                            .unwrap_or_default(),
-                        image: user_info.image.clone().map(Into::into).unwrap_or_default(),
-                        email: Some(provider_email.to_lowercase()),
-                        email_verified: Some(
-                            email_verified
-                                || (linked_user.email_verified()
-                                    && linked_user.email().is_some_and(|email| {
-                                        email.eq_ignore_ascii_case(provider_email)
-                                    })),
-                        ),
-                        ..Default::default()
-                    },
+                .update_user_by_id_value(
+                    &linked_user.id().field_value(),
+                    provider_profile_update(
+                        ctx,
+                        user_info,
+                        provider_email,
+                        email_verified
+                            || (linked_user.email_verified()
+                                && linked_user.email().is_some_and(|email| {
+                                    email.eq_ignore_ascii_case(provider_email)
+                                })),
+                    )?,
                 )
-                .await
-                .map_err(|error| error.to_string())?;
+                .await?;
+            if let Some(user) = updated {
+                linked_user = user;
+            } else {
+                better_auth_core::observability::logger::current().warn(
+                    "Could not update user info during OAuth sign in; preserving existing user for session.",
+                    &[],
+                );
+            }
         }
 
         options
@@ -657,6 +672,28 @@ pub(super) async fn process_oauth_sign_in(
 
         finish_oauth_user(issued, true, account_cookie, ctx).await
     }
+}
+
+fn provider_profile_update<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user_info: &OAuthUserInfo,
+    provider_email: &str,
+    email_verified: bool,
+) -> AuthResult<UpdateUser> {
+    Ok(UpdateUser {
+        additional_fields: ctx
+            .config
+            .user
+            .parse_provider_input(&user_info.additional_fields, false)?,
+        name: user_info
+            .name()?
+            .map(|value| Some(value.to_owned()).into())
+            .unwrap_or_default(),
+        image: user_info.image.clone().map(Into::into).unwrap_or_default(),
+        email: Some(provider_email.to_lowercase()),
+        email_verified: Some(email_verified),
+        ..Default::default()
+    })
 }
 
 async fn finish_oauth_user(
@@ -794,3 +831,7 @@ pub(super) fn callback_path(request: &AuthRequest) -> &str {
 #[cfg(test)]
 #[path = "signin_override_tests.rs"]
 mod override_tests;
+
+#[cfg(test)]
+#[path = "signin_error_tests.rs"]
+mod error_tests;

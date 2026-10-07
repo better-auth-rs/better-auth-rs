@@ -416,7 +416,7 @@ where
         update: UpdateUser,
     ) -> AuthResult<better_auth_core::UserView> {
         match self
-            .update_user_outcome_with_connection(db, tx, id, update)
+            .update_user_outcome_with_connection(db, tx, &FieldValue::from(id), update)
             .await?
         {
             std::ops::ControlFlow::Break(()) => Err(cancelled_by_hook("user update")),
@@ -428,7 +428,7 @@ where
         &self,
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
-        id: &str,
+        id: &FieldValue,
         mut update: UpdateUser,
     ) -> AuthResult<std::ops::ControlFlow<(), Option<better_auth_core::UserView>>> {
         update.prepare_user_fields(&self.config().user)?;
@@ -436,7 +436,6 @@ where
         if update.phone_number == Some(None) {
             update.phone_number_verified = Some(false);
         }
-        let user_id = self.parse_id(id, S::User::parse_id)?;
         let hook_context = self.hook_context(tx);
         let original = update.clone();
         for hook in self.hooks() {
@@ -456,7 +455,7 @@ where
                 }
             }
         }
-        let user = self.update_user_record(db, user_id, update).await?;
+        let user = self.update_user_record(db, id, update).await?;
         let Some(user) = user else {
             let store = self.clone();
             let request = hook_context.request.clone();
@@ -493,9 +492,16 @@ where
     pub(super) async fn update_user_record(
         &self,
         db: &impl ConnectionTrait,
-        user_id: <S::User as SeaOrmUserModel>::Id,
+        user_id: &FieldValue,
         mut update: UpdateUser,
     ) -> AuthResult<Option<S::User>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
+        let user_id = self
+            .config()
+            .advanced
+            .database
+            .generate_id()
+            .adapter_id_query(user_id.clone())?;
         self.model_fields.begin_id_input(
             EntityRole::User,
             AdapterIdInput {
@@ -566,7 +572,8 @@ where
                     name,
                     image,
                     fields,
-                    user_id.into(),
+                    user_id,
+                    self.config().advanced.database.generate_id(),
                 )
                 .await
             },
@@ -871,6 +878,14 @@ where
     async fn update_user_optional(
         &self,
         id: &str,
+        update: UpdateUser,
+    ) -> AuthResult<Option<better_auth_core::UserView>> {
+        self.update_user_by_id_value(&FieldValue::from(id), update)
+            .await
+    }
+    async fn update_user_by_id_value(
+        &self,
+        id: &FieldValue,
         update: UpdateUser,
     ) -> AuthResult<Option<better_auth_core::UserView>> {
         Ok(self

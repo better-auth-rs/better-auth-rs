@@ -16,6 +16,7 @@ use better_auth_core::{
 pub(super) struct Callbacks {
     pub(super) events: Events,
     pub(super) accounts_one: bool,
+    pub(super) callback: bool,
 }
 
 #[async_trait::async_trait]
@@ -43,9 +44,9 @@ impl OAuthUserInfoHandler for Callbacks {
         assert!(tokens.access_token_expires_at.is_none());
         assert!(tokens.refresh_token_expires_at.is_none());
         assert!(tokens.scopes.is_empty());
-        assert!(tokens.raw.is_none());
+        assert_eq!(tokens.raw.is_some(), self.callback);
         assert!(tokens.user.is_none());
-        let token_fields = FieldMap::from([
+        let mut token_fields = FieldMap::from([
             (
                 "idToken".into(),
                 tokens.id_token.map_or(FieldValue::Undefined, Into::into),
@@ -64,6 +65,22 @@ impl OAuthUserInfoHandler for Callbacks {
             ),
             ("user".into(), FieldValue::Undefined),
         ]);
+        if self.callback {
+            token_fields.extend([
+                ("tokenType".into(), FieldValue::Undefined),
+                ("accessTokenExpiresAt".into(), FieldValue::Undefined),
+                ("refreshTokenExpiresAt".into(), FieldValue::Undefined),
+                ("scopes".into(), FieldValue::from(Vec::<FieldValue>::new())),
+                (
+                    "raw".into(),
+                    FieldValue::from_json(
+                        tokens.raw.ok_or_else(|| {
+                            AuthError::internal("Missing token exchange response")
+                        })?,
+                    )?,
+                ),
+            ]);
+        }
         self.events.push(
             json!({"kind": "provider.userInfo", "tokens": values::observe(&token_fields.into())?}),
         )?;
@@ -96,7 +113,12 @@ impl<S: AuthSchema> ValidateUserInfo<S> for Callbacks {
         let request = context
             .request
             .ok_or_else(|| AuthError::internal("HTTP admission request missing"))?;
-        assert_eq!(request.method, HttpMethod::Post);
+        let method = if self.callback {
+            HttpMethod::Get
+        } else {
+            HttpMethod::Post
+        };
+        assert_eq!(request.method, method);
         let mut headers: Vec<_> = request
             .headers
             .iter()
@@ -106,7 +128,7 @@ impl<S: AuthSchema> ValidateUserInfo<S> for Callbacks {
         self.events.push(json!({
             "kind": "admission",
             "data": {"user": values::observe(&data.user.clone().into())?, "source": data.source},
-            "request": {"url": request.url().map(url::Url::as_str), "method": "POST", "headers": headers},
+            "request": {"url": request.url().map(url::Url::as_str), "method": if self.callback { "GET" } else { "POST" }, "headers": headers},
         }))?;
         Ok(None)
     }

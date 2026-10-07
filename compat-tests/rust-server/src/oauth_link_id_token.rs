@@ -277,7 +277,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn before_update_user(
         &self,
-        _: &str,
+        _: &better_auth_core::FieldValue,
         update: &UpdateUser,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateUser>> {

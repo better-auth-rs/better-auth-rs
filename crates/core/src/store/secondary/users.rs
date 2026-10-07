@@ -184,7 +184,15 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         id: &str,
         update: UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
-        let user = self.inner.update_user_optional(id, update).await?;
+        self.update_user_by_id_value(&crate::FieldValue::from(id), update)
+            .await
+    }
+    async fn update_user_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        let user = self.inner.update_user_by_id_value(id, update).await?;
         if let Some(user) = &user {
             self.refresh_user_sessions(user).await?;
         }

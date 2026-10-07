@@ -19,6 +19,9 @@ pub(super) fn configured(
 ) -> AuthResult<AuthConfig> {
     let mut config = baseline();
     config.advanced.database.joins = Some(joins);
+    if scenario.callback {
+        config.account.store_state_strategy = Some(better_auth_core::OAuthStateStrategy::Cookie);
+    }
     let relations: Value = serde_json::from_str(include_str!(
         "../fixtures/account-user-selected-relations-1.7.6.json"
     ))?;

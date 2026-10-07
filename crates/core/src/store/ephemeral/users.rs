@@ -48,7 +48,7 @@ impl EphemeralStore {
 
     async fn finish_user_update(
         &self,
-        id: &str,
+        id: &Value,
         update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
         let user = self.update_user_record_optional(id, update).await?;
@@ -126,9 +126,11 @@ impl EphemeralStore {
         Ok(())
     }
     pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
-        self.prepare_user_update_optional(update)
+        let update = self
+            .prepare_user_update_optional(update)
             .await?
-            .ok_or_else(|| AuthError::forbidden("user update cancelled by database hook"))
+            .ok_or_else(|| AuthError::forbidden("user update cancelled by database hook"))?;
+        self.prepare_user_update_fields(update).await
     }
     async fn prepare_user_update_optional(
         &self,
@@ -157,6 +159,10 @@ impl EphemeralStore {
                 }
             }
         }
+        Ok(Some(update))
+    }
+
+    async fn prepare_user_update_fields(&self, mut update: UpdateUser) -> AuthResult<UpdateUser> {
         let fields = update.take_user_field_input(&self.config.user)?;
         self.model_fields
             .begin_id_input(EntityRole::User, AdapterIdInput::default())?;
@@ -188,7 +194,23 @@ impl EphemeralStore {
             .user
             .stored_username_field(&update.additional_fields, "displayUsername")?
             .or(update.display_username);
-        Ok(Some(update))
+        Ok(update)
+    }
+
+    async fn update_user_outcome(
+        &self,
+        id: &Value,
+        update: UpdateUser,
+    ) -> AuthResult<std::ops::ControlFlow<(), Option<UserView>>> {
+        let Some(update) = self.prepare_user_update_optional(update).await? else {
+            return Ok(std::ops::ControlFlow::Break(()));
+        };
+        self.model_fields.canonicalize_id(EntityRole::User)?;
+        let id = self.memory_primary_id_query(id)?;
+        let update = self.prepare_user_update_fields(update).await?;
+        self.finish_user_update(&id, update)
+            .await
+            .map(std::ops::ControlFlow::Continue)
     }
 
     pub(super) async fn update_user_record(
@@ -196,93 +218,100 @@ impl EphemeralStore {
         id: &str,
         update: UpdateUser,
     ) -> AuthResult<UserView> {
-        self.update_user_record_optional(id, update)
+        self.model_fields.canonicalize_id(EntityRole::User)?;
+        let id = self.memory_primary_id_query(&Value::from(id))?;
+        self.update_user_record_optional(&id, update)
             .await?
             .ok_or(AuthError::UserNotFound)
     }
 
     async fn update_user_record_optional(
         &self,
-        id: &str,
-        mut update: UpdateUser,
+        id: &Value,
+        update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
-        let id = crate::SchemaValue::<String>::from_field(
-            self.memory_primary_id_query(&Value::from(id))?,
-        );
+        let updated_at = Utc::now();
         let user = self
             .raw("user", "update", |state| {
-                Ok({
-                    let Some(mut user) = state.users.get_mut(&id)? else {
-                        return Ok(None);
-                    };
-                    if update.phone_number == Some(None) {
-                        update.phone_number_verified = Some(false);
-                    }
-                    if let Some(email) = update.email {
-                        if let Some(fields) = &mut user.visible_fields {
-                            let _ = fields.insert("email".into());
+                let selected = state.users.select_refs(|user| {
+                    let value = user.id.field_value();
+                    value.strict_equals(id) || (id.is_null() && value.is_undefined())
+                })?;
+                for row in &selected {
+                    let mut update = update.clone();
+                    row.write(|user| {
+                        if update.phone_number == Some(None) {
+                            update.phone_number_verified = Some(false);
                         }
-                        user.email = Some(email.to_lowercase());
-                    }
-                    if !update.name.is_undefined() {
-                        if let Some(fields) = &mut user.visible_fields {
-                            let _ = fields.insert("name".into());
+                        if let Some(email) = update.email {
+                            if let Some(fields) = &mut user.visible_fields {
+                                let _ = fields.insert("email".into());
+                            }
+                            user.email = Some(email.to_lowercase());
                         }
-                        user.name = update.name;
-                    }
-                    if !update.image.is_undefined() {
-                        if let Some(fields) = &mut user.visible_fields {
-                            let _ = fields.insert("image".into());
+                        if !update.name.is_undefined() {
+                            if let Some(fields) = &mut user.visible_fields {
+                                let _ = fields.insert("name".into());
+                            }
+                            user.name = update.name;
                         }
-                        user.image = update.image;
-                    }
-                    if let Some(email_verified) = update.email_verified {
-                        user.email_verified = email_verified;
-                    }
-                    if let Some(value) = update.is_anonymous {
-                        user.is_anonymous = Some(value);
-                    }
-                    if let Some(value) = update.phone_number {
-                        user.phone_number = value;
-                    }
-                    if let Some(value) = update.phone_number_verified {
-                        user.phone_number_verified = Some(value);
-                    }
-                    if let Some(username) = update.username {
-                        user.username = username;
-                    }
-                    if let Some(display_username) = update.display_username {
-                        user.display_username = display_username;
-                    }
-                    if let Some(role) = update.role {
-                        user.role = Some(role);
-                    }
-                    if let Some(banned) = update.banned {
-                        user.banned = banned;
-                    }
-                    if let Some(ban_reason) = update.ban_reason {
-                        if let Some(fields) = &mut user.visible_fields {
-                            let _ = fields.insert("banReason".into());
+                        if !update.image.is_undefined() {
+                            if let Some(fields) = &mut user.visible_fields {
+                                let _ = fields.insert("image".into());
+                            }
+                            user.image = update.image;
                         }
-                        user.ban_reason = ban_reason;
-                    }
-                    if let Some(ban_expires) = update.ban_expires {
-                        if let Some(fields) = &mut user.visible_fields {
-                            let _ = fields.insert("banExpires".into());
+                        if let Some(email_verified) = update.email_verified {
+                            user.email_verified = email_verified;
                         }
-                        user.ban_expires = ban_expires;
-                    }
-                    if let Some(two_factor_enabled) = update.two_factor_enabled {
-                        user.two_factor_enabled = Some(two_factor_enabled);
-                    }
-                    if let Some(metadata) = update.metadata {
-                        user.metadata = metadata;
-                    }
-                    user.updated_at = Utc::now().into();
-                    user.additional_fields.extend(update.additional_fields);
-                    Some(user.clone())
-                })
+                        if let Some(value) = update.is_anonymous {
+                            user.is_anonymous = Some(value);
+                        }
+                        if let Some(value) = update.phone_number {
+                            user.phone_number = value;
+                        }
+                        if let Some(value) = update.phone_number_verified {
+                            user.phone_number_verified = Some(value);
+                        }
+                        if let Some(username) = update.username {
+                            user.username = username;
+                        }
+                        if let Some(display_username) = update.display_username {
+                            user.display_username = display_username;
+                        }
+                        if let Some(role) = update.role {
+                            user.role = Some(role);
+                        }
+                        if let Some(banned) = update.banned {
+                            user.banned = banned;
+                        }
+                        if let Some(ban_reason) = update.ban_reason {
+                            if let Some(fields) = &mut user.visible_fields {
+                                let _ = fields.insert("banReason".into());
+                            }
+                            user.ban_reason = ban_reason;
+                        }
+                        if let Some(ban_expires) = update.ban_expires {
+                            if let Some(fields) = &mut user.visible_fields {
+                                let _ = fields.insert("banExpires".into());
+                            }
+                            user.ban_expires = ban_expires;
+                        }
+                        if let Some(two_factor_enabled) = update.two_factor_enabled {
+                            user.two_factor_enabled = Some(two_factor_enabled);
+                        }
+                        if let Some(metadata) = update.metadata {
+                            user.metadata = metadata;
+                        }
+                        user.updated_at = updated_at.into();
+                        user.additional_fields.extend(update.additional_fields);
+                        Ok(())
+                    })?;
+                }
+                selected
+                    .first()
+                    .map(|row| row.read(|user| Ok(user.clone())))
+                    .transpose()
             })
             .await?;
         futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
@@ -552,20 +581,30 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
-        let update = self.prepare_user_update(update).await?;
-        self.finish_user_update(id, update)
-            .await?
-            .ok_or(AuthError::UserNotFound)
+        match self.update_user_outcome(&Value::from(id), update).await? {
+            std::ops::ControlFlow::Break(()) => Err(AuthError::forbidden(
+                "user update cancelled by database hook",
+            )),
+            std::ops::ControlFlow::Continue(user) => user.ok_or(AuthError::UserNotFound),
+        }
     }
     async fn update_user_optional(
         &self,
         id: &str,
         update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
-        let Some(update) = self.prepare_user_update_optional(update).await? else {
-            return Ok(None);
-        };
-        self.finish_user_update(id, update).await
+        self.update_user_by_id_value(&Value::from(id), update).await
+    }
+    async fn update_user_by_id_value(
+        &self,
+        id: &Value,
+        update: UpdateUser,
+    ) -> AuthResult<Option<UserView>> {
+        Ok(self
+            .update_user_outcome(id, update)
+            .await?
+            .continue_value()
+            .flatten())
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {

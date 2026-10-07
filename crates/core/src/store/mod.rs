@@ -290,6 +290,17 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must support nullable user updates",
         ))
     }
+    /// Update a native adapter ID. Return None for cancellation or an unmatched ID.
+    async fn update_user_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        let id = id
+            .as_str()
+            .ok_or_else(|| AuthError::config("The store must support native user ID updates"))?;
+        self.update_user_optional(id, update).await
+    }
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
     /// Delete children and the user, preserving cancellation for secondary cleanup.
     async fn delete_user_optional(
@@ -431,6 +442,17 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         Err(AuthError::config(
             "The store must support nullable user updates",
         ))
+    }
+    /// Update a native adapter ID. Return None for cancellation or an unmatched ID.
+    async fn update_user_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        let id = id
+            .as_str()
+            .ok_or_else(|| AuthError::config("The store must support native user ID updates"))?;
+        self.update_user_optional(id, update).await
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
     /// Delete children and the user, preserving cancellation for secondary cleanup.

@@ -9,6 +9,32 @@ use better_auth_core::{
 };
 
 pub(super) struct Hooks(pub(super) Events);
+
+fn user_update_fields(data: &UpdateUser) -> FieldMap {
+    use better_auth_core::SchemaField;
+    let mut fields = data.additional_fields.clone();
+    for (name, value) in [("name", &data.name), ("image", &data.image)] {
+        if !value.is_undefined() {
+            let _ = fields.insert(name.into(), value.field_value());
+        }
+    }
+    macro_rules! optional {
+        ($($field:ident => $name:literal),* $(,)?) => {$(
+            if let Some(value) = &data.$field {
+                let _ = fields.insert($name.into(), value.into_field());
+            }
+        )*};
+    }
+    optional!(
+        email => "email", email_verified => "emailVerified", username => "username",
+        display_username => "displayUsername", is_anonymous => "isAnonymous",
+        phone_number => "phoneNumber", phone_number_verified => "phoneNumberVerified",
+        role => "role", banned => "banned", ban_reason => "banReason", ban_expires => "banExpires",
+        two_factor_enabled => "twoFactorEnabled", metadata => "metadata",
+    );
+    fields
+}
+
 impl Hooks {
     fn record(
         &self,
@@ -53,7 +79,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
         data: &UpdateUser,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        self.unexpected("user", "update", "before", &data)?;
+        self.record("user", "update", "before", user_update_fields(data).into())?;
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_user(
@@ -61,7 +87,14 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
         data: Option<&UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
-        self.unexpected("user", "update", "after", &data)?;
+        self.record(
+            "user",
+            "update",
+            "after",
+            data.cloned()
+                .map(FieldMap::from)
+                .map_or(FieldValue::Null, Into::into),
+        )?;
         Ok(())
     }
     async fn before_delete_user(

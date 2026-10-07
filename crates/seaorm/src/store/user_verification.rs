@@ -100,7 +100,7 @@ where
             let original = update.clone();
             for hook in self.hooks() {
                 match better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeUpdateUser, hook
-                    .before_update_user(user_id, &original, &hook_context))
+                    .before_update_user(&user_id.into(), &original, &hook_context))
                     .await?
                 {
                     crate::hooks::DatabaseHookUpdate::Continue => {}
@@ -126,7 +126,7 @@ where
                     .map_err(map_db_err) }).await?;
             }
             let user = self
-                .update_user_record(&tx, self.parse_id(user_id, S::User::parse_id)?, update)
+                .update_user_record(&tx, &user_id.into(), update)
                 .await?
                 .ok_or(better_auth_core::AuthError::UserNotFound)?;
             let user = self.output_user(&user, &tx).await?;

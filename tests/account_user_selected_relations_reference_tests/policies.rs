@@ -56,6 +56,12 @@ impl<S: Subscriber> Layer<S> for Events {
         let Some((operation, model)) = query.split_once(' ') else {
             return;
         };
+        // SeaORM spans name the bundled tables; the oracle names logical models.
+        let model = match model {
+            "users" => "user",
+            "accounts" => "account",
+            name => name,
+        };
         self.push(json!(["query", operation, model]));
     }
 }

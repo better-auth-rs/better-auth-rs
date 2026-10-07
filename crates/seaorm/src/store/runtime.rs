@@ -116,7 +116,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_user(
         &self,
-        _id: &str,
+        _id: &better_auth_core::FieldValue,
         _data: &UpdateUser,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {

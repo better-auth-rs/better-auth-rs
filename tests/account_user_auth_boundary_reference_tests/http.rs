@@ -10,20 +10,36 @@ use better_auth::{
 use better_auth_core::{middleware::RateLimitConfig, utils::cookie_utils::verify_cookie_value};
 use tower::ServiceExt;
 
+pub(super) struct Harness<S: AuthSchema> {
+    pub(super) auth: Arc<BetterAuth<S>>,
+    pub(super) flow: Option<super::oauth_flow::Flow>,
+}
+
 pub(super) async fn auth<S: AuthSchema>(
     store: Arc<dyn AuthStore<S>>,
     config: AuthConfig,
     scenario: &Scenario,
     events: &Events,
-) -> AuthResult<Arc<BetterAuth<S>>> {
+) -> TestResult<Harness<S>> {
     let callbacks = Arc::new(callbacks::Callbacks {
         events: events.clone(),
         accounts_one: scenario.accounts_one,
+        callback: scenario.callback,
     });
+    let flow = if scenario.callback {
+        Some(super::oauth_flow::Flow::start(events.clone()).await?)
+    } else {
+        None
+    };
     let mut provider = OAuthProvider::google("fixture-client", "fixture-client-secret");
+    if let Some(flow) = &flow {
+        assert_eq!(provider.token_url, super::oauth_flow::TOKEN_URL);
+        provider.token_url = flow.endpoint.clone();
+    }
     provider.verify_id_token = Some(callbacks.clone());
     provider.get_user_info = Some(callbacks.clone());
-    Ok(Arc::new(
+    provider.override_user_info_on_sign_in = scenario.override_user_info;
+    let auth = Arc::new(
         BetterAuth::new(config)
             .store_arc(store)
             .plugin(OAuthPlugin::new().add_provider("google", provider))
@@ -36,14 +52,15 @@ pub(super) async fn auth<S: AuthSchema>(
             })
             .build()
             .await?,
-    ))
+    );
+    Ok(Harness { auth, flow })
 }
 
 pub(super) struct Response {
-    status: u16,
-    headers: Vec<[String; 2]>,
-    cookies: Vec<String>,
-    body: String,
+    pub(super) status: u16,
+    pub(super) headers: Vec<[String; 2]>,
+    pub(super) cookies: Vec<String>,
+    pub(super) body: String,
 }
 
 pub(super) async fn request<S: AuthSchema>(
@@ -59,9 +76,12 @@ pub(super) async fn request<S: AuthSchema>(
     for [name, value] in &input.headers {
         request = request.header(name, value);
     }
-    let response = router
-        .oneshot(request.body(Body::from(serde_json::to_vec(&input.body)?))?)
-        .await?;
+    let body = if input.body.is_null() {
+        Body::empty()
+    } else {
+        Body::from(serde_json::to_vec(&input.body)?)
+    };
+    let response = router.oneshot(request.body(body)?).await?;
     let status = response.status().as_u16();
     let mut headers = response
         .headers()
@@ -102,10 +122,12 @@ pub(super) fn assert_response(
 ) -> TestResult {
     assert_eq!(response.status, expected.status);
     for cookie in &mut response.cookies {
-        normalize_cookie(cookie, anchors)?;
+        if cookie.starts_with("better-auth.session_token=") {
+            normalize_cookie(cookie, anchors)?;
+        }
     }
     for [name, value] in &mut response.headers {
-        if name == "set-cookie" {
+        if name == "set-cookie" && value.starts_with("better-auth.session_token=") {
             normalize_cookie(value, anchors)?;
         }
     }

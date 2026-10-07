@@ -117,7 +117,13 @@ pub(super) fn verify_dynamic(
     let sessions = rows(after, "session")?;
     if case.response.status == 500 {
         assert_eq!(case.backend, "sqlite");
-        assert_eq!(case.scenario, "social-owner-many");
+        assert!(matches!(
+            case.scenario.as_str(),
+            "social-owner-many"
+                | "social-owner-many-direct-override"
+                | "social-owner-many-callback-override"
+        ));
+        assert_eq!(selected_id, &json!({"type": "undefined"}));
         assert!(sessions.is_empty());
         assert!(hook(events, "session", "after").is_none());
     } else {
@@ -181,7 +187,9 @@ pub(super) fn normalize(events: &mut [Value], after: &mut Value, anchors: &Ancho
     for event in events {
         if event["kind"] == "hook" {
             let model = text(event, "model")?.to_owned();
-            normalize_record(&model, &mut event["data"], anchors)?;
+            if matches!(model.as_str(), "account" | "session") {
+                normalize_record(&model, &mut event["data"], anchors)?;
+            }
         }
     }
     for model in ["account", "session"] {
@@ -197,7 +205,7 @@ pub(super) fn assert_events(actual: &[Value], expected: &[Value], case: &Case) -
         .iter()
         .filter(|event| event["kind"] == "api-error")
         .collect();
-    if case.response.status == 200 {
+    if matches!(case.response.status, 200 | 302) {
         assert!(errors.is_empty(), "{case:?}: {errors:?}");
     } else {
         assert_eq!(errors.len(), 1, "{case:?}");
@@ -243,12 +251,35 @@ pub(super) fn assert_events(actual: &[Value], expected: &[Value], case: &Case) -
     Ok(())
 }
 
-pub(super) fn assert_checked(case: &Case, scenario: &Scenario, anchors: &Anchors) {
-    assert_eq!(case.request.method, "POST");
-    assert_eq!(
-        case.request.url,
-        format!("{ORIGIN}/api/auth/sign-in/{}", scenario.route)
-    );
+pub(super) fn assert_checked(
+    case: &Case,
+    scenario: &Scenario,
+    anchors: &Anchors,
+    events: &[Value],
+) {
+    if scenario.callback {
+        assert_eq!(case.request.method, "GET");
+        assert_eq!(
+            case.request.url,
+            format!(
+                "{ORIGIN}/api/auth/callback/google?code=account-user-auth-code&state=<oauth-state>"
+            )
+        );
+        assert_eq!(
+            case.checked["userProfileOverrideReached"],
+            hook(events, "user", "before").is_some()
+        );
+        assert_eq!(hook(events, "user", "after"), Some(&Value::Null));
+    } else {
+        assert_eq!(case.request.method, "POST");
+        assert_eq!(
+            case.request.url,
+            format!("{ORIGIN}/api/auth/sign-in/{}", scenario.route)
+        );
+        assert!(case.checked.get("userProfileOverrideReached").is_none());
+        assert!(hook(events, "user", "before").is_none());
+        assert!(hook(events, "user", "after").is_none());
+    }
     assert_eq!(
         case.checked["admissionMatchesSessionInput"],
         anchors.token.is_some()

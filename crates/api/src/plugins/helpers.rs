@@ -373,8 +373,15 @@ async fn apply_session_ban<S: better_auth_core::AuthSchema>(
             };
             // Session admission updates storage without replacing the route's user snapshot.
             let _ = match transaction {
-                Some(tx) => tx.update_user(user_id.typed()?, update).await?,
-                None => ctx.database.update_user(user_id.typed()?, update).await?,
+                Some(tx) => {
+                    tx.update_user_by_id_value(&user_id.field_value(), update)
+                        .await?
+                }
+                None => {
+                    ctx.database
+                        .update_user_by_id_value(&user_id.field_value(), update)
+                        .await?
+                }
             };
         } else {
             return Err(SessionIssueError::Banned {

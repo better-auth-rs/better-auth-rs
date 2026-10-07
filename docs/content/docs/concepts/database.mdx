@@ -483,6 +483,12 @@ Memory string predicates retain type-safe handling of replacement values. Query 
 
 `AccountStore::create_account_optional` and `update_account_optional` return `None` when a database hook cancels that account write. Hook errors remain errors, including errors from nested writes. The strict `create_account` and `update_account` methods retain their existing cancellation error behavior. Custom stores with cancellable hooks must implement the optional methods; their default implementations wrap successful strict results in `Some`.
 
+## User Updates
+
+`UserStore::update_user_by_id_value` and its transaction counterpart accept a `FieldValue` ID and return `None` after cancellation or an unmatched query. Before-hook cancellation skips the query and after hooks. An unmatched query runs `after_update_user(None)`. OAuth profile overrides preserve the selected User or User array when the update returns `None`. The required string-ID `update_user` API still reports cancellation and missing-row errors.
+
+`SeaOrmHooks::before_update_user` now receives `id: &FieldValue`. Update custom hook implementations to use this signature. Read `id.as_str()` when the hook requires a string; preserve other values when forwarding a native selector. Generic `DatabaseHooks::before_update_user` retains its existing arguments. No database migration is required.
+
 Account schemas permit duplicate `(provider_id, account_id)` pairs, matching upstream storage. `AccountStore::get_account` reads at most two matching records and rejects an ambiguous identity after output projection. Its two-row limit is independent of `advanced.database.default_find_many_limit`. Generated schemas retain the account user index and foreign key. Existing applications that require upstream storage behavior must remove the former composite unique index in an application-owned migration; schema generation does not alter existing databases. Resolve duplicate identities before authentication can select an account.
 
 ## Testing

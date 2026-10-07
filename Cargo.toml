@@ -155,6 +155,7 @@ tracing-subscriber = { workspace = true }
 oas3 = { version = "0.20.1", features = ["yaml-spec"] }
 proptest = "1.10.0"
 reqwest = { workspace = true }
+sha2.workspace = true
 
 [[example]]
 name = "axum_server"

@@ -1120,7 +1120,7 @@ mod sqlite {
     impl SeaOrmHooks<Tables> for UpdateHooks {
         async fn before_update_user(
             &self,
-            _: &str,
+            _: &better_auth_core::FieldValue,
             _: &UpdateUser,
             _: &SeaOrmHookContext<'_, Tables>,
         ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
