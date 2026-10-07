@@ -134,6 +134,36 @@ where
         backend,
         target,
     )?;
+    if database.get_database_backend() != DbBackend::Sqlite {
+        let columns =
+            server_catalog::observe(&database, database.get_database_backend(), [target.table()])
+                .await?;
+        let actual = columns.as_array().ok_or("Missing generated columns")?;
+        for expected in expected["columns"]
+            .as_array()
+            .ok_or("Missing upstream columns")?
+            .iter()
+            .filter(|column| !column["datetimePrecision"].is_null())
+        {
+            let actual = actual
+                .iter()
+                .find(|column| column["name"] == expected["name"])
+                .ok_or("Missing generated date column")?;
+            for field in [
+                "type",
+                "nativeType",
+                "datetimePrecision",
+                "nullable",
+                "default",
+            ] {
+                assert_eq!(
+                    actual[field], expected[field],
+                    "{backend} {target:?} {} {field}",
+                    expected["name"]
+                );
+            }
+        }
+    }
     let store =
         SeaOrmStore::<S>::new(contract::config(), database.clone()).with_plugin_schema::<P>();
     contract::contract(Arc::new(store), backend, target, expected, move || {

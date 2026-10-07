@@ -525,8 +525,11 @@ fn gen_server_native_column(
     field: &Field,
     database: Database,
 ) -> Option<TokenStream> {
+    let definition = entity.catalog_field(field.registry_column?)?;
     if database == Database::Sqlite
         || !(entity.session_row_presence
+            || entity.api_key_native_schema
+                && matches!(definition.ty, "DateTimeUtc" | "Option<DateTimeUtc>")
             || entity.device_code_native_schema
             || entity.passkey_native_schema
             || entity.two_factor_native_schema
@@ -552,7 +555,6 @@ fn gen_server_native_column(
     {
         return None;
     }
-    let definition = entity.catalog_field(field.registry_column?)?;
     let data_type = match (database, definition.ty) {
         (Database::Mysql, "String")
             if entity.device_code_native_schema

@@ -205,6 +205,7 @@ pub(crate) struct Entity {
     pub role: Option<EntityRole>,
     pub fields: Vec<Field>,
     pub session_row_presence: bool,
+    pub api_key_native_schema: bool,
     pub device_code_native_schema: bool,
     pub passkey_native_schema: bool,
     pub two_factor_native_schema: bool,
@@ -313,6 +314,8 @@ impl Entity {
     ) -> Result<Self, String> {
         let session_row_presence =
             definition.role == Some(EntityRole::Session) && !options.session_active_column;
+        let api_key_native_schema =
+            definition.role == Some(EntityRole::ApiKey) && !options.api_key_legacy_schema;
         let device_code_native_schema =
             definition.role == Some(EntityRole::DeviceCode) && !options.device_code_legacy_schema;
         let passkey_native_schema =
@@ -334,7 +337,7 @@ impl Entity {
             .collect::<Vec<_>>();
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
-            || definition.role == Some(EntityRole::ApiKey) && !options.api_key_legacy_schema
+            || api_key_native_schema
             || device_code_native_schema
             || passkey_native_schema
             || two_factor_native_schema
@@ -365,6 +368,7 @@ impl Entity {
             },
             role: definition.role,
             session_row_presence,
+            api_key_native_schema,
             device_code_native_schema,
             passkey_native_schema,
             two_factor_native_schema,
