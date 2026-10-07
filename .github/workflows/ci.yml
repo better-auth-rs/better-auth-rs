@@ -33,6 +33,7 @@ on:
           - two-factor
           - plugin-fields
           - schema-joins
+          - user-fields
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string
@@ -176,3 +177,6 @@ jobs:
       - name: Check schema join references
         if: env.CHECK_STAGE == 'schema-joins'
         run: devenv shell -- ./scripts/check.sh schema-joins
+      - name: Check User fields and ID generation
+        if: env.CHECK_STAGE == 'user-fields'
+        run: devenv shell -- ./scripts/check.sh user-fields

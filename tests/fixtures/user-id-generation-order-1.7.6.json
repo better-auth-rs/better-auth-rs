@@ -1,0 +1,915 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "slot": "implicit",
+      "operation": "generated",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "generated-owner"
+      },
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": true,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label",
+          "id": "generated-owner"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "slot": "implicit",
+      "operation": "generator-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ]
+      ],
+      "result": {
+        "error": "generator-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "memory",
+      "slot": "implicit",
+      "operation": "field-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "error": "label-input-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "memory",
+      "slot": "implicit",
+      "operation": "supplied-id",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "supplied-owner"
+      },
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": true,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label",
+          "id": "supplied-owner"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "slot": "before-label",
+      "operation": "generated",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "id": "generated-owner",
+        "label": "Label"
+      },
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": true,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "id": "generated-owner",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "slot": "before-label",
+      "operation": "generator-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "generateId",
+          "user"
+        ]
+      ],
+      "result": {
+        "error": "generator-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "memory",
+      "slot": "before-label",
+      "operation": "field-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "error": "label-input-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "memory",
+      "slot": "before-label",
+      "operation": "supplied-id",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "id": "supplied-owner",
+        "label": "Label"
+      },
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": true,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "id": "supplied-owner",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "slot": "after-label",
+      "operation": "generated",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "generated-owner"
+      },
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": true,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label",
+          "id": "generated-owner"
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "slot": "after-label",
+      "operation": "generator-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ]
+      ],
+      "result": {
+        "error": "generator-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "memory",
+      "slot": "after-label",
+      "operation": "field-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "error": "label-input-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "memory",
+      "slot": "after-label",
+      "operation": "supplied-id",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "supplied-owner"
+      },
+      "after": [
+        {
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": true,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label",
+          "id": "supplied-owner"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "slot": "implicit",
+      "operation": "generated",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "generated-owner"
+      },
+      "after": [
+        {
+          "id": "generated-owner",
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": 1,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "slot": "implicit",
+      "operation": "generator-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ]
+      ],
+      "result": {
+        "error": "generator-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "sqlite",
+      "slot": "implicit",
+      "operation": "field-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "error": "label-input-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "sqlite",
+      "slot": "implicit",
+      "operation": "supplied-id",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "supplied-owner"
+      },
+      "after": [
+        {
+          "id": "supplied-owner",
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": 1,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "slot": "before-label",
+      "operation": "generated",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "id": "generated-owner",
+        "label": "Label"
+      },
+      "after": [
+        {
+          "id": "generated-owner",
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": 1,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "slot": "before-label",
+      "operation": "generator-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "generateId",
+          "user"
+        ]
+      ],
+      "result": {
+        "error": "generator-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "sqlite",
+      "slot": "before-label",
+      "operation": "field-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "error": "label-input-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "sqlite",
+      "slot": "before-label",
+      "operation": "supplied-id",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "id": "supplied-owner",
+        "label": "Label"
+      },
+      "after": [
+        {
+          "id": "supplied-owner",
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": 1,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "slot": "after-label",
+      "operation": "generated",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "generated-owner"
+      },
+      "after": [
+        {
+          "id": "generated-owner",
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": 1,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label"
+        }
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "slot": "after-label",
+      "operation": "generator-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "generateId",
+          "user"
+        ]
+      ],
+      "result": {
+        "error": "generator-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "sqlite",
+      "slot": "after-label",
+      "operation": "field-failure",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "error": "label-input-failure"
+      },
+      "after": []
+    },
+    {
+      "backend": "sqlite",
+      "slot": "after-label",
+      "operation": "supplied-id",
+      "before": [],
+      "events": [
+        [
+          "input",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "input",
+          "user.label",
+          "Label"
+        ],
+        [
+          "output",
+          "user.name",
+          "Owner"
+        ],
+        [
+          "output",
+          "user.label",
+          "Label"
+        ]
+      ],
+      "result": {
+        "name": "Owner",
+        "email": "owner@user-id-order.test",
+        "emailVerified": true,
+        "image": "owner-image",
+        "createdAt": "2030-01-02T03:04:05.000Z",
+        "updatedAt": "2030-01-02T03:04:05.000Z",
+        "label": "Label",
+        "id": "supplied-owner"
+      },
+      "after": [
+        {
+          "id": "supplied-owner",
+          "name": "Owner",
+          "email": "owner@user-id-order.test",
+          "emailVerified": 1,
+          "image": "owner-image",
+          "createdAt": "2030-01-02T03:04:05.000Z",
+          "updatedAt": "2030-01-02T03:04:05.000Z",
+          "label": "Label"
+        }
+      ]
+    }
+  ]
+}

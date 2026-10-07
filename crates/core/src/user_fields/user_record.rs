@@ -3,8 +3,17 @@
 use crate::store::schema::resolve_field_name;
 use serde_json::{Map, Value};
 
-use super::UserConfig;
+use super::{UserConfig, UserFieldConfig};
 use crate::{AuthResult, CreateUser, UpdateUser};
+
+pub(crate) const USER_FIELDS: &[&str] = &[
+    "name",
+    "email",
+    "emailVerified",
+    "image",
+    "createdAt",
+    "updatedAt",
+];
 
 fn take_field(fields: &mut Map<String, Value>, name: &str) -> AuthResult<Option<Option<String>>> {
     fields
@@ -154,6 +163,48 @@ impl UpdateUser {
 }
 
 impl UserConfig {
+    /// Resolve User schema order and replace the adapter-owned ID policy.
+    #[doc(hidden)]
+    pub fn user_adapter_fields(&self) -> Self {
+        let mut fields: indexmap::IndexMap<_, _> = self
+            .ordered_fields(USER_FIELDS)
+            .into_iter()
+            .map(|(name, field)| (name.to_owned(), field.clone()))
+            .collect();
+        if let Some(id) = fields.get_mut("id") {
+            *id = UserFieldConfig::default();
+        }
+        Self {
+            additional_fields: Some(fields),
+        }
+    }
+
+    /// Apply User input policies and generate the ID at its effective schema position.
+    #[doc(hidden)]
+    pub async fn create_user_storage_fields<I>(
+        &self,
+        input: Map<String, Value>,
+        mut generate_id: impl FnMut() -> AuthResult<Option<I>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<(Map<String, Value>, Option<I>)> {
+        let mut schema = self.user_adapter_fields();
+        // Insertion preserves a configured ID position and appends an implicit ID.
+        let _ = schema
+            .fields_mut()
+            .insert("id".into(), UserFieldConfig::default());
+        let mut output = Map::new();
+        let mut id = None;
+        for (name, field) in schema.fields() {
+            if name == "id" {
+                id = generate_id()?;
+            } else if let Some(value) = field.storage_input(input.get(name), true).await? {
+                let storage_name = resolve_field_name(field.field_name.as_deref(), name);
+                let _ = output.insert(storage_name.to_owned(), bind(storage_name, field, value)?);
+            }
+        }
+        Ok((output, id))
+    }
+
     /// Read one stored username field for the implicit adapter's typed columns.
     /// Keep the storage entry so output transforms can observe the original stored value once.
     pub fn stored_username_field(

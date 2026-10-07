@@ -38,7 +38,7 @@ where
         let mut output =
             better_auth_core::wire::UserView::with_internal_fields_many_for_adapter_using(
                 rows,
-                &self.config().user,
+                &self.config().user.user_adapter_fields(),
                 &Default::default(),
                 FieldOutputCapabilities {
                     supports_native_json: db.get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -193,14 +193,18 @@ where
         }
         self.model_fields.canonicalize_id(EntityRole::User)?;
         let now = Utc::now();
-        let generated_id = self.generated_id("user", create_user.id.take())?;
-        let user_id = generated_id.as_deref().map(S::User::parse_id).transpose()?;
-        let mut fields = self
+        let input = create_user.take_user_field_input(&self.config().user)?;
+        let (mut fields, user_id) = self
             .config()
             .user
-            .storage_fields_with_binding(
-                create_user.take_user_field_input(&self.config().user)?,
-                true,
+            .create_user_storage_fields(
+                input,
+                || {
+                    self.generated_id("user", create_user.id.take())?
+                        .as_deref()
+                        .map(S::User::parse_id)
+                        .transpose()
+                },
                 |name, field, value| {
                     crate::reference_id::input_binding(
                         name,
@@ -225,6 +229,7 @@ where
         }
         let created_at = create_user.created_at;
         let updated_at = create_user.updated_at;
+        let database_generated_id = user_id.is_none();
         let mut model = S::User::new_active(user_id, create_user, now)?;
         if let Some(value) = created_at {
             model.set(S::User::created_at_column(), value.into());
@@ -232,7 +237,7 @@ where
         if let Some(value) = updated_at {
             model.set(S::User::field_column("updatedAt")?, value.into());
         }
-        if generated_id.is_none() {
+        if database_generated_id {
             model.not_set(S::User::id_column());
         }
         S::User::apply_fields(&mut model, fields)?;

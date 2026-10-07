@@ -4,19 +4,9 @@ use crate::{
     AuthConfig, AuthError, AuthResult, SchemaValue,
     plugin_runtime::ModelFields,
     store::schema::{EntityRole, resolve_field_name},
-    user_fields::{UserConfig, UserFieldConfig, UserFieldReference},
-    utils::json::array_index,
+    user_fields::{USER_FIELDS, UserConfig, UserFieldConfig, UserFieldReference},
     wire::{AccountView, UserView},
 };
-
-const USER_FIELDS: &[&str] = &[
-    "name",
-    "email",
-    "emailVerified",
-    "image",
-    "createdAt",
-    "updatedAt",
-];
 
 /// An account and its persisted owner. A missing owner is an orphaned account, not a new identity.
 #[derive(Debug, Clone)]
@@ -111,24 +101,7 @@ impl UserAccounts {
 }
 
 fn ordered_fields<'a>(model: &str, fields: &'a UserConfig) -> Vec<(&'a str, &'a UserFieldConfig)> {
-    let mut fields = fields
-        .fields()
-        .iter()
-        .map(|(name, field)| (name.as_str(), field))
-        .collect::<Vec<_>>();
-    // Native replacements retain schema positions. Integer keys use JavaScript property order.
-    fields.sort_by_key(|(name, _)| {
-        let native = if model == "user" {
-            USER_FIELDS
-                .iter()
-                .position(|field| field == name)
-                .unwrap_or(USER_FIELDS.len())
-        } else {
-            0
-        };
-        array_index(name).map_or((true, 0, native), |index| (false, index, 0))
-    });
-    fields
+    fields.ordered_fields(if model == "user" { USER_FIELDS } else { &[] })
 }
 
 fn matching_references<'a>(

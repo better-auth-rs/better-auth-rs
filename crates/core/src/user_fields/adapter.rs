@@ -25,6 +25,24 @@ impl FieldOutputCapabilities {
 }
 
 impl UserConfig {
+    pub(crate) fn ordered_fields(&self, native: &[&str]) -> Vec<(&str, &UserFieldConfig)> {
+        let mut fields: Vec<_> = self
+            .fields()
+            .iter()
+            .map(|(name, field)| (name.as_str(), field))
+            .collect();
+        // Native replacements retain schema positions. Integer keys use JavaScript property order.
+        fields.sort_by_key(|(name, _)| {
+            let native = native
+                .iter()
+                .position(|field| field == name)
+                .unwrap_or(native.len());
+            crate::utils::json::array_index(name)
+                .map_or((true, 0, native), |index| (false, index, 0))
+        });
+        fields
+    }
+
     /// Apply storage policies before converting JSON for the selected adapter.
     pub async fn storage_fields_for_adapter(
         &self,

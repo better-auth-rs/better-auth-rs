@@ -21,6 +21,7 @@ mod record;
 mod transform;
 mod user_record;
 pub use transform::UserFieldTransform;
+pub(crate) use user_record::USER_FIELDS;
 
 /// Synchronous public input validator. Return the validated value or a public validation message.
 pub type UserFieldValidator = Arc<dyn Fn(Value) -> AuthResult<Value> + Send + Sync>;
@@ -272,13 +273,7 @@ impl UserConfig {
             if preserve_id && name == "id" {
                 continue;
             }
-            let Some(mut value) = field.storage_value(input.get(name), create)? else {
-                continue;
-            };
-            if let Some(transform) = field.input_transform() {
-                value = transform.call(value).await?;
-            }
-            if let Some(value) = value {
+            if let Some(value) = field.storage_input(input.get(name), create).await? {
                 let _ = output.insert(
                     resolve_field_name(field.field_name.as_deref(), name).to_owned(),
                     value,
@@ -290,6 +285,20 @@ impl UserConfig {
 }
 
 impl UserFieldConfig {
+    async fn storage_input(
+        &self,
+        input: Option<&Value>,
+        create: bool,
+    ) -> AuthResult<Option<Value>> {
+        let Some(value) = self.storage_value(input, create)? else {
+            return Ok(None);
+        };
+        match self.input_transform() {
+            Some(transform) => transform.call(value).await,
+            None => Ok(value),
+        }
+    }
+
     // The outer option omits a field. The inner option passes undefined to its callback.
     fn storage_value(
         &self,

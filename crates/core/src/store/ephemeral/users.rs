@@ -78,7 +78,12 @@ impl EphemeralStore {
                 Ok(input)
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let fields = self.config.user.output_memory_fields_many(&storage).await?;
+        let fields = self
+            .config
+            .user
+            .user_adapter_fields()
+            .output_memory_fields_many(&storage)
+            .await?;
         for (user, fields) in users.iter_mut().zip(fields) {
             self.assign_user_output(user, fields);
         }
@@ -312,12 +317,17 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         }
         let fields = create_user.take_user_field_input(&self.config.user)?;
         self.model_fields.canonicalize_id(EntityRole::User)?;
-        let mut fields = self
+        let (mut fields, id) = self
             .config
             .user
-            .storage_fields_with_binding(fields, true, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+            .create_user_storage_fields(
+                fields,
+                || {
+                    let row_count = self.lock()?.users.len();
+                    self.generated_id("user", create_user.id.take(), row_count)
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
             .await?;
         for (name, target) in [
             ("name", &mut create_user.name),
@@ -342,10 +352,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .or(create_user.display_username.take())
             .flatten();
         let now = Utc::now();
-        let id = self
-            .generated_id("user", create_user.id, self.lock()?.users.len())?
-            .map(crate::SchemaValue::Typed)
-            .unwrap_or_default();
+        let id = id.map(crate::SchemaValue::Typed).unwrap_or_default();
         let user = UserView {
             additional_fields: fields,
             visible_fields: Some(

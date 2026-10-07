@@ -5,7 +5,7 @@ Authentication for Rust with Axum integration and application-owned SeaORM entit
 > [!WARNING]
 > Version `1.0.0-alpha.3` is in development. Public Rust APIs and database schemas can change between alpha releases.
 
-Configure model IDs and application-owned defaults through [database ID generation](docs/content/docs/concepts/database.mdx#model-ids).
+Configure model IDs and application-owned defaults through [database ID generation](docs/content/docs/concepts/database.mdx#model-ids). User creation evaluates the ID generator at the ID field's schema position among input callbacks.
 
 Custom adapters must provide a credential-account point query independent of list pagination; see [adapter configuration](docs/content/docs/concepts/database.mdx#adapter-configuration). Enable `advanced.database.joins = Some(true)` for typed core and Organization associations with Memory child references or SeaORM query snapshots.
 
