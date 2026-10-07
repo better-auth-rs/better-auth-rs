@@ -253,7 +253,7 @@ run_stage() {
         --test secondary_storage_hooks_tests --test background_transaction_tests \
         --test missing_user_transaction_tests
       cargo test --locked -p better-auth-api --lib plugins::two_factor::
-      cargo test --locked -p better-auth-core --lib plugin_runtime::fields::models::tests::
+      cargo test --locked -p better-auth-core --lib -- plugin_runtime::fields::models::tests:: session::native::tests:: store::ephemeral::user_serial_tests:: store::ephemeral::sessions::live_output_tests::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
@@ -302,6 +302,14 @@ run_stage() {
         ./compat-tests/reference-server/contracts/passkey-fields.test.ts
       COMPAT_TEST_PROFILE=native-passkey cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 phase8_client_compat configuration_client_compat
+      ;;
+    totp-period)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-api --lib -- -D warnings
+      cargo clippy --locked --test totp_period_nan_tests -- -D warnings
+      cargo test --locked -p better-auth-api --lib plugins::two_factor::
+      cargo test --locked --test totp_period_nan_tests
+      bun --no-install test ./compat-tests/reference-server/contracts/totp-period.test.ts ./compat-tests/reference-server/contracts/totp-period-nan.test.ts
       ;;
     two-factor)
       cargo fmt --all -- --check
@@ -367,6 +375,14 @@ run_stage() {
         ./compat-tests/reference-server/contracts/openapi-endpoint-key-order.test.ts \
         ./compat-tests/reference-server/contracts/openapi-rate-limit-model.test.ts \
         ./compat-tests/reference-server/contracts/device-issuance.test.ts
+      ;;
+    oauth-proxy)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-api --features axum -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test oauth_proxy_max_age_tests -- -D warnings
+      cargo test --locked -p better-auth-api --features axum --lib plugins::oauth::proxy::
+      cargo test --locked --features axum,seaorm2,redis-cache --test oauth_proxy_max_age_tests --test oauth_proxy_hooks_tests --test oauth_proxy_request_url_tests
+      bun --no-install test ./compat-tests/reference-server/contracts/oauth-proxy-max-age.test.ts
       ;;
     oauth-duration)
       cargo fmt --all -- --check
