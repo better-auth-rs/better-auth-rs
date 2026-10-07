@@ -12,6 +12,10 @@ const utilsVersion = JSON.parse(readFileSync(new URL("../node_modules/@better-au
 const ordinaryTimestamp = 1_700_000_025_125;
 const offsets = [-2, -1, 0, 1, 2];
 const malformedToken = "not-a-totp";
+const bigintCounterInputs = {
+  "counter-two-to-53": ["9007199254740993"],
+  "counter-two-to-64": ["18446744073709551615"],
+};
 
 export const counterCaseInputs = [
   { name: "epoch", timestampMillis: 0, period: 30 },
@@ -89,10 +93,21 @@ async function captureCounterCase(input, diagnostics) {
       diagnostics.push({ case: input.name, surface: "helper", name: "neighbor", ...neighbor });
       neighbors.push(neighbor);
     }
+    const bigintNeighbors = [];
+    for (const decimalCounter of bigintCounterInputs[input.name] ?? []) {
+      const hotp = await observe("helper", "hotp-bigint", { decimalCounter }, () => otp.hotp(BigInt(decimalCounter)));
+      const token = hotp.kind === "returned" ? hotp.value : undefined;
+      const verification = hotp.kind === "returned"
+        ? await observe("helper", "verify-bigint", { decimalCounter, token }, () => otp.verify(token))
+        : { kind: "not-run", reason: "HOTP generation threw before producing a token" };
+      const neighbor = { decimalCounter, hotp, token: observeValue(token), verification };
+      diagnostics.push({ case: input.name, surface: "helper", name: "bigint-neighbor", ...neighbor });
+      bigintNeighbors.push(neighbor);
+    }
     const malformed = { token: malformedToken,
       verification: await observe("helper", "verify-malformed", { token: malformedToken }, () => otp.verify(malformedToken)) };
     const result = { ...observeValue(input), milliseconds: observeValue(milliseconds), counter: counterObservation(counter),
-      server, helper: { generation, uri, neighbors, malformed } };
+      server, helper: { generation, uri, neighbors, bigintNeighbors, malformed } };
     diagnostics.push({ case: input.name, stage: "complete", observation: result });
     return result;
   } finally {
@@ -113,6 +128,7 @@ export async function captureTotpCounter({ diagnostics = [] } = {}) {
   assert.equal(new Set(cases.map(input => input.name)).size, cases.length);
   for (const input of cases) {
     assert.deepEqual(input.helper.neighbors.map(neighbor => neighbor.offset), offsets);
+    assert.deepEqual(input.helper.bigintNeighbors.map(neighbor => neighbor.decimalCounter), bigintCounterInputs[input.name] ?? []);
     if (input.server.kind === "returned" && input.helper.generation.kind === "returned") {
       assert.deepEqual(input.server.value, { code: input.helper.generation.value });
     }
@@ -128,6 +144,11 @@ export async function captureTotpCounter({ diagnostics = [] } = {}) {
         if (Math.abs(neighbor.offset) <= 1) assert.equal(neighbor.verification.value, true);
       }
     }
+    for (const neighbor of input.helper.bigintNeighbors) {
+      assert.equal(neighbor.hotp.kind, "returned", JSON.stringify(neighbor.hotp));
+      assert.match(neighbor.token, /^\d{6}$/);
+      assert.deepEqual(neighbor.verification, { kind: "returned", value: false });
+    }
     if (input.helper.malformed.verification.kind === "returned") {
       assert.equal(input.helper.malformed.verification.value, false);
     }
@@ -136,6 +157,7 @@ export async function captureTotpCounter({ diagnostics = [] } = {}) {
     counter: "Record Number division, floor, addition, and negative zero before the upstream HOTP conversion",
     generation: "Capture the complete native generateTOTP and helper totp outcomes",
     verification: "Capture each HOTP token at offsets -2 through 2 and the malformed token with the default verification window",
+    bigintNeighbors: "Capture exact integer tokens that Number addition cannot produce at the 2^53 and 2^64 boundaries",
     unavailableToken: "Record verification as not-run when HOTP generation throws; still execute malformed-token verification",
   }, cases };
 }
