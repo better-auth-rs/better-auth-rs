@@ -28,6 +28,10 @@ on:
       - compat-tests/reference-server/contracts/account-user-auth-boundary-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary-override.mjs
       - compat-tests/reference-server/contracts/account-user-auth-email-capture.mjs
+      - compat-tests/reference-server/contracts/account-user-auth-secondary-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-number-name-capture.mjs
+      - compat-tests/reference-server/contracts/telemetry-fields-unique-capture.mjs
+      - compat-tests/reference-server/contracts/passkey-shared-display-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
@@ -39,8 +43,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: account-user-auth-email
-            regression: account-user-auth-boundary
+          - contract: account-user-auth-secondary
+            regressions: [account-user-auth-boundary, account-user-auth-email]
+            backend: ''
+          - contract: api-key-number-name
+            regressions: [api-key-fields]
+            backend: ''
+          - contract: telemetry-fields-unique
+            regressions: [telemetry-fields-init, telemetry-options]
+            backend: ''
+          - contract: passkey-shared-display
+            regressions: [passkey-display-mapping]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -81,7 +94,7 @@ jobs:
         shell: devenv shell -- bash -e {0}
         env:
           CAPTURE_CONTRACT: ${{ matrix.contract }}
-          CAPTURE_REGRESSION: ${{ matrix.regression }}
+          CAPTURE_REGRESSIONS: ${{ join(matrix.regressions, ' ') }}
           CAPTURE_BACKEND: ${{ matrix.backend }}
           BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
           BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
@@ -91,12 +104,21 @@ jobs:
           mkdir -p "$capture_dir"
           printf '%s\n' "$GITHUB_SHA" > "$capture_dir/source-sha.txt"
           bun install --cwd compat-tests/reference-server --frozen-lockfile
-          bun --no-install test "./compat-tests/reference-server/contracts/$CAPTURE_REGRESSION.test.ts" 2>&1 | tee "$capture_dir/regression.log"
+          read -r -a capture_regressions <<< "$CAPTURE_REGRESSIONS"
+          regression_args=()
+          for regression in "${capture_regressions[@]}"; do
+            regression_args+=("./compat-tests/reference-server/contracts/$regression.test.ts")
+          done
+          bun --no-install test "${regression_args[@]}" 2>&1 | tee "$capture_dir/regression.log"
           capture_args=()
           capture_suffix=""
           if [[ -n "$CAPTURE_BACKEND" ]]; then
             capture_args+=("$CAPTURE_BACKEND")
             capture_suffix="-$CAPTURE_BACKEND"
+          fi
+          if [[ "$CAPTURE_CONTRACT" == telemetry-fields-unique ]]; then
+            export NODE_ENV=production TEST=''
+            export BETTER_AUTH_TELEMETRY_ENDPOINT=https://telemetry-fields-unique.test/capture
           fi
           bun --no-install "./compat-tests/reference-server/contracts/$CAPTURE_CONTRACT-capture.mjs" "${capture_args[@]}" "$capture_dir/$CAPTURE_CONTRACT$capture_suffix-1.7.6.json" 2>&1 | tee "$capture_dir/capture.log"
           mkdir -p "$capture_dir/replay"

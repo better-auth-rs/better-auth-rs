@@ -279,21 +279,26 @@ async function captureCase(backend, scenario, joins, recorder, extension) {
   const memory = Object.fromEntries(tables.map(model => [model, []]));
   const database = sqlite ?? memoryAdapter(memory);
   const options = { ...optionsFor(scenario, joins, state), database };
-  const stored = () => structuredClone(Object.fromEntries(tables.map(model => [model, sqlite
-    ? sqlite.query(`SELECT * FROM "${model}" ORDER BY "id"`).all() : memory[model]])));
+  const stored = () => {
+    const present = sqlite ? new Set(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(row => row.name)) : null;
+    return structuredClone(Object.fromEntries(tables.map(model => [model, sqlite
+      ? present.has(model) ? sqlite.query(`SELECT * FROM "${model}" ORDER BY "id"`).all() : null : memory[model]])));
+  };
   try {
-    if (extension) extension.configure(scenario, options, event => {
+    const capture = extension?.configure(scenario, options, event => {
       if (state.enabled) state.events.push(native(event));
     });
     if (sqlite) await (await getMigrations(options)).runMigrations();
     const auth = betterAuth(options);
     const seedAdapter = (await auth.$context).adapter;
+    capture?.observeAdapter?.(seedAdapter);
     const seed = rowsFor(scenario);
     // The HTTP router validates the physical schema; seed in the selected foreign-key direction.
     for (const model of scenario.many ? ["account", "user"] : ["user", "account"]) for (const data of seed[model]) {
       await seedAdapter.create({ model, forceAllowId: true, data });
     }
     const before = stored();
+    const observationBefore = capture?.snapshot?.(before);
     const callback = scenario.callback ? await prepareCallbackOverride(auth, recorder, { origin, requestHeaders, idToken }) : null;
     if (callback) assert.deepEqual(stored(), before, "Cookie state setup must not change database rows");
     const input = scenario.route === "social" ? { provider: "google", idToken: { token: idToken, nonce } }
@@ -309,14 +314,16 @@ async function captureCase(backend, scenario, joins, recorder, extension) {
     finally { requestWindow.end = Date.now(); state.enabled = false; recorder.events = null; }
     const body = await response.text();
     const after = stored();
+    const observationAfter = capture?.snapshot?.(after);
     let verified;
     try { verified = extension ? extension.verify({ backend, scenario, joins, before, after, response, body,
-      events: state.events, requestWindow, requestHeaders, idToken, nonce, milliseconds }) : callback
+      events: state.events, requestWindow, requestHeaders, idToken, nonce, milliseconds,
+      observationBefore, observationAfter, secret, expiresIn }) : callback
       ? verifyCallbackOverride({ backend, joins, before, after, response, body, events: state.events, requestWindow, callback,
         requestHeaders, idToken, secret, expiresIn, milliseconds })
       : verifyResult(backend, scenario, joins, before, after, response, body, state.events, requestWindow); }
     catch (error) {
-      const evidence = `${JSON.stringify(observeValue({ backend, scenario, joins, requestWindow, before, after, events: state.events,
+      const evidence = `${JSON.stringify(observeValue({ backend, scenario, joins, requestWindow, before, after, observationBefore, observationAfter, events: state.events,
         response: { status: response.status, statusText: response.statusText, headers: [...response.headers], cookies: response.headers.getSetCookie(), body }, error: native(error) }), null, 2)}\n`;
       if (process.argv[2]) writeFileSync(`${process.argv[2]}.failure.json`, evidence);
       else process.stderr.write(evidence);
@@ -338,10 +345,15 @@ async function captureCase(backend, scenario, joins, recorder, extension) {
         ? normalize({ url: request.url, method: request.method, headers: [...request.headers], body: null }, replacements, true)
         : { url: request.url, method: request.method, headers: [...request.headers], body: input },
       before: observeValue(before),
-      events: state.events.map(event => event.kind === "hook"
-        ? { ...event, data: normalizeRecord(event.model, event.data, dynamic, replacements) } : normalize(event, replacements, Boolean(callback))),
+      events: state.events.map(event => {
+        const observed = verified.normalizeEvent ? verified.normalizeEvent(event) : event;
+        return observed.kind === "hook"
+          ? { ...observed, data: normalizeRecord(observed.model, observed.data, dynamic, replacements) }
+          : normalize(observed, replacements, Boolean(callback) || verified.embeddedStrings);
+      }),
       response: { status: response.status, statusText: response.statusText, headers, cookies, body: normalizedBody },
-      after: Object.fromEntries(tables.map(model => [model, after[model].map(row => normalizeRecord(model, row, dynamic, replacements))])),
+      after: Object.fromEntries(tables.map(model => [model, after[model]?.map(row => normalizeRecord(model, row, dynamic, replacements)) ?? null])),
+      ...(verified.observations ? { observations: normalize(verified.observations, replacements, true) } : {}),
       checked: verified.checked ?? { noNetwork: true, completeStorage: true, admissionMatchesSessionInput: !scenario.accountsOne && (!callback || Boolean(dynamic.session)),
         preservedCanonicalAccountOwner: !scenario.accountsOne, sessionDatesWithinRequest: Boolean(dynamic.session),
         sessionCookieMatchesStoredToken: cookie !== null,
