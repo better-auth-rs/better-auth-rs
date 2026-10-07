@@ -20,6 +20,8 @@ on:
       - compat-tests/reference-server/contracts/plugin-display-json-capture.mjs
       - compat-tests/reference-server/contracts/memory-sort-capture.mjs
       - compat-tests/reference-server/contracts/organization-member-join-reference-capture.mjs
+      - compat-tests/reference-server/contracts/account-user-selected-relations-capture.mjs
+      - compat-tests/reference-server/contracts/account-user-selected-relations.test.ts
 
 permissions:
   contents: read
@@ -30,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: organization-member-join-reference
+          - contract: account-user-selected-relations
             regression: schema-join-reference
             backend: ''
     runs-on: ubuntu-latest
