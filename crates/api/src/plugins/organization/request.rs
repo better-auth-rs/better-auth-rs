@@ -94,10 +94,11 @@ fn static_fields(
 fn selector(body: &Map<String, Value>, output: &mut FieldMap, errors: &mut Vec<String>) {
     if let Some((name, value)) = ["roleName", "roleId"].into_iter().find_map(|name| {
         body.get(name)
-            .filter(|value| value.as_str().is_some_and(|value| !value.is_empty()))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
             .map(|value| (name, value))
     }) {
-        let _ = output.insert(name.into(), value.as_str().unwrap().into());
+        let _ = output.insert(name.into(), value.into());
     } else {
         let name = match (
             body.get("roleName").and_then(Value::as_str),
