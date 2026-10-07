@@ -320,14 +320,14 @@ impl MemberUserJoin {
     pub fn finish(
         &self,
         member: crate::Member,
-        users: Vec<UserView>,
+        users: Vec<crate::MemberUserView>,
         require_user: bool,
     ) -> AuthResult<Option<MemberUser>> {
         let user = if self.many {
             // JavaScript reads the four summary properties from the array, including an empty array.
             crate::MemberUserView::default()
         } else if let Some(user) = users.first() {
-            crate::MemberUserView::from_user(user)
+            user.clone()
         } else if require_user {
             return Err(AuthError::internal("User not found for member"));
         } else {

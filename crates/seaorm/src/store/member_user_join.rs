@@ -6,8 +6,9 @@ use crate::{
     SeaOrmSessionModel, SeaOrmUserModel, SeaOrmVerificationModel, schema::AuthSchema,
 };
 use better_auth_core::{
-    AuthRecordFields, AuthResult, FieldValue,
+    AuthRecordFields, AuthResult, AuthUser, FieldMap, FieldValue, FromFieldMap, MemberUserView,
     store::{MemberUser, MemberUserJoin, schema::EntityRole},
+    user_fields::AdapterRecord,
 };
 use sea_orm::{EntityTrait, QueryFilter, QuerySelect, Select};
 
@@ -35,7 +36,8 @@ where
         } else {
             1.0
         };
-        let (member, selected_users) = if self.config().advanced.database.joins == Some(true) {
+        let native_join = self.config().advanced.database.joins == Some(true);
+        let (member, selected_users) = if native_join {
             self.model_fields.canonicalize_id(EntityRole::User)?;
             let query = super::joins::joined_query::<
                 Entity<O::Member>,
@@ -96,9 +98,62 @@ where
         };
         let mut output = Vec::with_capacity(users.len());
         for user in users {
-            output.push(self.output_user(&user, self.connection()).await?);
+            output.push(if native_join {
+                self.output_member_join_user(&user).await?
+            } else {
+                MemberUserView::from_user(&self.output_user(&user, self.connection()).await?)
+            });
         }
         relation.finish(member, output, require_user)
+    }
+
+    async fn output_member_join_user(&self, user: &S::User) -> AuthResult<MemberUserView> {
+        self.model_fields.begin_id_output(EntityRole::User)?;
+        let backend = self.connection().get_database_backend();
+        let mut fields = self.config().user.clone();
+        for name in [
+            "name",
+            "email",
+            "emailVerified",
+            "image",
+            "createdAt",
+            "updatedAt",
+        ] {
+            let _ = fields
+                .fields_mut()
+                .entry(name.into())
+                .or_insert_with(|| MemberUserJoin::target_field(self.config(), name));
+        }
+        let mut fields = fields.user_adapter_fields();
+        let _ = fields.fields_mut().insert("id".into(), Default::default());
+        let storage = super::joins::native_child_fields(&fields, |name, field| {
+            let value = super::field_output::column_value::<<S::User as SeaOrmUserModel>::Entity>(
+                user,
+                S::User::field_column(name)?,
+            );
+            super::field_output::raw_field_output(value, field, backend)?.ok_or_else(|| {
+                better_auth_core::AuthError::internal(format!(
+                    "Raw SQL output omitted selected User field: {name}"
+                ))
+            })
+        })?;
+        let core = FieldMap::from([("id".into(), user.id().into_owned().into_field_value())]);
+        let mut record = AdapterRecord::new(core, FieldMap::new());
+        record.map_storage_fields(
+            &fields,
+            super::field_output::capabilities(backend),
+            |name, _| Ok(Some(storage.get(name).cloned().unwrap_or_default())),
+        )?;
+        // The adapter completes every callback for one child before starting the next child.
+        let mut output = fields
+            .project_adapter_records(
+                vec![record],
+                backend == sea_orm::DbBackend::Postgres,
+                backend != sea_orm::DbBackend::Sqlite,
+            )
+            .await?;
+        // Projection preserves the one selected child.
+        MemberUserView::from_field_values(output.remove(0))
     }
 
     async fn member_join_users(

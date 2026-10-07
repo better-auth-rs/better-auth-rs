@@ -5,10 +5,38 @@ use sea_orm::{
 };
 
 use crate::error::AuthResult;
+use better_auth_core::{
+    FieldMap, FieldValue,
+    store::schema::resolve_field_name,
+    user_fields::{UserConfig, UserFieldConfig},
+};
 
 const PARENT: &str = "_auth_parent";
 const CHILD: &str = "_auth_child";
 const CHILD_PRESENT: &str = "_auth_child_present";
+
+pub(super) fn native_child_fields(
+    fields: &UserConfig,
+    mut read: impl FnMut(&str, &UserFieldConfig) -> AuthResult<FieldValue>,
+) -> AuthResult<FieldMap> {
+    let mut selected = FieldMap::new();
+    for (name, field) in fields.fields() {
+        let physical = resolve_field_name(field.field_name.as_deref(), name);
+        if !selected.contains_key(physical) {
+            let _ = selected.insert(physical.to_owned(), read(physical, field)?);
+        }
+    }
+    let mut output = FieldMap::new();
+    // Kysely remaps selected physical names into a new child object; later columns overwrite aliases.
+    for (physical, value) in selected {
+        let logical = if physical == "_id" { "id" } else { &physical };
+        let mapped = fields.fields().get(logical).map_or(logical, |field| {
+            resolve_field_name(field.field_name.as_deref(), logical)
+        });
+        let _ = output.insert(mapped.to_owned(), value);
+    }
+    Ok(output)
+}
 
 // Current core callers have no sort. An ordered caller must order both query levels explicitly.
 pub(super) fn joined_query<P: EntityTrait, C: EntityTrait>(

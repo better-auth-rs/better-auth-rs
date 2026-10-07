@@ -69,6 +69,14 @@ pub(super) fn plugin_field_output(
     if field.references_id() {
         return Ok(None);
     }
+    raw_field_output(value, field, backend)
+}
+
+pub(super) fn raw_field_output(
+    value: sea_orm::Value,
+    field: &UserFieldConfig,
+    backend: DbBackend,
+) -> AuthResult<Option<FieldValue>> {
     if backend == DbBackend::Sqlite {
         return sqlite_extra_output(value, field);
     }

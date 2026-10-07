@@ -139,7 +139,12 @@ impl EphemeralStore {
         let mut projected = Vec::with_capacity(users.len());
         // The adapter awaits each joined user's complete projection before starting the next user.
         for user in users {
-            projected.extend(self.output_user_refs(vec![user]).await?);
+            projected.extend(
+                self.output_user_refs(vec![user])
+                    .await?
+                    .iter()
+                    .map(crate::MemberUserView::from_user),
+            );
         }
         join.finish(member, projected, require_user)
     }
