@@ -54,10 +54,6 @@ impl SeaOrmHooks<BundledSchema> for ForcedId {
     }
 }
 
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The contract must fail on incorrect stored IDs or callback order"
-)]
 async fn check_creates(database: &DatabaseConnection) -> TestResult {
     for alias_order in [None, Some(false), Some(true)] {
         let _ = session::Entity::delete_many().exec(database).await?;
@@ -142,10 +138,6 @@ async fn check_creates(database: &DatabaseConnection) -> TestResult {
     Ok(())
 }
 
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The contract must fail on incorrect nested-failure policy or stored rows"
-)]
 async fn check_history(database: &DatabaseConnection) -> TestResult {
     for hook_failure in [false, true] {
         for id_first in [false, true] {

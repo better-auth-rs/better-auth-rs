@@ -1,4 +1,5 @@
 use super::*;
+use crate::user_fields::UserFieldType;
 
 async fn create_alias(slot: &'static str, serial: bool) -> AuthResult<JsonValue> {
     let trace = Events::default();
